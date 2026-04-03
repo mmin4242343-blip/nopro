@@ -6381,7 +6381,12 @@ init();
 // ══════════════════════════════════════
 // 🔐 인증 시스템
 // ══════════════════════════════════════
-const ADMIN_CRED = {email:'sangmin275@naver.com', pw:'leesang275@'};
+// SHA-256 해시 함수
+async function hashPw(pw){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pw));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+const ADMIN_CRED = {email:'sangmin275@naver.com', hash:'a0cc7840038c2f7221905cbe3c160959e2a985b7dfb56da217015fd873170baf'};
 
 function getNoproUsers(){ return JSON.parse(localStorage.getItem('nopro_users')||'[]'); }
 function saveNoproUsers(u){ localStorage.setItem('nopro_users', JSON.stringify(u)); }
@@ -6421,10 +6426,13 @@ async function doAuthLogin(){
   const btn=document.querySelector('#auth-login-form button.form-submit, #auth-login-form button[onclick*="doAuthLogin"]');
   err.style.display='none';
 
-  // 관리자 계정
-  if(email===ADMIN_CRED.email && pw===ADMIN_CRED.pw){
-    setNoproSession({email:ADMIN_CRED.email, role:'admin'});
-    enterAdmin(); return;
+  // 관리자 계정 (SHA-256 비교)
+  if(email===ADMIN_CRED.email){
+    const h=await hashPw(pw);
+    if(h===ADMIN_CRED.hash){
+      setNoproSession({email:ADMIN_CRED.email, role:'admin'});
+      enterAdmin(); return;
+    }
   }
 
   // 로딩 표시
@@ -6446,12 +6454,13 @@ async function doAuthLogin(){
   }
 }
 
-function doAdminAuthLogin(){
+async function doAdminAuthLogin(){
   const email=document.getElementById('al-email').value.trim();
   const pw=document.getElementById('al-pw').value;
   const err=document.getElementById('al-error');
   err.style.display='none';
-  if(email===ADMIN_CRED.email && pw===ADMIN_CRED.pw){
+  const h=await hashPw(pw);
+  if(email===ADMIN_CRED.email && h===ADMIN_CRED.hash){
     setNoproSession({email:ADMIN_CRED.email, role:'admin'});
     enterAdmin();
   } else {
@@ -6566,7 +6575,7 @@ function admPage(page){
         id:r.id, company:r.company_name, name:r.manager_name,
         phone:r.phone, email:r.email, size:r.size,
         joinDate:r.join_date, status:r.status,
-        pw: atob(r.password_hash||''), empCount:r.empCount
+        pw: '••••••••', empCount:r.empCount
       }));
       saveNoproUsers(mapped);
       users=mapped;
@@ -6841,7 +6850,7 @@ async function sbSignup({company, name, phone, email, pw, size, addr}) {
     company_name: company,
     manager_name: name,
     phone, email,
-    password_hash: btoa(pw), // 간단 인코딩 (실서비스는 bcrypt 사용)
+    password_hash: await hashPw(pw),
     size: size||'50이하',
     address: addr||'',
     join_date: new Date().toISOString().slice(0,10),
@@ -6856,7 +6865,8 @@ async function sbLogin(email, pw) {
   const rows = await sbFetch(`/rest/v1/companies?email=eq.${encodeURIComponent(email)}&select=*`);
   if(!rows.length) throw new Error('등록되지 않은 이메일입니다');
   const company = rows[0];
-  if(company.password_hash !== btoa(pw)) throw new Error('비밀번호가 올바르지 않습니다');
+  const pwHash = await hashPw(pw);
+  if(company.password_hash !== pwHash) throw new Error('비밀번호가 올바르지 않습니다');
   return company;
 }
 
@@ -6976,6 +6986,27 @@ async function sbDeleteCompany(id) {
     warn.innerHTML = '⚠️ 로컬 파일(file://)에서는 Supabase 연동이 작동하지 않습니다. <b>Netlify에 업로드 후 테스트하세요.</b>';
     document.body.appendChild(warn);
   }
+})();
+
+// ── 소스코드 보호 ──
+(function protect(){
+  // 우클릭 차단
+  document.addEventListener('contextmenu',e=>e.preventDefault());
+  // 개발자도구 단축키 차단
+  document.addEventListener('keydown',function(e){
+    if(e.key==='F12') e.preventDefault();
+    if(e.ctrlKey&&e.shiftKey&&(e.key==='I'||e.key==='J'||e.key==='C')) e.preventDefault();
+    if(e.ctrlKey&&e.key==='u') e.preventDefault();
+    if(e.ctrlKey&&e.key==='s') e.preventDefault();
+  });
+  // 텍스트 선택 차단 (input/textarea 제외)
+  document.addEventListener('selectstart',function(e){
+    if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.isContentEditable) return;
+    e.preventDefault();
+  });
+  // 콘솔 경고
+  console.log('%c⚠️ 경고!','font-size:40px;color:red;font-weight:900');
+  console.log('%c이 브라우저 기능은 개발자 전용입니다.\n허가 없이 코드를 복사하거나 수정하는 행위는 법적 조치의 대상이 될 수 있습니다.','font-size:14px;color:#333');
 })();
 
 
