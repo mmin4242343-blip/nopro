@@ -1709,7 +1709,7 @@ const fdow=(y,m)=>new Date(y,m-1,1).getDay();
 const rk=(id,y,m,d)=>`${id}_${y}-${pad(m)}-${pad(d)}`;
 const pT=t=>{if(!t||!t.includes(':'))return null;const[h,m]=t.split(':').map(Number);return h*60+m;};
 const rEnd=(s,e)=>e<=s?e+1440:e;
-const fmt$=n=>Math.round(n).toLocaleString('ko-KR');
+const fmt$=n=>(Math.round(Math.round(n)/10)*10).toLocaleString('ko-KR');
 const fmtH=m=>{if(!m||m<=0)return '';const hrs=Math.round(m/60*100)/100;return hrs%1===0?`${hrs}h`:`${hrs.toFixed(2).replace(/0$/,'')}h`;};
 function parseTimeInput(raw){
   if(!raw||!raw.trim())return '';
@@ -2102,6 +2102,8 @@ function monthSummary(eid,y,m){
     allowances[a.id]=effectiveV;
     totalAllowance+=effectiveV;
   });
+  const r10=v=>Math.round(Math.round(v)/10)*10;
+  tBase=r10(tBase);tNt=r10(tNt);tOt=r10(tOt);tHol=r10(tHol);deduction=r10(deduction);
   const total=tBase+wkly+tNt+tOt+tHol+annualPay+bonus+totalAllowance-deduction;
   return{wdays,adays,aldays,twkH:twk/60,tntH:tnt/60,totH:tot/60,tHolH:tHolH/60,
     tBase,tNt,tOt,tHol,annualPay,wkly,bonus,allowances,totalAllowance,deduction,total};
@@ -2782,13 +2784,18 @@ function renderCal(){
     const autoH=isAutoHol(vY,vM,d,emp),phName=getPhName(vY,vM,d);
     const rate=getEmpRate(emp);
     const isAl=rec&&rec.annual;
+    const isHalf=rec&&rec.halfAnnual;
     const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,getActiveBk(vY,vM,d),rec.outTimes||[],calEmpMode):null;
     const isSel=vY===cY&&vM===cM&&d===cD;
-    let cls='cdc '+(rec&&rec.absent?'abd':isAl?'ald':phName?'phd':c?'hd':'')+(isSel?' sel':'');
+    let cls='cdc '+(rec&&rec.absent?'abd':isAl?'ald':isHalf?'ald':phName?'phd':c?'hd':'')+(isSel?' sel':'');
     let inner=`<div class="cdn ${dow===0?'su':dow===6?'sa':phName?'ph':''}">${d}</div>`;
     if(phName)inner+=`<div class="ph-name">${phName}</div>`;
     if(rec&&rec.absent)inner+=`<div style="font-size:9px;color:#DC2626">결근</div>`;
     else if(isAl)inner+=`<div style="font-size:9px;color:var(--green);font-weight:700">연차</div>`;
+    else if(isHalf){
+      inner+=`<div style="font-size:9px;color:#0891B2;font-weight:700">반차</div>`;
+      if(c){inner+=`<div class="cti">${rec.start}~${rec.end}</div><div class="cwk">${fmtH(c.work)}</div>`;}
+    }
     else if(c){
       inner+=`<div class="cti">${rec.start}~${rec.end}</div><div class="cwk">${fmtH(c.work)}</div><div>`;
       if(c.crossed)inner+=`<span class="tch" style="background:var(--gbg);color:#065F46">익일</span>`;
@@ -2817,6 +2824,7 @@ function renderOv(){
       const ph=getPhName(vY,vM,d);
       if(rec&&rec.absent)tr+=`<td class="ab2">결근</td>`;
       else if(isAl)tr+=`<td class="al2">연차</td>`;
+      else if(rec&&rec.halfAnnual)tr+=`<td class="al2" style="background:#E0F2FE;color:#0891B2">반차${c?'<br>'+fmtH(c.work):''}</td>`;
       else if(ph&&!c)tr+=`<td class="ph2" title="${ph}">🎌</td>`;
       else if(c)tr+=`<td class="${autoH?'ph2':'hd2'}">${fmtH(c.work)}</td>`;
       else tr+=`<td class="mt">-</td>`;
