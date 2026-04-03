@@ -2325,10 +2325,14 @@ function setR(eid,f,v){
   if(f==='halfAnnual'&&v){REC[k].absent=false;REC[k].annual=false;}
   if(f==='absent'&&v){REC[k].annual=false;REC[k].halfAnnual=false;}
   REC[k][f]=v;saveLS();renderTable();
-  // 연차 변경 시 연차관리 탭도 즉시 갱신
-  if(f==='annual'||f==='halfAnnual'){
+  // 연차/반차 변경 시 관련 탭도 즉시 갱신
+  if(f==='annual'||f==='halfAnnual'||f==='absent'){
     const lvPage=document.getElementById('pg-leave');
     if(lvPage&&lvPage.classList.contains('on')) renderLeave();
+    const mvPage=document.getElementById('pg-monthly');
+    if(mvPage&&mvPage.classList.contains('on')) renderMonthly();
+    const pvPage=document.getElementById('pg-payroll');
+    if(pvPage&&pvPage.classList.contains('on')) renderPayroll();
   }
 }
 
@@ -2835,7 +2839,7 @@ function renderOv(){
   }).join('');
   return`<div class="ov-w"><table class="ov-t"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
-function jumpDay(y,m,d){cY=y;cM=m;cD=d;updDbar();renderBks();renderTable();gp('daily');}
+function jumpDay(y,m,d){cY=y;cM=m;cD=d;vY=y;vM=m;updDbar();renderBks();renderTable();gp('daily');}
 
 // ══════════════════════════════════════
 // 급여 요약
@@ -3894,7 +3898,7 @@ function confirmBulkAdd(){
 
 
 function addEmp(){
-  const nid=Math.max(...EMPS.map(e=>e.id))+1;
+  const nid=EMPS.length>0?Math.max(...EMPS.map(e=>e.id))+1:1;
   const colors=['#DBEAFE','#FEF3C7','#D1FAE5','#EDE9FE','#FCE7F3','#FFF7ED'];
   const tcs=['#1E3A5F','#78350F','#064E3B','#4C1D95','#831843','#7C2D12'];
   const ci=EMPS.length%colors.length;
