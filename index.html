@@ -2795,8 +2795,8 @@ function renderCal(){
     else if(isHalf){
       inner+=`<div style="font-size:9px;color:#0891B2;font-weight:700">반차</div>`;
       if(c){inner+=`<div class="cti">${rec.start}~${rec.end}</div><div class="cwk">${fmtH(c.work)}</div>`;}
-    }
-    else if(c){
+      else{inner+=`<div style="font-size:8px;color:#0891B2">0.5일</div>`;}
+    } else if(c){
       inner+=`<div class="cti">${rec.start}~${rec.end}</div><div class="cwk">${fmtH(c.work)}</div><div>`;
       if(c.crossed)inner+=`<span class="tch" style="background:var(--gbg);color:#065F46">익일</span>`;
       if(c.nightM>30)inner+=`<span class="tch" style="background:var(--abg);color:#92400E">야${(c.nightM/60).toFixed(1)}h</span>`;
