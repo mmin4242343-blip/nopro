@@ -1348,6 +1348,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
       <button class="btn btn-sm btn-t" onclick="exportEmpsExcel()">⬇ 엑셀 내보내기</button>
       <button class="btn btn-n btn-sm" onclick="addEmp()">+ 직원 추가</button>
       <button class="btn btn-sm" onclick="openBulkAdd()" style="color:var(--navy2);border-color:var(--navy2)">📋 일괄 추가</button>
+      <button class="btn btn-sm" onclick="rmAllEmps()" style="color:var(--rose);border-color:#FECACA">🗑 전직원 삭제</button>
     </div>
     </div>
   </div>
@@ -1720,6 +1721,16 @@ function parseTimeInput(raw){
   else{h=parseInt(s.slice(0,-2));m=parseInt(s.slice(-2));}
   if(isNaN(h)||isNaN(m)||h>23||m>59)return '';
   return`${pad(h)}:${pad(m)}`;
+}
+
+// ══════════════════════════════════════
+// 핸드폰 번호 자동 포맷 (숫자만 → 010-0000-0000)
+// ══════════════════════════════════════
+function formatPhone(val){
+  const d=val.replace(/[^0-9]/g,'');
+  if(d.length<=3) return d;
+  if(d.length<=7) return d.slice(0,3)+'-'+d.slice(3);
+  return d.slice(0,3)+'-'+d.slice(3,7)+'-'+d.slice(7,11);
 }
 
 // ══════════════════════════════════════
@@ -2160,7 +2171,7 @@ function renderSb(filter=''){
       ondragstart="dragIdx=${i}" ondragover="event.preventDefault()"
       ondrop="sbDrop(event,${i})" onclick="vEid=${e.id};renderSb(document.getElementById('sb-search-inp')?.value||'')">
       <span style="cursor:grab;color:var(--ink3);font-size:11px;margin-right:1px">⠿</span>
-      <div class="av" style="width:28px;height:28px;font-size:12px;background:${e.color||'#DBEAFE'};color:${e.tc||'#1E3A5F'}">${e.name[0]}</div>
+      <div class="av" style="width:28px;height:28px;font-size:12px;background:${e.color||'#DBEAFE'};color:${e.tc||'#1E3A5F'}">${e.name?e.name[0]:'?'}</div>
       <div><div class="en">${e.name}<span class="emp-mode-badge ${getEmpPayModeLabel(e).cls}">${getEmpPayModeLabel(e).text}</span>${e.nation==='foreign'?'<span style="font-size:9px;color:#92400E;background:var(--abg);padding:1px 5px;border-radius:5px;font-weight:700;margin-left:2px">외국인</span>':''} ${e.leave?'<span style="font-size:9px;color:var(--rose);font-weight:700;margin-left:3px">퇴사</span>':''}</div><div class="er">${e.role} · ${getEmpShiftLabel(e).text}</div></div>
     </div>`).join('');
 }
@@ -3317,8 +3328,8 @@ function renderEmps(){
     const al=calcAnnualLeave(e);
     return`<tr draggable="true" ondragstart="empDragIdx=${i}" ondragover="event.preventDefault()" ondrop="empDrop(event,${i})" style="${e.leave?'opacity:.5;background:var(--rose-dim);':''}">
       <td><span style="cursor:grab;color:var(--ink3)">⠿</span></td>
-      <td><input class="ei2" value="${e.empNo||''}" onchange="updE(${e.id},'empNo',this.value)" style="width:40px;text-align:center"></td>
-      <td><input class="ei2" value="${e.name}" onchange="updE(${e.id},'name',this.value)" style="width:56px"></td>
+      <td><input class="ei2" value="${e.empNo||''}" onchange="updE(${e.id},'empNo',this.value)" style="width:40px;text-align:center" placeholder="번호"></td>
+      <td><input class="ei2" value="${e.name}" onchange="updE(${e.id},'name',this.value)" style="width:56px" placeholder="이름"></td>
       <td><input class="ei2" value="${e.role}" onchange="updE(${e.id},'role',this.value)" style="width:52px"></td>
       <td><input class="ei2" value="${e.grade||''}" onchange="updE(${e.id},'grade',this.value)" style="width:52px" placeholder="직급"></td>
       <td><input class="ei2" value="${e.dept||''}" onchange="updE(${e.id},'dept',this.value)" style="width:52px" placeholder="인천본점"></td>
@@ -3342,7 +3353,7 @@ function renderEmps(){
         </div>
       </td>
       <td><input class="ei2" type="number" value="${e.age||''}" onchange="updE(${e.id},'age',+this.value)" style="width:46px;text-align:center" placeholder="자동" id="age-${e.id}"></td>
-      <td><input class="ei2" value="${e.phone||''}" onchange="updE(${e.id},'phone',this.value)" style="width:100px" placeholder="010-0000-0000"></td>
+      <td><input class="ei2" value="${e.phone||''}" oninput="this.value=formatPhone(this.value);updE(${e.id},'phone',this.value)" style="width:100px" placeholder="010-0000-0000" maxlength="13"></td>
       <td>
         <div style="display:flex;gap:3px;align-items:center">
           <input class="ei2" value="${e.rrnFront||''}" maxlength="6" placeholder="앞6자리"
@@ -3879,7 +3890,7 @@ function addEmp(){
   const colors=['#DBEAFE','#FEF3C7','#D1FAE5','#EDE9FE','#FCE7F3','#FFF7ED'];
   const tcs=['#1E3A5F','#78350F','#064E3B','#4C1D95','#831843','#7C2D12'];
   const ci=EMPS.length%colors.length;
-  EMPS.push({id:nid,name:`직원${nid}`,role:'',dept:'',empNo:String(500+nid),rate:null,monthly:null,join:'',leave:'',age:'',phone:'',rrnFront:'',rrnBack:'',sot:209,payMode:null,shift:'day',gender:'male',nation:'local',color:colors[ci],tc:tcs[ci]});
+  EMPS.push({id:nid,name:'',role:'',dept:'',empNo:'',rate:null,monthly:null,join:'',leave:'',age:'',phone:'',rrnFront:'',rrnBack:'',sot:209,payMode:null,shift:'day',gender:'male',nation:'local',color:colors[ci],tc:tcs[ci]});
   saveLS();renderEmps();renderSb();
 }
 function setLeave(id){
@@ -3917,7 +3928,18 @@ function cancelLeave(id){
   e.leave='';
   saveLS();renderEmps();renderSb();
 }
-function rmE(id){if(EMPS.length<=1){alert('최소 1명');return;}EMPS=EMPS.filter(e=>e.id!==id);saveLS();renderEmps();renderSb();renderTable();}
+function rmE(id){
+  const emp=EMPS.find(e=>e.id===id);
+  if(!emp)return;
+  if(!confirm(`"${emp.name||'이름없음'}" 직원을 삭제하시겠습니까?`))return;
+  EMPS=EMPS.filter(e=>e.id!==id);saveLS();renderEmps();renderSb();renderTable();
+}
+function rmAllEmps(){
+  if(!EMPS.length){alert('삭제할 직원이 없습니다');return;}
+  if(!confirm(`전체 ${EMPS.length}명을 모두 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`))return;
+  if(!confirm('정말로 전직원을 삭제하시겠습니까? (최종 확인)'))return;
+  EMPS=[];saveLS();renderEmps();renderSb();renderTable();
+}
 
 // ══════════════════════════════════════
 // 정책 설정
