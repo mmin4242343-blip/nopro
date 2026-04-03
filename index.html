@@ -2482,7 +2482,7 @@ function renderTable(){
         onblur="handleTimeInput(${emp.id},'start',this.value)"></td>
       <td><input class="time-inp ${eCls} ${rec.absent||rec.annual?'dis':''}" value="${rec.end||''}" placeholder="1800" ${rec.absent||rec.annual?'disabled':''} data-eid="${emp.id}" data-field="end"
         onblur="handleTimeInput(${emp.id},'end',this.value)"></td>
-      <td class="td-w">${c?`<div>${fmtH(c.work)}</div><div style="margin-top:1px">${chips.join('')}</div>`:(rec.absent?'<span class="chip ch-ab">결근</span>':'')}</td>
+      <td class="td-w">${c?`<div>${fmtH(c.work)}</div><div style="margin-top:1px">${chips.join('')}</div>`:rec.absent?'<span class="chip ch-ab">결근</span>':rec.halfAnnual?'<div><span class="chip" style="background:#E0E7FF;color:#3730A3;font-weight:700">반차</span></div><div style="font-size:9px;color:#0891B2;margin-top:2px">4h</div>':''}</td>
       <td class="td-nt">${c&&!rec.annual&&c.nightM>30?fmtH(c.nightM):''}</td>
       <td class="td-ot">${c&&!rec.annual&&c.ot>0?fmtH(c.ot):''}</td>
       <td class="td-hol">${c&&!rec.annual&&autoH?fmtH(c.work):''}</td>
