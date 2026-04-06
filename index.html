@@ -7465,10 +7465,8 @@ function admPage(page){
   apiFetch('/admin-companies','GET').then(rows=>{
     if(rows&&rows.length){
       saveNoproUsers(rows);
-      users=rows;
-      if(page==='dashboard') renderDashboard(users);
-      else if(page==='companies') admRenderCompanies(users);
-      else if(page==='users') renderUsers(users);
+      // 서버 데이터로 현재 페이지 다시 렌더링
+      admPage(page);
     }
   }).catch(e=>console.warn('관리자 데이터 로드 오류:',e));
   const cont=document.getElementById('adm-content');
