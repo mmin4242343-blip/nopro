@@ -1360,6 +1360,8 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
       </div>
       <div style="display:flex;gap:4px">
       <button class="btn btn-sm btn-t" onclick="exportEmpsExcel()">⬇ 엑셀 내보내기</button>
+      <button class="btn btn-sm" onclick="document.getElementById('excel-upload-input').click()" style="color:var(--green);border-color:#6EE7B7;background:#ECFDF5">⬆ 엑셀 업로드</button>
+      <input type="file" id="excel-upload-input" accept=".xlsx,.xls" style="display:none" onchange="importEmpsExcel(this)">
       <button class="btn btn-n btn-sm" onclick="addEmp()">+ 직원 추가</button>
       <button class="btn btn-sm" onclick="openBulkAdd()" style="color:var(--navy2);border-color:var(--navy2)">📋 일괄 추가</button>
       <button class="btn btn-sm" onclick="rmAllEmps()" style="color:var(--rose);border-color:#FECACA">🗑 전직원 삭제</button>
@@ -4428,6 +4430,156 @@ function confirmBulkAdd(){
   setTimeout(()=>toast.remove(),2500);
 }
 
+
+// ══════════════════════════════════════
+// 📂 엑셀 업로드 → 직원 일괄 등록
+// ══════════════════════════════════════
+function excelToast(msg){
+  const t=document.createElement('div');
+  t.style.cssText='position:fixed;bottom:24px;right:24px;background:var(--navy);color:#fff;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,.2)';
+  t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),2500);
+}
+function importEmpsExcel(input){
+  const file=input.files[0];
+  if(!file)return;
+  input.value='';
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const data=new Uint8Array(e.target.result);
+    const wb=XLSX.read(data,{type:'array',cellDates:true});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    if(rows.length<2){excelToast('데이터가 없습니다');return;}
+
+    // 헤더(1행) 기반 열 인덱스 자동 감지
+    const hdr=rows[0].map(h=>String(h||'').trim());
+    const colMap={};
+    const colNames={
+      empNo:['사원코드','사원번호','사번'],
+      name:['사원명','이름','성명'],
+      nation:['내외국인구분','내외국인','국적구분'],
+      rrn:['주민(외국인)등록번호','주민등록번호','주민번호','등록번호'],
+      age:['나이','연령'],
+      gender:['성별'],
+      join:['입사일자','입사일','입사날짜'],
+      grade:['직급'],
+      role:['직종','직무'],
+      phone:['휴대폰번호','핸드폰','휴대폰','연락처','전화번호']
+    };
+    for(const[key,names]of Object.entries(colNames)){
+      const idx=hdr.findIndex(h=>names.some(n=>h.includes(n)));
+      if(idx>=0)colMap[key]=idx;
+    }
+    // 직급/직종 구분: 직급이 직종보다 앞에 있으면 순서대로 매핑
+    // 별도 처리 불필요 - 헤더명으로 정확히 매칭됨
+
+    if(colMap.name===undefined){excelToast('사원명 열을 찾을 수 없습니다');return;}
+
+    const colors=['#DBEAFE','#FEF3C7','#D1FAE5','#EDE9FE','#FCE7F3','#FFF7ED'];
+    const tcs=['#1E3A5F','#78350F','#064E3B','#4C1D95','#831843','#7C2D12'];
+    let added=0;
+
+    for(let i=1;i<rows.length;i++){
+      const r=rows[i];
+      const nm=String(r[colMap.name]||'').trim();
+      if(!nm)continue;
+
+      const nid=EMPS.length>0?Math.max(...EMPS.map(x=>x.id))+1:1;
+      const ci=EMPS.length%colors.length;
+
+      // 주민번호 파싱 (XXXXXX-XXXXXXX 또는 13자리 숫자)
+      let rrnFront='',rrnBack='';
+      if(colMap.rrn!==undefined){
+        const raw=String(r[colMap.rrn]||'').replace(/\s/g,'');
+        if(raw.includes('-')){
+          const parts=raw.split('-');
+          rrnFront=parts[0]||'';
+          rrnBack=parts[1]||'';
+        }else if(raw.length>=13){
+          rrnFront=raw.slice(0,6);
+          rrnBack=raw.slice(6,13);
+        }else if(raw.length>=6){
+          rrnFront=raw.slice(0,6);
+        }
+      }
+
+      // 성별 변환
+      let gender='male';
+      if(colMap.gender!==undefined){
+        const g=String(r[colMap.gender]||'').trim();
+        if(g==='여'||g==='여성'||g==='F'||g==='female')gender='female';
+      }else if(rrnBack){
+        const g2=rrn2gender(rrnBack);
+        if(g2)gender=g2;
+      }
+
+      // 내외국인 변환
+      let nation='local';
+      if(colMap.nation!==undefined){
+        const n=String(r[colMap.nation]||'').trim();
+        if(n==='외국인'||n==='외국'||n==='foreign'||n==='F')nation='foreign';
+      }else if(rrnBack){
+        const n2=rrn2nation(rrnBack);
+        if(n2)nation=n2;
+      }
+
+      // 나이 계산 (주민번호 기반 만나이)
+      let age='';
+      if(rrnFront.length>=6){
+        age=rrn2age(rrnFront,rrnBack);
+      }
+
+      // 입사일 파싱
+      let joinDate='';
+      if(colMap.join!==undefined){
+        const jv=r[colMap.join];
+        if(jv instanceof Date){
+          joinDate=jv.toISOString().slice(0,10);
+        }else{
+          joinDate=parseDate(String(jv||''));
+        }
+      }
+
+      // 전화번호 정리
+      let phone='';
+      if(colMap.phone!==undefined){
+        phone=String(r[colMap.phone]||'').trim();
+      }
+
+      const emp={
+        id:nid,
+        name:nm,
+        empNo:colMap.empNo!==undefined?String(r[colMap.empNo]||'').trim():'',
+        role:colMap.role!==undefined?String(r[colMap.role]||'').trim():'',
+        grade:colMap.grade!==undefined?String(r[colMap.grade]||'').trim():'',
+        dept:'',
+        rate:null,
+        monthly:null,
+        join:joinDate,
+        leave:'',
+        age:age,
+        phone:phone,
+        rrnFront:rrnFront,
+        rrnBack:rrnBack,
+        sot:209,
+        payMode:null,
+        shift:'day',
+        gender:gender,
+        nation:nation,
+        color:colors[ci],
+        tc:tcs[ci]
+      };
+      EMPS.push(emp);
+      added++;
+    }
+
+    saveLS();renderEmps();renderSb();renderTable();
+    excelToast(added+'명의 직원이 등록되었습니다');
+  };
+  reader.readAsArrayBuffer(file);
+}
 
 function addEmp(){
   const nid=EMPS.length>0?Math.max(...EMPS.map(e=>e.id))+1:1;
