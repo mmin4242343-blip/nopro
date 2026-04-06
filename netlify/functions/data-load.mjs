@@ -2,7 +2,7 @@ import { supabase } from './_shared/supabase.mjs';
 import { verifyToken, ok, err, options } from './_shared/auth.mjs';
 import { decryptEmps } from './_shared/crypto.mjs';
 
-export default async function handler(event) {
+export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return options();
   if (event.httpMethod !== 'POST') return err(405, 'Method not allowed');
 

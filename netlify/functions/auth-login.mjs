@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import { supabase } from './_shared/supabase.mjs';
 import { signToken, ok, err, options } from './_shared/auth.mjs';
 
-export default async function handler(event) {
+export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return options();
   if (event.httpMethod !== 'POST') return err(405, 'Method not allowed');
 
@@ -13,13 +13,18 @@ export default async function handler(event) {
     // 관리자 로그인
     if (email === process.env.ADMIN_EMAIL) {
       const adminHash = process.env.ADMIN_PASSWORD_HASH;
-      if (adminHash && await bcrypt.compare(password, adminHash)) {
-        const token = signToken({ email, role: 'admin' });
-        return ok({ token, session: { email, role: 'admin' } });
+      // bcrypt 해시 비교
+      if (adminHash && adminHash.startsWith('$2')) {
+        try {
+          if (await bcrypt.compare(password, adminHash)) {
+            const token = signToken({ email, role: 'admin' });
+            return ok({ token, session: { email, role: 'admin' } });
+          }
+        } catch(e) {}
       }
-      // bcrypt 해시가 아직 없으면 SHA-256 비교 (마이그레이션 전 호환)
+      // SHA-256 비교 (마이그레이션 전 호환)
       const sha = await sha256(password);
-      if (sha === adminHash) {
+      if (adminHash && sha === adminHash) {
         const token = signToken({ email, role: 'admin' });
         return ok({ token, session: { email, role: 'admin' } });
       }
