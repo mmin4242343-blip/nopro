@@ -4479,12 +4479,17 @@ function importEmpsExcel(input){
 
     const colors=['#DBEAFE','#FEF3C7','#D1FAE5','#EDE9FE','#FCE7F3','#FFF7ED'];
     const tcs=['#1E3A5F','#78350F','#064E3B','#4C1D95','#831843','#7C2D12'];
-    let added=0;
+    let added=0, skipped=0;
 
     for(let i=1;i<rows.length;i++){
       const r=rows[i];
       const nm=String(r[colMap.name]||'').trim();
       if(!nm)continue;
+
+      // 중복 체크: 사원코드 + 이름 일치 시 스킵
+      const empNo=colMap.empNo!==undefined?String(r[colMap.empNo]||'').trim():'';
+      const isDup=EMPS.some(x=>x.name===nm&&String(x.empNo||'')===empNo);
+      if(isDup){skipped++;continue;}
 
       const nid=EMPS.length>0?Math.max(...EMPS.map(x=>x.id))+1:1;
       const ci=EMPS.length%colors.length;
@@ -4576,7 +4581,8 @@ function importEmpsExcel(input){
     }
 
     saveLS();renderEmps();renderSb();renderTable();
-    excelToast(added+'명의 직원이 등록되었습니다');
+    const msg=added+'명 등록'+(skipped>0?' / '+skipped+'명 중복 스킵':'');
+    excelToast(msg);
   };
   reader.readAsArrayBuffer(file);
 }
