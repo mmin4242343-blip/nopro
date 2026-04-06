@@ -1,16 +1,20 @@
 import jwt from 'jsonwebtoken';
 
 const SECRET = () => process.env.JWT_SECRET;
+const ALLOWED_ORIGINS = [
+  'https://noprohr.netlify.app',
+  'http://localhost:8888'
+];
 
 export function signToken(payload) {
-  return jwt.sign(payload, SECRET(), { expiresIn: '24h' });
+  return jwt.sign(payload, SECRET(), { expiresIn: '2h' });
 }
 
 export function verifyToken(event) {
   const header = event.headers.authorization || event.headers.Authorization || '';
   const token = header.replace('Bearer ', '');
   if (!token) throw new Error('인증 토큰이 없습니다');
-  return jwt.verify(token, SECRET());
+  return jwt.verify(token, SECRET(), { algorithms: ['HS256'] });
 }
 
 export function requireAdmin(event) {
@@ -19,23 +23,25 @@ export function requireAdmin(event) {
   return decoded;
 }
 
-export function cors() {
+export function cors(event) {
+  const origin = event?.headers?.origin || '';
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': allowed,
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
     'Content-Type': 'application/json'
   };
 }
 
-export function ok(body) {
-  return { statusCode: 200, headers: cors(), body: JSON.stringify(body) };
+export function ok(body, event) {
+  return { statusCode: 200, headers: cors(event), body: JSON.stringify(body) };
 }
 
-export function err(statusCode, message) {
-  return { statusCode, headers: cors(), body: JSON.stringify({ error: message }) };
+export function err(statusCode, message, event) {
+  return { statusCode, headers: cors(event), body: JSON.stringify({ error: message }) };
 }
 
-export function options() {
-  return { statusCode: 204, headers: cors(), body: '' };
+export function options(event) {
+  return { statusCode: 204, headers: cors(event), body: '' };
 }

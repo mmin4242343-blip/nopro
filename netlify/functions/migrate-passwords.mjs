@@ -3,8 +3,8 @@ import { supabase } from './_shared/supabase.mjs';
 import { requireAdmin, ok, err, options } from './_shared/auth.mjs';
 
 export const handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return options();
-  if (event.httpMethod !== 'POST') return err(405, 'Method not allowed');
+  if (event.httpMethod === 'OPTIONS') return options(event);
+  if (event.httpMethod !== 'POST') return err(405, 'Method not allowed', event);
 
   try {
     requireAdmin(event);
@@ -13,7 +13,7 @@ export const handler = async (event) => {
       .from('companies')
       .select('id, email, password_hash, password_plain');
 
-    if (dbErr) return err(500, 'DB 오류: ' + dbErr.message);
+    if (dbErr) return err(500, '서버 오류가 발생했습니다', event);
 
     let migrated = 0;
     let skipped = 0;
@@ -61,10 +61,10 @@ export const handler = async (event) => {
       message: adminHashResult
         ? 'ADMIN_PASSWORD_HASH 환경변수를 이 값으로 설정하세요: ' + adminHashResult
         : '관리자 비밀번호를 bcrypt로 변환하려면 body에 adminPassword를 포함하세요'
-    });
+    }, event);
 
   } catch (e) {
-    if (e.message.includes('관리자')) return err(403, e.message);
-    return err(500, e.message);
+    if (e.message.includes('관리자')) return err(403, '관리자 권한이 필요합니다', event);
+    return err(500, '서버 오류가 발생했습니다', event);
   }
 }

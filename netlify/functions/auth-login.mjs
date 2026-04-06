@@ -3,12 +3,12 @@ import { supabase } from './_shared/supabase.mjs';
 import { signToken, ok, err, options } from './_shared/auth.mjs';
 
 export const handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return options();
-  if (event.httpMethod !== 'POST') return err(405, 'Method not allowed');
+  if (event.httpMethod === 'OPTIONS') return options(event);
+  if (event.httpMethod !== 'POST') return err(405, 'Method not allowed', event);
 
   try {
     const { email, password } = JSON.parse(event.body);
-    if (!email || !password) return err(400, '이메일과 비밀번호를 입력해주세요');
+    if (!email || !password) return err(400, '이메일과 비밀번호를 입력해주세요', event);
 
     // 관리자 로그인
     if (email === process.env.ADMIN_EMAIL) {
@@ -18,7 +18,7 @@ export const handler = async (event) => {
         try {
           if (await bcrypt.compare(password, adminHash)) {
             const token = signToken({ email, role: 'admin' });
-            return ok({ token, session: { email, role: 'admin' } });
+            return ok({ token, session: { email, role: 'admin' } }, event);
           }
         } catch(e) {}
       }
@@ -26,9 +26,9 @@ export const handler = async (event) => {
       const sha = await sha256(password);
       if (adminHash && sha === adminHash) {
         const token = signToken({ email, role: 'admin' });
-        return ok({ token, session: { email, role: 'admin' } });
+        return ok({ token, session: { email, role: 'admin' } }, event);
       }
-      return err(401, '비밀번호가 올바르지 않습니다');
+      return err(401, '비밀번호가 올바르지 않습니다', event);
     }
 
     // 일반 사용자 로그인
@@ -37,8 +37,8 @@ export const handler = async (event) => {
       .select('*')
       .eq('email', email);
 
-    if (dbErr) return err(500, 'DB 오류: ' + dbErr.message);
-    if (!rows || rows.length === 0) return err(401, '등록되지 않은 이메일입니다');
+    if (dbErr) return err(500, '서버 오류가 발생했습니다', event);
+    if (!rows || rows.length === 0) return err(401, '등록되지 않은 이메일입니다', event);
 
     const company = rows[0];
 
@@ -69,7 +69,7 @@ export const handler = async (event) => {
       }
     }
 
-    if (!passwordMatch) return err(401, '비밀번호가 올바르지 않습니다');
+    if (!passwordMatch) return err(401, '비밀번호가 올바르지 않습니다', event);
 
     const token = signToken({
       companyId: company.id,
@@ -86,10 +86,10 @@ export const handler = async (event) => {
         role: 'user',
         companyId: company.id
       }
-    });
+    }, event);
 
   } catch (e) {
-    return err(500, e.message);
+    return err(500, '서버 오류가 발생했습니다', event);
   }
 }
 

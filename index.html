@@ -2495,8 +2495,8 @@ function renderSb(filter=''){
       ondragstart="dragIdx=${i}" ondragover="event.preventDefault()"
       ondrop="sbDrop(event,${i})" onclick="vEid=${e.id};renderSb(document.getElementById('sb-search-inp')?.value||'')">
       <span style="cursor:grab;color:var(--ink3);font-size:11px;margin-right:1px">⠿</span>
-      <div class="av" style="width:28px;height:28px;font-size:12px;background:${e.color||'#DBEAFE'};color:${e.tc||'#1E3A5F'}">${e.name?e.name[0]:'?'}</div>
-      <div><div class="en">${e.name}<span class="emp-mode-badge ${getEmpPayModeLabel(e).cls}">${getEmpPayModeLabel(e).text}</span>${e.nation==='foreign'?'<span style="font-size:9px;color:#92400E;background:var(--abg);padding:1px 5px;border-radius:5px;font-weight:700;margin-left:2px">외국인</span>':''} ${e.leave?'<span style="font-size:9px;color:var(--rose);font-weight:700;margin-left:3px">퇴사</span>':''}</div><div class="er">${e.role} · ${getEmpShiftLabel(e).text}</div></div>
+      <div class="av" style="width:28px;height:28px;font-size:12px;background:${e.color||'#DBEAFE'};color:${e.tc||'#1E3A5F'}">${e.name?esc(e.name)[0]:'?'}</div>
+      <div><div class="en">${esc(e.name)}<span class="emp-mode-badge ${getEmpPayModeLabel(e).cls}">${getEmpPayModeLabel(e).text}</span>${e.nation==='foreign'?'<span style="font-size:9px;color:#92400E;background:var(--abg);padding:1px 5px;border-radius:5px;font-weight:700;margin-left:2px">외국인</span>':''} ${e.leave?'<span style="font-size:9px;color:var(--rose);font-weight:700;margin-left:3px">퇴사</span>':''}</div><div class="er">${esc(e.role)} · ${getEmpShiftLabel(e).text}</div></div>
     </div>`).join('');
 }
 function filterSb(v){renderSb(v);}
@@ -2730,10 +2730,10 @@ function renderTable(){
     const holTag=autoH?`<span style="font-size:9px;color:#9A3412;background:#FED7AA;padding:1px 5px;border-radius:5px;font-weight:700;margin-left:3px">${phName||'휴일'}</span>`:'';
     const nameTd=`<td class="td-nm">
       <div style="display:flex;align-items:center;gap:5px">
-        <div class="av" style="width:26px;height:26px;font-size:11px;background:${emp.color||'#DBEAFE'};color:${emp.tc||'#1E3A5F'}">${emp.name[0]}</div>
+        <div class="av" style="width:26px;height:26px;font-size:11px;background:${emp.color||'#DBEAFE'};color:${emp.tc||'#1E3A5F'}">${esc(emp.name)[0]}</div>
         <div>
-          <div style="font-size:12px;font-weight:700;color:var(--ink)">${emp.name}${holTag}<span class="emp-mode-badge ${getEmpPayModeLabel(emp).cls}">${getEmpPayModeLabel(emp).text}</span><span style="font-size:9px;padding:1px 5px;border-radius:5px;background:${getEmpShiftLabel(emp).bg};color:${getEmpShiftLabel(emp).color};font-weight:700;margin-left:2px">${getEmpShiftLabel(emp).text}</span></div>
-          <div style="font-size:9px;color:var(--ink3)">${emp.role} · 연차${al.remain}개</div>
+          <div style="font-size:12px;font-weight:700;color:var(--ink)">${esc(emp.name)}${holTag}<span class="emp-mode-badge ${getEmpPayModeLabel(emp).cls}">${getEmpPayModeLabel(emp).text}</span><span style="font-size:9px;padding:1px 5px;border-radius:5px;background:${getEmpShiftLabel(emp).bg};color:${getEmpShiftLabel(emp).color};font-weight:700;margin-left:2px">${getEmpShiftLabel(emp).text}</span></div>
+          <div style="font-size:9px;color:var(--ink3)">${esc(emp.role)} · 연차${al.remain}개</div>
         </div>
       </div>
     </td>`;
@@ -2748,7 +2748,7 @@ function renderTable(){
             <button class="att-btn ${isWork?'on-work':''}" onclick="setPohalAtt(${emp.id},'work')">✓ 출근</button>
             <button class="att-btn ${rec.annual?'on-annual':''}" onclick="setPohalAtt(${emp.id},'annual')">🌿 연차</button>
             <button class="att-btn ${rec.absent?'on-absent':''}" onclick="setPohalAtt(${emp.id},'absent')">✗ 결근</button>
-            <input class="note-inp" value="${rec.note||''}" placeholder="비고" onchange="setR(${emp.id},'note',this.value)" style="margin-left:4px">
+            <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" onchange="setR(${emp.id},'note',this.value)" style="margin-left:4px">
           </div>
         </td>
         <td style="padding:6px 8px;font-size:10px;color:var(--ink3)">
@@ -2783,7 +2783,7 @@ function renderTable(){
             <label style="font-size:10px;color:var(--ink2);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:500">
               <input type="checkbox" ${rec.absent?'checked':''} onchange="setR(${emp.id},'absent',this.checked)">결근
             </label>
-            <input class="note-inp" value="${rec.note||''}" placeholder="비고" onchange="setR(${emp.id},'note',this.value)">
+            <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" onchange="setR(${emp.id},'note',this.value)">
           </div>
         </td>
         <td style="padding:4px 6px;font-size:10px">
@@ -2837,7 +2837,7 @@ function renderTable(){
             <input type="checkbox" ${rec.customBk?'checked':''} onchange="setR(${emp.id},'customBk',this.checked)">개별휴게
           </label>
           <button class="out-btn ${(rec.outTimes&&rec.outTimes.length>0)?'active':''}" onclick="addOutTime(${emp.id})">+ 외출</button>
-          <input class="note-inp" value="${rec.note||''}" placeholder="비고" onchange="setR(${emp.id},'note',this.value)">
+          <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" onchange="setR(${emp.id},'note',this.value)">
         </div>
         ${outUI}
         ${customBkUI}
@@ -3094,7 +3094,7 @@ function renderMonthly(){
   if(!mvEmps.find(e=>e.id===vEid) && mvEmps.length>0) vEid=mvEmps[0].id;
   document.getElementById('mv-tabs').innerHTML=mvEmps.map(e=>`
     <button onclick="vEid=${e.id};renderMonthly()"
-      style="padding:2px 8px;font-size:10px;border:1px solid ${e.id===vEid?'var(--navy2)':'var(--bd2)'};border-radius:12px;background:${e.id===vEid?'var(--nbg)':'var(--card)'};color:${e.id===vEid?'var(--navy2)':'var(--ink2)'};cursor:pointer;font-family:inherit;font-weight:${e.id===vEid?'700':'500'}">${e.name}</button>`).join('');
+      style="padding:2px 8px;font-size:10px;border:1px solid ${e.id===vEid?'var(--navy2)':'var(--bd2)'};border-radius:12px;background:${e.id===vEid?'var(--nbg)':'var(--card)'};color:${e.id===vEid?'var(--navy2)':'var(--ink2)'};cursor:pointer;font-family:inherit;font-weight:${e.id===vEid?'700':'500'}">${esc(e.name)}</button>`).join('');
   document.getElementById('mv-body').innerHTML=vMode==='cal'?renderCal():renderOv();
 }
 function renderCal(){
@@ -3164,7 +3164,7 @@ function renderOv(){
   th+=`<th style="background:#0E4D2E">근무일</th><th style="background:#0E4D2E">연차</th><th style="background:#0E4D2E">실근무</th><th style="background:#0E4D2E">월급여</th>`;
   const rows=EMPS.map(emp=>{
     const rate=getEmpRate(emp);
-    let tr=`<td class="ec"><div style="display:flex;align-items:center;gap:4px"><div class="av" style="width:19px;height:19px;font-size:9px;background:${emp.color||'#DBEAFE'};color:${emp.tc||'#1E3A5F'}">${emp.name[0]}</div>${emp.name}</div></td>`;
+    let tr=`<td class="ec"><div style="display:flex;align-items:center;gap:4px"><div class="av" style="width:19px;height:19px;font-size:9px;background:${emp.color||'#DBEAFE'};color:${emp.tc||'#1E3A5F'}">${esc(emp.name)[0]}</div>${esc(emp.name)}</div></td>`;
     for(let d=1;d<=days;d++){
       const rec=REC[rk(emp.id,vY,vM,d)];
       const autoH=isAutoHol(vY,vM,d);
@@ -3218,10 +3218,10 @@ function renderPayroll(){
     gt.base+=s.tBase;gt.nt+=s.tNightPay;gt.ot+=s.tOtDayPay+s.tOtNightPay;gt.hol+=(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0);gt.al+=s.annualPay;gt.bonus+=s.bonus;gt.allow+=s.totalAllowance;gt.ded+=s.deduction;gt.total+=s.total;
     return`<div class="pc">
       <div class="pch">
-        <div class="av" style="width:32px;height:32px;font-size:12px;background:${emp.color||'#DBEAFE'};color:${emp.tc||'#1E3A5F'}">${emp.name[0]}</div>
+        <div class="av" style="width:32px;height:32px;font-size:12px;background:${emp.color||'#DBEAFE'};color:${emp.tc||'#1E3A5F'}">${esc(emp.name)[0]}</div>
         <div>
-          <div style="font-size:13px;font-weight:700;color:var(--ink)">${emp.name}</div>
-          <div style="font-size:10px;color:var(--ink3)">${emp.role} · ${s.wdays}일<span class="emp-mode-badge ${getEmpPayModeLabel(emp).cls}" style="margin-left:4px">${getEmpPayModeLabel(emp).text}</span><span style="font-size:9px;padding:1px 5px;border-radius:5px;background:${getEmpShiftLabel(emp).bg};color:${getEmpShiftLabel(emp).color};font-weight:700;margin-left:2px">${getEmpShiftLabel(emp).text}</span></div>
+          <div style="font-size:13px;font-weight:700;color:var(--ink)">${esc(emp.name)}</div>
+          <div style="font-size:10px;color:var(--ink3)">${esc(emp.role)} · ${s.wdays}일<span class="emp-mode-badge ${getEmpPayModeLabel(emp).cls}" style="margin-left:4px">${getEmpPayModeLabel(emp).text}</span><span style="font-size:9px;padding:1px 5px;border-radius:5px;background:${getEmpShiftLabel(emp).bg};color:${getEmpShiftLabel(emp).color};font-weight:700;margin-left:2px">${getEmpShiftLabel(emp).text}</span></div>
         </div>
       </div>
       <div class="pcb">
@@ -3397,9 +3397,9 @@ function renderXlPreview(){
 
     return `<tr>
       <td class="num" style="position:sticky;left:0;z-index:2;background:#F8FAFC">${idx+1}</td>
-      <td>${emp.dept||''}</td>
-      <td>${emp.role||''}</td>
-      <td style="font-weight:500;position:sticky;left:36px;z-index:2;background:#fff">${emp.name||''}</td>
+      <td>${esc(emp.dept||'')}</td>
+      <td>${esc(emp.role||'')}</td>
+      <td style="font-weight:500;position:sticky;left:36px;z-index:2;background:#fff">${esc(emp.name||'')}</td>
       <td style="text-align:center"><span class="emp-mode-badge ${getEmpPayModeLabel(emp).cls}" style="font-size:9px;padding:2px 6px">${getEmpPayModeLabel(emp).text}</span></td>
       <td class="num">${annualTotal}</td>
       <td class="num">${s.wdays}</td>
@@ -3822,10 +3822,10 @@ function renderEmps(){
       <td><span style="cursor:grab;color:var(--ink3)">⠿</span></td>
       <td style="text-align:center;font-size:11px;font-weight:700;color:#94A3B8;padding:0 4px">${rowNum}</td>
       <td><input class="ei2" value="${e.empNo||''}" onchange="updE(${e.id},'empNo',this.value)" style="width:40px;text-align:center" placeholder="번호"></td>
-      <td><input class="ei2" value="${e.name}" onchange="updE(${e.id},'name',this.value)" style="width:56px" placeholder="이름"></td>
-      <td><input class="ei2" value="${e.role}" onchange="updE(${e.id},'role',this.value)" style="width:52px"></td>
-      <td><input class="ei2" value="${e.grade||''}" onchange="updE(${e.id},'grade',this.value)" style="width:52px" placeholder="직급"></td>
-      <td><input class="ei2" value="${e.dept||''}" onchange="updE(${e.id},'dept',this.value)" style="width:52px" placeholder="인천본점"></td>
+      <td><input class="ei2" value="${esc(e.name)}" onchange="updE(${e.id},'name',this.value)" style="width:56px" placeholder="이름"></td>
+      <td><input class="ei2" value="${esc(e.role)}" onchange="updE(${e.id},'role',this.value)" style="width:52px"></td>
+      <td><input class="ei2" value="${esc(e.grade||'')}" onchange="updE(${e.id},'grade',this.value)" style="width:52px" placeholder="직급"></td>
+      <td><input class="ei2" value="${esc(e.dept||'')}" onchange="updE(${e.id},'dept',this.value)" style="width:52px" placeholder="인천본점"></td>
       <td>
         ${(e.payMode||POL.basePayMode)==='monthly'
           ?`<div style="display:flex;align-items:center;gap:2px"><input class="ei2" type="number" value="${e.monthly!==null&&e.monthly!==undefined?e.monthly:POL.baseMonthly}" onchange="updE(${e.id},'monthly',+this.value)" style="width:80px;text-align:right"><span style="font-size:9px;color:var(--ink3)">원/월</span></div>`
@@ -6170,8 +6170,8 @@ function renderLeave() {
     return `<tr style="border-bottom:1px solid var(--bd);${emp.leave ? 'opacity:.55;background:var(--rose-dim)' : ''}">
       <td style="padding:10px 14px;font-size:12px;font-weight:700">
         <div style="display:flex;align-items:center;gap:6px">
-          <div class="av" style="width:26px;height:26px;font-size:11px;background:${emp.color||'#DBEAFE'};color:${emp.tc||'#1E3A5F'}">${emp.name[0]}</div>
-          ${emp.name}${emp.leave ? '<span style="font-size:9px;color:var(--rose);margin-left:3px">퇴사</span>' : ''}
+          <div class="av" style="width:26px;height:26px;font-size:11px;background:${emp.color||'#DBEAFE'};color:${emp.tc||'#1E3A5F'}">${esc(emp.name)[0]}</div>
+          ${esc(emp.name)}${emp.leave ? '<span style="font-size:9px;color:var(--rose);margin-left:3px">퇴사</span>' : ''}
         </div>
       </td>
       <td style="padding:10px 8px;font-size:11px;text-align:center;color:var(--ink3)">${emp.join||'-'}</td>
@@ -7029,7 +7029,7 @@ function setCompanyTab(t) {
   if(sel){ sel.style.display=t==='emp'?'block':'none'; }
   if(t==='emp'){
     const empSel=document.getElementById('cp-emp-sel');
-    if(empSel){ const cur=empSel.value; empSel.innerHTML='<option value="">직원 선택</option>'+EMPS.map(e=>`<option value="${e.id}" ${String(e.id)===cur?'selected':''}>${e.name}</option>`).join(''); }
+    if(empSel){ const cur=empSel.value; empSel.innerHTML='<option value="">직원 선택</option>'+EMPS.map(e=>`<option value="${e.id}" ${String(e.id)===cur?'selected':''}>${esc(e.name)}</option>`).join(''); }
   }
   renderCompany();
 }
@@ -7071,8 +7071,8 @@ function renderCompany() {
     const mode=getEmpPayMode(emp);
     body.innerHTML=`
     <div style="background:var(--nbg);border:1.5px solid var(--nbg2);border-radius:12px;padding:12px 16px;margin-bottom:14px;display:flex;gap:16px;flex-wrap:wrap;align-items:center">
-      <div style="font-size:15px;font-weight:800;color:var(--navy)">${emp.name}</div>
-      <div style="font-size:11px;color:var(--ink3)">${emp.role||''} · ${emp.dept||''}</div>
+      <div style="font-size:15px;font-weight:800;color:var(--navy)">${esc(emp.name)}</div>
+      <div style="font-size:11px;color:var(--ink3)">${esc(emp.role||'')} · ${esc(emp.dept||'')}</div>
       <span class="emp-mode-badge ${getEmpPayModeLabel(emp).cls}">${getEmpPayModeLabel(emp).text}</span>
       <span style="font-size:9px;padding:1px 6px;border-radius:5px;background:${getEmpShiftLabel(emp).bg};color:${getEmpShiftLabel(emp).color};font-weight:700">${getEmpShiftLabel(emp).text}</span>
       ${emp.join?`<div style="font-size:11px;color:var(--ink3)">입사: ${emp.join.substring(0,10)}</div>`:''}
