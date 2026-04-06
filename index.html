@@ -331,7 +331,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 /* ── 툴팁 팝업 ── */
 .tip-wrap{display:inline-flex;align-items:center}
 .tip-popup-bg{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
-.tip-popup{background:#fff;color:#0F172A;font-size:13px;line-height:1.75;padding:24px 26px;border-radius:20px;max-width:360px;width:90%;box-shadow:var(--shadow-lg);position:relative;white-space:normal;font-weight:400;animation:fadeIn .18s ease}
+.tip-popup{background:#fff;color:#0F172A;font-size:13px;line-height:1.75;padding:24px 26px;border-radius:20px;max-width:90vw;width:420px;max-height:85vh;overflow-y:auto;box-shadow:var(--shadow-lg);position:relative;white-space:normal;font-weight:400;animation:fadeIn .18s ease}
 .tip-popup-close{position:absolute;top:14px;right:16px;background:none;border:none;color:#94A3B8;font-size:22px;cursor:pointer;line-height:1;padding:0;transition:color .1s}
 .tip-popup-close:hover{color:var(--ink)}
 .tip-wrap .tip-btn{pointer-events:all}
@@ -1113,7 +1113,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 <div class="pg on" id="pg-daily">
   <div class="ph">
     <div>
-      <div class="pt">출퇴근 기록 입력 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:12px;padding:0 2px;opacity:.7" onclick="showTip('출퇴근 기록 사용법','① 날짜 선택 후 직원별 출근·퇴근 시간 입력 (예: 0900 / 1800)\n② Tab키로 빠르게 다음 칸 이동\n③ 야간·연장·휴일 수당은 자동 계산됩니다.\n\n[연차] 체크 시 → 연차수당 자동 적용\n[결근] 체크 시 → 급여 차감 적용\n[외출] 버튼 → 외출 시간 차감 처리')">💡</button></span> <span id="mode-badge" class="mode-badge mode-fixed">소정근무제</span></div>
+      <div class="pt">출퇴근 기록 입력 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:12px;padding:0 2px;opacity:.7" onclick="showTip('출퇴근 기록 사용법','① 날짜 선택 후 직원별 출근·퇴근 시간 입력 (예: 0900 / 1800)\n② Tab키로 빠르게 다음 칸 이동\n③ 야간·연장·휴일 수당은 자동 계산됩니다.\n\n[연차] 체크 시 → 연차수당 자동 적용\n[결근] 체크 시 → 급여 차감 적용\n[외출] 버튼 → 외출 시간 차감 처리')">💡</button></span></div>
       <div class="pt-s" id="daily-sub">날짜를 선택하세요</div>
     </div>
     <div style="display:flex;gap:6px;align-items:center">
@@ -1292,6 +1292,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 
   <!-- 연차수당 금액 설명 -->
   <div id="leave-pay-desc" class="info" style="margin-bottom:12px">연차수당 = 시급 × 8h (기본값)</div>
+  <div id="leave-custom-wrap" style="display:none;margin-bottom:12px;align-items:center;gap:8px"><label style="font-size:12px;font-weight:700;color:var(--ink)">1일 연차수당 금액:</label><input type="number" id="leave-custom-amount" placeholder="금액 입력" min="0" style="width:120px;padding:6px 10px;font-size:12px;border:1.5px solid var(--bd2);border-radius:8px;font-weight:700" onchange="saveLeaveCustomAmount(this.value)"><span style="font-size:11px;color:var(--ink3)">원</span></div>
 
   <!-- 연차 테이블 -->
   <div style="background:var(--card);border:1px solid var(--bd);border-radius:16px;overflow:hidden;overflow-x:auto;box-shadow:var(--shadow-sm)">
@@ -5992,9 +5993,16 @@ function loadLeaveOverrides() {
 // {payMode:'hourly', overrides:{empId:{year:{total,used}}}}
 let leaveOverrides = loadLeaveOverrides();
 
+function saveLeaveCustomAmount(val){
+  leaveSettings.customAmount = parseFloat(val) || 0;
+  localStorage.setItem("npm5_leave_settings", JSON.stringify(leaveSettings));
+  renderLeave();
+}
 function saveLeaveSettings(){
-  leaveSettings.payMode = document.getElementById('leave-pay-mode')?.value || 'hourly';
-  localStorage.setItem('npm5_leave_settings', JSON.stringify(leaveSettings));
+  leaveSettings.payMode = document.getElementById("leave-pay-mode")?.value || "hourly";
+  localStorage.setItem("npm5_leave_settings", JSON.stringify(leaveSettings));
+  var wrap = document.getElementById("leave-custom-wrap");
+  if(wrap) wrap.style.display = leaveSettings.payMode === "custom" ? "flex" : "none";
   renderLeave();
 }
 
@@ -6142,6 +6150,12 @@ function renderLeave() {
   const desc = document.getElementById('leave-pay-desc');
   const modeLabels = { hourly: '시급 × 8h', daily: '일급 (소정근로시간 기준)', custom: '직접 입력 금액' };
   if (desc) desc.textContent = `연차수당 계산 방식: ${modeLabels[leaveSettings.payMode || 'hourly']}`;
+
+  // 직접입력 금액 입력란 동기화
+  var customWrap = document.getElementById("leave-custom-wrap");
+  var customInput = document.getElementById("leave-custom-amount");
+  if(customWrap) customWrap.style.display = (leaveSettings.payMode === "custom") ? "flex" : "none";
+  if(customInput && leaveSettings.customAmount) customInput.value = leaveSettings.customAmount;
 
   const tbody = document.getElementById('leave-tbody');
   if (!tbody) return;
@@ -7254,8 +7268,7 @@ function showTip(title, msg) {
     <button class="tip-popup-close" onclick="document.getElementById('tip-popup-layer').remove()">×</button>
     <div style="font-size:15px;font-weight:700;color:#1C2B3A;margin-bottom:10px;padding-right:24px">💡 ${title}</div>
     <div style="font-size:13px;line-height:1.8;color:#4A5568;white-space:pre-line">${msg}</div>
-  </div>
-    <button class="btn btn-sm btn-t" style="margin-top:4px" onclick="exportCompanyExcel()">⬇ 엑셀 내보내기</button>`;
+  </div>`;
   bg.addEventListener('click', e => { if (e.target === bg) bg.remove(); });
   document.body.appendChild(bg);
 }
