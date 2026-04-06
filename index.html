@@ -1796,9 +1796,30 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 
 </div></div></div>
 <script>
-// ══ Supabase 상수 (최상단 선언) ══
-const SB_URL = 'https://rjddrkrbuwbplhwdlotb.supabase.co';
-const SB_KEY = 'sb_publishable_9sWK84sayTkZSOO07sXTMg_21VQD_e3';
+// ══ API 설정 ══
+const API_BASE = '/api';
+
+// API 호출 헬퍼 (JWT 토큰 자동 첨부)
+async function apiFetch(endpoint, method='POST', body=null){
+  const token=localStorage.getItem('nopro_token');
+  const headers={'Content-Type':'application/json'};
+  if(token) headers['Authorization']='Bearer '+token;
+  const opts={method,headers};
+  if(body) opts.body=JSON.stringify(body);
+  const res=await fetch(API_BASE+endpoint,opts);
+  if(res.status===401){authLogout();throw new Error('세션이 만료되었습니다');}
+  const data=await res.json();
+  if(!res.ok) throw new Error(data.error||'서버 오류');
+  // 토큰 갱신
+  if(data.newToken) localStorage.setItem('nopro_token',data.newToken);
+  return data;
+}
+
+// XSS 방지 이스케이프
+function esc(s){
+  if(s==null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 
 // ══════════════════════════════════════
 // 공휴일 2024~2026
@@ -7294,14 +7315,8 @@ init();
 })();
 
 // ══════════════════════════════════════
-// 🔐 인증 시스템
+// 🔐 인증 시스템 (서버사이드)
 // ══════════════════════════════════════
-// SHA-256 해시 함수
-async function hashPw(pw){
-  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pw));
-  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
-}
-const ADMIN_CRED = {email:'sangmin275@naver.com', hash:'a0cc7840038c2f7221905cbe3c160959e2a985b7dfb56da217015fd873170baf'};
 
 function getNoproUsers(){ return JSON.parse(localStorage.getItem('nopro_users')||'[]'); }
 function saveNoproUsers(u){ localStorage.setItem('nopro_users', JSON.stringify(u)); }
@@ -7337,49 +7352,32 @@ function authTab(tab){
 async function doAuthLogin(){
   const email=document.getElementById('al-email').value.trim();
   const pw=document.getElementById('al-pw').value;
-  const err=document.getElementById('al-error');
+  const errEl=document.getElementById('al-error');
   const btn=document.querySelector('#auth-login-form button.form-submit, #auth-login-form button[onclick*="doAuthLogin"]');
-  err.style.display='none';
+  errEl.style.display='none';
 
-  // 관리자 계정 (SHA-256 비교)
-  if(email===ADMIN_CRED.email){
-    const h=await hashPw(pw);
-    if(h===ADMIN_CRED.hash){
-      setNoproSession({email:ADMIN_CRED.email, role:'admin'});
-      enterAdmin(); return;
-    }
-  }
-
-  // 로딩 표시
   if(btn){ btn.textContent='로그인 중...'; btn.disabled=true; }
 
   try{
-    const company = await sbLogin(email, pw);
-    setNoproSession({email, company:company.company_name, name:company.manager_name, role:'user', companyId:company.id});
-    // localStorage 초기화 (다른 계정 데이터 제거)
-    // Supabase에서 해당 회사 데이터 불러오기
-    await sbLoadAll(company.id);
-    enterApp(company.company_name);
+    const res=await apiFetch('/auth-login','POST',{email,password:pw});
+    localStorage.setItem('nopro_token',res.token);
+    setNoproSession(res.session);
+    if(res.session.role==='admin'){
+      enterAdmin();
+    } else {
+      await sbLoadAll(res.session.companyId);
+      enterApp(res.session.company);
+    }
   } catch(e){
-    err.textContent = e.message || '로그인 실패';
-    err.style.display='block';
+    errEl.textContent=e.message||'로그인 실패';
+    errEl.style.display='block';
   } finally {
     if(btn){ btn.textContent='로그인'; btn.disabled=false; }
   }
 }
 
 async function doAdminAuthLogin(){
-  const email=document.getElementById('al-email').value.trim();
-  const pw=document.getElementById('al-pw').value;
-  const err=document.getElementById('al-error');
-  err.style.display='none';
-  const h=await hashPw(pw);
-  if(email===ADMIN_CRED.email && h===ADMIN_CRED.hash){
-    setNoproSession({email:ADMIN_CRED.email, role:'admin'});
-    enterAdmin();
-  } else {
-    err.style.display='block';
-  }
+  return doAuthLogin();
 }
 
 async function doAuthSignup(){
@@ -7389,27 +7387,23 @@ async function doAuthSignup(){
   const email=document.getElementById('as-email').value.trim();
   const pw=document.getElementById('as-pw').value;
   const size=document.getElementById('as-size').value;
-  const err=document.getElementById('as-error');
-  err.style.display='none';
-  if(!company||!name||!phone||!email||!pw){ err.textContent='필수 항목을 모두 입력해주세요'; err.style.display='block'; return; }
+  const errEl=document.getElementById('as-error');
+  errEl.style.display='none';
+  if(!company||!name||!phone||!email||!pw){ errEl.textContent='필수 항목을 모두 입력해주세요'; errEl.style.display='block'; return; }
 
   const btns=document.querySelectorAll('#auth-signup-form button[onclick*="doAuthSignup"]');
   btns.forEach(b=>{b.textContent='가입 중...';b.disabled=true;});
 
   try{
-    const result = await sbSignup({company,name,phone,email,pw,size});
-    // 로컬에도 저장 (관리자 페이지용)
-    const users=getNoproUsers();
-    users.push({id:result.id,company,name,phone,email,pw,size,joinDate:new Date().toISOString().slice(0,10),status:'active'});
-    saveNoproUsers(users);
-    setNoproSession({email,company,name,role:'user',companyId:result.id});
-    // localStorage 초기화 (이전 데이터 제거)
-    // 새 회사 기본 데이터 Supabase에 저장
-    await sbSaveAll(result.id);
+    const res=await apiFetch('/auth-signup','POST',{company,name,phone,email,password:pw,size});
+    localStorage.setItem('nopro_token',res.token);
+    setNoproSession(res.session);
+    // 새 회사 기본 데이터 저장
+    await sbSaveAll(res.session.companyId);
     enterApp(company);
   } catch(e){
-    err.textContent = e.message||'회원가입 실패';
-    err.style.display='block';
+    errEl.textContent=e.message||'회원가입 실패';
+    errEl.style.display='block';
   } finally {
     btns.forEach(b=>{b.textContent='회원가입 완료';b.disabled=false;});
   }
@@ -7445,6 +7439,7 @@ function enterAdmin(){
 
 function admLogout(){
   localStorage.removeItem('nopro_session');
+  localStorage.removeItem('nopro_token');
   document.getElementById('admin-overlay').style.display='none';
   document.getElementById('auth-overlay').style.display='flex';
   document.querySelector('.app').style.display='none';
@@ -7452,6 +7447,7 @@ function admLogout(){
 
 function authLogout(){
   localStorage.removeItem('nopro_session');
+  localStorage.removeItem('nopro_token');
   clearLocalData(); // 로그아웃 시 데이터 초기화
   document.querySelector('.app').style.display='none';
   const badge=document.getElementById('company-name-badge');
@@ -7466,24 +7462,10 @@ function admPage(page){
   const active=document.getElementById('adm-m-'+page);
   if(active) active.classList.add('on');
   let users=getNoproUsers(); // 로컬 캐시 먼저
-  sbGetAllCompanies().then(async rows=>{
+  apiFetch('/admin-companies','GET').then(rows=>{
     if(rows&&rows.length){
-      // 각 회사의 직원 수 조회
-      const withEmpCount = await Promise.all(rows.map(async r=>{
-        try{
-          const empData = await sbFetch(`/rest/v1/company_data?company_id=eq.${r.id}&data_key=eq.emps&select=data_value`);
-          const emps = empData.length ? JSON.parse(empData[0].data_value) : [];
-          return {...r, empCount: Array.isArray(emps) ? emps.filter(e=>!e.leave).length : 0};
-        }catch(e){ return {...r, empCount:0}; }
-      }));
-      const mapped = withEmpCount.map(r=>({
-        id:r.id, company:r.company_name, name:r.manager_name,
-        phone:r.phone, email:r.email, size:r.size,
-        joinDate:r.join_date, status:r.status,
-        pw: r.password_plain||'(미확인)', empCount:r.empCount
-      }));
-      saveNoproUsers(mapped);
-      users=mapped;
+      saveNoproUsers(rows);
+      users=rows;
       if(page==='dashboard') renderDashboard(users);
       else if(page==='companies') admRenderCompanies(users);
       else if(page==='users') renderUsers(users);
@@ -7518,10 +7500,10 @@ function admPage(page){
             ${['회사명','담당자','연락처','가입일','요금제','상태'].map(h=>`<th style="padding:10px 16px;font-size:10px;font-weight:700;color:#64748B;text-align:left;letter-spacing:.3px;border-bottom:1px solid rgba(255,255,255,.04)">${h}</th>`).join('')}
           </tr></thead>
           <tbody>${recent.length?recent.map(u=>`<tr style="border-bottom:1px solid rgba(255,255,255,.04)">
-            <td style="padding:12px 16px;font-size:13px;font-weight:700;color:#fff">${u.company}</td>
-            <td style="padding:12px 16px;font-size:12px;color:#94A3B8">${u.name}</td>
-            <td style="padding:12px 16px;font-size:12px;color:#94A3B8">${u.phone}</td>
-            <td style="padding:12px 16px;font-size:11px;color:#64748B">${u.joinDate||'-'}</td>
+            <td style="padding:12px 16px;font-size:13px;font-weight:700;color:#fff">${esc(u.company)}</td>
+            <td style="padding:12px 16px;font-size:12px;color:#94A3B8">${esc(u.name)}</td>
+            <td style="padding:12px 16px;font-size:12px;color:#94A3B8">${esc(u.phone)}</td>
+            <td style="padding:12px 16px;font-size:11px;color:#64748B">${esc(u.joinDate||'-')}</td>
             <td style="padding:12px 16px"><span style="padding:3px 10px;border-radius:999px;background:rgba(245,158,11,.15);color:#FCD34D;font-size:10px;font-weight:700">${planLabel[u.size]||u.size}</span></td>
             <td style="padding:12px 16px"><span style="padding:3px 10px;border-radius:999px;background:rgba(16,185,129,.15);color:#6EE7B7;font-size:10px;font-weight:700">● 활성</span></td>
           </tr>`).join(''):'<tr><td colspan="6" style="padding:40px;text-align:center;color:#64748B">가입 회사가 없습니다</td></tr>'}</tbody>
@@ -7541,7 +7523,7 @@ function admPage(page){
       <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;overflow:hidden">
         <table style="width:100%;border-collapse:collapse">
           <thead><tr style="background:rgba(255,255,255,.04)">
-            ${['#','회사명','담당자','연락처','이메일 / 비밀번호','직원수','요금제','상태','삭제'].map(h=>`
+            ${['#','회사명','담당자','연락처','이메일','직원수','요금제','상태','삭제'].map(h=>`
               <th style="padding:11px 14px;font-size:10px;font-weight:700;color:#64748B;text-align:left;letter-spacing:.3px;border-bottom:1px solid rgba(255,255,255,.06);white-space:nowrap">${h}</th>
             `).join('')}
           </tr></thead>
@@ -7560,10 +7542,10 @@ function admPage(page){
             ${['이름','이메일','회사','연락처','직원규모','가입일','상태'].map(h=>`<th style="padding:10px 14px;font-size:10px;font-weight:700;color:#64748B;text-align:left;letter-spacing:.3px;border-bottom:1px solid rgba(255,255,255,.06)">${h}</th>`).join('')}
           </tr></thead>
           <tbody>${users.length?users.map(u=>`<tr style="border-bottom:1px solid rgba(255,255,255,.04)">
-            <td style="padding:11px 14px;font-size:13px;font-weight:700;color:#fff">${u.name}</td>
-            <td style="padding:11px 14px;font-size:11px;color:#64748B">${u.email}</td>
-            <td style="padding:11px 14px;font-size:12px;color:#94A3B8">${u.company}</td>
-            <td style="padding:11px 14px;font-size:12px;color:#94A3B8">${u.phone}</td>
+            <td style="padding:11px 14px;font-size:13px;font-weight:700;color:#fff">${esc(u.name)}</td>
+            <td style="padding:11px 14px;font-size:11px;color:#64748B">${esc(u.email)}</td>
+            <td style="padding:11px 14px;font-size:12px;color:#94A3B8">${esc(u.company)}</td>
+            <td style="padding:11px 14px;font-size:12px;color:#94A3B8">${esc(u.phone)}</td>
             <td style="padding:11px 14px;font-size:11px;color:#94A3B8">${u.size}</td>
             <td style="padding:11px 14px;font-size:11px;color:#64748B">${u.joinDate||'-'}</td>
             <td style="padding:11px 14px"><span style="padding:2px 8px;border-radius:999px;background:rgba(16,185,129,.15);color:#6EE7B7;font-size:10px;font-weight:700">활성</span></td>
@@ -7589,14 +7571,13 @@ function admRenderCompanies(users, filter=''){
     return `<tr style="border-bottom:1px solid rgba(255,255,255,.04);transition:background .1s" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
       <td style="padding:10px 14px;font-size:11px;color:#64748B">${i+1}</td>
       <td style="padding:10px 14px">
-        <div style="font-size:13px;font-weight:700;color:#fff">${u.company||u.company_name||'-'}</div>
-        <div style="font-size:10px;color:#64748B;margin-top:2px">${u.joinDate||u.join_date||'-'} 가입</div>
+        <div style="font-size:13px;font-weight:700;color:#fff">${esc(u.company||u.company_name||'-')}</div>
+        <div style="font-size:10px;color:#64748B;margin-top:2px">${esc(u.joinDate||u.join_date||'-')} 가입</div>
       </td>
-      <td style="padding:10px 14px;font-size:12px;color:#94A3B8">${u.name||u.manager_name||'-'}</td>
-      <td style="padding:10px 14px;font-size:12px;color:#94A3B8">${u.phone||'-'}</td>
+      <td style="padding:10px 14px;font-size:12px;color:#94A3B8">${esc(u.name||u.manager_name||'-')}</td>
+      <td style="padding:10px 14px;font-size:12px;color:#94A3B8">${esc(u.phone||'-')}</td>
       <td style="padding:10px 14px">
-        <div style="font-size:11px;color:#94A3B8">${u.email||'-'}</div>
-        <div style="font-size:11px;color:#FCD34D;margin-top:3px;font-family:monospace;background:rgba(252,211,77,.1);padding:2px 6px;border-radius:4px;display:inline-block">${u.pw||'(미확인)'}</div>
+        <div style="font-size:11px;color:#94A3B8">${esc(u.email||'-')}</div>
       </td>
       <td style="padding:10px 14px;text-align:center">
         <span style="font-size:14px;font-weight:900;color:#6EE7B7">${empCount}</span>
@@ -7636,15 +7617,7 @@ async function admDeleteUser(id){
 
   try {
     const numId = Number(id);
-    console.log('삭제 시도:', numId, typeof numId);
-    
-    // 1. company_data 먼저 삭제
-    const r1 = await sbFetch(`/rest/v1/company_data?company_id=eq.${numId}`, 'DELETE', null, {'Prefer':'return=minimal'}).catch(e=>{console.warn('data삭제 오류',e);});
-    console.log('company_data 삭제:', r1);
-    
-    // 2. companies 삭제
-    const r2 = await sbFetch(`/rest/v1/companies?id=eq.${numId}`, 'DELETE', null, {'Prefer':'return=minimal'});
-    console.log('company 삭제:', r2);
+    await apiFetch('/admin-delete','DELETE',{companyId:numId});
     
     // 3. 로컬 캐시 업데이트
     saveNoproUsers(users.filter(u=>Number(u.id)!==numId));
@@ -7662,23 +7635,24 @@ async function admDeleteUser(id){
   }
 }
 
-// ── 앱 초기 로드 시 세션 체크 ──
-(function initAuth(){
-  const sess=getNoproSession();
+// ── 앱 초기 로드 시 세션 체크 (JWT 기반) ──
+(async function initAuth(){
   document.querySelector('.app').style.display='none';
-  if(sess){
-    if(sess.role==='admin') enterAdmin();
-    else if(sess.role==='user'){
-      if(sess.companyId){
-        sbLoadAll(sess.companyId)
-          .catch(e=>console.warn('세션 복원 오류:',e))
-          .finally(()=>enterApp(sess.company||''));
-      } else {
-        enterApp(sess.company||'');
-      }
+  const token=localStorage.getItem('nopro_token');
+  if(!token){ showLanding(); return; }
+  try{
+    const res=await apiFetch('/auth-verify','POST');
+    if(!res.valid) throw new Error('invalid');
+    setNoproSession(res.session);
+    if(res.session.role==='admin'){
+      enterAdmin();
+    } else {
+      await sbLoadAll(res.session.companyId);
+      enterApp(res.session.company||'');
     }
-    else showLanding();
-  } else {
+  } catch(e){
+    localStorage.removeItem('nopro_token');
+    localStorage.removeItem('nopro_session');
     showLanding();
   }
 })();
@@ -7701,30 +7675,8 @@ function showAuthModal(tab){
 
 
 // ══════════════════════════════════════════════════════
-// 🗄️ Supabase 연동 (SB_URL, SB_KEY는 script 상단에 선언됨)
+// 🗄️ 서버 API 연동 (Supabase는 서버에서만 접근)
 // ══════════════════════════════════════════════════════
-
-// Supabase REST API 헬퍼
-async function sbFetch(path, method='GET', body=null, extraHeaders={}) {
-  const headers = {
-    'apikey': SB_KEY,
-    'Authorization': 'Bearer ' + SB_KEY,
-    'Content-Type': 'application/json',
-    'Prefer': 'return=representation',
-    ...extraHeaders
-  };
-  const opts = { method, headers };
-  if(body) opts.body = JSON.stringify(body);
-  const res = await fetch(SB_URL + path, opts);
-  if(!res.ok) {
-    const err = await res.text();
-    console.error('Supabase 오류:', res.status, err);
-    throw new Error(`${res.status}: ${err}`);
-  }
-  const text = await res.text();
-  return text ? JSON.parse(text) : [];
-}
-
 
 // ── 로컬 데이터 완전 초기화 (계정 전환 시) ──
 function clearLocalData(){
@@ -7734,7 +7686,6 @@ function clearLocalData(){
     'npm5_leave_overrides','npm5_folders','npm5_safety'
   ];
   keys.forEach(k => localStorage.removeItem(k));
-  // 메모리 변수 완전 초기화 (샘플 데이터 없이 빈 상태)
   EMPS = [];
   POL  = {...DEF_POL};
   DEF_BK = [{id:1,start:'12:00',end:'13:00'},{id:2,start:'18:00',end:'18:30'}];
@@ -7744,119 +7695,32 @@ function clearLocalData(){
   ALLOWANCE_REC = {};
   SAFETY_REC = {};
 }
-// ── 회원가입 ──
-async function sbSignup({company, name, phone, email, pw, size, addr}) {
-  // 이메일 중복 체크
-  const existing = await sbFetch(`/rest/v1/companies?email=eq.${encodeURIComponent(email)}&select=id`);
-  if(existing.length > 0) throw new Error('이미 등록된 이메일입니다');
 
-  const row = {
-    company_name: company,
-    manager_name: name,
-    phone, email,
-    password_hash: await hashPw(pw),
-    password_plain: pw,
-    size: size||'50이하',
-    address: addr||'',
-    join_date: new Date().toISOString().slice(0,10),
-    status: 'active'
-  };
-  const result = await sbFetch('/rest/v1/companies', 'POST', row);
-  return result[0];
-}
-
-// ── 로그인 ──
-async function sbLogin(email, pw) {
-  const rows = await sbFetch(`/rest/v1/companies?email=eq.${encodeURIComponent(email)}&select=*`);
-  if(!rows.length) throw new Error('등록되지 않은 이메일입니다');
-  const company = rows[0];
-  const pwHash = await hashPw(pw);
-  if(company.password_hash !== pwHash) throw new Error('비밀번호가 올바르지 않습니다');
-  return company;
-}
-
-// ── 데이터 저장 ──
-async function sbSaveData(companyId, key, value) {
-  const row = {
-    company_id: companyId,
-    data_key: key,
-    data_value: JSON.stringify(value),
-    updated_at: new Date().toISOString()
-  };
-  // upsert: 있으면 update, 없으면 insert
-  await sbFetch(
-    '/rest/v1/company_data',
-    'POST',
-    row,
-    {
-      'Prefer': 'resolution=merge-duplicates,return=minimal',
-      'Content-Type': 'application/json'
-    }
-  );
-}
-
-async function sbSaveDataUpsert(companyId, key, value) {
-  const dataStr = JSON.stringify(value);
-  // 먼저 존재하는지 확인
-  const existing = await sbFetch(
-    `/rest/v1/company_data?company_id=eq.${companyId}&data_key=eq.${encodeURIComponent(key)}&select=id`
-  );
-  if(existing && existing.length > 0) {
-    // UPDATE
-    await sbFetch(
-      `/rest/v1/company_data?company_id=eq.${companyId}&data_key=eq.${encodeURIComponent(key)}`,
-      'PATCH',
-      { data_value: dataStr, updated_at: new Date().toISOString() },
-      { 'Prefer': 'return=minimal' }
-    );
-  } else {
-    // INSERT
-    await sbFetch(
-      '/rest/v1/company_data',
-      'POST',
-      { company_id: companyId, data_key: key, data_value: dataStr, updated_at: new Date().toISOString() },
-      { 'Prefer': 'return=minimal' }
-    );
-  }
-}
-
-// ── 데이터 불러오기 ──
-async function sbLoadData(companyId, key) {
-  const rows = await sbFetch(`/rest/v1/company_data?company_id=eq.${companyId}&data_key=eq.${encodeURIComponent(key)}&select=data_value`);
-  if(!rows.length) return null;
-  try { return JSON.parse(rows[0].data_value); } catch(e) { return null; }
-}
-
-// ── 전체 저장 ──
+// ── 전체 저장 (서버 프록시) ──
 async function sbSaveAll(companyId) {
-  const keys = [
-    ['emps', EMPS],
-    ['pol', POL],
-    ['bk', DEF_BK],
-    ['tbk', TBK],
-    ['rec', REC],
-    ['bonus', BONUS_REC],
-    ['allow', ALLOWANCE_REC],
-    ['tax', JSON.parse(localStorage.getItem('npm5_tax')||'{}')],
-    ['leave_settings', JSON.parse(localStorage.getItem('npm5_leave_settings')||'{}')],
-    ['leave_overrides', JSON.parse(localStorage.getItem('npm5_leave_overrides')||'{}')],
-    ['folders', JSON.parse(localStorage.getItem('npm5_folders')||'[]')],
+  const items = [
+    {key:'emps', value:EMPS},
+    {key:'pol', value:POL},
+    {key:'bk', value:DEF_BK},
+    {key:'tbk', value:TBK},
+    {key:'rec', value:REC},
+    {key:'bonus', value:BONUS_REC},
+    {key:'allow', value:ALLOWANCE_REC},
+    {key:'tax', value:JSON.parse(localStorage.getItem('npm5_tax')||'{}')},
+    {key:'leave_settings', value:JSON.parse(localStorage.getItem('npm5_leave_settings')||'{}')},
+    {key:'leave_overrides', value:JSON.parse(localStorage.getItem('npm5_leave_overrides')||'{}')},
+    {key:'folders', value:JSON.parse(localStorage.getItem('npm5_folders')||'[]')},
   ];
-  // 순차 저장 (동시 요청 충돌 방지)
-  for(const [k,v] of keys) {
-    await sbSaveDataUpsert(companyId, k, v);
-  }
+  await apiFetch('/data-save','POST',{items});
 }
 
-// ── 전체 불러오기 ──
+// ── 전체 불러오기 (서버 프록시) ──
 async function sbLoadAll(companyId) {
-  const rows = await sbFetch(`/rest/v1/company_data?company_id=eq.${companyId}&select=data_key,data_value`);
-  const map = {};
-  rows.forEach(r => { try { map[r.data_key] = JSON.parse(r.data_value); } catch(e) {} });
+  const map = await apiFetch('/data-load','POST',{});
 
   if(map.emps)           { EMPS = map.emps; localStorage.setItem('npm5_emps', JSON.stringify(EMPS)); }
-  else { EMPS = []; } // 신규 회사면 빈 배열
-  sortEMPS(); // 로드 후 주간→야간 정렬
+  else { EMPS = []; }
+  sortEMPS();
   if(map.pol)            { POL = Object.assign({...DEF_POL}, map.pol); localStorage.setItem('npm5_pol', JSON.stringify(POL)); }
   if(map.bk)             { DEF_BK = map.bk; localStorage.setItem('npm5_bk', JSON.stringify(DEF_BK)); }
   if(map.tbk)            { TBK = map.tbk; localStorage.setItem('npm5_tbk', JSON.stringify(TBK)); }
@@ -7870,40 +7734,6 @@ async function sbLoadAll(companyId) {
 
   return map;
 }
-
-// ── 관리자: 전체 회사 목록 ──
-async function sbGetAllCompanies() {
-  return await sbFetch('/rest/v1/companies?select=*&order=created_at.desc');
-}
-
-// ── 관리자: 회사 삭제 ──
-async function sbDeleteCompany(id) {
-  await sbFetch(`/rest/v1/companies?id=eq.${id}`, 'DELETE');
-}
-
-// saveLS에 Supabase 직접 내장됨
-
-
-// ── 로컬 파일 환경 감지 ──
-(function checkEnv(){
-  if(window.location.protocol === 'file:'){
-    const warn = document.createElement('div');
-    warn.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:#EF4444;color:#fff;text-align:center;padding:10px 16px;font-size:13px;font-weight:700;font-family:sans-serif';
-    warn.innerHTML = '⚠️ 로컬 파일(file://)에서는 Supabase 연동이 작동하지 않습니다. <b>Netlify에 업로드 후 테스트하세요.</b>';
-    document.body.appendChild(warn);
-  }
-})();
-
-// ── 소스코드 보호 ──
-(function protect(){
-  // 우클릭 차단
-  document.addEventListener('contextmenu',e=>e.preventDefault());
-  // 텍스트 선택 차단 (input/textarea 제외)
-  document.addEventListener('selectstart',function(e){
-    if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.isContentEditable) return;
-    e.preventDefault();
-  });
-})();
 
 
 // ── 랜딩 노이즈 + 스크롤 애니메이션 ──
