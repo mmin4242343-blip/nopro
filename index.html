@@ -2034,7 +2034,7 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode){
     let nightPay = _ntF ? r10(rate*0.5*(nightM/60)) : 0;
     // 주간연장 가산수당 (×0.5 추가) - 8h초과 주간 구간
     // 소정외 1.0 지급됐으나 연장가산 0.5가 추가로 붙어야 함 (1.0+0.5=1.5)
-    let otDayPay = (_otF&&!isHol&&overDay>0) ? r10(rate*0.5*(overDay/60)) : 0;
+    let otDayPay = (_otF&&overDay>0) ? r10(rate*0.5*(overDay/60)) : 0;
     // 야간연장 가산수당 (×0.5 추가) - 8h초과 야간 구간
     let otNightPay = (_otF&&_ntF&&overNight>0) ? r10(rate*0.5*(overNight/60)) : 0;
     // 초과휴일수당 (×0.5)
