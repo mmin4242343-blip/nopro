@@ -251,13 +251,76 @@ ADMIN_PASSWORD_HASH   # 관리자 비밀번호 bcrypt 해시
 
 관리자 함수: `admPage(page)`, `admDeleteUser(id)`, `admFilter(val)`
 
+## !!! 절대 삭제/수정 금지 파일 !!!
+
+> **이 섹션에 나열된 파일을 삭제하거나 내용을 임의로 변경하면 서비스가 즉시 장애 상태에 빠집니다.**
+> 기능 추가/수정 작업 시 이 파일들이 "필요 없어 보인다"고 판단하더라도 절대 건드리지 마세요.
+> 확신이 없으면 반드시 프로젝트 관리자에게 먼저 확인하세요.
+
+### 1. `netlify.toml` — 삭제 금지, 함부로 수정 금지
+
+이 파일이 없으면 **사이트 전체가 작동하지 않습니다.**
+
+| 설정 | 삭제/변경 시 발생하는 장애 |
+|------|--------------------------|
+| `[[redirects]]` `/api/*` → `/.netlify/functions/:splat` | **로그인, 회원가입, 데이터 저장/로드 등 모든 API 호출 실패.** 브라우저에 `"Unexpected token '<'"` JSON 파싱 에러 발생 |
+| `[build] functions = "netlify/functions"` | Netlify가 백엔드 함수를 인식하지 못해 **모든 서버 기능 중단** |
+| `[functions] node_bundler = "esbuild"` | 함수 번들링 실패로 **배포 자체가 실패** |
+| `[[headers]]` 보안 헤더 | CSP, HSTS, XSS 보호 해제로 **보안 취약점 노출** |
+
+> **실제 사고 이력**: 2026-04-06 이 파일이 삭제되어 로그인 기능이 완전히 마비됨. 복구에 불필요한 시간 소모.
+
+### 2. `netlify/functions/` 폴더 전체 — 삭제 금지
+
+| 파일 | 삭제 시 장애 |
+|------|-------------|
+| `_shared/auth.js` | **모든 API 인증 실패** — 로그인, 데이터 접근 전부 불가 |
+| `_shared/supabase.js` | **DB 연결 불가** — 서버 기능 전체 중단 |
+| `_shared/crypto.js` | **주민번호 암호화/복호화 불가** — 직원 데이터 읽기/쓰기 실패 |
+| `auth-login.js` | **로그인 불가** |
+| `auth-signup.js` | **회원가입 불가** |
+| `auth-verify.js` | **세션 유지 불가** — 로그인해도 즉시 튕김 |
+| `data-load.js` | **저장된 데이터 불러오기 불가** — 빈 화면 |
+| `data-save.js` | **데이터 서버 저장 불가** — 작업 내용 유실 |
+| `admin-companies.js` | 관리자 페이지 회사 목록 불가 |
+| `admin-delete.js` | 관리자 회사 삭제 불가 |
+| `migrate-passwords.js` | 패스워드 마이그레이션 불가 |
+
+### 3. `package.json` — 삭제 금지, 의존성 함부로 제거 금지
+
+| 의존성 | 제거 시 장애 |
+|--------|-------------|
+| `@supabase/supabase-js` | DB 연결 라이브러리 없음 → **서버 함수 전체 실행 실패** |
+| `bcryptjs` | 비밀번호 검증 불가 → **로그인 불가** |
+| `jsonwebtoken` | JWT 발급/검증 불가 → **인증 전체 불가** |
+| `"type": "module"` | ES Module import 구문 실패 → **모든 함수 실행 에러** |
+
+### 4. `index.html` — 삭제 금지
+
+이 파일이 곧 **서비스 전체**입니다. 프론트엔드 HTML/CSS/JS가 모두 이 파일 하나에 들어있습니다.
+삭제하면 사이트에 아무것도 표시되지 않습니다.
+
+### 파일 삭제/수정 전 체크리스트
+
+작업 전에 아래를 반드시 확인하세요:
+
+- [ ] 삭제하려는 파일이 위 목록에 포함되어 있지 않은가?
+- [ ] 해당 파일을 `import`하거나 참조하는 다른 파일이 없는가?
+- [ ] 수정 후에도 `netlify.toml`의 리다이렉트, 보안 헤더가 그대로 유지되는가?
+- [ ] `package.json`의 의존성을 제거하기 전에 해당 패키지를 사용하는 함수가 없는지 확인했는가?
+- [ ] **확신이 없으면 프로젝트 관리자에게 먼저 물어봤는가?**
+
+---
+
 ## 작업 시 주의사항
 
 1. `index.html`이 ~7700줄로 매우 크므로, 수정 시 정확한 위치를 파악한 후 편집할 것
-2. Netlify Functions는 ES Module 형식 (`.mjs`, `export const handler`)
+2. Netlify Functions는 ES Module 형식 (`.js`, `export const handler`, `package.json`에 `"type":"module"`)
 3. 프론트엔드에서 Supabase URL/키를 직접 참조하지 말 것 (보안)
 4. `saveLS()` 호출을 빠뜨리면 데이터가 유실될 수 있음
 5. 공휴일(`PH`) 객체는 매년 수동 업데이트 필요
 6. CORS 허용 목록 변경 시 모든 Netlify Function의 `corsHeaders`를 일괄 수정할 것
 7. 패스워드 관련 수정 시 bcrypt와 SHA-256 양쪽 호환 유지 고려
 8. push 시 Netlify 자동 배포가 즉시 이루어지므로 main 브랜치 직접 push 주의
+9. **파일을 삭제하기 전에 반드시 "절대 삭제 금지 파일" 섹션을 확인할 것**
+10. **"이 파일 필요 없는 것 같은데?" 라는 생각이 들면, 그 파일은 십중팔구 필요한 파일이다. 삭제하지 말 것**
