@@ -1,5 +1,5 @@
-import { supabase } from './_shared/supabase.mjs';
-import { requireAdmin, ok, err, options } from './_shared/auth.mjs';
+import { supabase } from './_shared/supabase.js';
+import { requireAdmin, ok, err, options } from './_shared/auth.js';
 
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return options(event);

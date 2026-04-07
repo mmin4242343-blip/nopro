@@ -1,6 +1,6 @@
-import { supabase } from './_shared/supabase.mjs';
-import { verifyToken, ok, err, options } from './_shared/auth.mjs';
-import { decryptEmps } from './_shared/crypto.mjs';
+import { supabase } from './_shared/supabase.js';
+import { verifyToken, ok, err, options } from './_shared/auth.js';
+import { decryptEmps } from './_shared/crypto.js';
 
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return options(event);
