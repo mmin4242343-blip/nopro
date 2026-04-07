@@ -374,526 +374,309 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 <body>
 
 
+
 <!-- ══ 랜딩페이지 ══ -->
 <div id="landing-overlay" style="position:fixed;inset:0;z-index:99997;display:none;overflow-y:auto;overflow-x:hidden;background:#fff;-webkit-font-smoothing:antialiased">
 
-<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
 <style>
-#lo{font-family:'Pretendard','Noto Sans KR',sans-serif;color:#1a1a1a;background:#fff}
-#lo *{box-sizing:border-box;margin:0;padding:0}
-#lo a{text-decoration:none;color:inherit}
-#lo button{font-family:'Pretendard','Noto Sans KR',sans-serif;cursor:pointer;border:none}
-
-/* 애니메이션 */
-@keyframes lo-up{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
-@keyframes lo-fade{from{opacity:0}to{opacity:1}}
-@keyframes lo-scale{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
-@keyframes lo-logo-scroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
-.lo-a1{animation:lo-up .7s cubic-bezier(.16,1,.3,1) both}
-.lo-a2{animation:lo-up .7s .1s cubic-bezier(.16,1,.3,1) both}
-.lo-a3{animation:lo-up .7s .2s cubic-bezier(.16,1,.3,1) both}
-.lo-a4{animation:lo-up .7s .3s cubic-bezier(.16,1,.3,1) both}
-.lo-a5{animation:lo-up .7s .4s cubic-bezier(.16,1,.3,1) both}
-
-/* 버튼 */
-.lo-btn-green{background:#00C471;color:#fff;border-radius:8px;padding:0 26px;height:52px;font-size:16px;font-weight:700;letter-spacing:-.3px;transition:all .18s;display:inline-flex;align-items:center;gap:6px}
-.lo-btn-green:hover{background:#00AF63;transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,196,113,.35)}
-.lo-btn-green:active{transform:translateY(0)}
-.lo-btn-gray{background:#F5F5F5;color:#444;border-radius:8px;padding:0 26px;height:52px;font-size:16px;font-weight:600;letter-spacing:-.3px;transition:all .18s;display:inline-flex;align-items:center;gap:6px}
-.lo-btn-gray:hover{background:#EBEBEB;transform:translateY(-1px)}
-.lo-btn-outline{background:transparent;color:#1a1a1a;border:1.5px solid #ddd;border-radius:10px;padding:0 22px;height:46px;font-size:14px;font-weight:600;letter-spacing:-.3px;transition:all .15s;display:inline-flex;align-items:center;white-space:nowrap}
-.lo-btn-outline:hover{border-color:#999;background:#f8f8f8}
-.lo-btn-inquiry{background:#1a1a1a;color:#fff;border-radius:10px;padding:0 24px;height:46px;font-size:14px;font-weight:700;letter-spacing:-.3px;transition:all .15s;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
-.lo-btn-inquiry:hover{background:#333;transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.2)}
-
-/* NAV */
-.lo-nav{position:sticky;top:0;z-index:100;background:rgba(255,255,255,.92);backdrop-filter:blur(20px);border-bottom:1px solid #F0F0F0;height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 6%}
-.lo-nav-logo{display:flex;align-items:center;gap:8px}
-.lo-nav-logo-icon{width:32px;height:32px;border-radius:8px;background:#1a1a1a;display:flex;align-items:center;justify-content:center}
-.lo-nav-links{display:flex;align-items:center;gap:32px}
-.lo-nav-link{font-size:15px;color:#444;font-weight:500;letter-spacing:-.2px;padding:4px 0;border-bottom:2px solid transparent;transition:all .15s;cursor:pointer}
-.lo-nav-link:hover{color:#1a1a1a;border-bottom-color:#1a1a1a}
-
-/* 섹션 공통 */
-.lo-section{padding:90px 5%}
-.lo-section-badge{display:inline-block;padding:5px 14px;border-radius:999px;background:#F0FFF8;color:#00C471;font-size:12.5px;font-weight:700;letter-spacing:.3px;margin-bottom:16px;border:1px solid #C8F5E0}
-.lo-section-title{font-size:clamp(32px,3.5vw,48px);font-weight:800;color:#1a1a1a;letter-spacing:-2px;line-height:1.15;margin-bottom:14px}
-.lo-section-sub{font-size:17px;color:#666;line-height:1.75;font-weight:400}
-
-/* 카드 */
-.lo-card{background:#fff;border:1px solid #EFEFEF;border-radius:16px;padding:32px;transition:all .25s cubic-bezier(.16,1,.3,1)}
-.lo-card:hover{border-color:#E0E0E0;box-shadow:0 16px 48px rgba(0,0,0,.09);transform:translateY(-5px)}
-
-/* 기능 아이콘 */
-.lo-feat-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;margin-bottom:20px;font-size:26px}
-
-/* 요금제 */
-.lo-plan{background:#fff;border:1.5px solid #E8E8E8;border-radius:18px;padding:32px 28px;transition:all .2s;position:relative;overflow:visible;box-sizing:border-box}
-.lo-plan:hover{border-color:#D0D0D0;box-shadow:0 16px 48px rgba(0,0,0,.1);transform:translateY(-4px)}
-.lo-plan.featured{border-color:#00C471;box-shadow:0 0 0 1px #00C471,0 12px 40px rgba(0,196,113,.1);position:relative;overflow:visible}
-
-/* 체크리스트 */
-.lo-check{display:flex;align-items:center;gap:9px;padding:7px 0;font-size:13.5px;color:#555;border-bottom:1px solid #F5F5F5}
-.lo-check:last-child{border:none;padding-bottom:0}
-.lo-check-mark{width:20px;height:20px;border-radius:50%;background:#F0FFF8;color:#00C471;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;flex-shrink:0;border:1px solid #C8F5E0}
-
-/* 로고 스크롤 */
-.lo-logo-track{display:flex;gap:60px;align-items:center;animation:lo-logo-scroll 20s linear infinite;width:max-content}
-.lo-logo-item{font-size:18px;font-weight:800;color:#ccc;letter-spacing:-1px;white-space:nowrap;transition:color .2s}
-.lo-logo-item:hover{color:#999}
+#landing-overlay{--bd:#1a2f6e;--bm:#2347b5;--bl:#5b82e8;--bp:#f0f4fd;--bdim:rgba(35,71,181,.10);--bdim2:rgba(35,71,181,.05);--wh:#fff;--tx:#111827;--t2:#6b7280;--t3:#9ca3af;--br:#e5e9f2;--br2:#d1d9f0;--bg:#f7f9fe;}
+#landing-overlay *{box-sizing:border-box;margin:0;padding:0;}
+#landing-overlay{font-family:'Pretendard',-apple-system,sans-serif;color:var(--tx);overflow-x:hidden;background:var(--wh);}
+.ln{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 40px;height:64px;background:rgba(255,255,255,.95);backdrop-filter:blur(16px);border-bottom:1px solid var(--br);box-shadow:0 1px 4px rgba(35,71,181,.08);}
+.ln-logo{font-size:18px;font-weight:800;letter-spacing:-.04em;color:var(--bd);text-decoration:none;display:flex;align-items:center;gap:8px;}
+.ln-icon{width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,var(--bm),var(--bl));display:flex;align-items:center;justify-content:center;font-size:14px;}
+.ln-links{display:flex;align-items:center;gap:4px;}
+.ln-pill{font-size:13px;font-weight:500;color:var(--t2);padding:7px 14px;border-radius:100px;background:transparent;border:none;cursor:pointer;text-decoration:none;transition:all .2s;}
+.ln-pill:hover{color:var(--bm);background:var(--bdim2);}
+.ln-right{display:flex;align-items:center;gap:8px;}
+.ln-login{font-size:13px;font-weight:600;color:var(--bm);padding:7px 16px;border-radius:100px;border:1.5px solid var(--bm);cursor:pointer;background:transparent;}
+.ln-cta{font-size:13px;font-weight:700;color:var(--wh);padding:8px 20px;border-radius:100px;background:linear-gradient(135deg,var(--bm),var(--bl));box-shadow:0 2px 8px rgba(35,71,181,.3);cursor:pointer;border:none;}
+.ln-ham{display:none;flex-direction:column;gap:5px;cursor:pointer;padding:4px;}
+.ln-ham span{width:22px;height:2px;background:var(--bd);border-radius:2px;}
+.lm-menu{display:none;position:sticky;top:64px;z-index:99;background:var(--wh);border-bottom:1px solid var(--br);padding:16px 20px;box-shadow:0 4px 24px rgba(35,71,181,.12);}
+.lm-menu.open{display:flex;flex-direction:column;gap:4px;}
+.lm-menu a{font-size:15px;font-weight:600;color:var(--tx);padding:12px 16px;border-radius:10px;text-decoration:none;cursor:pointer;}
+.lm-cta{margin-top:8px;display:block;text-align:center;font-size:15px;font-weight:700;color:var(--wh)!important;background:linear-gradient(135deg,var(--bm),var(--bl))!important;border-radius:12px!important;padding:14px!important;}
+.lh{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:80px 24px 60px;position:relative;overflow:hidden;background:linear-gradient(180deg,var(--bp) 0%,var(--wh) 100%);}
+.lh-badge{display:inline-flex;align-items:center;gap:8px;padding:6px 16px;border-radius:100px;background:var(--bdim);border:1px solid rgba(35,71,181,.2);font-size:12px;font-weight:700;color:var(--bm);margin-bottom:24px;}
+.lh-dot{width:6px;height:6px;border-radius:50%;background:var(--bm);animation:lpulse 2s infinite;}
+@keyframes lpulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.4)}}
+.lh-title{font-size:clamp(30px,6vw,64px);font-weight:800;letter-spacing:-.05em;line-height:1.05;margin-bottom:12px;color:var(--bd);}
+.lh-accent{color:var(--bm);}
+.lh-sub{font-size:clamp(13px,1.8vw,17px);font-weight:600;color:var(--t2);letter-spacing:-.02em;margin-bottom:24px;}
+.lh-points{display:flex;flex-direction:column;gap:10px;margin-bottom:32px;width:100%;max-width:560px;}
+.lh-pt{display:flex;align-items:flex-start;gap:12px;background:var(--wh);border:1px solid var(--br);border-radius:12px;padding:14px 18px;text-align:left;box-shadow:0 1px 4px rgba(35,71,181,.08);}
+.lh-pt-icon{font-size:20px;flex-shrink:0;}
+.lh-pt-txt{font-size:13px;color:var(--tx);line-height:1.55;}
+.lh-pt-txt strong{color:var(--bm);}
+.lh-actions{display:flex;align-items:center;gap:12px;margin-bottom:48px;flex-wrap:wrap;justify-content:center;}
+.lb-pr{font-size:15px;font-weight:700;color:var(--wh);padding:14px 28px;border-radius:100px;background:linear-gradient(135deg,var(--bm),var(--bl));border:none;cursor:pointer;display:inline-block;box-shadow:0 4px 16px rgba(35,71,181,.3);}
+.lb-gh{font-size:15px;font-weight:600;color:var(--bm);padding:13px 24px;border-radius:100px;background:transparent;border:1.5px solid var(--br2);cursor:pointer;text-decoration:none;display:inline-block;}
+.lh-stats{display:flex;background:var(--wh);border:1px solid var(--br);border-radius:20px;box-shadow:0 4px 24px rgba(35,71,181,.12);overflow:hidden;flex-wrap:wrap;}
+.lh-stat{text-align:center;padding:20px 28px;flex:1;min-width:120px;}
+.lh-stat+.lh-stat{border-left:1px solid var(--br);}
+.lh-snum{font-size:28px;font-weight:800;letter-spacing:-.05em;color:var(--bm);line-height:1;margin-bottom:4px;}
+.lh-slabel{font-size:11px;font-weight:500;color:var(--t2);}
+.ls{padding:0 24px 64px;background:var(--bg);}
+.ls-inner{max-width:1020px;margin:0 auto;}
+.ls-tabs{display:flex;gap:8px;margin-bottom:16px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;}
+.ls-tabs::-webkit-scrollbar{display:none;}
+.ls-tab{padding:8px 16px;border-radius:100px;font-size:12px;font-weight:600;color:var(--t2);background:var(--wh);border:1.5px solid var(--br);cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .2s;}
+.ls-tab.active{background:var(--bm);color:var(--wh);border-color:var(--bm);}
+.ls-frame{border-radius:14px;overflow:hidden;border:1px solid var(--br2);box-shadow:0 16px 60px rgba(35,71,181,.16);background:var(--wh);}
+.ls-bar{height:36px;background:#1F3864;display:flex;align-items:center;padding:0 14px;gap:5px;}
+.ls-dot{width:9px;height:9px;border-radius:50%;}
+.ls-dot:nth-child(1){background:#ff5f57;}.ls-dot:nth-child(2){background:#ffbd2e;}.ls-dot:nth-child(3){background:#28c940;}
+.ls-url{margin-left:10px;background:rgba(255,255,255,.1);border-radius:4px;padding:2px 12px;font-size:11px;color:rgba(255,255,255,.6);flex:1;max-width:260px;}
+.ls-panel{display:none;min-height:200px;background:var(--bg);display:flex;align-items:center;justify-content:center;color:var(--t2);font-size:14px;padding:60px 20px;text-align:center;}
+.ls-panel.active{display:flex;}
+.ls-img{width:100%;display:block;}
+.ls-cap{padding:16px 20px;background:var(--wh);border-top:1px solid var(--br);display:flex;align-items:center;gap:12px;}
+.ls-cap-icon{width:34px;height:34px;border-radius:9px;background:var(--bdim);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
+.ls-cap-title{font-size:13px;font-weight:700;color:var(--bd);margin-bottom:2px;}
+.ls-cap-desc{font-size:12px;color:var(--t2);line-height:1.5;}
+.lsw{padding:64px 24px;max-width:1020px;margin:0 auto;}
+.l-badge{display:inline-flex;padding:4px 14px;border-radius:100px;background:var(--bdim);border:1px solid rgba(35,71,181,.15);font-size:11px;font-weight:700;color:var(--bm);letter-spacing:.05em;text-transform:uppercase;margin-bottom:14px;}
+.l-title{font-size:clamp(22px,3.5vw,38px);font-weight:800;letter-spacing:-.05em;line-height:1.1;color:var(--bd);margin-bottom:10px;}
+.l-title span{color:var(--t2);}
+.l-desc{font-size:14px;color:var(--t2);line-height:1.7;max-width:520px;}
+.lf-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:40px;}
+.lf-card{background:var(--wh);border:1.5px solid var(--br);border-radius:16px;padding:20px 16px;transition:all .2s;}
+.lf-card:hover{border-color:var(--bm);box-shadow:0 4px 24px rgba(35,71,181,.12);transform:translateY(-2px);}
+.lf-icon{width:40px;height:40px;border-radius:10px;background:var(--bdim);display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:10px;}
+.lf-name{font-size:13px;font-weight:700;color:var(--bd);margin-bottom:5px;}
+.lf-desc{font-size:12px;color:var(--t2);line-height:1.6;}
+.lhow{background:linear-gradient(180deg,var(--bg) 0%,var(--wh) 100%);padding:64px 24px;}
+.lhow-inner{max-width:1020px;margin:0 auto;}
+.lhow-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px;}
+.lhow-step{background:var(--wh);border:1.5px solid var(--br);border-radius:16px;padding:24px 20px;}
+.lhow-num{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--bm),var(--bl));color:var(--wh);font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;margin-bottom:12px;}
+.lhow-ttl{font-size:16px;font-weight:700;color:var(--bd);margin-bottom:6px;}
+.lhow-desc{font-size:13px;color:var(--t2);line-height:1.65;}
+.lcmp{margin-top:40px;border:1.5px solid var(--br2);border-radius:18px;overflow:hidden;}
+.lcmp-hd{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;background:var(--bd);}
+.lcmp-h{padding:14px 16px;font-size:12px;font-weight:700;color:rgba(255,255,255,.65);border-right:1px solid rgba(255,255,255,.1);}
+.lcmp-h:last-child{border-right:none;}.lcmp-h.hl{background:var(--bm);color:var(--wh);}
+.lcmp-row{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;border-top:1px solid var(--br);}
+.lcmp-row:hover{background:var(--bp);}
+.lcmp-c{padding:12px 16px;font-size:12px;color:var(--t2);border-right:1px solid var(--br);display:flex;align-items:center;gap:5px;}
+.lcmp-c:last-child{border-right:none;}.lcmp-c.label{color:var(--tx);font-weight:600;background:var(--bg);}.lcmp-c.hl{background:rgba(35,71,181,.04);}
+.ck{color:#16a34a;}.cx{color:#d1d5db;}.cp{color:#d97706;}
+.lpr{background:var(--bg);padding:64px 24px;}
+.lpr-inner{max-width:1020px;margin:0 auto;}
+.lpr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:40px;}
+.lpr-card{background:var(--wh);border:1.5px solid var(--br);border-radius:16px;padding:28px 22px;display:flex;flex-direction:column;position:relative;transition:all .2s;}
+.lpr-card:hover{transform:translateY(-2px);box-shadow:0 4px 24px rgba(35,71,181,.12);}
+.lpr-card.feat{border-color:var(--bm);box-shadow:0 0 0 3px rgba(35,71,181,.1);}
+.lpr-rec{position:absolute;top:-1px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--bm),var(--bl));color:var(--wh);font-size:11px;font-weight:700;padding:4px 16px;border-radius:0 0 10px 10px;white-space:nowrap;}
+.lpr-tier{font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;}
+.lpr-price{font-size:28px;font-weight:800;letter-spacing:-.05em;color:var(--bd);line-height:1;margin-bottom:4px;}
+.lpr-price sub{font-size:12px;font-weight:500;color:var(--t2);vertical-align:baseline;}
+.lpr-per{font-size:11px;color:var(--t2);margin-bottom:20px;}
+.lpr-feats{list-style:none;flex:1;margin-bottom:20px;}
+.lpr-feats li{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--t2);padding:6px 0;border-bottom:1px solid var(--br);}
+.lpr-feats li:last-child{border-bottom:none;}
+.lpr-btn{width:100%;padding:11px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:center;display:block;border:none;transition:all .2s;}
+.lpr-btn-g{background:transparent;border:1.5px solid var(--br2);color:var(--bm);}
+.lpr-btn-s{background:linear-gradient(135deg,var(--bm),var(--bl));color:var(--wh);}
+.lfaq-list{margin-top:40px;}
+.lfaq-item{border-top:1px solid var(--br);padding:20px 0;}
+.lfaq-item:last-child{border-bottom:1px solid var(--br);}
+.lfaq-q{display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:16px;}
+.lfaq-qtxt{font-size:14px;font-weight:600;color:var(--bd);line-height:1.4;}
+.lfaq-tog{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--br2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:17px;color:var(--t2);transition:all .2s;background:var(--wh);}
+.lfaq-item.open .lfaq-tog{background:var(--bm);border-color:var(--bm);color:var(--wh);transform:rotate(45deg);}
+.lfaq-a{font-size:13px;color:var(--t2);line-height:1.7;max-height:0;overflow:hidden;transition:max-height .3s ease,padding .3s;}
+.lfaq-item.open .lfaq-a{max-height:200px;padding-top:12px;}
+.lcta-wrap{padding:0 24px 64px;}
+.lcta{max-width:1020px;margin:0 auto;background:linear-gradient(135deg,var(--bd) 0%,var(--bm) 60%,var(--bl) 100%);border-radius:22px;padding:64px 48px;text-align:center;position:relative;overflow:hidden;}
+.lcta-title{font-size:clamp(22px,3.5vw,38px);font-weight:800;letter-spacing:-.05em;color:var(--wh);margin-bottom:12px;line-height:1.1;}
+.lcta-desc{font-size:14px;color:rgba(255,255,255,.75);line-height:1.7;margin-bottom:28px;}
+.lcta-btn{display:inline-block;font-size:15px;font-weight:700;color:var(--bd);background:var(--wh);padding:14px 36px;border-radius:100px;cursor:pointer;border:none;box-shadow:0 4px 20px rgba(0,0,0,.2);}
+.lcta-contact{font-size:12px;color:rgba(255,255,255,.6);margin-top:20px;line-height:1.9;}
+.lfoot{background:var(--bd);padding:48px 24px 36px;}
+.lfoot-inner{max-width:1020px;margin:0 auto;display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1fr;gap:32px;}
+.lfoot-brand{font-size:18px;font-weight:800;color:var(--wh);margin-bottom:8px;}
+.lfoot-desc{font-size:12px;color:rgba(255,255,255,.5);line-height:1.65;}
+.lfoot-col-title{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-bottom:12px;}
+.lfoot-links{list-style:none;}
+.lfoot-links li{margin-bottom:8px;}
+.lfoot-links a{font-size:12px;color:rgba(255,255,255,.55);text-decoration:none;}
+.lfoot-bottom{max-width:1020px;margin:28px auto 0;padding-top:20px;border-top:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+.lfoot-copy{font-size:11px;color:rgba(255,255,255,.3);}
+.ldiv{height:1px;background:var(--br);max-width:1020px;margin:0 auto;}
+@media(max-width:768px){
+  .ln{padding:0 20px;}.ln-links,.ln-right{display:none;}.ln-ham{display:flex;}
+  .lh{padding:80px 20px 48px;min-height:auto;}
+  .lh-stats{flex-direction:column;width:100%;}
+  .lh-stat{width:100%;border-left:none!important;border-top:1px solid var(--br);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;text-align:left;}
+  .lh-stat:first-child{border-top:none;}
+  .lh-actions{flex-direction:column;width:100%;}
+  .lb-pr,.lb-gh{width:100%;text-align:center;}
+  .ls{padding:0 16px 48px;}.lsw{padding:48px 20px;}
+  .lf-grid{grid-template-columns:repeat(2,1fr);}
+  .lhow{padding:48px 20px;}.lhow-steps{grid-template-columns:1fr;}
+  .lpr{padding:48px 20px;}.lpr-grid{grid-template-columns:1fr;}
+  .lcta-wrap{padding:0 20px 48px;}.lcta{padding:48px 24px;}
+  .lfoot{padding:40px 20px 28px;}.lfoot-inner{grid-template-columns:1fr 1fr;gap:24px;}
+  .lcmp-hd,.lcmp-row{grid-template-columns:1.4fr 1fr 1fr 1fr;font-size:10px;}
+  .lcmp-h,.lcmp-c{padding:10px 8px;font-size:10px;}
+}
+@media(max-width:420px){.lf-grid{grid-template-columns:1fr;}.lfoot-inner{grid-template-columns:1fr;}}
 </style>
 
-<div id="lo">
-
-<!-- ── NAV ── -->
-<nav class="lo-nav">
-  <div class="lo-nav-logo">
-    <div class="lo-nav-logo-icon">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5z" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"/><path d="M2 17l10 5 10-5" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"/><path d="M2 12l10 5 10-5" stroke="rgba(255,255,255,.55)" stroke-width="2.2" stroke-linejoin="round"/></svg>
-    </div>
-    <span style="font-size:18px;font-weight:800;color:#1a1a1a;letter-spacing:-.5px">노프로</span>
+<nav class="ln">
+  <a href="#" class="ln-logo"><div class="ln-icon">&#127970;</div>&#45432;&#54532;&#47196;</a>
+  <div class="ln-links">
+    <a href="#lshowcase" class="ln-pill">서비스 화면</a>
+    <a href="#lfeatures" class="ln-pill">기능</a>
+    <a href="#lhow" class="ln-pill">사용방법</a>
+    <a href="#lpricing" class="ln-pill">요금제</a>
+    <a href="#lcontact" class="ln-pill">문의</a>
   </div>
-
-  <div class="lo-nav-links">
-    <span class="lo-nav-link" onclick="document.getElementById('lo-feat').scrollIntoView({behavior:'smooth'})">서비스</span>
-    <span class="lo-nav-link" onclick="document.getElementById('lo-how').scrollIntoView({behavior:'smooth'})">사용방법</span>
-    <span class="lo-nav-link" onclick="document.getElementById('lo-price').scrollIntoView({behavior:'smooth'})">요금제</span>
+  <div class="ln-right">
+    <button class="ln-login" onclick="showAuthModal('login')">로그인</button>
+    <button class="ln-cta" onclick="showAuthModal('signup')">무료로 시작하기 →</button>
   </div>
-
-  <div style="display:flex;align-items:center;gap:10px">
-    <button onclick="showAuthModal('login')" class="lo-btn-outline">로그인</button>
-    <button onclick="document.getElementById('lo-contact-section').scrollIntoView({behavior:'smooth'})" class="lo-btn-inquiry" style="white-space:nowrap;padding:0 22px;gap:6px;letter-spacing:-.3px">
-      도입 문의하기
-      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-    </button>
-  </div>
+  <div class="ln-ham" onclick="loToggleMenu()" id="lo-ham"><span></span><span></span><span></span></div>
 </nav>
-
-<!-- ── HERO ── -->
-<section style="position:relative;overflow:hidden;min-height:88vh;display:flex;align-items:center">
-  <!-- 배경 그라디언트 -->
-  <div style="position:absolute;inset:0;background:linear-gradient(135deg,#F8FFF4 0%,#F0F9FF 40%,#FFF8F0 100%)"></div>
-  <!-- 배경 도형들 -->
-  <div style="position:absolute;top:-10%;right:-5%;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(0,196,113,.08) 0%,transparent 70%);pointer-events:none"></div>
-  <div style="position:absolute;bottom:-15%;left:-10%;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(99,91,255,.06) 0%,transparent 70%);pointer-events:none"></div>
-  <!-- 점 패턴 -->
-  <svg style="position:absolute;inset:0;width:100%;height:100%;opacity:.25" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="dots" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#ccc"/></pattern></defs><rect width="100%" height="100%" fill="url(#dots)"/></svg>
-
-  <div style="position:relative;z-index:1;padding:80px 6% 80px;max-width:1280px;margin:0 auto;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center">
-    <!-- 좌측 텍스트 -->
-    <div>
-      <div class="lo-a1" style="display:inline-flex;align-items:center;gap:8px;padding:7px 16px;border-radius:999px;background:#F0FFF8;border:1px solid #C8F5E0;font-size:13px;font-weight:700;color:#00C471;margin-bottom:28px">
-        <span style="width:7px;height:7px;border-radius:50%;background:#00C471;animation:lo-fade 1.5s ease-in-out infinite alternate"></span>
-        자영업자 · 중소기업을 위한 노무 통합 관리 플랫폼
-      </div>
-      <h1 class="lo-a2" style="font-size:clamp(40px,4.5vw,62px);font-weight:900;color:#1a1a1a;letter-spacing:-3px;line-height:1.1;margin-bottom:22px">
-        모든 노무 업무<br>
-        <span style="color:#00C471">노프로</span> 하나로
-      </h1>
-      <p class="lo-a3" style="font-size:18px;color:#666;line-height:1.8;margin-bottom:36px;font-weight:400;letter-spacing:-.2px">
-        급여 자동계산부터 연차 관리, 출퇴근 기록까지.<br>복잡한 노무 업무를 단 하나의 플랫폼으로 끝내세요.
-      </p>
-      <div class="lo-a4" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:48px">
-        <button onclick="document.getElementById('lo-contact-section').scrollIntoView({behavior:'smooth'})" class="lo-btn-green" style="height:56px;padding:0 32px;font-size:17px;border-radius:10px">
-          도입 문의하기 →
-        </button>
-        <button onclick="showAuthModal('signup')" class="lo-btn-gray" style="height:56px;padding:0 32px;font-size:17px;border-radius:10px">
-          무료 체험하기
-        </button>
-      </div>
-      <!-- 수치 -->
-      <div class="lo-a5" style="display:flex;gap:40px;flex-wrap:wrap">
-        <div>
-          <div style="font-size:28px;font-weight:900;color:#1a1a1a;letter-spacing:-1.5px">100+</div>
-          <div style="font-size:13px;color:#999;margin-top:3px;font-weight:500">사용 중인 기업</div>
-        </div>
-        <div style="width:1px;background:#eee"></div>
-        <div>
-          <div style="font-size:28px;font-weight:900;color:#1a1a1a;letter-spacing:-1.5px">98%</div>
-          <div style="font-size:13px;color:#999;margin-top:3px;font-weight:500">급여 자동화율</div>
-        </div>
-        <div style="width:1px;background:#eee"></div>
-        <div>
-          <div style="font-size:28px;font-weight:900;color:#1a1a1a;letter-spacing:-1.5px">3분</div>
-          <div style="font-size:13px;color:#999;margin-top:3px;font-weight:500">월급 정산 완료</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 우측 UI 미리보기 -->
-    <div class="lo-a3" style="position:relative">
-      <!-- 메인 카드 -->
-      <div style="background:#fff;border-radius:20px;padding:28px;box-shadow:0 24px 64px rgba(0,0,0,.12),0 0 0 1px rgba(0,0,0,.05);position:relative;z-index:2">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-          <div>
-            <div style="font-size:13px;color:#999;font-weight:500;margin-bottom:3px">2026년 4월 급여 요약</div>
-            <div style="font-size:22px;font-weight:800;color:#1a1a1a;letter-spacing:-1px">12,345,000원</div>
-          </div>
-          <div style="background:#F0FFF8;border-radius:10px;padding:8px 14px;font-size:12px;font-weight:700;color:#00C471;border:1px solid #C8F5E0">월고정 · 5명</div>
-        </div>
-        <!-- 직원 리스트 -->
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:#F8F8F8;border-radius:10px">
-            <div style="display:flex;align-items:center;gap:10px">
-              <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#635BFF,#9F9AFF);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff">이</div>
-              <div>
-                <div style="font-size:14px;font-weight:700;color:#1a1a1a">이상민</div>
-                <div style="font-size:12px;color:#999">매니저 · 주간</div>
-              </div>
-            </div>
-            <div style="text-align:right">
-              <div style="font-size:14px;font-weight:700;color:#1a1a1a">2,455,750원</div>
-              <div style="font-size:11px;color:#00C471;font-weight:600">출근 22일</div>
-            </div>
-          </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:#F8F8F8;border-radius:10px">
-            <div style="display:flex;align-items:center;gap:10px">
-              <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#10B981,#6EE7B7);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff">김</div>
-              <div>
-                <div style="font-size:14px;font-weight:700;color:#1a1a1a">김민준</div>
-                <div style="font-size:12px;color:#999">선별 · 야간</div>
-              </div>
-            </div>
-            <div style="text-align:right">
-              <div style="font-size:14px;font-weight:700;color:#1a1a1a">2,680,200원</div>
-              <div style="font-size:11px;color:#635BFF;font-weight:600">야간수당 포함</div>
-            </div>
-          </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:#F8F8F8;border-radius:10px">
-            <div style="display:flex;align-items:center;gap:10px">
-              <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#F97316,#FCD34D);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff">박</div>
-              <div>
-                <div style="font-size:14px;font-weight:700;color:#1a1a1a">박서연</div>
-                <div style="font-size:12px;color:#999">바리스타 · 주간</div>
-              </div>
-            </div>
-            <div style="text-align:right">
-              <div style="font-size:14px;font-weight:700;color:#1a1a1a">2,120,000원</div>
-              <div style="font-size:11px;color:#999;font-weight:600">출근 20일</div>
-            </div>
-          </div>
-        </div>
-        <!-- 엑셀 버튼 -->
-        <div style="margin-top:16px;padding:12px 16px;background:#1a1a1a;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:8px">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          <span style="font-size:14px;font-weight:700;color:#fff">급여명세서 엑셀 다운로드</span>
-        </div>
-      </div>
-
-      <!-- 플로팅 뱃지 1 -->
-      <div style="position:absolute;top:-16px;right:-16px;background:#00C471;border-radius:14px;padding:12px 18px;box-shadow:0 8px 24px rgba(0,196,113,.35);z-index:3;animation:lo-up .6s .5s both">
-        <div style="font-size:11px;color:rgba(255,255,255,.8);margin-bottom:2px;font-weight:600">자동 계산 완료</div>
-        <div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:-1px">+₩247,500</div>
-        <div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:1px">야간수당 포함</div>
-      </div>
-
-      <!-- 플로팅 뱃지 2 -->
-      <div style="position:absolute;bottom:-16px;left:-16px;background:#fff;border:1px solid #EFEFEF;border-radius:14px;padding:14px 18px;box-shadow:0 8px 24px rgba(0,0,0,.1);z-index:3;animation:lo-up .6s .65s both">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="width:38px;height:38px;border-radius:10px;background:#F0FFF8;display:flex;align-items:center;justify-content:center">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00C471" stroke-width="2.5" stroke-linecap="round"><polyline points="20,6 9,17 4,12"/></svg>
-          </div>
-          <div>
-            <div style="font-size:13px;font-weight:700;color:#1a1a1a">연차 자동 적립</div>
-            <div style="font-size:12px;color:#999;margin-top:1px">입사일 기준 15일 적립</div>
-          </div>
-        </div>
-      </div>
-    </div>
+<div class="lm-menu" id="lo-mmenu">
+  <a href="#lshowcase" onclick="loToggleMenu()">📱 서비스 화면</a>
+  <a href="#lfeatures" onclick="loToggleMenu()">⚡ 기능 소개</a>
+  <a href="#lhow" onclick="loToggleMenu()">📖 사용방법</a>
+  <a href="#lpricing" onclick="loToggleMenu()">💳 요금제</a>
+  <a href="#lcontact" onclick="loToggleMenu()">📞 문의</a>
+  <a class="lm-cta" onclick="loToggleMenu();showAuthModal('signup')">무료로 시작하기 →</a>
+</div>
+<section class="lh">
+  <div class="lh-badge"><span class="lh-dot"></span>소규모 사업장을 위한 근태·급여 관리 플랫폼</div>
+  <h1 class="lh-title">복잡한 근태관리,<br><span class="lh-accent">노프로로 해결하세요</span></h1>
+  <p class="lh-sub">앱도 엑셀도 아닌, 딱 그 중간의 솔루션</p>
+  <div class="lh-points">
+    <div class="lh-pt"><div class="lh-pt-icon">📱</div><div class="lh-pt-txt"><strong>지문인식·앱 방식</strong>은 지각, 조기퇴근, 외출 등 예외 상황에 대응하지 못해 변수가 너무 많습니다.</div></div>
+    <div class="lh-pt"><div class="lh-pt-icon">📊</div><div class="lh-pt-txt"><strong>엑셀 수기 입력</strong>은 야간·연장수당 계산이 번거롭고, 수식 오류로 급여 실수가 잦습니다.</div></div>
+    <div class="lh-pt"><div class="lh-pt-icon">✅</div><div class="lh-pt-txt"><strong>노프로</strong>는 관리자가 출퇴근만 입력하면 모든 수당을 자동 계산합니다. 3분이면 월급 정산 완료.</div></div>
+  </div>
+  <div class="lh-actions">
+    <button class="lb-pr" onclick="showAuthModal('signup')">무료로 시작하기 →</button>
+    <a href="#lshowcase" class="lb-gh">실제 화면 보기</a>
+  </div>
+  <div class="lh-stats">
+    <div class="lh-stat"><div class="lh-snum">100+</div><div class="lh-slabel">사용 중인 기업</div></div>
+    <div class="lh-stat"><div class="lh-snum">29+</div><div class="lh-slabel">법적 검증 케이스</div></div>
+    <div class="lh-stat"><div class="lh-snum">3분</div><div class="lh-slabel">월급 정산 완료</div></div>
+    <div class="lh-stat"><div class="lh-snum">100%</div><div class="lh-slabel">법적 기준 준수</div></div>
   </div>
 </section>
-
-<!-- ── 고객사 로고 스크롤 ── -->
-<div style="border-top:1px solid #F0F0F0;border-bottom:1px solid #F0F0F0;padding:28px 0;overflow:hidden;background:#FAFAFA">
-  <div style="display:flex;overflow:hidden">
-    <div class="lo-logo-track">
-      <span class="lo-logo-item">명민산업</span>
-      <span class="lo-logo-item">우리산업환경</span>
-      <span class="lo-logo-item">EcoTree</span>
-      <span class="lo-logo-item">대광에코텍</span>
-      <span class="lo-logo-item">영주자원</span>
-      <span class="lo-logo-item">WTR</span>
-      <span class="lo-logo-item">명민자원</span>
-      <span class="lo-logo-item">성원리사이클</span>
-      <span class="lo-logo-item">인천환경</span>
-      <span class="lo-logo-item">그린솔루션</span>
-      <!-- 반복 -->
-      <span class="lo-logo-item">명민산업</span>
-      <span class="lo-logo-item">우리산업환경</span>
-      <span class="lo-logo-item">EcoTree</span>
-      <span class="lo-logo-item">대광에코텍</span>
-      <span class="lo-logo-item">영주자원</span>
-      <span class="lo-logo-item">WTR</span>
-      <span class="lo-logo-item">명민자원</span>
-      <span class="lo-logo-item">성원리사이클</span>
-      <span class="lo-logo-item">인천환경</span>
-      <span class="lo-logo-item">그린솔루션</span>
+<div class="ls" id="lshowcase">
+  <div class="ls-inner">
+    <div class="ls-tabs">
+      <div class="ls-tab active" onclick="loScreen(0,this)">📝 출퇴근 기록</div>
+      <div class="ls-tab" onclick="loScreen(1,this)">📅 근태 현황</div>
+      <div class="ls-tab" onclick="loScreen(2,this)">💰 급여 관리</div>
+      <div class="ls-tab" onclick="loScreen(3,this)">🗓 연차 관리</div>
+      <div class="ls-tab" onclick="loScreen(4,this)">👥 직원 관리</div>
+    </div>
+    <div class="ls-frame">
+      <div class="ls-bar"><div class="ls-dot"></div><div class="ls-dot"></div><div class="ls-dot"></div><div class="ls-url">noprohr.netlify.app · 노무관리 Pro v5</div></div>
+      <div id="lo-sc0" class="ls-panel active">출퇴근 기록 화면 미리보기</div>
+      <div id="lo-sc1" class="ls-panel">근태 현황 화면 미리보기</div>
+      <div id="lo-sc2" class="ls-panel">급여 관리 화면 미리보기</div>
+      <div id="lo-sc3" class="ls-panel">연차 관리 화면 미리보기</div>
+      <div id="lo-sc4" class="ls-panel">직원 관리 화면 미리보기</div>
+      <div class="ls-cap" id="lo-cap">
+        <div class="ls-cap-icon">📝</div>
+        <div><div class="ls-cap-title">출퇴근 기록 입력</div><div class="ls-cap-desc">출퇴근 시간만 입력하면 야간·연장·휴일 수당이 자동 계산됩니다.</div></div>
+      </div>
     </div>
   </div>
 </div>
-
-<!-- ── FEATURES ── -->
-<section id="lo-feat" class="lo-section" style="background:#fff">
-  <div style="max-width:1160px;margin:0 auto">
-    <div style="max-width:560px;margin-bottom:60px">
-      <div class="lo-section-badge">서비스</div>
-      <h2 class="lo-section-title">필요한 기능,<br>전부 여기에</h2>
-      <p class="lo-section-sub">설치 없이 브라우저에서 바로 시작. 어느 기기에서든 동일한 데이터로 업무하세요.</p>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
-
-      <div class="lo-card">
-        <div class="lo-feat-icon" style="background:#EFF6FF">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
-        </div>
-        <h3 style="font-size:17px;font-weight:700;color:#1a1a1a;margin-bottom:10px;letter-spacing:-.3px">스마트 근태 관리</h3>
-        <p style="font-size:14px;color:#777;line-height:1.75">Tab키로 빠른 입력. 야간·초과·휴일 자동 계산. 개인별 휴게시간 설정 지원</p>
-        <div style="margin-top:18px;font-size:12.5px;font-weight:700;color:#3B82F6;background:#EFF6FF;border-radius:6px;padding:4px 10px;display:inline-block">자동화</div>
-      </div>
-
-      <div class="lo-card">
-        <div class="lo-feat-icon" style="background:#F0FFF8">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#00C471" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-        </div>
-        <h3 style="font-size:17px;font-weight:700;color:#1a1a1a;margin-bottom:10px;letter-spacing:-.3px">정확한 급여 계산</h3>
-        <p style="font-size:14px;color:#777;line-height:1.75">시급·월고정·월급제 완벽 구분. 수당·공제·세금 오차 없이 자동 계산</p>
-        <div style="margin-top:18px;font-size:12.5px;font-weight:700;color:#00C471;background:#F0FFF8;border-radius:6px;padding:4px 10px;display:inline-block">정확도 100%</div>
-      </div>
-
-      <div class="lo-card">
-        <div class="lo-feat-icon" style="background:#FFF7ED">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#F97316" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        </div>
-        <h3 style="font-size:17px;font-weight:700;color:#1a1a1a;margin-bottom:10px;letter-spacing:-.3px">연차 자동 적립</h3>
-        <p style="font-size:14px;color:#777;line-height:1.75">입사일 기준 완전 자동 계산. 연차촉진 설정으로 법적 리스크 제로화</p>
-        <div style="margin-top:18px;font-size:12.5px;font-weight:700;color:#F97316;background:#FFF7ED;border-radius:6px;padding:4px 10px;display:inline-block">법적 준수</div>
-      </div>
-
-      <div class="lo-card">
-        <div class="lo-feat-icon" style="background:#F5F3FF">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-        </div>
-        <h3 style="font-size:17px;font-weight:700;color:#1a1a1a;margin-bottom:10px;letter-spacing:-.3px">전문 급여명세서</h3>
-        <p style="font-size:14px;color:#777;line-height:1.75">색상 구분된 프리미엄 엑셀. 급여방식별 시트 자동 분리 출력</p>
-        <div style="margin-top:18px;font-size:12.5px;font-weight:700;color:#8B5CF6;background:#F5F3FF;border-radius:6px;padding:4px 10px;display:inline-block">원클릭 출력</div>
-      </div>
-
-      <div class="lo-card">
-        <div class="lo-feat-icon" style="background:#F0F9FF">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0EA5E9" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
-        </div>
-        <h3 style="font-size:17px;font-weight:700;color:#1a1a1a;margin-bottom:10px;letter-spacing:-.3px">직원 일괄 관리</h3>
-        <p style="font-size:14px;color:#777;line-height:1.75">엑셀처럼 빠른 일괄 추가. 내외국인 구분, 급여방식별 완벽 필터링</p>
-        <div style="margin-top:18px;font-size:12.5px;font-weight:700;color:#0EA5E9;background:#F0F9FF;border-radius:6px;padding:4px 10px;display:inline-block">대량 처리</div>
-      </div>
-
-      <div class="lo-card">
-        <div class="lo-feat-icon" style="background:#F0FFF8">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#00C471" stroke-width="2" stroke-linecap="round"><polyline points="16,3 21,3 21,8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21,16 21,21 16,21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
-        </div>
-        <h3 style="font-size:17px;font-weight:700;color:#1a1a1a;margin-bottom:10px;letter-spacing:-.3px">클라우드 동기화</h3>
-        <p style="font-size:14px;color:#777;line-height:1.75">어느 기기에서나 로그인 하나로 동일한 데이터. 변경사항 실시간 자동 저장</p>
-        <div style="margin-top:18px;font-size:12.5px;font-weight:700;color:#00C471;background:#F0FFF8;border-radius:6px;padding:4px 10px;display:inline-block">실시간 저장</div>
-      </div>
-
-    </div>
+<section class="lsw" id="lfeatures">
+  <div class="l-badge">핵심 기능</div>
+  <h2 class="l-title">필요한 기능만,<br><span>군더더기 없이</span></h2>
+  <p class="l-desc">관리자가 출퇴근 시간을 입력하면, 나머지는 노프로가 알아서 합니다.</p>
+  <div class="lf-grid">
+    <div class="lf-card"><div class="lf-icon">💰</div><div class="lf-name">급여 자동 계산</div><div class="lf-desc">야간·연장·휴일 수당을 근로기준법 기준으로 자동 계산.</div></div>
+    <div class="lf-card"><div class="lf-icon">🕐</div><div class="lf-name">출퇴근 기록</div><div class="lf-desc">관리자 직접 입력으로 모든 예외 상황까지 정확히 처리.</div></div>
+    <div class="lf-card"><div class="lf-icon">📅</div><div class="lf-name">연차 관리</div><div class="lf-desc">입사일 기준 연차 자동 생성, 잔여 연차 실시간 확인.</div></div>
+    <div class="lf-card"><div class="lf-icon">📋</div><div class="lf-name">상세 명세표</div><div class="lf-desc">직원별 급여 명세를 항목별 상세 조회.</div></div>
+    <div class="lf-card"><div class="lf-icon">⚖️</div><div class="lf-name">법적 기준 준수</div><div class="lf-desc">근로기준법 제56조 기준 29가지 케이스 전부 검증.</div></div>
+    <div class="lf-card"><div class="lf-icon">☁️</div><div class="lf-name">클라우드 동기화</div><div class="lf-desc">설치 없이 브라우저에서 바로. 어디서든 접근 가능.</div></div>
+    <div class="lf-card"><div class="lf-icon">📊</div><div class="lf-name">엑셀 출력</div><div class="lf-desc">월별 급여 데이터를 엑셀로 즉시 출력.</div></div>
+    <div class="lf-card"><div class="lf-icon">🔒</div><div class="lf-name">데이터 보안</div><div class="lf-desc">직원 급여 정보는 암호화 저장.</div></div>
   </div>
 </section>
-
-<!-- ── HOW ── -->
-<section id="lo-how" class="lo-section" style="background:#F8F8F8">
-  <div style="max-width:1000px;margin:0 auto">
-    <div style="text-align:center;margin-bottom:64px">
-      <div class="lo-section-badge">사용방법</div>
-      <h2 class="lo-section-title">3단계로 시작하세요</h2>
-      <p class="lo-section-sub">회원가입부터 첫 급여 정산까지 5분이면 충분합니다</p>
+<div class="ldiv"></div>
+<div class="lhow" id="lhow">
+  <div class="lhow-inner">
+    <div class="l-badge">사용방법</div>
+    <h2 class="l-title">3단계로<br><span>바로 시작하세요</span></h2>
+    <p class="l-desc">회원가입부터 첫 급여 정산까지 5분이면 충분합니다.</p>
+    <div class="lhow-steps">
+      <div class="lhow-step"><div class="lhow-num">1</div><div class="lhow-ttl">회원가입</div><div class="lhow-desc">이메일과 회사 정보로 30초 만에 가입 완료.</div></div>
+      <div class="lhow-step"><div class="lhow-num">2</div><div class="lhow-ttl">직원 등록</div><div class="lhow-desc">시급제·월급제·소정근무제·포괄임금제 모두 지원.</div></div>
+      <div class="lhow-step"><div class="lhow-num">3</div><div class="lhow-ttl">급여 정산</div><div class="lhow-desc">출퇴근 시간 입력하면 수당이 자동 계산됩니다.</div></div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:32px;position:relative">
-      <div style="position:absolute;top:40px;left:calc(16.67% + 20px);right:calc(16.67% + 20px);height:2px;background:linear-gradient(90deg,#00C471,#0EA5E9);opacity:.3;pointer-events:none"></div>
-      <div style="text-align:center">
-        <div style="width:80px;height:80px;border-radius:24px;background:#fff;border:2px solid #F0F0F0;display:flex;align-items:center;justify-content:center;margin:0 auto 24px;box-shadow:0 4px 16px rgba(0,0,0,.06)">
-          <span style="font-size:32px;font-weight:900;color:#00C471;letter-spacing:-2px">1</span>
-        </div>
-        <h3 style="font-size:18px;font-weight:700;color:#1a1a1a;margin-bottom:10px;letter-spacing:-.3px">회원가입</h3>
-        <p style="font-size:14.5px;color:#888;line-height:1.7">회사 정보 입력 후<br>1분이면 완료</p>
-      </div>
-      <div style="text-align:center">
-        <div style="width:80px;height:80px;border-radius:24px;background:#fff;border:2px solid #F0F0F0;display:flex;align-items:center;justify-content:center;margin:0 auto 24px;box-shadow:0 4px 16px rgba(0,0,0,.06)">
-          <span style="font-size:32px;font-weight:900;color:#00C471;letter-spacing:-2px">2</span>
-        </div>
-        <h3 style="font-size:18px;font-weight:700;color:#1a1a1a;margin-bottom:10px;letter-spacing:-.3px">직원 등록</h3>
-        <p style="font-size:14.5px;color:#888;line-height:1.7">일괄 추가로<br>전직원 한번에 등록</p>
-      </div>
-      <div style="text-align:center">
-        <div style="width:80px;height:80px;border-radius:24px;background:#fff;border:2px solid #F0F0F0;display:flex;align-items:center;justify-content:center;margin:0 auto 24px;box-shadow:0 4px 16px rgba(0,0,0,.06)">
-          <span style="font-size:32px;font-weight:900;color:#00C471;letter-spacing:-2px">3</span>
-        </div>
-        <h3 style="font-size:18px;font-weight:700;color:#1a1a1a;margin-bottom:10px;letter-spacing:-.3px">바로 사용</h3>
-        <p style="font-size:14.5px;color:#888;line-height:1.7">출퇴근 입력 → 급여 자동계산<br>→ 엑셀 출력</p>
-      </div>
-    </div>
+  </div>
+</div>
+<div class="ldiv"></div>
+<section class="lsw">
+  <div class="l-badge">비교</div>
+  <h2 class="l-title">왜 노프로인가요?</h2>
+  <p class="l-desc">지문인식 앱과 엑셀 사이, 딱 필요한 것만 갖춘 솔루션입니다.</p>
+  <div class="lcmp">
+    <div class="lcmp-hd"><div class="lcmp-h">기능 비교</div><div class="lcmp-h hl">✦ 노프로</div><div class="lcmp-h">지문인식 앱</div><div class="lcmp-h">엑셀 수기</div></div>
+    <div class="lcmp-row"><div class="lcmp-c label">야간·연장·휴일 자동 계산</div><div class="lcmp-c hl"><span class="ck">✓</span> 완전 자동</div><div class="lcmp-c"><span class="cp">△</span> 일부</div><div class="lcmp-c"><span class="cx">✕</span> 수동</div></div>
+    <div class="lcmp-row"><div class="lcmp-c label">예외 상황 처리</div><div class="lcmp-c hl"><span class="ck">✓</span> 완벽</div><div class="lcmp-c"><span class="cx">✕</span> 불가</div><div class="lcmp-c"><span class="cp">△</span> 번거로움</div></div>
+    <div class="lcmp-row"><div class="lcmp-c label">설치 없이 사용</div><div class="lcmp-c hl"><span class="ck">✓</span> 브라우저</div><div class="lcmp-c"><span class="cx">✕</span> 설치 필요</div><div class="lcmp-c"><span class="ck">✓</span> 가능</div></div>
+    <div class="lcmp-row"><div class="lcmp-c label">엑셀 출력</div><div class="lcmp-c hl"><span class="ck">✓</span> 즉시</div><div class="lcmp-c"><span class="cp">△</span> 제한적</div><div class="lcmp-c"><span class="ck">✓</span> 가능</div></div>
+    <div class="lcmp-row"><div class="lcmp-c label">월 비용</div><div class="lcmp-c hl"><span class="ck">✓</span> 5만원~</div><div class="lcmp-c"><span class="cx">✕</span> 수십만원~</div><div class="lcmp-c"><span class="ck">✓</span> 무료</div></div>
   </div>
 </section>
-
-<!-- ── PRICING ── -->
-<section id="lo-price" class="lo-section" style="background:#fff">
-  <div style="max-width:1240px;margin:0 auto">
-    <div style="text-align:center;margin-bottom:60px">
-      <div class="lo-section-badge">요금제</div>
-      <h2 class="lo-section-title">투명한 요금제</h2>
-      <p class="lo-section-sub">숨겨진 비용 없이, 직원 수에 맞게 선택하세요</p>
+<div class="ldiv"></div>
+<div class="lpr" id="lpricing">
+  <div class="lpr-inner">
+    <div class="l-badge">요금제</div>
+    <h2 class="l-title">투명한 요금제</h2>
+    <p class="l-desc">숨겨진 비용 없이, 직원 수에 맞게 선택하세요.</p>
+    <div class="lpr-grid">
+      <div class="lpr-card"><div class="lpr-tier">Starter</div><div class="lpr-price">₩50,000<sub>/월</sub></div><div class="lpr-per">직원 10명까지</div><ul class="lpr-feats"><li><span class="ck">✓</span> 급여 자동 계산</li><li><span class="ck">✓</span> 출퇴근 기록</li><li><span class="ck">✓</span> 연차 관리</li><li><span class="ck">✓</span> 엑셀 출력</li></ul><button class="lpr-btn lpr-btn-g" onclick="showAuthModal('signup')">시작하기</button></div>
+      <div class="lpr-card feat"><div class="lpr-rec">가장 인기</div><div class="lpr-tier">Growth</div><div class="lpr-price">₩150,000<sub>/월</sub></div><div class="lpr-per">직원 50명까지</div><ul class="lpr-feats"><li><span class="ck">✓</span> Starter 모든 기능</li><li><span class="ck">✓</span> 4가지 급여 방식</li><li><span class="ck">✓</span> 상세 명세표</li><li><span class="ck">✓</span> 이메일 지원</li></ul><button class="lpr-btn lpr-btn-s" onclick="showAuthModal('signup')">시작하기 →</button></div>
+      <div class="lpr-card"><div class="lpr-tier">Scale</div><div class="lpr-price">₩200,000<sub>/월</sub></div><div class="lpr-per">직원 100명까지</div><ul class="lpr-feats"><li><span class="ck">✓</span> Growth 모든 기능</li><li><span class="ck">✓</span> 전담 매니저</li><li><span class="ck">✓</span> 우선 지원</li><li><span class="ck">✓</span> 커스텀 설정</li></ul><button class="lpr-btn lpr-btn-g" onclick="showAuthModal('signup')">시작하기</button></div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:20px;padding-top:36px">
-
-      <div class="lo-plan">
-        <div style="font-size:11px;font-weight:700;color:#bbb;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">STARTER</div>
-        <div style="font-size:13.5px;color:#00C471;font-weight:700;margin-bottom:14px">10인 이하</div>
-        <div style="margin-bottom:6px"><span style="font-size:44px;font-weight:900;color:#1a1a1a;letter-spacing:-2px;line-height:1">5</span><span style="font-size:18px;font-weight:500;color:#bbb;margin-left:2px">만원</span></div>
-        <div style="font-size:13px;color:#bbb;margin-bottom:24px">/월 · VAT 별도</div>
-        <div style="height:1px;background:#F5F5F5;margin-bottom:20px"></div>
-        <div style="margin-bottom:24px">
-          <div class="lo-check"><div class="lo-check-mark">✓</div>직원 10명까지</div>
-          <div class="lo-check"><div class="lo-check-mark">✓</div>급여 자동 계산</div>
-          <div class="lo-check"><div class="lo-check-mark">✓</div>연차 관리</div>
-          <div class="lo-check"><div class="lo-check-mark">✓</div>엑셀 내보내기</div>
-        </div>
-        <button onclick="showAuthModal('signup')" class="lo-btn-outline" style="width:100%;justify-content:center;height:48px;border-radius:10px;font-size:15px">시작하기</button>
-      </div>
-
-      <div class="lo-plan featured" style="padding-top:48px;padding-left:28px;padding-right:28px">
-        <div style="position:absolute;top:-1.5px;left:-1.5px;right:-1.5px;height:4px;background:linear-gradient(90deg,#00C471,#0EA5E9);border-radius:18px 18px 0 0"></div>
-        <div style="position:absolute;top:-16px;left:50%;transform:translateX(-50%);white-space:nowrap;padding:6px 18px;border-radius:999px;background:#00C471;font-size:11.5px;font-weight:700;color:#fff;letter-spacing:.3px;box-shadow:0 4px 14px rgba(0,196,113,.4);z-index:10">가장 인기</div>
-        <div style="font-size:11px;font-weight:700;color:#bbb;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;margin-top:20px">GROWTH</div>
-        <div style="font-size:13.5px;color:#00C471;font-weight:700;margin-bottom:14px">50인 이하</div>
-        <div style="margin-bottom:6px"><span style="font-size:44px;font-weight:900;color:#1a1a1a;letter-spacing:-2px;line-height:1">15</span><span style="font-size:18px;font-weight:500;color:#bbb;margin-left:2px">만원</span></div>
-        <div style="font-size:13px;color:#bbb;margin-bottom:24px">/월 · VAT 별도</div>
-        <div style="height:1px;background:#F0FFF8;margin-bottom:20px"></div>
-        <div style="margin-bottom:24px">
-          <div class="lo-check"><div class="lo-check-mark">✓</div>직원 50명까지</div>
-          <div class="lo-check"><div class="lo-check-mark">✓</div>모든 급여방식</div>
-          <div class="lo-check"><div class="lo-check-mark">✓</div>문서 폴더 관리</div>
-          <div class="lo-check"><div class="lo-check-mark">✓</div>클라우드 동기화</div>
-          <div class="lo-check"><div class="lo-check-mark">✓</div>우선 고객지원</div>
-        </div>
-        <button onclick="showAuthModal('signup')" class="lo-btn-green" style="width:100%;justify-content:center;height:48px;border-radius:10px;font-size:15px">시작하기 →</button>
-      </div>
-
-      <div class="lo-plan">
-        <div style="font-size:11px;font-weight:700;color:#bbb;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">SCALE</div>
-        <div style="font-size:13.5px;color:#00C471;font-weight:700;margin-bottom:14px">100인 이하</div>
-        <div style="margin-bottom:6px"><span style="font-size:44px;font-weight:900;color:#1a1a1a;letter-spacing:-2px;line-height:1">20</span><span style="font-size:18px;font-weight:500;color:#bbb;margin-left:2px">만원</span></div>
-        <div style="font-size:13px;color:#bbb;margin-bottom:24px">/월 · VAT 별도</div>
-        <div style="height:1px;background:#F5F5F5;margin-bottom:20px"></div>
-        <div style="margin-bottom:24px">
-          <div class="lo-check"><div class="lo-check-mark">✓</div>직원 100명까지</div>
-          <div class="lo-check"><div class="lo-check-mark">✓</div>모든 기능 포함</div>
-          <div class="lo-check"><div class="lo-check-mark">✓</div>전담 매니저</div>
-          <div class="lo-check"><div class="lo-check-mark">✓</div>데이터 정기 백업</div>
-        </div>
-        <button onclick="showAuthModal('signup')" class="lo-btn-outline" style="width:100%;justify-content:center;height:48px;border-radius:10px;font-size:15px">시작하기</button>
-      </div>
-
-      <div class="lo-plan">
-        <div style="font-size:11px;font-weight:700;color:#bbb;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">ENTERPRISE</div>
-        <div style="font-size:13.5px;color:#F97316;font-weight:700;margin-bottom:14px">100인 이상</div>
-        <div style="margin-bottom:6px"><span style="font-size:44px;font-weight:900;color:#1a1a1a;letter-spacing:-2px;line-height:1">25</span><span style="font-size:18px;font-weight:500;color:#bbb;margin-left:2px">만원</span></div>
-        <div style="font-size:13px;color:#bbb;margin-bottom:24px">/월 · VAT 별도</div>
-        <div style="height:1px;background:#F5F5F5;margin-bottom:20px"></div>
-        <div style="margin-bottom:24px">
-          <div class="lo-check"><div class="lo-check-mark" style="background:#FFF7ED;color:#F97316;border-color:#FED7AA">✓</div>무제한 직원</div>
-          <div class="lo-check"><div class="lo-check-mark" style="background:#FFF7ED;color:#F97316;border-color:#FED7AA">✓</div>맞춤 기능 개발</div>
-          <div class="lo-check"><div class="lo-check-mark" style="background:#FFF7ED;color:#F97316;border-color:#FED7AA">✓</div>전담 CS팀</div>
-          <div class="lo-check"><div class="lo-check-mark" style="background:#FFF7ED;color:#F97316;border-color:#FED7AA">✓</div>SLA 보장</div>
-        </div>
-        <button onclick="showAuthModal('signup')" class="lo-btn-outline" style="width:100%;justify-content:center;height:48px;border-radius:10px;font-size:15px">문의하기</button>
-      </div>
-
-    </div>
+  </div>
+</div>
+<div class="ldiv"></div>
+<section class="lsw">
+  <div class="l-badge">자주 묻는 질문</div>
+  <h2 class="l-title">궁금한 점을<br><span>해소해 드립니다</span></h2>
+  <div class="lfaq-list">
+    <div class="lfaq-item open"><div class="lfaq-q" onclick="this.closest('.lfaq-item').classList.toggle('open')"><div class="lfaq-qtxt">야간·연장·휴일 수당이 자동으로 계산되나요?</div><div class="lfaq-tog">+</div></div><div class="lfaq-a">네. 출퇴근 시간만 입력하면 근로기준법 제56조 기준으로 자동 계산됩니다. 29가지 케이스를 모두 검증했습니다.</div></div>
+    <div class="lfaq-item"><div class="lfaq-q" onclick="this.closest('.lfaq-item').classList.toggle('open')"><div class="lfaq-qtxt">지문인식 앱과 다른 점이 뭔가요?</div><div class="lfaq-tog">+</div></div><div class="lfaq-a">노프로는 관리자가 직접 입력하기 때문에 모든 예외 상황까지 정확히 처리할 수 있습니다.</div></div>
+    <div class="lfaq-item"><div class="lfaq-q" onclick="this.closest('.lfaq-item').classList.toggle('open')"><div class="lfaq-qtxt">설치 없이 바로 사용할 수 있나요?</div><div class="lfaq-tog">+</div></div><div class="lfaq-a">네. 별도 설치 없이 브라우저에서 바로 사용할 수 있습니다.</div></div>
   </div>
 </section>
-
-<!-- ── 도입 문의 ── -->
-<section id="lo-contact-section" class="lo-section" style="background:#1a1a1a">
-  <div style="max-width:900px;margin:0 auto;text-align:center">
-    <div style="display:inline-block;padding:5px 16px;border-radius:999px;background:rgba(0,196,113,.15);border:1px solid rgba(0,196,113,.3);font-size:12.5px;font-weight:700;color:#00C471;margin-bottom:20px;letter-spacing:.3px">도입 문의</div>
-    <h2 style="font-size:clamp(32px,4vw,50px);font-weight:900;color:#fff;letter-spacing:-2.5px;line-height:1.1;margin-bottom:16px">노프로 도입,<br>지금 상담하세요</h2>
-    <p style="font-size:17px;color:rgba(255,255,255,.55);line-height:1.75;margin-bottom:44px">궁금한 점은 언제든지 연락주세요.<br>빠르게 답변드리겠습니다.</p>
-    <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-bottom:40px">
-      <a href="mailto:sangmin275@naver.com" style="display:flex;align-items:center;gap:12px;padding:18px 28px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);text-decoration:none;transition:all .2s" onmouseover="this.style.background='rgba(255,255,255,.1)'" onmouseout="this.style.background='rgba(255,255,255,.06)'">
-        <div style="width:42px;height:42px;border-radius:12px;background:#00C471;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-        </div>
-        <div style="text-align:left">
-          <div style="font-size:12px;color:rgba(255,255,255,.45);margin-bottom:3px;font-weight:500">이메일 문의</div>
-          <div style="font-size:15px;font-weight:700;color:#fff">sangmin275@naver.com</div>
-        </div>
-      </a>
-      <a href="tel:010-2349-4208" style="display:flex;align-items:center;gap:12px;padding:18px 28px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);text-decoration:none;transition:all .2s" onmouseover="this.style.background='rgba(255,255,255,.1)'" onmouseout="this.style.background='rgba(255,255,255,.06)'">
-        <div style="width:42px;height:42px;border-radius:12px;background:#0EA5E9;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.01 1.18 2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.92z"/></svg>
-        </div>
-        <div style="text-align:left">
-          <div style="font-size:12px;color:rgba(255,255,255,.45);margin-bottom:3px;font-weight:500">전화·문자 문의</div>
-          <div style="font-size:15px;font-weight:700;color:#fff">010-2349-4208</div>
-        </div>
-      </a>
-    </div>
-    <button onclick="showAuthModal('signup')" class="lo-btn-green" style="height:56px;padding:0 40px;font-size:17px;border-radius:12px">무료로 시작하기 →</button>
-    <p style="margin-top:20px;font-size:13px;color:rgba(255,255,255,.3)">평일 09:00 – 18:00 운영 · 24시간 이내 답변</p>
+<div class="lcta-wrap" id="lcontact">
+  <div class="lcta">
+    <h2 class="lcta-title">복잡한 급여 계산,<br>노프로가 대신합니다</h2>
+    <p class="lcta-desc">설치 없이 브라우저에서 바로. 5분이면 첫 급여 정산까지 완료됩니다.</p>
+    <button class="lcta-btn" onclick="showAuthModal('signup')">무료로 시작하기 →</button>
+    <div class="lcta-contact">📧 sangmin275@naver.com &nbsp;|&nbsp; 📞 010-2349-4208<br>평일 09:00 – 18:00 운영</div>
   </div>
-</section>
-
-<!-- ── FOOTER ── -->
-<footer style="background:#111;border-top:1px solid #222;padding:28px 6%;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px">
-  <div style="display:flex;align-items:center;gap:9px">
-    <div style="width:28px;height:28px;border-radius:8px;background:#fff;display:flex;align-items:center;justify-content:center">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5z" stroke="#1a1a1a" stroke-width="2.2" stroke-linejoin="round"/><path d="M2 17l10 5 10-5" stroke="#1a1a1a" stroke-width="2.2" stroke-linejoin="round"/><path d="M2 12l10 5 10-5" stroke="rgba(26,26,26,.5)" stroke-width="2.2" stroke-linejoin="round"/></svg>
-    </div>
-    <span style="font-size:15px;font-weight:800;color:#fff;letter-spacing:-.3px">노프로</span>
+</div>
+<div class="lfoot">
+  <div class="lfoot-inner">
+    <div><div class="lfoot-brand">🏢 노프로</div><div class="lfoot-desc">소규모 사업장을 위한 노무 관리 플랫폼.</div></div>
+    <div><div class="lfoot-col-title">서비스</div><ul class="lfoot-links"><li><a href="#lfeatures">기능 소개</a></li><li><a href="#lhow">사용방법</a></li></ul></div>
+    <div><div class="lfoot-col-title">바로가기</div><ul class="lfoot-links"><li><a href="#lpricing">요금제</a></li><li><a href="#lcontact">문의</a></li></ul></div>
+    <div><div class="lfoot-col-title">법적 정보</div><ul class="lfoot-links"><li><a href="#">개인정보처리방침</a></li><li><a href="#">이용약관</a></li></ul></div>
+    <div><div class="lfoot-col-title">고객센터</div><ul class="lfoot-links"><li><a href="tel:01023494208">010-2349-4208</a></li><li><a href="mailto:sangmin275@naver.com">sangmin275@naver.com</a></li></ul></div>
   </div>
-  <span style="font-size:12.5px;color:#555">© 2025 NoPro · 이상민 대표 · 010-2349-4208 · sangmin275@naver.com</span>
-</footer>
-
-<!-- ── 플로팅 문의 버튼 ── -->
-<div id="lo-float-wrap" style="position:fixed;bottom:28px;right:28px;z-index:9999;display:flex;flex-direction:column;align-items:flex-end;gap:12px">
-  <!-- 팝업 -->
-  <div id="lo-float-pop" style="display:none;background:#fff;border:1px solid #EFEFEF;border-radius:18px;padding:22px;width:290px;box-shadow:0 20px 60px rgba(0,0,0,.14),0 0 0 1px rgba(0,0,0,.04);animation:lo-up .2s cubic-bezier(.16,1,.3,1)">
-    <div style="font-size:15px;font-weight:800;color:#1a1a1a;margin-bottom:4px;letter-spacing:-.3px">문의하기</div>
-    <div style="font-size:13px;color:#999;margin-bottom:18px;line-height:1.6">궁금한 점이 있으시면 언제든지 연락주세요</div>
-    <a href="mailto:sangmin275@naver.com" style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:12px;background:#F8F8F8;border:1px solid #EFEFEF;text-decoration:none;margin-bottom:9px;transition:all .15s" onmouseover="this.style.background='#F0F0F0';this.style.borderColor='#DDD'" onmouseout="this.style.background='#F8F8F8';this.style.borderColor='#EFEFEF'">
-      <div style="width:38px;height:38px;border-radius:10px;background:#00C471;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(0,196,113,.3)">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-      </div>
-      <div>
-        <div style="font-size:11px;color:#999;margin-bottom:2px;font-weight:500">이메일</div>
-        <div style="font-size:13.5px;font-weight:700;color:#1a1a1a;letter-spacing:-.2px">sangmin275@naver.com</div>
-      </div>
-    </a>
-    <a href="tel:010-2349-4208" style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:12px;background:#F8F8F8;border:1px solid #EFEFEF;text-decoration:none;transition:all .15s" onmouseover="this.style.background='#F0F0F0';this.style.borderColor='#DDD'" onmouseout="this.style.background='#F8F8F8';this.style.borderColor='#EFEFEF'">
-      <div style="width:38px;height:38px;border-radius:10px;background:#0EA5E9;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(14,165,233,.3)">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.01 1.18 2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.92z"/></svg>
-      </div>
-      <div>
-        <div style="font-size:11px;color:#999;margin-bottom:2px;font-weight:500">전화·문자</div>
-        <div style="font-size:13.5px;font-weight:700;color:#1a1a1a;letter-spacing:-.2px">010-2349-4208</div>
-      </div>
-    </a>
-    <div style="margin-top:14px;padding-top:12px;border-top:1px solid #F5F5F5;font-size:12px;color:#bbb;text-align:center">평일 09:00 – 18:00</div>
-  </div>
-
-  <!-- 버튼 -->
-  <button id="lo-float-btn"
-    onclick="(()=>{const p=document.getElementById('lo-float-pop');const b=document.getElementById('lo-float-btn');const open=p.style.display!=='block';p.style.display=open?'block':'none';b.querySelector('.lo-float-label').textContent=open?'닫기':'도입 문의하기';b.style.background=open?'#333':'#1a1a1a'})()"
-    style="display:flex;align-items:center;gap:8px;padding:0 22px;height:50px;background:#1a1a1a;color:#fff;border:none;border-radius:999px;font-size:14.5px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;box-shadow:0 4px 24px rgba(0,0,0,.25),0 0 0 1px rgba(255,255,255,.08) inset;letter-spacing:-.2px"
-    onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 32px rgba(0,0,0,.3),0 0 0 1px rgba(255,255,255,.08) inset'" onmouseout="this.style.transform='';this.style.boxShadow='0 4px 24px rgba(0,0,0,.25),0 0 0 1px rgba(255,255,255,.08) inset'">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-    <span class="lo-float-label">도입 문의하기</span>
-  </button>
+  <div class="lfoot-bottom"><div class="lfoot-copy">© 2025 노프로. All rights reserved.</div></div>
 </div>
 
-</div>
 </div>
 
 <!-- ══ 로그인/회원가입 오버레이 ══ -->
@@ -2956,9 +2739,9 @@ function updateRowCalc(eid){
     const workCell = tr.querySelector('.work-cell');
     const nightCell = tr.querySelector('.night-cell');
     const otCell = tr.querySelector('.ot-cell');
-    if(workCell) workCell.textContent = (c.work/60).toFixed(1);
-    if(nightCell) nightCell.textContent = c.nightM>0 ? (c.nightM/60).toFixed(1) : '';
-    if(otCell) otCell.textContent = c.ot>0 ? (c.ot/60).toFixed(1) : '';
+    if(workCell) workCell.textContent = (c.work/60).toFixed(2);
+    if(nightCell) nightCell.textContent = c.nightM>0 ? (c.nightM/60).toFixed(2) : '';
+    if(otCell) otCell.textContent = c.ot>0 ? (c.ot/60).toFixed(2) : '';
   });
 }
 
@@ -3108,8 +2891,8 @@ function renderCal(){
   let h=`<div class="sg5">
     <div class="sc"><div class="sc-l">근무일</div><div class="sc-v">${s.wdays}<span class="sc-u">일</span></div></div>
     <div class="sc"><div class="sc-l">연차사용</div><div class="sc-v" style="color:var(--green)">${s.aldays}<span class="sc-u">일</span></div></div>
-    <div class="sc"><div class="sc-l">야간</div><div class="sc-v">${(s.tNightH||0).toFixed(1)}<span class="sc-u">h</span></div></div>
-    <div class="sc"><div class="sc-l">연장</div><div class="sc-v">${((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(1)}<span class="sc-u">h</span></div></div>
+    <div class="sc"><div class="sc-l">야간</div><div class="sc-v">${(s.tNightH||0).toFixed(2)}<span class="sc-u">h</span></div></div>
+    <div class="sc"><div class="sc-l">연장</div><div class="sc-v">${((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2)}<span class="sc-u">h</span></div></div>
     <div class="sc ok"><div class="sc-l">월 급여</div><div class="sc-v" style="font-size:15px;color:var(--green)">${Math.round(s.total/10000)}<span class="sc-u">만원</span></div></div>
   </div>
   <div style="background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:11px 15px;margin-bottom:11px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 3px rgba(0,0,0,.05)">
@@ -3151,8 +2934,8 @@ function renderCal(){
     } else if(c){
       inner+=`<div class="cti">${rec.start}~${rec.end}</div><div class="cwk">${fmtH(c.work)}</div><div>`;
       if(c.crossed)inner+=`<span class="tch" style="background:var(--gbg);color:#065F46">익일</span>`;
-      if(c.nightM>30)inner+=`<span class="tch" style="background:var(--abg);color:#92400E">야${(c.nightM/60).toFixed(1)}h</span>`;
-      if(c.ot>0)inner+=`<span class="tch" style="background:#EDE9FE;color:#4C1D95">연${(c.ot/60).toFixed(1)}h</span>`;
+      if(c.nightM>30)inner+=`<span class="tch" style="background:var(--abg);color:#92400E">야${(c.nightM/60).toFixed(2)}h</span>`;
+      if(c.ot>0)inner+=`<span class="tch" style="background:#EDE9FE;color:#4C1D95">연${(c.ot/60).toFixed(2)}h</span>`;
       if(autoH)inner+=`<span class="tch" style="background:#FED7AA;color:#9A3412">휴</span>`;
       inner+=`</div>`;
     }
@@ -3182,7 +2965,7 @@ function renderOv(){
       else tr+=`<td class="mt">-</td>`;
     }
     const s=monthSummary(emp.id,vY,vM);
-    tr+=`<td class="sm">${s.wdays}일</td><td class="sm" style="background:var(--gbg);color:var(--green)">${s.aldays}일</td><td class="sm">${s.twkH.toFixed(1)}h</td><td class="sm">${Math.round(s.total/10000)}만</td>`;
+    tr+=`<td class="sm">${s.wdays}일</td><td class="sm" style="background:var(--gbg);color:var(--green)">${s.aldays}일</td><td class="sm">${s.twkH.toFixed(2)}h</td><td class="sm">${Math.round(s.total/10000)}만</td>`;
     return`<tr>${tr}</tr>`;
   }).join('');
   return`<div class="ov-w"><table class="ov-t"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table></div>`;
@@ -3414,10 +3197,10 @@ function renderXlPreview(){
       <td class="num xl-editable">${s.annualPay>0?fmt$(s.annualPay):''}</td>
       ${allowCells}
       <td class="num" style="font-weight:500;background:#EFF6FF">${fmt$(basePay)}</td>
-      <td class="num">${s.twkH>0?s.twkH.toFixed(1):''}</td>
+      <td class="num">${s.twkH>0?s.twkH.toFixed(2):''}</td>
       <td class="num" style="${(s.tExtraWorkH||0)>0?'color:#1565C0;font-weight:500':''}">${(s.tExtraWorkH||0)>0?(s.tExtraWorkH).toFixed(2):''}</td>
       <td class="num" style="${s.tNightH>0?'color:#0C447C;font-weight:500':''}">${s.tNightH>0?s.tNightH.toFixed(2):''}</td>
-      <td class="num" style="${s.tOtNightH>0?'color:#534AB7;font-weight:500':''}">${s.tOtNightH>0?s.tOtNightH.toFixed(2):''}</td>
+      <td class="num" style="${((s.tOtDayH||0)+(s.tOtNightH||0))>0?'color:#534AB7;font-weight:500':''}">${((s.tOtDayH||0)+(s.tOtNightH||0))>0?((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2):''}</td>
       <td class="num" style="${((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0))>0?'color:#854F0B;font-weight:500':''}">${((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0))>0?((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0)).toFixed(2):''}</td>
       <td class="num">${s.adays>0?s.adays:''}</td>
       <td class="num" style="${(s.tExtraWorkPay||0)>0?'color:#1565C0;font-weight:700':''}">${(s.tExtraWorkPay||0)>0?fmt$(s.tExtraWorkPay):''}</td>
@@ -6578,9 +6361,9 @@ function exportMonthlyExcel(){
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+2}),s.wdays,S.num(C.green,ei%2===0?C.green4:'E8F5E9',true));
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+3}),s.adays,S.num(s.adays>0?C.rose:C.gray,s.adays>0?(ei%2===0?C.rose4:'FFEBEE'):bg,s.adays>0));
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+4}),+s.aldays.toFixed(1),S.numDec(C.orange2,ei%2===0?C.orange4:'FFF3E0'));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+5}),+s.twkH.toFixed(1),S.numDec(C.navy,bg,true));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+6}),+(s.tNightH||0).toFixed(1),S.numDec(C.purple2,ei%2===0?C.purple4:'F3E5F5'));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+7}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(1),S.numDec(C.blue,ei%2===0?C.blue4:'E3F2FD'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+5}),+s.twkH.toFixed(2),S.numDec(C.navy,bg,true));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+6}),+(s.tNightH||0).toFixed(2),S.numDec(C.purple2,ei%2===0?C.purple4:'F3E5F5'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+7}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),S.numDec(C.blue,ei%2===0?C.blue4:'E3F2FD'));
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+8}),totalPay,S.num('FFFFFF','0F2952',true));
       ws['!rows'].push({hpt:20});
       R++;
@@ -6622,9 +6405,9 @@ function exportMonthlyExcel(){
       ['출근일',s.wdays,'일',C.green,C.green4],
       ['결근일',s.adays,'일',C.rose,C.rose4],
       ['연차',+s.aldays.toFixed(1),'일',C.orange2,C.orange4],
-      ['총근무',+s.twkH.toFixed(1),'h',C.navy,C.blue4],
-      ['야간',+(s.tNightH||0).toFixed(1),'h',C.purple2,C.purple4],
-      ['연장',+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(1),'h',C.blue,C.blue3],
+      ['총근무',+s.twkH.toFixed(2),'h',C.navy,C.blue4],
+      ['야간',+(s.tNightH||0).toFixed(2),'h',C.purple2,C.purple4],
+      ['연장',+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),'h',C.blue,C.blue3],
     ];
     cards.forEach((card,i)=>{
       const col=i*2;
@@ -7426,8 +7209,6 @@ async function doAuthSignup(){
 
 function enterApp(company){
   document.getElementById('landing-overlay').style.display='none';
-  const fw=document.getElementById('lo-float-wrap');
-  if(fw) fw.style.display='none';
   document.getElementById('auth-overlay').style.display='none';
   document.getElementById('admin-overlay').style.display='none';
   const badge=document.getElementById('company-name-badge');
@@ -7672,8 +7453,6 @@ async function admDeleteUser(id){
 
 function showLanding(){
   document.getElementById('landing-overlay').style.display='block';
-  const fw=document.getElementById('lo-float-wrap');
-  if(fw) fw.style.display='flex';
   document.getElementById('auth-overlay').style.display='none';
   document.getElementById('admin-overlay').style.display='none';
   document.querySelector('.app').style.display='none';
@@ -7751,23 +7530,39 @@ async function sbLoadAll(companyId) {
 
 // ── 랜딩 노이즈 + 스크롤 애니메이션 ──
 function initLandingEffects(){
-  try{
-    const c=document.getElementById('lo-noise');
-    if(c){const ctx=c.getContext('2d');c.width=200;c.height=200;const d=ctx.createImageData(200,200);for(let i=0;i<d.data.length;i+=4){const v=Math.random()*255;d.data[i]=d.data[i+1]=d.data[i+2]=v;d.data[i+3]=30}ctx.putImageData(d,0,0);}
-  }catch(e){}
   const obs=new IntersectionObserver((entries)=>{
     entries.forEach(en=>{
     if(en.isIntersecting){en.target.style.opacity='1';en.target.style.transform='translateY(0)';}
   });
 },{threshold:.1,rootMargin:'0px 0px -50px 0px'});
   setTimeout(()=>{
-    document.querySelectorAll('#lo .lo-card,.lo-plan').forEach(el=>{
+    document.querySelectorAll('#landing-overlay .lf-card,#landing-overlay .lpr-card,#landing-overlay .lhow-step').forEach(el=>{
       el.style.opacity='0';el.style.transform='translateY(24px)';
       el.style.transition='opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1)';
       obs.observe(el);
     });
   },300);
 }
+
+// ── 랜딩 서비스 화면 탭 ──
+const loCaps=[
+  {icon:'📝',title:'출퇴근 기록 입력',desc:'출퇴근 시간만 입력하면 야간·연장·휴일 수당이 자동 계산됩니다.'},
+  {icon:'📅',title:'근태 현황 캘린더',desc:'직원별 월간 근태를 캘린더로 한눈에 확인할 수 있습니다.'},
+  {icon:'💰',title:'급여 관리',desc:'직원별 급여를 카드 형태로 상세하게 조회할 수 있습니다.'},
+  {icon:'🗓',title:'연차 관리',desc:'입사일 기준 연차 자동 생성. 연차수당도 자동 계산됩니다.'},
+  {icon:'👥',title:'직원 관리',desc:'직원 정보 등록·수정. 드래그로 순서 변경도 가능합니다.'}
+];
+function loScreen(idx,tab){
+  document.querySelectorAll('.ls-panel').forEach((p,i)=>p.classList.toggle('active',i===idx));
+  document.querySelectorAll('.ls-tab').forEach((t,i)=>t.classList.toggle('active',i===idx));
+  const c=loCaps[idx];
+  document.getElementById('lo-cap').innerHTML='<div class="ls-cap-icon">'+c.icon+'</div><div><div class="ls-cap-title">'+c.title+'</div><div class="ls-cap-desc">'+c.desc+'</div></div>';
+}
+function loToggleMenu(){document.getElementById('lo-mmenu').classList.toggle('open');}
+document.addEventListener('click',function(e){
+  var m=document.getElementById('lo-mmenu'),h=document.getElementById('lo-ham');
+  if(m&&h&&!m.contains(e.target)&&!h.contains(e.target))m.classList.remove('open');
+});
 </script>
 </body>
 </html>
