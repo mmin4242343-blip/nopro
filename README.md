@@ -1,4 +1,4 @@
-[index (4).html](https://github.com/user-attachments/files/26527768/index.4.html)
+[index (5).html](https://github.com/user-attachments/files/26528193/index.5.html)
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -658,7 +658,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
     <h2 class="lcta-title">복잡한 급여 계산,<br>노프로가 대신합니다</h2>
     <p class="lcta-desc">설치 없이 브라우저에서 바로. 5분이면 첫 급여 정산까지 완료됩니다.</p>
     <button class="lcta-btn" onclick="showAuthModal()">무료로 시작하기 →</button>
-    <div class="lcta-contact">📧 sangmin275@naver.com &nbsp;|&nbsp; 📞 010-2349-4208<br>평일 09:00 – 18:00 운영</div>
+    <div class="lcta-contact">📧 <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="4e3d2f20292327207c797b0e202f382b3c602d2123">[email&#160;protected]</a> &nbsp;|&nbsp; 📞 010-2349-4208<br>평일 09:00 – 18:00 운영</div>
   </div>
 </div>
 <div class="lfoot">
@@ -667,12 +667,12 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
     <div><div class="lfoot-col-title">서비스</div><ul class="lfoot-links"><li><a href="#lfeatures">기능 소개</a></li><li><a href="#lhow">사용방법</a></li></ul></div>
     <div><div class="lfoot-col-title">바로가기</div><ul class="lfoot-links"><li><a href="#lpricing">요금제</a></li><li><a href="#lcontact">문의</a></li></ul></div>
     <div><div class="lfoot-col-title">법적 정보</div><ul class="lfoot-links"><li><a href="#">개인정보처리방침</a></li><li><a href="#">이용약관</a></li></ul></div>
-    <div><div class="lfoot-col-title">고객센터</div><ul class="lfoot-links"><li><a href="tel:01023494208">010-2349-4208</a></li><li><a href="mailto:sangmin275@naver.com">sangmin275@naver.com</a></li></ul></div>
+    <div><div class="lfoot-col-title">고객센터</div><ul class="lfoot-links"><li><a href="tel:01023494208">010-2349-4208</a></li><li><a href="/cdn-cgi/l/email-protection#bdcedcd3dad0d4d38f8a88fdd3dccbd8cf93ded2d0"><span class="__cf_email__" data-cfemail="7d0e1c131a1014134f4a483d131c0b180f531e1210">[email&#160;protected]</span></a></li></ul></div>
   </div>
   <div class="lfoot-bottom"><div class="lfoot-copy">© 2025 노프로. All rights reserved.</div></div>
 </div>
 </div>
-<script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 const loCaps=[
   {icon:'📝',title:'출퇴근 기록 입력',desc:'출퇴근 시간만 입력하면 야간·연장·휴일 수당이 자동 계산됩니다.'},
   {icon:'📅',title:'근태 현황 캘린더',desc:'직원별 월간 근태를 캘린더로 한눈에 확인할 수 있습니다.'},
@@ -1457,13 +1457,43 @@ document.addEventListener('click',e=>{
             <label class="tgl"><input type="checkbox" id="tog-hol-monthly" checked onchange="updNotes()"><div class="ttr"></div><div class="tth"></div></label>
           </div>
           <div id="hol-monthly-detail" style="margin-top:4px;padding:8px 10px;background:var(--surf);border-radius:8px;border:1px solid var(--bd)">
-            <div class="sr" style="margin-bottom:6px">
-              <div><div class="sl" style="font-size:11px">8h 이내 (통상시급 × 1.5배)</div><div class="ss" id="hol-monthly-std-note" style="color:var(--teal)">ON: ×150%</div></div>
-              <label class="tgl"><input type="checkbox" id="tog-hol-monthly-std" checked onchange="updNotes()"><div class="ttr"></div><div class="tth"></div></label>
+            <!-- 방식 선택 탭 -->
+            <div style="display:flex;gap:6px;margin-bottom:10px">
+              <button id="btn-hol-auto" onclick="setHolMode('auto')"
+                style="flex:1;padding:5px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--teal);background:var(--teal);color:#fff;font-family:inherit">
+                📊 자동계산
+              </button>
+              <button id="btn-hol-fixed" onclick="setHolMode('fixed')"
+                style="flex:1;padding:5px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--bd2);background:none;color:var(--ink3);font-family:inherit">
+                💰 고정금액
+              </button>
             </div>
-            <div class="sr">
-              <div><div class="sl" style="font-size:11px">8h 초과 (통상시급 × 2.0배)</div><div class="ss" id="hol-monthly-ot-note" style="color:var(--teal)">ON: ×200%</div></div>
-              <label class="tgl"><input type="checkbox" id="tog-hol-monthly-ot" checked onchange="updNotes()"><div class="ttr"></div><div class="tth"></div></label>
+            <!-- 자동계산 -->
+            <div id="hol-mode-auto">
+              <div class="sr" style="margin-bottom:6px">
+                <div><div class="sl" style="font-size:11px">8h 이내 (통상시급 × 1.5배)</div><div class="ss" id="hol-monthly-std-note" style="color:var(--teal)">ON: ×150%</div></div>
+                <label class="tgl"><input type="checkbox" id="tog-hol-monthly-std" checked onchange="updNotes()"><div class="ttr"></div><div class="tth"></div></label>
+              </div>
+              <div class="sr">
+                <div><div class="sl" style="font-size:11px">8h 초과 (통상시급 × 2.0배)</div><div class="ss" id="hol-monthly-ot-note" style="color:var(--teal)">ON: ×200%</div></div>
+                <label class="tgl"><input type="checkbox" id="tog-hol-monthly-ot" checked onchange="updNotes()"><div class="ttr"></div><div class="tth"></div></label>
+              </div>
+            </div>
+            <!-- 고정금액 -->
+            <div id="hol-mode-fixed" style="display:none">
+              <div style="font-size:11px;color:var(--ink3);margin-bottom:6px">
+                ⚠️ 법정 최소금액 이상이어야 합니다<br>
+                <span style="color:var(--rose);font-size:10px">예) 시급 10,000원 × 8h × 1.5 = 최소 120,000원</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <div style="font-size:12px;font-weight:600;color:var(--ink2)">휴일 고정 지급액</div>
+                <input type="number" id="inp-hol-fixed-amount" 
+                  placeholder="예: 120000"
+                  style="flex:1;border:1.5px solid var(--bd2);border-radius:7px;padding:5px 8px;font-size:12px;font-family:inherit;text-align:right"
+                  onchange="POL.holFixedAmount=+this.value;saveLS();updNotes()">
+                <span style="font-size:12px;color:var(--ink3)">원</span>
+              </div>
+              <div style="font-size:10px;color:var(--ink3);margin-top:4px">몇 시간 근무해도 동일 금액 지급</div>
             </div>
           </div>
           <div class="divider"></div>
@@ -2003,9 +2033,25 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode){
   const otDay=Math.max(0, ot-otNight);
 
   if(mode==='pohal'){
+    // 포괄임금제: 평일 수당 없음, 휴일만 별도 계산
+    let holDayStdPay=0, holDayOtPay=0;
+    if(isHol){
+      const holMode = POL.holMode||'auto';
+      if(holMode==='fixed' && POL.holFixedAmount>0){
+        // 고정금액 지급
+        holDayStdPay = POL.holFixedAmount;
+      } else {
+        // 자동계산: 통상시급(월급÷209h) 기준
+        const stdM = Math.min(work, 480);
+        const otM  = Math.max(0, work-480);
+        if(POL.holMonthlyStd!==false) holDayStdPay = r10(rate*1.5*(stdM/60));
+        if(POL.holMonthlyOt!==false)  holDayOtPay  = r10(rate*2.0*(otM/60));
+      }
+    }
+    const totalPay = holDayStdPay + holDayOtPay;
     return{gross,deduct,work,nightM,otDay,otNight,ot,crossed,
       basePay:0,nightPay:0,otDayPay:0,otNightPay:0,
-      holDayStdPay:0,holNightStdPay:0,holDayOtPay:0,holNightOtPay:0,totalPay:0};
+      holDayStdPay,holNightStdPay:0,holDayOtPay,holNightOtPay:0,totalPay};
   }
 
   if(mode==='monthly'){
@@ -4518,7 +4564,7 @@ function setBasePay(m){
     if(sotRow)sotRow.style.display='none';
     if(juhyuTgl)juhyuTgl.classList.add('dis');
     if(juhyuSs){juhyuSs.textContent='포괄임금제: 주휴 월급에 포함';juhyuSs.style.color='var(--amber)';}
-    if(prem)prem.style.display='none';if(pohalInfo)pohalInfo.style.display='block';renderPohalBks();
+    if(prem)prem.style.display='none';if(pohalInfo)pohalInfo.style.display='block';renderPohalBks();setTimeout(initHolMode,100);
     if(monthlyRow)monthlyRow.style.display='flex';
     if(infoEl){infoEl.textContent='포괄임금제: 월급 고정, 가산수당 없음';infoEl.className='info amber';}
     const rr3=document.getElementById('sr-base-rate');if(rr3)rr3.style.display='none';
@@ -5260,6 +5306,36 @@ document.addEventListener('keydown', function(e) {
     if(next){ next.focus(); next.select(); }
   }
 }, true);
+
+// ══ 포괄임금제 휴일수당 방식 관리 ══
+function setHolMode(mode){
+  POL.holMode = mode; // 'auto' or 'fixed'
+  saveLS();
+  const autoDiv = document.getElementById('hol-mode-auto');
+  const fixedDiv = document.getElementById('hol-mode-fixed');
+  const btnAuto = document.getElementById('btn-hol-auto');
+  const btnFixed = document.getElementById('btn-hol-fixed');
+  if(!autoDiv||!fixedDiv) return;
+  if(mode==='auto'){
+    autoDiv.style.display='block';
+    fixedDiv.style.display='none';
+    if(btnAuto){btnAuto.style.background='var(--teal)';btnAuto.style.color='#fff';btnAuto.style.borderColor='var(--teal)';}
+    if(btnFixed){btnFixed.style.background='none';btnFixed.style.color='var(--ink3)';btnFixed.style.borderColor='var(--bd2)';}
+  } else {
+    autoDiv.style.display='none';
+    fixedDiv.style.display='block';
+    if(btnFixed){btnFixed.style.background='var(--amber)';btnFixed.style.color='#fff';btnFixed.style.borderColor='var(--amber)';}
+    if(btnAuto){btnAuto.style.background='none';btnAuto.style.color='var(--ink3)';btnAuto.style.borderColor='var(--bd2)';}
+    // 고정금액 입력란에 저장된 값 복원
+    const inp = document.getElementById('inp-hol-fixed-amount');
+    if(inp && POL.holFixedAmount) inp.value = POL.holFixedAmount;
+  }
+}
+
+function initHolMode(){
+  const mode = POL.holMode || 'auto';
+  setHolMode(mode);
+}
 
 // ══ 포괄임금제 휴게시간 관리 ══
 function renderPohalBks(){
@@ -7578,15 +7654,4 @@ async function sbLoadAll(companyId) {
   if(map.allow)          { ALLOWANCE_REC = map.allow; localStorage.setItem('npm5_allow', JSON.stringify(ALLOWANCE_REC)); }
   if(map.tax)            localStorage.setItem('npm5_tax', JSON.stringify(map.tax));
   if(map.leave_settings) localStorage.setItem('npm5_leave_settings', JSON.stringify(map.leave_settings));
-  if(map.leave_overrides)localStorage.setItem('npm5_leave_overrides', JSON.stringify(map.leave_overrides));
-  if(map.folders)        localStorage.setItem('npm5_folders', JSON.stringify(map.folders));
-
-  return map;
-}
-
-
-// ── 랜딩 노이즈 + 스크롤 애니메이션 ──
-function initLandingEffects(){
-  try{
-    const c=document.getElementById('lo-noise');
-    if(c){const ctx=c.getContext('2d');c.widt
+  if(map.leave_overrides)localStorage.setItem
