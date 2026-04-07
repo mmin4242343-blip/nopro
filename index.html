@@ -3205,7 +3205,7 @@ function renderXlPreview(){
       <td class="num">${s.adays>0?s.adays:''}</td>
       <td class="num" style="${(s.tExtraWorkPay||0)>0?'color:#1565C0;font-weight:700':''}">${(s.tExtraWorkPay||0)>0?fmt$(s.tExtraWorkPay):''}</td>
       <td class="num" style="${s.tNightPay>0?'color:#0C447C;font-weight:700':''}">${s.tNightPay>0?fmt$(s.tNightPay):''}</td>
-      <td class="num" style="${s.tOtNightPay>0?'color:#534AB7;font-weight:700':''}">${s.tOtNightPay>0?fmt$(s.tOtNightPay):''}</td>
+      <td class="num" style="${((s.tOtDayPay||0)+(s.tOtNightPay||0))>0?'color:#534AB7;font-weight:700':''}">${((s.tOtDayPay||0)+(s.tOtNightPay||0))>0?fmt$((s.tOtDayPay||0)+(s.tOtNightPay||0)):''}</td>
       <td class="num" style="${(s.tHolPayNew||0)>0?'color:#854F0B;font-weight:700':''}">${(s.tHolPayNew||0)>0?fmt$(s.tHolPayNew):''}</td>
       <td class="num" style="${(s.tMonthlyHolStdPay||0)>0?'color:#854F0B;font-weight:700':''}">${(s.tMonthlyHolStdPay||0)>0?fmt$(s.tMonthlyHolStdPay):''}</td>
       <td class="num" style="${(s.tMonthlyHolOtPay||0)>0?'color:#993C1D;font-weight:700':''}">${(s.tMonthlyHolOtPay||0)>0?fmt$(s.tMonthlyHolOtPay):''}</td>
