@@ -1,4 +1,4 @@
-[index (5).html](https://github.com/user-attachments/files/26528193/index.5.html)
+[index (7).html](https://github.com/user-attachments/files/26530840/index.7.html)
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -2806,9 +2806,9 @@ function updateRowCalc(eid){
     const workCell = tr.querySelector('.work-cell');
     const nightCell = tr.querySelector('.night-cell');
     const otCell = tr.querySelector('.ot-cell');
-    if(workCell) workCell.textContent = (c.work/60).toFixed(1);
-    if(nightCell) nightCell.textContent = c.nightM>0 ? (c.nightM/60).toFixed(1) : '';
-    if(otCell) otCell.textContent = c.ot>0 ? (c.ot/60).toFixed(1) : '';
+    if(workCell) workCell.textContent = (c.work/60).toFixed(2);
+    if(nightCell) nightCell.textContent = c.nightM>0 ? (c.nightM/60).toFixed(2) : '';
+    if(otCell) otCell.textContent = c.ot>0 ? (c.ot/60).toFixed(2) : '';
   });
 }
 
@@ -2958,8 +2958,8 @@ function renderCal(){
   let h=`<div class="sg5">
     <div class="sc"><div class="sc-l">근무일</div><div class="sc-v">${s.wdays}<span class="sc-u">일</span></div></div>
     <div class="sc"><div class="sc-l">연차사용</div><div class="sc-v" style="color:var(--green)">${s.aldays}<span class="sc-u">일</span></div></div>
-    <div class="sc"><div class="sc-l">야간</div><div class="sc-v">${(s.tNightH||0).toFixed(1)}<span class="sc-u">h</span></div></div>
-    <div class="sc"><div class="sc-l">연장</div><div class="sc-v">${((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(1)}<span class="sc-u">h</span></div></div>
+    <div class="sc"><div class="sc-l">야간</div><div class="sc-v">${(s.tNightH||0).toFixed(2)}<span class="sc-u">h</span></div></div>
+    <div class="sc"><div class="sc-l">연장</div><div class="sc-v">${((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2)}<span class="sc-u">h</span></div></div>
     <div class="sc ok"><div class="sc-l">월 급여</div><div class="sc-v" style="font-size:15px;color:var(--green)">${Math.round(s.total/10000)}<span class="sc-u">만원</span></div></div>
   </div>
   <div style="background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:11px 15px;margin-bottom:11px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 3px rgba(0,0,0,.05)">
@@ -3001,7 +3001,7 @@ function renderCal(){
     } else if(c){
       inner+=`<div class="cti">${rec.start}~${rec.end}</div><div class="cwk">${fmtH(c.work)}</div><div>`;
       if(c.crossed)inner+=`<span class="tch" style="background:var(--gbg);color:#065F46">익일</span>`;
-      if(c.nightM>30)inner+=`<span class="tch" style="background:var(--abg);color:#92400E">야${(c.nightM/60).toFixed(1)}h</span>`;
+      if(c.nightM>30)inner+=`<span class="tch" style="background:var(--abg);color:#92400E">야${(c.nightM/60).toFixed(2)}h</span>`;
       if(c.ot>0)inner+=`<span class="tch" style="background:#EDE9FE;color:#4C1D95">연${(c.ot/60).toFixed(1)}h</span>`;
       if(autoH)inner+=`<span class="tch" style="background:#FED7AA;color:#9A3412">휴</span>`;
       inner+=`</div>`;
@@ -3032,7 +3032,7 @@ function renderOv(){
       else tr+=`<td class="mt">-</td>`;
     }
     const s=monthSummary(emp.id,vY,vM);
-    tr+=`<td class="sm">${s.wdays}일</td><td class="sm" style="background:var(--gbg);color:var(--green)">${s.aldays}일</td><td class="sm">${s.twkH.toFixed(1)}h</td><td class="sm">${Math.round(s.total/10000)}만</td>`;
+    tr+=`<td class="sm">${s.wdays}일</td><td class="sm" style="background:var(--gbg);color:var(--green)">${s.aldays}일</td><td class="sm">${s.twkH.toFixed(2)}h</td><td class="sm">${Math.round(s.total/10000)}만</td>`;
     return`<tr>${tr}</tr>`;
   }).join('');
   return`<div class="ov-w"><table class="ov-t"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table></div>`;
@@ -3264,10 +3264,10 @@ function renderXlPreview(){
       <td class="num xl-editable">${s.annualPay>0?fmt$(s.annualPay):''}</td>
       ${allowCells}
       <td class="num" style="font-weight:500;background:#EFF6FF">${fmt$(basePay)}</td>
-      <td class="num">${s.twkH>0?s.twkH.toFixed(1):''}</td>
+      <td class="num">${s.twkH>0?s.twkH.toFixed(2):''}</td>
       <td class="num" style="${(s.tExtraWorkH||0)>0?'color:#1565C0;font-weight:500':''}">${(s.tExtraWorkH||0)>0?(s.tExtraWorkH).toFixed(2):''}</td>
       <td class="num" style="${s.tNightH>0?'color:#0C447C;font-weight:500':''}">${s.tNightH>0?s.tNightH.toFixed(2):''}</td>
-      <td class="num" style="${s.tOtNightH>0?'color:#534AB7;font-weight:500':''}">${s.tOtNightH>0?s.tOtNightH.toFixed(2):''}</td>
+      <td class="num" style="${((s.tOtDayH||0)+(s.tOtNightH||0))>0?'color:#534AB7;font-weight:500':''}">${((s.tOtDayH||0)+(s.tOtNightH||0))>0?((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2):''}</td>
       <td class="num" style="${((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0))>0?'color:#854F0B;font-weight:500':''}">${((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0))>0?((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0)).toFixed(2):''}</td>
       <td class="num">${s.adays>0?s.adays:''}</td>
       <td class="num" style="${(s.tExtraWorkPay||0)>0?'color:#1565C0;font-weight:700':''}">${(s.tExtraWorkPay||0)>0?fmt$(s.tExtraWorkPay):''}</td>
@@ -6477,7 +6477,7 @@ function exportMonthlyExcel(){
           else if(rec.halfAnnual){val='반차';cellBg='B3E5FC';fg='01579B';}
           else if(rec.start&&rec.end){
             const c2=calcSession(rec.start,rec.end,getEmpRate(emp),autoH,getActiveBk(vY,vM,d),rec.outTimes||[],getEmpPayMode(emp));
-            if(c2){val=+(c2.work/60).toFixed(1);fg=C.navy;}
+            if(c2){val=+(c2.work/60).toFixed(2);fg=C.navy;}
           }
         }
         const isNum=typeof val==='number';
@@ -6490,9 +6490,9 @@ function exportMonthlyExcel(){
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+2}),s.wdays,S.num(C.green,ei%2===0?C.green4:'E8F5E9',true));
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+3}),s.adays,S.num(s.adays>0?C.rose:C.gray,s.adays>0?(ei%2===0?C.rose4:'FFEBEE'):bg,s.adays>0));
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+4}),+s.aldays.toFixed(1),S.numDec(C.orange2,ei%2===0?C.orange4:'FFF3E0'));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+5}),+s.twkH.toFixed(1),S.numDec(C.navy,bg,true));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+6}),+(s.tNightH||0).toFixed(1),S.numDec(C.purple2,ei%2===0?C.purple4:'F3E5F5'));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+7}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(1),S.numDec(C.blue,ei%2===0?C.blue4:'E3F2FD'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+5}),+s.twkH.toFixed(2),S.numDec(C.navy,bg,true));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+6}),+(s.tNightH||0).toFixed(2),S.numDec(C.purple2,ei%2===0?C.purple4:'F3E5F5'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+7}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),S.numDec(C.blue,ei%2===0?C.blue4:'E3F2FD'));
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+8}),totalPay,S.num('FFFFFF','0F2952',true));
       ws['!rows'].push({hpt:20});
       R++;
@@ -6534,7 +6534,7 @@ function exportMonthlyExcel(){
       ['출근일',s.wdays,'일',C.green,C.green4],
       ['결근일',s.adays,'일',C.rose,C.rose4],
       ['연차',+s.aldays.toFixed(1),'일',C.orange2,C.orange4],
-      ['총근무',+s.twkH.toFixed(1),'h',C.navy,C.blue4],
+      ['총근무',+s.twkH.toFixed(2),'h',C.navy,C.blue4],
       ['야간',+(s.tNightH||0).toFixed(1),'h',C.purple2,C.purple4],
       ['연장',+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(1),'h',C.blue,C.blue3],
     ];
