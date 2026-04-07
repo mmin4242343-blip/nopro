@@ -2211,7 +2211,7 @@ function monthSummary(eid,y,m){
   const total=tBase+wkly+tNightPay+tOtDayPay+tOtNightPay+tHolDayPay+tHolNightPay+tHolDayOtPay+tHolNightOtPay+annualPay+bonus+totalAllowance-deduction;
   // 총 가산수당 합계
   const tTotalBonus = empPayMode==='fixed'
-    ? tExtraWorkPay + tNightPay + tOtNightPay + tHolPayNew
+    ? tExtraWorkPay + tNightPay + tOtDayPay + tOtNightPay + tHolPayNew
     : tNightPay + tOtDayPay + tOtNightPay + (tHolDayPay||0) + (tHolNightPay||0) + (tHolDayOtPay||0) + (tHolNightOtPay||0);
 
   return{wdays,adays,aldays,twkH:twk/60,tNightH:tNightM/60,tOtDayH:tOtDayM/60,tOtNightH:tOtNightM/60,tHolDayH:tHolDayM/60,tHolNightH:tHolNightM/60,tHolDayOtH:tHolDayOtM/60,tHolNightOtH:tHolNightOtM/60,
@@ -3025,7 +3025,10 @@ function renderPayroll(){
         ${(()=>{
           const _pm2=getEmpPayMode(emp);
           if(_pm2==='monthly') return ''; // 월급제: 가산수당 없음 (휴일수당은 위에서 처리)
-          const addPay=s.tNightPay+s.tOtDayPay+s.tOtNightPay+(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0);
+          const _isFixed=_pm2==='fixed';
+          const addPay=_isFixed
+            ? (s.tExtraWorkPay||0)+(s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolPayNew||0)
+            : (s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0);
           return addPay>0?`<div class="pr"><span class="prl">추가수당</span><span class="prv" style="color:#3C3489">${fmt$(addPay)}원</span></div>`:'';
         })()}
         ${s.aldays>0?`<div class="pr"><span class="prl">연차수당</span><span class="prv" style="color:var(--green)">${fmt$(s.annualPay)}원<span class="prx">${s.aldays}일</span></span></div>`:''}
@@ -6854,10 +6857,13 @@ function renderCompany() {
     const emp=EMPS.find(e=>e.id===empId);
     if(!emp){body.innerHTML='';return;}
     const months=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+    const _isFixed2=getEmpPayMode(emp)==='fixed';
     const rows=months.map((_,mi)=>{
       const m=mi+1;
       const s=monthSummary(emp.id,companyYear,m);
-      const addPay=s.tNightPay+s.tOtDayPay+s.tOtNightPay+(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0);
+      const addPay=_isFixed2
+        ? (s.tExtraWorkPay||0)+(s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolPayNew||0)
+        : (s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0);
       return{m,s,addPay};
     });
     const totBase=rows.reduce((a,r)=>a+r.s.tBase,0);
