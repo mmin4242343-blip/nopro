@@ -9,10 +9,10 @@
 
 | 계층 | 기술 |
 |------|------|
-| 프론트엔드 | HTML5, CSS3, Vanilla JavaScript (SPA, 단일 index.html) |
+| 프론트엔드 | HTML5, CSS3, Vanilla JavaScript (SPA, index.html + js/app.js) |
 | 백엔드 | Node.js, Netlify Functions (ES Modules) |
 | 데이터베이스 | Supabase (PostgreSQL) |
-| 인증 | JWT (jsonwebtoken) + bcryptjs |
+| 인증 | JWT (jsonwebtoken) + bcryptjs + httpOnly 쿠키 |
 | 암호화 | AES-256-GCM (주민번호 뒷자리 암호화) |
 | 배포 | Netlify (GitHub 연동 자동 배포) |
 | 버전 관리 | Git / GitHub |
@@ -33,23 +33,34 @@
 
 ```
 nopro/
-├── index.html                          # 전체 SPA (HTML+CSS+JS, ~7700줄)
+├── index.html                          # SPA HTML+CSS (~1600줄, JS는 외부 파일로 분리)
+├── js/
+│   └── app.js                          # 메인 애플리케이션 JS (~5970줄)
+├── images/                             # 랜딩페이지 스크린샷 이미지
+│   ├── 출퇴근기록입력.png
+│   ├── 근태현황.png
+│   ├── 급여관리.png
+│   ├── 연차관리.png
+│   └── 직원관리.png
 ├── netlify.toml                        # Netlify 설정 (보안 헤더, 리다이렉트, 함수 경로)
 ├── package.json                        # 백엔드 의존성 (supabase, bcryptjs, jsonwebtoken)
 ├── CLAUDE.md                           # 이 파일
 └── netlify/functions/
     ├── _shared/
-    │   ├── auth.mjs                    # JWT 인증 유틸 (signToken, verifyToken, requireAdmin)
-    │   ├── crypto.mjs                  # AES-256-GCM 암호화/복호화 (주민번호 뒷자리)
-    │   └── supabase.mjs               # Supabase 클라이언트 초기화
-    ├── auth-login.mjs                  # 로그인 (관리자/사용자)
-    ├── auth-signup.mjs                 # 회사 가입
-    ├── auth-verify.mjs                 # JWT 토큰 검증 및 자동 갱신
-    ├── data-load.mjs                   # 회사 데이터 로드 (암호화 필드 복호화)
-    ├── data-save.mjs                   # 회사 데이터 저장 (upsert)
-    ├── admin-companies.mjs             # [관리자] 전체 회사 목록 조회
-    ├── admin-delete.mjs                # [관리자] 회사 삭제
-    └── migrate-passwords.mjs           # [관리자] SHA-256 → bcrypt 패스워드 마이그레이션
+    │   ├── auth.js                     # JWT 인증 + httpOnly 쿠키 + CORS 유틸
+    │   ├── crypto.js                   # AES-256-GCM 암호화/복호화 (주민번호 뒷자리)
+    │   ├── rate-limit.js               # 로그인 Rate Limiting (in-memory + DB)
+    │   └── supabase.js                 # Supabase 클라이언트 초기화
+    ├── auth-login.js                   # 로그인 (bcrypt only, Rate Limiting 적용)
+    ├── auth-signup.js                  # 회사 가입
+    ├── auth-verify.js                  # JWT 토큰 검증 및 자동 갱신 (쿠키 기반)
+    ├── auth-logout.js                  # 로그아웃 (httpOnly 쿠키 클리어)
+    ├── data-load.js                    # 회사 데이터 로드 (암호화 필드 복호화)
+    ├── data-save.js                    # 회사 데이터 저장 (atomic upsert + 감사 로그)
+    ├── audit-log.js                    # 감사 로그 조회 API
+    ├── admin-companies.js              # [관리자] 전체 회사 목록 조회
+    ├── admin-delete.js                 # [관리자] 회사 삭제
+    └── migrate-passwords.js            # [관리자] SHA-256 → bcrypt 패스워드 마이그레이션
 ```
 
 ## 아키텍처 패턴
@@ -64,11 +75,13 @@ Frontend → /api/* → Netlify Function → Supabase
 
 | 엔드포인트 | 메서드 | 인증 | 용도 |
 |------------|--------|------|------|
-| `/auth-login` | POST | 없음 | 사용자/관리자 로그인 |
+| `/auth-login` | POST | 없음 | 사용자/관리자 로그인 (bcrypt only) |
 | `/auth-signup` | POST | 없음 | 회사 등록 |
-| `/auth-verify` | POST | JWT | 세션 검증 + 토큰 갱신 |
-| `/data-load` | POST | JWT(user) | 회사 데이터 로드 |
-| `/data-save` | POST | JWT(user) | 회사 데이터 저장 |
+| `/auth-verify` | POST | JWT(cookie) | 세션 검증 + 토큰 갱신 |
+| `/auth-logout` | POST | 없음 | httpOnly 쿠키 클리어 |
+| `/data-load` | POST | JWT(cookie/bearer) | 회사 데이터 로드 |
+| `/data-save` | POST | JWT(cookie/bearer) | 회사 데이터 저장 + 감사 로그 |
+| `/audit-log` | GET | JWT(cookie/bearer) | 감사 로그 조회 |
 | `/admin-companies` | GET | JWT(admin) | 전체 회사 목록 |
 | `/admin-delete` | DELETE | JWT(admin) | 회사 및 데이터 삭제 |
 | `/migrate-passwords` | POST | JWT(admin) | 패스워드 해시 마이그레이션 |
@@ -81,6 +94,15 @@ Frontend → /api/* → Netlify Function → Supabase
 
 저장 흐름: 사용자 조작 → 전역 변수 업데이트 → `saveLS()` → localStorage → (수동) `sbSaveAll()` → Supabase
 
+### 감사 로그 (audit_log)
+
+데이터 저장 시 자동으로 변경 이력이 기록된다.
+- **기록 내용**: 변경 전 값(old_value), 변경 후 값(new_value), 변경자(changed_by), 시각(changed_at)
+- **대용량 키 예외**: `rec`, `tbk`는 저장 공간 절약을 위해 old/new_value 생략
+- **조회**: `GET /api/audit-log?key=emps&limit=50`
+- **롤백**: audit_log의 old_value를 company_data에 복원하여 수동 롤백 가능
+- **보존 기간**: 무제한 (직접 삭제 전까지 영구 저장)
+
 ## Supabase 테이블 구조
 
 ### `companies` 테이블
@@ -90,8 +112,7 @@ company_name    VARCHAR         -- 회사명
 manager_name    VARCHAR         -- 담당자명
 phone           VARCHAR         -- 전화번호
 email           VARCHAR UNIQUE  -- 로그인 이메일
-password_hash   VARCHAR         -- bcrypt 해시
-password_plain  VARCHAR         -- (deprecated, 마이그레이션 후 null)
+password_hash   VARCHAR         -- bcrypt 해시 (bcrypt only, SHA-256/평문 폴백 제거됨)
 size            VARCHAR         -- '10이하', '50이하', '100이하', '100초과'
 address         VARCHAR         -- 주소
 join_date       DATE            -- 가입일
@@ -106,6 +127,7 @@ company_id      BIGINT REFERENCES companies(id) ON DELETE CASCADE
 data_key        VARCHAR         -- 데이터 종류 키
 data_value      TEXT            -- JSON 문자열
 updated_at      TIMESTAMP
+UNIQUE(company_id, data_key)    -- atomic upsert용 유니크 제약
 ```
 
 **data_key 종류:**
@@ -120,7 +142,27 @@ updated_at      TIMESTAMP
 - `leave_settings` — 연차 설정
 - `leave_overrides` — 직원별 연차 오버라이드
 
-## 핵심 전역 변수 (index.html)
+### `audit_log` 테이블
+```
+id              BIGSERIAL PRIMARY KEY
+company_id      BIGINT REFERENCES companies(id) ON DELETE CASCADE
+data_key        VARCHAR NOT NULL
+action          VARCHAR NOT NULL    -- 'create', 'update', 'snapshot'
+changed_by      VARCHAR             -- 변경자 이메일
+old_value       TEXT                -- 변경 전 JSON (롤백용)
+new_value       TEXT                -- 변경 후 JSON
+changed_at      TIMESTAMP NOT NULL DEFAULT now()
+```
+
+### `login_attempts` 테이블
+```
+id              BIGSERIAL PRIMARY KEY
+email           VARCHAR NOT NULL
+ip              VARCHAR NOT NULL DEFAULT 'unknown'
+attempted_at    TIMESTAMP NOT NULL DEFAULT now()
+```
+
+## 핵심 전역 변수 (js/app.js)
 
 ```javascript
 EMPS = []           // 직원 배열 [{id, name, phone, rrnFront, rrnBack, rate, payMode, monthly, position, ...}]
@@ -171,11 +213,18 @@ SAFETY_REC = {}     // 안전교육 기록
 ## 인증 흐름
 
 1. 랜딩 페이지 → 로그인/회원가입
-2. `/auth-login` 또는 `/auth-signup` → JWT 토큰 발급
-3. `localStorage['nopro_token']`에 토큰 저장, `localStorage['nopro_session']`에 세션 저장
-4. 모든 API 요청에 `Authorization: Bearer {token}` 헤더 포함
-5. `/auth-verify`로 토큰 유효성 검증, 만료 2시간 전 자동 갱신
-6. 관리자(role='admin') vs 사용자(role='user') 분기
+2. `/auth-login` 또는 `/auth-signup` → JWT 토큰을 **httpOnly 쿠키**로 설정
+3. 쿠키는 브라우저가 자동으로 API 요청에 포함 (`credentials: 'include'`)
+4. 세션 정보(role, company name 등)만 `localStorage['nopro_session']`에 저장
+5. `/auth-verify`로 토큰 유효성 검증, 만료 2시간 전 자동 갱신 (Set-Cookie)
+6. 로그아웃: `/auth-logout` 호출 → 쿠키 클리어 + localStorage 세션 삭제
+7. 관리자(role='admin') vs 사용자(role='user') 분기
+
+### Rate Limiting
+- **In-memory**: 동일 이메일+IP로 1분 내 5회 초과 시 차단 (burst 보호)
+- **DB-backed**: 동일 이메일로 15분 내 10회 초과 시 차단 (persistent)
+- 로그인 성공 시 시도 기록 초기화
+- 429 응답 + Retry-After 헤더
 
 ## 환경 변수 (Netlify에 설정)
 
@@ -186,34 +235,55 @@ JWT_SECRET            # JWT 서명 비밀키
 ENCRYPTION_KEY        # AES-256-GCM 암호화 키 (32바이트 hex)
 ADMIN_EMAIL           # 관리자 이메일
 ADMIN_PASSWORD_HASH   # 관리자 비밀번호 bcrypt 해시
+ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https://noprohr.netlify.app,http://localhost:8888)
 ```
 
 ## 보안 사항
 
 - 프론트엔드 → Supabase 직접 접근 차단 (Netlify Functions 프록시 필수)
+- JWT 토큰은 **httpOnly 쿠키**로 저장 (JS에서 접근 불가, XSS 토큰 탈취 방지)
 - 주민번호 뒷자리 AES-256-GCM 암호화 (서버 측 암/복호화)
-- 비밀번호 bcrypt 12라운드 해싱 (SHA-256 레거시 자동 마이그레이션)
+- 비밀번호 **bcrypt 12라운드만 허용** (SHA-256, 평문 폴백 완전 제거)
+- 로그인 에러 메시지 통일 ("이메일 또는 비밀번호가 올바르지 않습니다") — 이메일 열거 공격 방지
+- 로그인 Rate Limiting (in-memory + DB-backed)
 - CSP, HSTS, X-Frame-Options 등 보안 헤더 (netlify.toml)
-- CORS: `https://noprohr.netlify.app`, `http://localhost:8888`만 허용
+- CORS: 환경변수 `ALLOWED_ORIGINS`로 관리 + `Access-Control-Allow-Credentials: true`
 - JWT HS256 알고리즘 고정
+- 데이터 변경 시 감사 로그 자동 기록 (audit_log 테이블)
+
+### 보안 개선 이력 (2026-04-08)
+- `password_plain` 컬럼 및 폴백 코드 완전 제거
+- SHA-256 해시 비교 폴백 및 `sha256()` 함수 완전 제거
+- Rate Limiting 추가 (`_shared/rate-limit.js` + `login_attempts` 테이블)
+- localStorage 토큰 → httpOnly 쿠키 전환
+- 인라인 JS 6000줄 → 외부 파일(`js/app.js`)로 분리
+- CORS origins 환경변수화
+- 감사 로그(audit_log) 구현
+- data-save.js: select+insert/update → atomic upsert 전환
+
+### 남은 보안 작업 (선택)
+- CSP `script-src 'unsafe-inline'` 제거: 인라인 이벤트 핸들러 336개를 addEventListener로 전환 필요 (대규모 리팩토링)
+- CSP `style-src 'unsafe-inline'` 제거: 인라인 스타일 분리 필요
+- httpOnly 쿠키 전환으로 토큰 탈취는 이미 방지되어 있으므로 긴급도 낮음
 
 ## 코딩 컨벤션
 
-- **프론트엔드**: 단일 `index.html`에 모든 HTML/CSS/JS 포함 (모노리스 SPA)
-- **백엔드**: ES Module (`.mjs` 확장자, `import/export` 사용)
+- **프론트엔드**: `index.html`(HTML+CSS) + `js/app.js`(JavaScript) 분리 구조
+- **백엔드**: ES Module (`.js` 확장자, `import/export` 사용)
 - **함수명**: camelCase (`calcSession`, `renderTable`, `sbSaveAll`)
 - **전역 변수**: 대문자 (`EMPS`, `POL`, `REC`, `BONUS_REC`)
 - **localStorage 키**: `npm5_` 접두사 (`npm5_emps`, `npm5_rec`)
 - **data_key**: snake_case (`leave_settings`, `leave_overrides`)
 - **CSS 클래스**: 축약형 (`.pg`, `.sb`, `.nt`, `.ei`, `.tw`, `.et`, `.sc`, `.bk-box`)
+- **랜딩페이지 CSS**: `#lo` 스코핑 접두사로 스타일 충돌 방지
 - **날짜 형식**: `YYYY-MM-DD` (ISO)
 - **시간 형식**: `HH:mm` (24시간)
-- **Netlify Function 응답**: `{ statusCode, headers(CORS), body(JSON) }` 형식
+- **Netlify Function 응답**: `{ statusCode, headers(CORS+Set-Cookie), body(JSON) }` 형식
 
-## 주요 함수 (index.html)
+## 주요 함수 (js/app.js)
 
 ### 데이터 관리
-- `apiFetch(endpoint, method, body)` — API 호출 래퍼
+- `apiFetch(endpoint, method, body)` — API 호출 래퍼 (credentials:'include', httpOnly 쿠키 자동 전송)
 - `saveLS()` — 전역 변수 → localStorage 저장
 - `sbLoadAll(companyId)` — Supabase에서 전체 데이터 로드
 - `sbSaveAll(companyId)` — Supabase에 전체 데이터 저장
@@ -241,6 +311,13 @@ ADMIN_PASSWORD_HASH   # 관리자 비밀번호 bcrypt 해시
 - `handleTimeInput(eid,field,raw)` — 시간 파싱 (예: "9" → "09:00")
 - `parseTimeInput(raw)` — 유연한 시간 파싱
 - `timeKeyNav(e,el,eid,field)` — 화살표키 셀 이동
+
+### 인증
+- `showAuthModal(tab)` — 로그인/회원가입 모달 표시
+- `doAuthLogin()` — 로그인 실행
+- `doAuthSignup()` — 회원가입 실행
+- `authLogout()` — 로그아웃 (서버 쿠키 클리어 + 세션 삭제)
+- `initAuth()` — 앱 초기 로드 시 세션 검증
 
 ## 관리자 패널
 
@@ -277,11 +354,14 @@ ADMIN_PASSWORD_HASH   # 관리자 비밀번호 bcrypt 해시
 | `_shared/auth.js` | **모든 API 인증 실패** — 로그인, 데이터 접근 전부 불가 |
 | `_shared/supabase.js` | **DB 연결 불가** — 서버 기능 전체 중단 |
 | `_shared/crypto.js` | **주민번호 암호화/복호화 불가** — 직원 데이터 읽기/쓰기 실패 |
+| `_shared/rate-limit.js` | **Rate Limiting 비활성화** — 무차별 로그인 공격에 취약 |
 | `auth-login.js` | **로그인 불가** |
 | `auth-signup.js` | **회원가입 불가** |
 | `auth-verify.js` | **세션 유지 불가** — 로그인해도 즉시 튕김 |
+| `auth-logout.js` | **로그아웃 불가** — httpOnly 쿠키 클리어 불가 |
 | `data-load.js` | **저장된 데이터 불러오기 불가** — 빈 화면 |
 | `data-save.js` | **데이터 서버 저장 불가** — 작업 내용 유실 |
+| `audit-log.js` | 감사 로그 조회 불가 |
 | `admin-companies.js` | 관리자 페이지 회사 목록 불가 |
 | `admin-delete.js` | 관리자 회사 삭제 불가 |
 | `migrate-passwords.js` | 패스워드 마이그레이션 불가 |
@@ -297,8 +377,11 @@ ADMIN_PASSWORD_HASH   # 관리자 비밀번호 bcrypt 해시
 
 ### 4. `index.html` — 삭제 금지
 
-이 파일이 곧 **서비스 전체**입니다. 프론트엔드 HTML/CSS/JS가 모두 이 파일 하나에 들어있습니다.
-삭제하면 사이트에 아무것도 표시되지 않습니다.
+이 파일이 서비스의 **HTML/CSS 구조 전체**입니다. 삭제하면 사이트에 아무것도 표시되지 않습니다.
+
+### 5. `js/app.js` — 삭제 금지
+
+이 파일이 서비스의 **모든 프론트엔드 로직**입니다. 삭제하면 어떤 기능도 동작하지 않습니다.
 
 ### 파일 삭제/수정 전 체크리스트
 
@@ -314,13 +397,15 @@ ADMIN_PASSWORD_HASH   # 관리자 비밀번호 bcrypt 해시
 
 ## 작업 시 주의사항
 
-1. `index.html`이 ~7700줄로 매우 크므로, 수정 시 정확한 위치를 파악한 후 편집할 것
+1. `index.html`과 `js/app.js`를 함께 수정할 때, HTML ID/클래스와 JS 셀렉터의 정합성 유지
 2. Netlify Functions는 ES Module 형식 (`.js`, `export const handler`, `package.json`에 `"type":"module"`)
 3. 프론트엔드에서 Supabase URL/키를 직접 참조하지 말 것 (보안)
 4. `saveLS()` 호출을 빠뜨리면 데이터가 유실될 수 있음
 5. 공휴일(`PH`) 객체는 매년 수동 업데이트 필요
-6. CORS 허용 목록 변경 시 모든 Netlify Function의 `corsHeaders`를 일괄 수정할 것
-7. 패스워드 관련 수정 시 bcrypt와 SHA-256 양쪽 호환 유지 고려
+6. CORS 허용 목록 변경 시 Netlify 환경변수 `ALLOWED_ORIGINS` 수정
+7. 비밀번호는 **bcrypt만 지원** (SHA-256, 평문 폴백 없음)
 8. push 시 Netlify 자동 배포가 즉시 이루어지므로 main 브랜치 직접 push 주의
 9. **파일을 삭제하기 전에 반드시 "절대 삭제 금지 파일" 섹션을 확인할 것**
 10. **"이 파일 필요 없는 것 같은데?" 라는 생각이 들면, 그 파일은 십중팔구 필요한 파일이다. 삭제하지 말 것**
+11. httpOnly 쿠키 기반 인증이므로, 프론트엔드에서 `nopro_token`을 직접 다루지 말 것
+12. API 호출 시 `credentials: 'include'` 필수 (쿠키 자동 전송)
