@@ -1607,10 +1607,13 @@ async function apiFetch(endpoint, method='POST', body=null){
   const opts={method,headers};
   if(body) opts.body=JSON.stringify(body);
   const res=await fetch(API_BASE+endpoint,opts);
-  if(res.status===401){authLogout();throw new Error('세션이 만료되었습니다');}
   const text=await res.text();
   let data;
   try{data=JSON.parse(text);}catch(e){throw new Error('서버 응답 오류 (status:'+res.status+')');}
+  // 인증 엔드포인트는 401을 서버 에러 메시지 그대로 전달
+  const isAuthEndpoint=endpoint.startsWith('/auth-login')||endpoint.startsWith('/auth-signup');
+  if(res.status===401 && !isAuthEndpoint){authLogout();throw new Error('세션이 만료되었습니다');}
+  if(res.status===429) throw new Error(data.error||'요청이 너무 많습니다. 잠시 후 다시 시도해주세요.');
   if(!res.ok) throw new Error(data.error||'서버 오류');
   // 토큰 갱신
   if(data.newToken) localStorage.setItem('nopro_token',data.newToken);
