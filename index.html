@@ -78,7 +78,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .er{font-size:10px;color:var(--ink3)}
 .main{flex:1;overflow:auto;background:var(--surf)}
 .pg{padding:0;display:none;overflow-y:auto}
-.pg.on{display:block;animation:fadeIn .2s ease;overflow-y:auto;height:100%;}
+.pg.on{display:flex;flex-direction:column;animation:fadeIn .2s ease;overflow-y:auto;height:100%;padding-bottom:40px;}
 
 /* ── 페이지 헤더 ── */
 .ph{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;padding:20px 22px 0}
@@ -946,6 +946,13 @@ document.addEventListener('click',e=>{
     <button class="sb-fb on" onclick="setSbFilter('shift','all',this)">전체</button>
     <button class="sb-fb" onclick="setSbFilter('shift','day',this)">주간</button>
     <button class="sb-fb" onclick="setSbFilter('shift','night',this)" style="color:#afa9ec;border-color:#534ab7;">야간</button>
+  </div>
+
+  <!-- 내국인/외국인 필터 -->
+  <div style="padding:4px 8px;border-bottom:1px solid var(--bd);display:flex;flex-wrap:wrap;gap:3px;">
+    <button class="sb-fb on" onclick="setSbFilter('nation','all',this)">전체</button>
+    <button class="sb-fb" onclick="setSbFilter('nation','korean',this)">내국인</button>
+    <button class="sb-fb" onclick="setSbFilter('nation','foreign',this)" style="color:#92400e;border-color:#f59e0b;">외국인</button>
   </div>
 
   <!-- 급여형태 필터 -->

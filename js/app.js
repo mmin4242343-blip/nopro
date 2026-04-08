@@ -692,7 +692,7 @@ function gp(p){
   if(p==='folder')renderFolder();
 }
 // ══ 사이드바 필터 상태 ══
-const SBF = { shift:'all', pay:'all' };
+const SBF = { shift:'all', nation:'all', pay:'all' };
 
 function setSbFilter(key, val, btn){
   SBF[key] = val;
@@ -708,13 +708,21 @@ function renderSb(filter=''){
   const sbSorted=[...EMPS].filter(e=>{
     if(filter && !e.name.includes(filter)) return false;
     if(SBF.shift!=='all' && (e.shift||'day')!==SBF.shift) return false;
+    const isFor = e.nation==='foreign' || e.foreigner===true;
+    if(SBF.nation==='korean' && isFor) return false;
+    if(SBF.nation==='foreign' && !isFor) return false;
     if(SBF.pay!=='all' && (e.payMode||'fixed')!==SBF.pay) return false;
     return true;
   });
   document.getElementById('sb-list').innerHTML=sbSorted.map((e,i)=>`
     <div class="ei ${e.id===vEid?'on':''}" draggable="true"
-      ondragstart="dragIdx=${i}" ondragover="event.preventDefault()"
-      ondrop="sbDrop(event,${i})" onclick="vEid=${e.id};renderSb(document.getElementById('sb-search-inp')?.value||'')">
+      ondragstart="dragIdx=${i};this.style.opacity='.4';this.style.background='var(--nbg)'"
+      ondragend="this.style.opacity='';this.style.background=''"
+      ondragover="event.preventDefault();this.style.borderTop='2px solid var(--navy2)'"
+      ondragleave="this.style.borderTop=''"
+      ondrop="sbDrop(event,${i});document.querySelectorAll('#sb-list .ei').forEach(r=>r.style.borderTop='')"
+      onclick="vEid=${e.id};renderSb(document.getElementById('sb-search-inp')?.value||'')"
+      style="transition:opacity .15s;">
       <span style="cursor:grab;color:var(--ink3);font-size:11px;margin-right:1px">⠿</span>
       <div class="av" style="width:28px;height:28px;font-size:12px;background:${e.color||'#DBEAFE'};color:${e.tc||'#1E3A5F'}">${e.name?esc(e.name)[0]:'?'}</div>
       <div><div class="en">${esc(e.name)}<span class="emp-mode-badge ${getEmpPayModeLabel(e).cls}">${getEmpPayModeLabel(e).text}</span>${e.nation==='foreign'?'<span style="font-size:9px;color:#92400E;background:var(--abg);padding:1px 5px;border-radius:5px;font-weight:700;margin-left:2px">외국인</span>':''} ${e.leave?'<span style="font-size:9px;color:var(--rose);font-weight:700;margin-left:3px">퇴사</span>':''}</div><div class="er">${esc(e.role)} · ${getEmpShiftLabel(e).text}</div></div>
@@ -2097,8 +2105,14 @@ function renderEmps(){
       else if(_curGroup==='leave') _groupHdr=`<tr><td colspan="18" style="padding:5px 14px;background:linear-gradient(90deg,#FEE2E2,#FFF1F2);font-size:10px;font-weight:800;color:#E11D48;letter-spacing:.5px;border-bottom:1px solid #FECDD3">🚪 퇴사자</td></tr>`;
     }
     _prevGroup = _curGroup;
-    return _groupHdr+`<tr draggable="true" ondragstart="empDragIdx=${i}" ondragover="event.preventDefault()" ondrop="empDrop(event,${i})" style="${e.leave?'opacity:.5;background:var(--rose-dim);':''}">
-      <td><span style="cursor:grab;color:var(--ink3)">⠿</span></td>
+    return _groupHdr+`<tr draggable="true"
+      ondragstart="empDragIdx=${i};this.style.opacity='.4';this.style.background='var(--nbg)';this.style.transform='scale(.98)'"
+      ondragend="this.style.opacity='';this.style.background='';this.style.transform=''"
+      ondragover="event.preventDefault();this.style.borderTop='2px solid var(--navy2)'"
+      ondragleave="this.style.borderTop=''"
+      ondrop="empDrop(event,${i});document.querySelectorAll('#emp-tbody tr').forEach(r=>r.style.borderTop='')"
+      style="transition:all .15s;${e.leave?'opacity:.5;background:var(--rose-dim);':''}cursor:pointer;">
+      <td><span style="cursor:grab;color:var(--ink3);font-size:14px;padding:0 4px;">⠿</span></td>
       <td style="text-align:center;font-size:11px;font-weight:700;color:#94A3B8;padding:0 4px">${rowNum}</td>
       <td><input class="ei2" value="${e.empNo||''}" onchange="updE(${e.id},'empNo',this.value)" style="width:40px;text-align:center" placeholder="번호"></td>
       <td><input class="ei2" value="${esc(e.name)}" onchange="updE(${e.id},'name',this.value)" style="width:56px" placeholder="이름"></td>
