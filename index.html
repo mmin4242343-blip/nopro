@@ -376,159 +376,154 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 
 
 <!-- ══ 랜딩페이지 ══ -->
-<div id="landing-overlay" style="position:fixed;inset:0;z-index:99997;display:none;overflow-y:auto;overflow-x:hidden;background:#fff;-webkit-font-smoothing:antialiased">
-
+<div id="landing-overlay" style="position:fixed;inset:0;z-index:99997;display:block;overflow-y:auto;overflow-x:hidden;background:#fff;">
 <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
 <style>
-#landing-overlay{--bd:#1a2f6e;--bm:#2347b5;--bl:#5b82e8;--bp:#f0f4fd;--bdim:rgba(35,71,181,.10);--bdim2:rgba(35,71,181,.05);--wh:#fff;--tx:#111827;--t2:#6b7280;--t3:#9ca3af;--br:#e5e9f2;--br2:#d1d9f0;--bg:#f7f9fe;}
-#landing-overlay *{box-sizing:border-box;margin:0;padding:0;}
-#landing-overlay{font-family:'Pretendard',-apple-system,sans-serif;color:var(--tx);overflow-x:hidden;background:var(--wh);}
-.ln{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 40px;height:64px;background:rgba(255,255,255,.95);backdrop-filter:blur(16px);border-bottom:1px solid var(--br);box-shadow:0 1px 4px rgba(35,71,181,.08);}
-.ln-logo{font-size:18px;font-weight:800;letter-spacing:-.04em;color:var(--bd);text-decoration:none;display:flex;align-items:center;gap:8px;}
-.ln-icon{width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,var(--bm),var(--bl));display:flex;align-items:center;justify-content:center;font-size:14px;}
-.ln-links{display:flex;align-items:center;gap:4px;}
-.ln-pill{font-size:13px;font-weight:500;color:var(--t2);padding:7px 14px;border-radius:100px;background:transparent;border:none;cursor:pointer;text-decoration:none;transition:all .2s;}
-.ln-pill:hover{color:var(--bm);background:var(--bdim2);}
-.ln-right{display:flex;align-items:center;gap:8px;}
-.ln-login{font-size:13px;font-weight:600;color:var(--bm);padding:7px 16px;border-radius:100px;border:1.5px solid var(--bm);cursor:pointer;background:transparent;}
-.ln-cta{font-size:13px;font-weight:700;color:var(--wh);padding:8px 20px;border-radius:100px;background:linear-gradient(135deg,var(--bm),var(--bl));box-shadow:0 2px 8px rgba(35,71,181,.3);cursor:pointer;border:none;}
-.ln-ham{display:none;flex-direction:column;gap:5px;cursor:pointer;padding:4px;}
-.ln-ham span{width:22px;height:2px;background:var(--bd);border-radius:2px;}
-.lm-menu{display:none;position:sticky;top:64px;z-index:99;background:var(--wh);border-bottom:1px solid var(--br);padding:16px 20px;box-shadow:0 4px 24px rgba(35,71,181,.12);}
-.lm-menu.open{display:flex;flex-direction:column;gap:4px;}
-.lm-menu a{font-size:15px;font-weight:600;color:var(--tx);padding:12px 16px;border-radius:10px;text-decoration:none;cursor:pointer;}
-.lm-cta{margin-top:8px;display:block;text-align:center;font-size:15px;font-weight:700;color:var(--wh)!important;background:linear-gradient(135deg,var(--bm),var(--bl))!important;border-radius:12px!important;padding:14px!important;}
-.lh{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:80px 24px 60px;position:relative;overflow:hidden;background:linear-gradient(180deg,var(--bp) 0%,var(--wh) 100%);}
-.lh-badge{display:inline-flex;align-items:center;gap:8px;padding:6px 16px;border-radius:100px;background:var(--bdim);border:1px solid rgba(35,71,181,.2);font-size:12px;font-weight:700;color:var(--bm);margin-bottom:24px;}
-.lh-dot{width:6px;height:6px;border-radius:50%;background:var(--bm);animation:lpulse 2s infinite;}
+:root{--bd:#1a2f6e;--bm:#2347b5;--bl:#5b82e8;--bp:#f0f4fd;--bdim:rgba(35,71,181,.10);--bdim2:rgba(35,71,181,.05);--wh:#fff;--tx:#111827;--t2:#6b7280;--t3:#9ca3af;--br:#e5e9f2;--br2:#d1d9f0;--bg:#f7f9fe;}
+#lo{font-family:'Pretendard',-apple-system,sans-serif;color:var(--tx);-webkit-font-smoothing:antialiased;overflow-x:hidden;}
+#lo *{box-sizing:border-box;margin:0;padding:0;}
+#lo .ln{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 40px;height:64px;background:rgba(255,255,255,.95);backdrop-filter:blur(16px);border-bottom:1px solid var(--br);box-shadow:0 1px 4px rgba(35,71,181,.08);}
+#lo .ln-logo{font-size:18px;font-weight:800;letter-spacing:-.04em;color:var(--bd);text-decoration:none;display:flex;align-items:center;gap:8px;}
+#lo .ln-icon{width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,var(--bm),var(--bl));display:flex;align-items:center;justify-content:center;font-size:14px;}
+#lo .ln-links{display:flex;align-items:center;gap:4px;}
+#lo .ln-pill{font-size:13px;font-weight:500;color:var(--t2);padding:7px 14px;border-radius:100px;background:transparent;border:none;cursor:pointer;text-decoration:none;transition:all .2s;}
+#lo .ln-pill:hover{color:var(--bm);background:var(--bdim2);}
+#lo .ln-right{display:flex;align-items:center;gap:8px;}
+#lo .ln-login{font-size:13px;font-weight:600;color:var(--bm);padding:7px 16px;border-radius:100px;border:1.5px solid var(--bm);cursor:pointer;background:transparent;}
+#lo .ln-cta{font-size:13px;font-weight:700;color:var(--wh);padding:8px 20px;border-radius:100px;background:linear-gradient(135deg,var(--bm),var(--bl));box-shadow:0 2px 8px rgba(35,71,181,.3);cursor:pointer;border:none;}
+#lo .ln-ham{display:none;flex-direction:column;gap:5px;cursor:pointer;padding:4px;}
+#lo .ln-ham span{width:22px;height:2px;background:var(--bd);border-radius:2px;}
+#lo .lm-menu{display:none;position:sticky;top:64px;z-index:99;background:var(--wh);border-bottom:1px solid var(--br);padding:16px 20px;box-shadow:0 4px 24px rgba(35,71,181,.12);}
+#lo .lm-menu.open{display:flex;flex-direction:column;gap:4px;}
+#lo .lm-menu a{font-size:15px;font-weight:600;color:var(--tx);padding:12px 16px;border-radius:10px;text-decoration:none;cursor:pointer;}
+#lo .lm-cta{margin-top:8px;display:block;text-align:center;font-size:15px;font-weight:700;color:var(--wh)!important;background:linear-gradient(135deg,var(--bm),var(--bl))!important;border-radius:12px!important;padding:14px!important;}
+#lo .lh{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:80px 24px 60px;position:relative;overflow:hidden;background:linear-gradient(180deg,var(--bp) 0%,var(--wh) 100%);}
+#lo .lh-badge{display:inline-flex;align-items:center;gap:8px;padding:6px 16px;border-radius:100px;background:var(--bdim);border:1px solid rgba(35,71,181,.2);font-size:12px;font-weight:700;color:var(--bm);margin-bottom:24px;}
+#lo .lh-dot{width:6px;height:6px;border-radius:50%;background:var(--bm);animation:lpulse 2s infinite;}
 @keyframes lpulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.4)}}
-.lh-title{font-size:clamp(30px,6vw,64px);font-weight:800;letter-spacing:-.05em;line-height:1.05;margin-bottom:12px;color:var(--bd);}
-.lh-accent{color:var(--bm);}
-.lh-sub{font-size:clamp(13px,1.8vw,17px);font-weight:600;color:var(--t2);letter-spacing:-.02em;margin-bottom:24px;}
-.lh-points{display:flex;flex-direction:column;gap:10px;margin-bottom:32px;width:100%;max-width:560px;}
-.lh-pt{display:flex;align-items:flex-start;gap:12px;background:var(--wh);border:1px solid var(--br);border-radius:12px;padding:14px 18px;text-align:left;box-shadow:0 1px 4px rgba(35,71,181,.08);}
-.lh-pt-icon{font-size:20px;flex-shrink:0;}
-.lh-pt-txt{font-size:13px;color:var(--tx);line-height:1.55;}
-.lh-pt-txt strong{color:var(--bm);}
-.lh-actions{display:flex;align-items:center;gap:12px;margin-bottom:48px;flex-wrap:wrap;justify-content:center;}
-.lb-pr{font-size:15px;font-weight:700;color:var(--wh);padding:14px 28px;border-radius:100px;background:linear-gradient(135deg,var(--bm),var(--bl));border:none;cursor:pointer;display:inline-block;box-shadow:0 4px 16px rgba(35,71,181,.3);}
-.lb-gh{font-size:15px;font-weight:600;color:var(--bm);padding:13px 24px;border-radius:100px;background:transparent;border:1.5px solid var(--br2);cursor:pointer;text-decoration:none;display:inline-block;}
-.lh-stats{display:flex;background:var(--wh);border:1px solid var(--br);border-radius:20px;box-shadow:0 4px 24px rgba(35,71,181,.12);overflow:hidden;flex-wrap:wrap;}
-.lh-stat{text-align:center;padding:20px 28px;flex:1;min-width:120px;}
-.lh-stat+.lh-stat{border-left:1px solid var(--br);}
-.lh-snum{font-size:28px;font-weight:800;letter-spacing:-.05em;color:var(--bm);line-height:1;margin-bottom:4px;}
-.lh-slabel{font-size:11px;font-weight:500;color:var(--t2);}
-.ls{padding:0 24px 64px;background:var(--bg);}
-.ls-inner{max-width:1020px;margin:0 auto;}
-.ls-tabs{display:flex;gap:8px;margin-bottom:16px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;}
-.ls-tabs::-webkit-scrollbar{display:none;}
-.ls-tab{padding:8px 16px;border-radius:100px;font-size:12px;font-weight:600;color:var(--t2);background:var(--wh);border:1.5px solid var(--br);cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .2s;}
-.ls-tab.active{background:var(--bm);color:var(--wh);border-color:var(--bm);}
-.ls-frame{border-radius:14px;overflow:hidden;border:1px solid var(--br2);box-shadow:0 16px 60px rgba(35,71,181,.16);background:var(--wh);}
-.ls-bar{height:36px;background:#1F3864;display:flex;align-items:center;padding:0 14px;gap:5px;}
-.ls-dot{width:9px;height:9px;border-radius:50%;}
-.ls-dot:nth-child(1){background:#ff5f57;}.ls-dot:nth-child(2){background:#ffbd2e;}.ls-dot:nth-child(3){background:#28c940;}
-.ls-url{margin-left:10px;background:rgba(255,255,255,.1);border-radius:4px;padding:2px 12px;font-size:11px;color:rgba(255,255,255,.6);flex:1;max-width:260px;}
-.ls-panel{display:none;min-height:200px;background:var(--bg);display:flex;align-items:center;justify-content:center;color:var(--t2);font-size:14px;padding:60px 20px;text-align:center;}
-.ls-panel.active{display:flex;}
-.ls-img{width:100%;display:block;}
-.ls-cap{padding:16px 20px;background:var(--wh);border-top:1px solid var(--br);display:flex;align-items:center;gap:12px;}
-.ls-cap-icon{width:34px;height:34px;border-radius:9px;background:var(--bdim);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
-.ls-cap-title{font-size:13px;font-weight:700;color:var(--bd);margin-bottom:2px;}
-.ls-cap-desc{font-size:12px;color:var(--t2);line-height:1.5;}
-.lsw{padding:64px 24px;max-width:1020px;margin:0 auto;}
-.l-badge{display:inline-flex;padding:4px 14px;border-radius:100px;background:var(--bdim);border:1px solid rgba(35,71,181,.15);font-size:11px;font-weight:700;color:var(--bm);letter-spacing:.05em;text-transform:uppercase;margin-bottom:14px;}
-.l-title{font-size:clamp(22px,3.5vw,38px);font-weight:800;letter-spacing:-.05em;line-height:1.1;color:var(--bd);margin-bottom:10px;}
-.l-title span{color:var(--t2);}
-.l-desc{font-size:14px;color:var(--t2);line-height:1.7;max-width:520px;}
-.lf-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:40px;}
-.lf-card{background:var(--wh);border:1.5px solid var(--br);border-radius:16px;padding:20px 16px;transition:all .2s;}
-.lf-card:hover{border-color:var(--bm);box-shadow:0 4px 24px rgba(35,71,181,.12);transform:translateY(-2px);}
-.lf-icon{width:40px;height:40px;border-radius:10px;background:var(--bdim);display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:10px;}
-.lf-name{font-size:13px;font-weight:700;color:var(--bd);margin-bottom:5px;}
-.lf-desc{font-size:12px;color:var(--t2);line-height:1.6;}
-.lhow{background:linear-gradient(180deg,var(--bg) 0%,var(--wh) 100%);padding:64px 24px;}
-.lhow-inner{max-width:1020px;margin:0 auto;}
-.lhow-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px;}
-.lhow-step{background:var(--wh);border:1.5px solid var(--br);border-radius:16px;padding:24px 20px;}
-.lhow-num{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--bm),var(--bl));color:var(--wh);font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;margin-bottom:12px;}
-.lhow-ttl{font-size:16px;font-weight:700;color:var(--bd);margin-bottom:6px;}
-.lhow-desc{font-size:13px;color:var(--t2);line-height:1.65;}
-.lcmp{margin-top:40px;border:1.5px solid var(--br2);border-radius:18px;overflow:hidden;}
-.lcmp-hd{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;background:var(--bd);}
-.lcmp-h{padding:14px 16px;font-size:12px;font-weight:700;color:rgba(255,255,255,.65);border-right:1px solid rgba(255,255,255,.1);}
-.lcmp-h:last-child{border-right:none;}.lcmp-h.hl{background:var(--bm);color:var(--wh);}
-.lcmp-row{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;border-top:1px solid var(--br);}
-.lcmp-row:hover{background:var(--bp);}
-.lcmp-c{padding:12px 16px;font-size:12px;color:var(--t2);border-right:1px solid var(--br);display:flex;align-items:center;gap:5px;}
-.lcmp-c:last-child{border-right:none;}.lcmp-c.label{color:var(--tx);font-weight:600;background:var(--bg);}.lcmp-c.hl{background:rgba(35,71,181,.04);}
-.ck{color:#16a34a;}.cx{color:#d1d5db;}.cp{color:#d97706;}
-.lpr{background:var(--bg);padding:64px 24px;}
-.lpr-inner{max-width:1020px;margin:0 auto;}
-.lpr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:40px;}
-.lpr-card{background:var(--wh);border:1.5px solid var(--br);border-radius:16px;padding:28px 22px;display:flex;flex-direction:column;position:relative;transition:all .2s;}
-.lpr-card:hover{transform:translateY(-2px);box-shadow:0 4px 24px rgba(35,71,181,.12);}
-.lpr-card.feat{border-color:var(--bm);box-shadow:0 0 0 3px rgba(35,71,181,.1);}
-.lpr-rec{position:absolute;top:-1px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--bm),var(--bl));color:var(--wh);font-size:11px;font-weight:700;padding:4px 16px;border-radius:0 0 10px 10px;white-space:nowrap;}
-.lpr-tier{font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;}
-.lpr-price{font-size:28px;font-weight:800;letter-spacing:-.05em;color:var(--bd);line-height:1;margin-bottom:4px;}
-.lpr-price sub{font-size:12px;font-weight:500;color:var(--t2);vertical-align:baseline;}
-.lpr-per{font-size:11px;color:var(--t2);margin-bottom:20px;}
-.lpr-feats{list-style:none;flex:1;margin-bottom:20px;}
-.lpr-feats li{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--t2);padding:6px 0;border-bottom:1px solid var(--br);}
-.lpr-feats li:last-child{border-bottom:none;}
-.lpr-btn{width:100%;padding:11px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:center;display:block;border:none;transition:all .2s;}
-.lpr-btn-g{background:transparent;border:1.5px solid var(--br2);color:var(--bm);}
-.lpr-btn-s{background:linear-gradient(135deg,var(--bm),var(--bl));color:var(--wh);}
-.lfaq-list{margin-top:40px;}
-.lfaq-item{border-top:1px solid var(--br);padding:20px 0;}
-.lfaq-item:last-child{border-bottom:1px solid var(--br);}
-.lfaq-q{display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:16px;}
-.lfaq-qtxt{font-size:14px;font-weight:600;color:var(--bd);line-height:1.4;}
-.lfaq-tog{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--br2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:17px;color:var(--t2);transition:all .2s;background:var(--wh);}
-.lfaq-item.open .lfaq-tog{background:var(--bm);border-color:var(--bm);color:var(--wh);transform:rotate(45deg);}
-.lfaq-a{font-size:13px;color:var(--t2);line-height:1.7;max-height:0;overflow:hidden;transition:max-height .3s ease,padding .3s;}
-.lfaq-item.open .lfaq-a{max-height:200px;padding-top:12px;}
-.lcta-wrap{padding:0 24px 64px;}
-.lcta{max-width:1020px;margin:0 auto;background:linear-gradient(135deg,var(--bd) 0%,var(--bm) 60%,var(--bl) 100%);border-radius:22px;padding:64px 48px;text-align:center;position:relative;overflow:hidden;}
-.lcta-title{font-size:clamp(22px,3.5vw,38px);font-weight:800;letter-spacing:-.05em;color:var(--wh);margin-bottom:12px;line-height:1.1;}
-.lcta-desc{font-size:14px;color:rgba(255,255,255,.75);line-height:1.7;margin-bottom:28px;}
-.lcta-btn{display:inline-block;font-size:15px;font-weight:700;color:var(--bd);background:var(--wh);padding:14px 36px;border-radius:100px;cursor:pointer;border:none;box-shadow:0 4px 20px rgba(0,0,0,.2);}
-.lcta-contact{font-size:12px;color:rgba(255,255,255,.6);margin-top:20px;line-height:1.9;}
-.lfoot{background:var(--bd);padding:48px 24px 36px;}
-.lfoot-inner{max-width:1020px;margin:0 auto;display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1fr;gap:32px;}
-.lfoot-brand{font-size:18px;font-weight:800;color:var(--wh);margin-bottom:8px;}
-.lfoot-desc{font-size:12px;color:rgba(255,255,255,.5);line-height:1.65;}
-.lfoot-col-title{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-bottom:12px;}
-.lfoot-links{list-style:none;}
-.lfoot-links li{margin-bottom:8px;}
-.lfoot-links a{font-size:12px;color:rgba(255,255,255,.55);text-decoration:none;}
-.lfoot-bottom{max-width:1020px;margin:28px auto 0;padding-top:20px;border-top:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
-.lfoot-copy{font-size:11px;color:rgba(255,255,255,.3);}
-.ldiv{height:1px;background:var(--br);max-width:1020px;margin:0 auto;}
+#lo .lh-title{font-size:clamp(30px,6vw,64px);font-weight:800;letter-spacing:-.05em;line-height:1.05;margin-bottom:12px;color:var(--bd);}
+#lo .lh-accent{color:var(--bm);}
+#lo .lh-sub{font-size:clamp(13px,1.8vw,17px);font-weight:600;color:var(--t2);letter-spacing:-.02em;margin-bottom:24px;}
+#lo .lh-points{display:flex;flex-direction:column;gap:10px;margin-bottom:32px;width:100%;max-width:560px;}
+#lo .lh-pt{display:flex;align-items:flex-start;gap:12px;background:var(--wh);border:1px solid var(--br);border-radius:12px;padding:14px 18px;text-align:left;box-shadow:0 1px 4px rgba(35,71,181,.08);}
+#lo .lh-pt-icon{font-size:20px;flex-shrink:0;}
+#lo .lh-pt-txt{font-size:13px;color:var(--tx);line-height:1.55;}
+#lo .lh-pt-txt strong{color:var(--bm);}
+#lo .lh-actions{display:flex;align-items:center;gap:12px;margin-bottom:48px;flex-wrap:wrap;justify-content:center;}
+#lo .lb-pr{font-size:15px;font-weight:700;color:var(--wh);padding:14px 28px;border-radius:100px;background:linear-gradient(135deg,var(--bm),var(--bl));border:none;cursor:pointer;display:inline-block;box-shadow:0 4px 16px rgba(35,71,181,.3);}
+#lo .lb-gh{font-size:15px;font-weight:600;color:var(--bm);padding:13px 24px;border-radius:100px;background:transparent;border:1.5px solid var(--br2);cursor:pointer;text-decoration:none;display:inline-block;}
+#lo .lh-stats{display:flex;background:var(--wh);border:1px solid var(--br);border-radius:20px;box-shadow:0 4px 24px rgba(35,71,181,.12);overflow:hidden;flex-wrap:wrap;}
+#lo .lh-stat{text-align:center;padding:20px 28px;flex:1;min-width:120px;}
+#lo .lh-stat+.lh-stat{border-left:1px solid var(--br);}
+#lo .lh-snum{font-size:28px;font-weight:800;letter-spacing:-.05em;color:var(--bm);line-height:1;margin-bottom:4px;}
+#lo .lh-slabel{font-size:11px;font-weight:500;color:var(--t2);}
+#lo .ls{padding:0 24px 64px;background:var(--bg);}
+#lo .ls-inner{max-width:1020px;margin:0 auto;}
+#lo .ls-tabs{display:flex;gap:8px;margin-bottom:16px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;}
+#lo .ls-tabs::-webkit-scrollbar{display:none;}
+#lo .ls-tab{padding:8px 16px;border-radius:100px;font-size:12px;font-weight:600;color:var(--t2);background:var(--wh);border:1.5px solid var(--br);cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .2s;}
+#lo .ls-tab.active{background:var(--bm);color:var(--wh);border-color:var(--bm);}
+#lo .ls-frame{border-radius:14px;overflow:hidden;border:1px solid var(--br2);box-shadow:0 16px 60px rgba(35,71,181,.16);background:var(--wh);}
+#lo .ls-bar{height:36px;background:#1F3864;display:flex;align-items:center;padding:0 14px;gap:5px;}
+#lo .ls-dot{width:9px;height:9px;border-radius:50%;}
+#lo .ls-dot:nth-child(1){background:#ff5f57;}#lo .ls-dot:nth-child(2){background:#ffbd2e;}#lo .ls-dot:nth-child(3){background:#28c940;}
+#lo .ls-url{margin-left:10px;background:rgba(255,255,255,.1);border-radius:4px;padding:2px 12px;font-size:11px;color:rgba(255,255,255,.6);flex:1;max-width:260px;}
+#lo .ls-panel{display:none;}#lo .ls-panel.active{display:block;}
+#lo .ls-img{width:100%;display:block;}
+#lo .ls-cap{padding:16px 20px;background:var(--wh);border-top:1px solid var(--br);display:flex;align-items:center;gap:12px;}
+#lo .ls-cap-icon{width:34px;height:34px;border-radius:9px;background:var(--bdim);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
+#lo .ls-cap-title{font-size:13px;font-weight:700;color:var(--bd);margin-bottom:2px;}
+#lo .ls-cap-desc{font-size:12px;color:var(--t2);line-height:1.5;}
+#lo .lsw{padding:64px 24px;max-width:1020px;margin:0 auto;}
+#lo .l-badge{display:inline-flex;padding:4px 14px;border-radius:100px;background:var(--bdim);border:1px solid rgba(35,71,181,.15);font-size:11px;font-weight:700;color:var(--bm);letter-spacing:.05em;text-transform:uppercase;margin-bottom:14px;}
+#lo .l-title{font-size:clamp(22px,3.5vw,38px);font-weight:800;letter-spacing:-.05em;line-height:1.1;color:var(--bd);margin-bottom:10px;}
+#lo .l-title span{color:var(--t2);}
+#lo .l-desc{font-size:14px;color:var(--t2);line-height:1.7;max-width:520px;}
+#lo .lf-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:40px;}
+#lo .lf-card{background:var(--wh);border:1.5px solid var(--br);border-radius:16px;padding:20px 16px;transition:all .2s;}
+#lo .lf-card:hover{border-color:var(--bm);box-shadow:0 4px 24px rgba(35,71,181,.12);transform:translateY(-2px);}
+#lo .lf-icon{width:40px;height:40px;border-radius:10px;background:var(--bdim);display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:10px;}
+#lo .lf-name{font-size:13px;font-weight:700;color:var(--bd);margin-bottom:5px;}
+#lo .lf-desc{font-size:12px;color:var(--t2);line-height:1.6;}
+#lo .lhow{background:linear-gradient(180deg,var(--bg) 0%,var(--wh) 100%);padding:64px 24px;}
+#lo .lhow-inner{max-width:1020px;margin:0 auto;}
+#lo .lhow-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px;}
+#lo .lhow-step{background:var(--wh);border:1.5px solid var(--br);border-radius:16px;padding:24px 20px;}
+#lo .lhow-num{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--bm),var(--bl));color:var(--wh);font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;margin-bottom:12px;}
+#lo .lhow-ttl{font-size:16px;font-weight:700;color:var(--bd);margin-bottom:6px;}
+#lo .lhow-desc{font-size:13px;color:var(--t2);line-height:1.65;}
+#lo .lcmp{margin-top:40px;border:1.5px solid var(--br2);border-radius:18px;overflow:hidden;}
+#lo .lcmp-hd{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;background:var(--bd);}
+#lo .lcmp-h{padding:14px 16px;font-size:12px;font-weight:700;color:rgba(255,255,255,.65);border-right:1px solid rgba(255,255,255,.1);}
+#lo .lcmp-h:last-child{border-right:none;}#lo .lcmp-h.hl{background:var(--bm);color:var(--wh);}
+#lo .lcmp-row{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;border-top:1px solid var(--br);}
+#lo .lcmp-row:hover{background:var(--bp);}
+#lo .lcmp-c{padding:12px 16px;font-size:12px;color:var(--t2);border-right:1px solid var(--br);display:flex;align-items:center;gap:5px;}
+#lo .lcmp-c:last-child{border-right:none;}#lo .lcmp-c.label{color:var(--tx);font-weight:600;background:var(--bg);}#lo .lcmp-c.hl{background:rgba(35,71,181,.04);}
+#lo .ck{color:#16a34a;}#lo .cx{color:#d1d5db;}#lo .cp{color:#d97706;}
+#lo .lpr{background:var(--bg);padding:64px 24px;}
+#lo .lpr-inner{max-width:1020px;margin:0 auto;}
+#lo .lpr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:40px;}
+#lo .lpr-card{background:var(--wh);border:1.5px solid var(--br);border-radius:16px;padding:28px 22px;display:flex;flex-direction:column;position:relative;transition:all .2s;}
+#lo .lpr-card:hover{transform:translateY(-2px);box-shadow:0 4px 24px rgba(35,71,181,.12);}
+#lo .lpr-card.feat{border-color:var(--bm);box-shadow:0 0 0 3px rgba(35,71,181,.1);}
+#lo .lpr-rec{position:absolute;top:-1px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--bm),var(--bl));color:var(--wh);font-size:11px;font-weight:700;padding:4px 16px;border-radius:0 0 10px 10px;white-space:nowrap;}
+#lo .lpr-tier{font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;}
+#lo .lpr-price{font-size:28px;font-weight:800;letter-spacing:-.05em;color:var(--bd);line-height:1;margin-bottom:4px;}
+#lo .lpr-price sub{font-size:12px;font-weight:500;color:var(--t2);vertical-align:baseline;}
+#lo .lpr-per{font-size:11px;color:var(--t2);margin-bottom:20px;}
+#lo .lpr-feats{list-style:none;flex:1;margin-bottom:20px;}
+#lo .lpr-feats li{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--t2);padding:6px 0;border-bottom:1px solid var(--br);}
+#lo .lpr-feats li:last-child{border-bottom:none;}
+#lo .lpr-btn{width:100%;padding:11px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:center;display:block;border:none;transition:all .2s;}
+#lo .lpr-btn-g{background:transparent;border:1.5px solid var(--br2);color:var(--bm);}
+#lo .lpr-btn-s{background:linear-gradient(135deg,var(--bm),var(--bl));color:var(--wh);}
+#lo .lfaq-list{margin-top:40px;}
+#lo .lfaq-item{border-top:1px solid var(--br);padding:20px 0;}
+#lo .lfaq-item:last-child{border-bottom:1px solid var(--br);}
+#lo .lfaq-q{display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:16px;}
+#lo .lfaq-qtxt{font-size:14px;font-weight:600;color:var(--bd);line-height:1.4;}
+#lo .lfaq-tog{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--br2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:17px;color:var(--t2);transition:all .2s;background:var(--wh);}
+#lo .lfaq-item.open .lfaq-tog{background:var(--bm);border-color:var(--bm);color:var(--wh);transform:rotate(45deg);}
+#lo .lfaq-a{font-size:13px;color:var(--t2);line-height:1.7;max-height:0;overflow:hidden;transition:max-height .3s ease,padding .3s;}
+#lo .lfaq-item.open .lfaq-a{max-height:200px;padding-top:12px;}
+#lo .lcta-wrap{padding:0 24px 64px;}
+#lo .lcta{max-width:1020px;margin:0 auto;background:linear-gradient(135deg,var(--bd) 0%,var(--bm) 60%,var(--bl) 100%);border-radius:22px;padding:64px 48px;text-align:center;position:relative;overflow:hidden;}
+#lo .lcta-title{font-size:clamp(22px,3.5vw,38px);font-weight:800;letter-spacing:-.05em;color:var(--wh);margin-bottom:12px;line-height:1.1;}
+#lo .lcta-desc{font-size:14px;color:rgba(255,255,255,.75);line-height:1.7;margin-bottom:28px;}
+#lo .lcta-btn{display:inline-block;font-size:15px;font-weight:700;color:var(--bd);background:var(--wh);padding:14px 36px;border-radius:100px;cursor:pointer;border:none;box-shadow:0 4px 20px rgba(0,0,0,.2);}
+#lo .lcta-contact{font-size:12px;color:rgba(255,255,255,.6);margin-top:20px;line-height:1.9;}
+#lo .lfoot{background:var(--bd);padding:48px 24px 36px;}
+#lo .lfoot-inner{max-width:1020px;margin:0 auto;display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1fr;gap:32px;}
+#lo .lfoot-brand{font-size:18px;font-weight:800;color:var(--wh);margin-bottom:8px;}
+#lo .lfoot-desc{font-size:12px;color:rgba(255,255,255,.5);line-height:1.65;}
+#lo .lfoot-col-title{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-bottom:12px;}
+#lo .lfoot-links{list-style:none;}
+#lo .lfoot-links li{margin-bottom:8px;}
+#lo .lfoot-links a{font-size:12px;color:rgba(255,255,255,.55);text-decoration:none;}
+#lo .lfoot-bottom{max-width:1020px;margin:28px auto 0;padding-top:20px;border-top:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+#lo .lfoot-copy{font-size:11px;color:rgba(255,255,255,.3);}
+#lo .ldiv{height:1px;background:var(--br);max-width:1020px;margin:0 auto;}
 @media(max-width:768px){
-  .ln{padding:0 20px;}.ln-links,.ln-right{display:none;}.ln-ham{display:flex;}
-  .lh{padding:80px 20px 48px;min-height:auto;}
-  .lh-stats{flex-direction:column;width:100%;}
-  .lh-stat{width:100%;border-left:none!important;border-top:1px solid var(--br);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;text-align:left;}
-  .lh-stat:first-child{border-top:none;}
-  .lh-actions{flex-direction:column;width:100%;}
-  .lb-pr,.lb-gh{width:100%;text-align:center;}
-  .ls{padding:0 16px 48px;}.lsw{padding:48px 20px;}
-  .lf-grid{grid-template-columns:repeat(2,1fr);}
-  .lhow{padding:48px 20px;}.lhow-steps{grid-template-columns:1fr;}
-  .lpr{padding:48px 20px;}.lpr-grid{grid-template-columns:1fr;}
-  .lcta-wrap{padding:0 20px 48px;}.lcta{padding:48px 24px;}
-  .lfoot{padding:40px 20px 28px;}.lfoot-inner{grid-template-columns:1fr 1fr;gap:24px;}
-  .lcmp-hd,.lcmp-row{grid-template-columns:1.4fr 1fr 1fr 1fr;font-size:10px;}
-  .lcmp-h,.lcmp-c{padding:10px 8px;font-size:10px;}
+  #lo .ln{padding:0 20px;}#lo .ln-links,#lo .ln-right{display:none;}#lo .ln-ham{display:flex;}
+  #lo .lh{padding:80px 20px 48px;min-height:auto;}
+  #lo .lh-stats{flex-direction:column;width:100%;}
+  #lo .lh-stat{width:100%;border-left:none!important;border-top:1px solid var(--br);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;text-align:left;}
+  #lo .lh-stat:first-child{border-top:none;}
+  #lo .lh-actions{flex-direction:column;width:100%;}
+  #lo .lb-pr,#lo .lb-gh{width:100%;text-align:center;}
+  #lo .ls{padding:0 16px 48px;}#lo .lsw{padding:48px 20px;}
+  #lo .lf-grid{grid-template-columns:repeat(2,1fr);}
+  #lo .lhow{padding:48px 20px;}#lo .lhow-steps{grid-template-columns:1fr;}
+  #lo .lpr{padding:48px 20px;}#lo .lpr-grid{grid-template-columns:1fr;}
+  #lo .lcta-wrap{padding:0 20px 48px;}#lo .lcta{padding:48px 24px;}
+  #lo .lfoot{padding:40px 20px 28px;}#lo .lfoot-inner{grid-template-columns:1fr 1fr;gap:24px;}
 }
-@media(max-width:420px){.lf-grid{grid-template-columns:1fr;}.lfoot-inner{grid-template-columns:1fr;}}
+@media(max-width:420px){#lo .lf-grid{grid-template-columns:1fr;}#lo .lfoot-inner{grid-template-columns:1fr;}}
 </style>
-
+<div id="lo">
 <nav class="ln">
-  <a href="#" class="ln-logo"><div class="ln-icon">&#127970;</div>&#45432;&#54532;&#47196;</a>
+  <a href="#" class="ln-logo"><div class="ln-icon">🏢</div>노프로</a>
   <div class="ln-links">
     <a href="#lshowcase" class="ln-pill">서비스 화면</a>
     <a href="#lfeatures" class="ln-pill">기능</a>
@@ -537,18 +532,18 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
     <a href="#lcontact" class="ln-pill">문의</a>
   </div>
   <div class="ln-right">
-    <button class="ln-login" onclick="showAuthModal('login')">로그인</button>
-    <button class="ln-cta" onclick="showAuthModal('signup')">무료로 시작하기 →</button>
+    <button class="ln-login" onclick="showAuthModal()">로그인</button>
+    <button class="ln-cta" onclick="showAuthModal()">무료로 시작하기 →</button>
   </div>
   <div class="ln-ham" onclick="loToggleMenu()" id="lo-ham"><span></span><span></span><span></span></div>
 </nav>
 <div class="lm-menu" id="lo-mmenu">
-  <a href="#lshowcase" onclick="loToggleMenu()">📱 서비스 화면</a>
-  <a href="#lfeatures" onclick="loToggleMenu()">⚡ 기능 소개</a>
-  <a href="#lhow" onclick="loToggleMenu()">📖 사용방법</a>
-  <a href="#lpricing" onclick="loToggleMenu()">💳 요금제</a>
-  <a href="#lcontact" onclick="loToggleMenu()">📞 문의</a>
-  <a class="lm-cta" onclick="loToggleMenu();showAuthModal('signup')">무료로 시작하기 →</a>
+  <a onclick="loToggleMenu()">📱 서비스 화면</a>
+  <a onclick="loToggleMenu()">⚡ 기능 소개</a>
+  <a onclick="loToggleMenu()">📖 사용방법</a>
+  <a onclick="loToggleMenu()">💳 요금제</a>
+  <a onclick="loToggleMenu()">📞 문의</a>
+  <a class="lm-cta" onclick="loToggleMenu();showAuthModal()">무료로 시작하기 →</a>
 </div>
 <section class="lh">
   <div class="lh-badge"><span class="lh-dot"></span>소규모 사업장을 위한 근태·급여 관리 플랫폼</div>
@@ -560,7 +555,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
     <div class="lh-pt"><div class="lh-pt-icon">✅</div><div class="lh-pt-txt"><strong>노프로</strong>는 관리자가 출퇴근만 입력하면 모든 수당을 자동 계산합니다. 3분이면 월급 정산 완료.</div></div>
   </div>
   <div class="lh-actions">
-    <button class="lb-pr" onclick="showAuthModal('signup')">무료로 시작하기 →</button>
+    <button class="lb-pr" onclick="showAuthModal()">무료로 시작하기 →</button>
     <a href="#lshowcase" class="lb-gh">실제 화면 보기</a>
   </div>
   <div class="lh-stats">
@@ -581,56 +576,11 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
     </div>
     <div class="ls-frame">
       <div class="ls-bar"><div class="ls-dot"></div><div class="ls-dot"></div><div class="ls-dot"></div><div class="ls-url">noprohr.netlify.app · 노무관리 Pro v5</div></div>
-      <div id="lo-sc0" class="ls-panel active" style="flex-direction:column;gap:12px;padding:40px 32px;">
-        <div style="font-size:36px;">📝</div>
-        <div style="font-size:18px;font-weight:700;color:var(--bd);">출퇴근 기록</div>
-        <div style="font-size:13px;color:var(--t2);line-height:1.7;max-width:420px;">직원별 출퇴근 시간을 입력하면<br>야간·연장·휴일 근무시간이 <strong style="color:var(--bm);">자동 분류</strong>됩니다.<br>결근·휴가·외출도 한 화면에서 관리하세요.</div>
-        <div style="display:flex;gap:10px;margin-top:8px;">
-          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">야간 자동감지</span>
-          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">휴게시간 차감</span>
-          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">화살표키 이동</span>
-        </div>
-      </div>
-      <div id="lo-sc1" class="ls-panel" style="flex-direction:column;gap:12px;padding:40px 32px;">
-        <div style="font-size:36px;">📅</div>
-        <div style="font-size:18px;font-weight:700;color:var(--bd);">근태 현황</div>
-        <div style="font-size:13px;color:var(--t2);line-height:1.7;max-width:420px;">월별 캘린더 뷰로 직원별 근태를 한눈에 확인.<br><strong style="color:var(--bm);">야간·연장·휴일 수당</strong>이 자동 집계됩니다.</div>
-        <div style="display:flex;gap:10px;margin-top:8px;">
-          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">캘린더 뷰</span>
-          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">직원별 필터</span>
-          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">수당 집계</span>
-        </div>
-      </div>
-      <div id="lo-sc2" class="ls-panel" style="flex-direction:column;gap:12px;padding:40px 32px;">
-        <div style="font-size:36px;">💰</div>
-        <div style="font-size:18px;font-weight:700;color:var(--bd);">급여 관리</div>
-        <div style="font-size:13px;color:var(--t2);line-height:1.7;max-width:420px;">카드뷰·스프레드시트뷰로 급여를 확인하고<br><strong style="color:var(--bm);">상여금·수당·세금</strong>까지 한 번에 정산.<br>엑셀로 즉시 내보내기 가능합니다.</div>
-        <div style="display:flex;gap:10px;margin-top:8px;">
-          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">카드뷰</span>
-          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">엑셀 출력</span>
-          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">세금 계산</span>
-        </div>
-      </div>
-      <div id="lo-sc3" class="ls-panel" style="flex-direction:column;gap:12px;padding:40px 32px;">
-        <div style="font-size:36px;">🗓</div>
-        <div style="font-size:18px;font-weight:700;color:var(--bd);">연차 관리</div>
-        <div style="font-size:13px;color:var(--t2);line-height:1.7;max-width:420px;">입사일 기준 <strong style="color:var(--bm);">연차 자동 생성</strong> 및 잔여일수 실시간 확인.<br>직원별 오버라이드로 유연하게 관리하세요.</div>
-        <div style="display:flex;gap:10px;margin-top:8px;">
-          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">자동 생성</span>
-          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">잔여일수</span>
-          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">오버라이드</span>
-        </div>
-      </div>
-      <div id="lo-sc4" class="ls-panel" style="flex-direction:column;gap:12px;padding:40px 32px;">
-        <div style="font-size:36px;">👥</div>
-        <div style="font-size:18px;font-weight:700;color:var(--bd);">직원 관리</div>
-        <div style="font-size:13px;color:var(--t2);line-height:1.7;max-width:420px;">직원 추가·수정·삭제, <strong style="color:var(--bm);">주민번호 암호화</strong> 저장.<br>시급제·월급제·포괄임금제 등 다양한 급여 방식 지원.</div>
-        <div style="display:flex;gap:10px;margin-top:8px;">
-          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">암호화 저장</span>
-          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">드래그 정렬</span>
-          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">4가지 급여방식</span>
-        </div>
-      </div>
+      <div id="lo-sc0" class="ls-panel active"><img class="ls-img" src="/images/출퇴근기록입력.png" alt="출퇴근 기록 입력 화면"></div>
+      <div id="lo-sc1" class="ls-panel"><img class="ls-img" src="/images/근태현황.png" alt="근태 현황 화면"></div>
+      <div id="lo-sc2" class="ls-panel"><img class="ls-img" src="/images/급여관리.png" alt="급여 관리 화면"></div>
+      <div id="lo-sc3" class="ls-panel"><img class="ls-img" src="/images/연차관리.png" alt="연차 관리 화면"></div>
+      <div id="lo-sc4" class="ls-panel"><img class="ls-img" src="/images/직원관리.png" alt="직원 관리 화면"></div>
       <div class="ls-cap" id="lo-cap">
         <div class="ls-cap-icon">📝</div>
         <div><div class="ls-cap-title">출퇴근 기록 입력</div><div class="ls-cap-desc">출퇴근 시간만 입력하면 야간·연장·휴일 수당이 자동 계산됩니다.</div></div>
@@ -661,7 +611,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
     <p class="l-desc">회원가입부터 첫 급여 정산까지 5분이면 충분합니다.</p>
     <div class="lhow-steps">
       <div class="lhow-step"><div class="lhow-num">1</div><div class="lhow-ttl">회원가입</div><div class="lhow-desc">이메일과 회사 정보로 30초 만에 가입 완료.</div></div>
-      <div class="lhow-step"><div class="lhow-num">2</div><div class="lhow-ttl">직원 등록</div><div class="lhow-desc">시급제·월급제·소정근무제·포괄임금제 모두 지원.</div></div>
+      <div class="lhow-step"><div class="lhow-num">2</div><div class="lhow-ttl">직원 등록</div><div class="lhow-desc">시급제·소정근무제·포괄임금제 모두 지원. 엑셀 일괄 등록도 가능.</div></div>
       <div class="lhow-step"><div class="lhow-num">3</div><div class="lhow-ttl">급여 정산</div><div class="lhow-desc">출퇴근 시간 입력하면 수당이 자동 계산됩니다.</div></div>
     </div>
   </div>
@@ -687,9 +637,9 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
     <h2 class="l-title">투명한 요금제</h2>
     <p class="l-desc">숨겨진 비용 없이, 직원 수에 맞게 선택하세요.</p>
     <div class="lpr-grid">
-      <div class="lpr-card"><div class="lpr-tier">Starter</div><div class="lpr-price">₩50,000<sub>/월</sub></div><div class="lpr-per">직원 10명까지</div><ul class="lpr-feats"><li><span class="ck">✓</span> 급여 자동 계산</li><li><span class="ck">✓</span> 출퇴근 기록</li><li><span class="ck">✓</span> 연차 관리</li><li><span class="ck">✓</span> 엑셀 출력</li></ul><button class="lpr-btn lpr-btn-g" onclick="showAuthModal('signup')">시작하기</button></div>
-      <div class="lpr-card feat"><div class="lpr-rec">가장 인기</div><div class="lpr-tier">Growth</div><div class="lpr-price">₩150,000<sub>/월</sub></div><div class="lpr-per">직원 50명까지</div><ul class="lpr-feats"><li><span class="ck">✓</span> Starter 모든 기능</li><li><span class="ck">✓</span> 4가지 급여 방식</li><li><span class="ck">✓</span> 상세 명세표</li><li><span class="ck">✓</span> 이메일 지원</li></ul><button class="lpr-btn lpr-btn-s" onclick="showAuthModal('signup')">시작하기 →</button></div>
-      <div class="lpr-card"><div class="lpr-tier">Scale</div><div class="lpr-price">₩200,000<sub>/월</sub></div><div class="lpr-per">직원 100명까지</div><ul class="lpr-feats"><li><span class="ck">✓</span> Growth 모든 기능</li><li><span class="ck">✓</span> 전담 매니저</li><li><span class="ck">✓</span> 우선 지원</li><li><span class="ck">✓</span> 커스텀 설정</li></ul><button class="lpr-btn lpr-btn-g" onclick="showAuthModal('signup')">시작하기</button></div>
+      <div class="lpr-card"><div class="lpr-tier">Starter</div><div class="lpr-price">₩50,000<sub>/월</sub></div><div class="lpr-per">직원 10명까지</div><ul class="lpr-feats"><li><span class="ck">✓</span> 급여 자동 계산</li><li><span class="ck">✓</span> 출퇴근 기록</li><li><span class="ck">✓</span> 연차 관리</li><li><span class="ck">✓</span> 엑셀 출력</li></ul><button class="lpr-btn lpr-btn-g" onclick="showAuthModal()">시작하기</button></div>
+      <div class="lpr-card feat"><div class="lpr-rec">가장 인기</div><div class="lpr-tier">Growth</div><div class="lpr-price">₩150,000<sub>/월</sub></div><div class="lpr-per">직원 50명까지</div><ul class="lpr-feats"><li><span class="ck">✓</span> Starter 모든 기능</li><li><span class="ck">✓</span> 3가지 급여 방식</li><li><span class="ck">✓</span> 상세 명세표</li><li><span class="ck">✓</span> 이메일 지원</li></ul><button class="lpr-btn lpr-btn-s" onclick="showAuthModal()">시작하기 →</button></div>
+      <div class="lpr-card"><div class="lpr-tier">Scale</div><div class="lpr-price">₩200,000<sub>/월</sub></div><div class="lpr-per">직원 100명까지</div><ul class="lpr-feats"><li><span class="ck">✓</span> Growth 모든 기능</li><li><span class="ck">✓</span> 전담 매니저</li><li><span class="ck">✓</span> 우선 지원</li><li><span class="ck">✓</span> 커스텀 설정</li></ul><button class="lpr-btn lpr-btn-g" onclick="showAuthModal()">시작하기</button></div>
     </div>
   </div>
 </div>
@@ -707,7 +657,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
   <div class="lcta">
     <h2 class="lcta-title">복잡한 급여 계산,<br>노프로가 대신합니다</h2>
     <p class="lcta-desc">설치 없이 브라우저에서 바로. 5분이면 첫 급여 정산까지 완료됩니다.</p>
-    <button class="lcta-btn" onclick="showAuthModal('signup')">무료로 시작하기 →</button>
+    <button class="lcta-btn" onclick="showAuthModal()">무료로 시작하기 →</button>
     <div class="lcta-contact">📧 sangmin275@naver.com &nbsp;|&nbsp; 📞 010-2349-4208<br>평일 09:00 – 18:00 운영</div>
   </div>
 </div>
@@ -721,7 +671,28 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
   </div>
   <div class="lfoot-bottom"><div class="lfoot-copy">© 2025-2026 노프로. All rights reserved.</div></div>
 </div>
-
+</div>
+<script>
+const loCaps=[
+  {icon:'📝',title:'출퇴근 기록 입력',desc:'출퇴근 시간만 입력하면 야간·연장·휴일 수당이 자동 계산됩니다.'},
+  {icon:'📅',title:'근태 현황 캘린더',desc:'직원별 월간 근태를 캘린더로 한눈에 확인할 수 있습니다.'},
+  {icon:'💰',title:'급여 관리',desc:'직원별 급여를 카드 형태로 상세하게 조회할 수 있습니다.'},
+  {icon:'🗓',title:'연차 관리',desc:'입사일 기준 연차 자동 생성. 연차수당도 자동 계산됩니다.'},
+  {icon:'👥',title:'직원 관리',desc:'직원 정보 등록·수정. 드래그로 순서 변경도 가능합니다.'}
+];
+function loScreen(idx,tab){
+  document.querySelectorAll('.ls-panel').forEach((p,i)=>p.classList.toggle('active',i===idx));
+  document.querySelectorAll('.ls-tab').forEach((t,i)=>t.classList.toggle('active',i===idx));
+  const c=loCaps[idx];
+  document.getElementById('lo-cap').innerHTML=`<div class="ls-cap-icon">${c.icon}</div><div><div class="ls-cap-title">${c.title}</div><div class="ls-cap-desc">${c.desc}</div></div>`;
+}
+function loToggleMenu(){document.getElementById('lo-mmenu').classList.toggle('open');}
+document.addEventListener('click',e=>{
+  const m=document.getElementById('lo-mmenu');const h=document.getElementById('lo-ham');
+  if(m&&h&&!m.contains(e.target)&&!h.contains(e.target))m.classList.remove('open');
+});
+</script>
+</div>
 </div>
 
 <!-- ══ 로그인/회원가입 오버레이 ══ -->
@@ -7595,25 +7566,7 @@ function initLandingEffects(){
   },300);
 }
 
-// ── 랜딩 서비스 화면 탭 ──
-const loCaps=[
-  {icon:'📝',title:'출퇴근 기록 입력',desc:'출퇴근 시간만 입력하면 야간·연장·휴일 수당이 자동 계산됩니다.'},
-  {icon:'📅',title:'근태 현황 캘린더',desc:'직원별 월간 근태를 캘린더로 한눈에 확인할 수 있습니다.'},
-  {icon:'💰',title:'급여 관리',desc:'직원별 급여를 카드 형태로 상세하게 조회할 수 있습니다.'},
-  {icon:'🗓',title:'연차 관리',desc:'입사일 기준 연차 자동 생성. 연차수당도 자동 계산됩니다.'},
-  {icon:'👥',title:'직원 관리',desc:'직원 정보 등록·수정. 드래그로 순서 변경도 가능합니다.'}
-];
-function loScreen(idx,tab){
-  document.querySelectorAll('.ls-panel').forEach((p,i)=>p.classList.toggle('active',i===idx));
-  document.querySelectorAll('.ls-tab').forEach((t,i)=>t.classList.toggle('active',i===idx));
-  const c=loCaps[idx];
-  document.getElementById('lo-cap').innerHTML='<div class="ls-cap-icon">'+c.icon+'</div><div><div class="ls-cap-title">'+c.title+'</div><div class="ls-cap-desc">'+c.desc+'</div></div>';
-}
-function loToggleMenu(){document.getElementById('lo-mmenu').classList.toggle('open');}
-document.addEventListener('click',function(e){
-  var m=document.getElementById('lo-mmenu'),h=document.getElementById('lo-ham');
-  if(m&&h&&!m.contains(e.target)&&!h.contains(e.target))m.classList.remove('open');
-});
+// ── 랜딩 서비스 화면 탭 (랜딩페이지 inline script로 이동됨) ──
 </script>
 </body>
 </html>
