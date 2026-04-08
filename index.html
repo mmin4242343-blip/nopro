@@ -32,7 +32,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .fade-in{animation:fadeIn .22s ease}
 
 /* ── 앱 구조 ── */
-.app{display:flex;flex-direction:column;min-height:100vh}
+.app{display:none;flex-direction:column;height:100vh;overflow:hidden}
 
 /* ── 네비게이션 ── */
 .nav{background:var(--grad1);display:flex;align-items:center;padding:0 20px;height:54px;gap:2px;flex-shrink:0;
@@ -56,10 +56,10 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .nxa:hover{background:rgba(255,255,255,.22);border-color:rgba(255,255,255,.4);transform:translateY(-1px)}
 
 /* ── 레이아웃 ── */
-.body{display:flex;flex:1;height:calc(100vh - 54px);overflow:hidden}
+.body{display:flex;flex:1;overflow:hidden}
 
 /* ── 사이드바 ── */
-.sb{width:176px;background:var(--card);border-right:1px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0;
+.sb{width:176px;background:var(--card);border-right:1px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0;height:100%;overflow:hidden;
   box-shadow:2px 0 12px rgba(0,0,0,.04)}
 .sb-hd{padding:14px 14px 10px}
 .sb-t{font-size:10px;font-weight:700;color:var(--ink3);letter-spacing:.8px;text-transform:uppercase}
@@ -76,9 +76,9 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .av{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0}
 .en{font-size:12px;font-weight:600;color:var(--ink)}
 .er{font-size:10px;color:var(--ink3)}
-.main{flex:1;overflow:auto;background:var(--surf)}
-.pg{padding:0;display:none;overflow-y:auto}
-.pg.on{display:flex;flex-direction:column;animation:fadeIn .2s ease;overflow-y:auto;height:100%;padding-bottom:40px;}
+.main{flex:1;overflow-y:auto;background:var(--surf);height:100%;}
+.pg{padding:0;display:none;}
+.pg.on{display:block;animation:fadeIn .2s ease;}
 
 /* ── 페이지 헤더 ── */
 .ph{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;padding:20px 22px 0}

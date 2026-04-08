@@ -733,7 +733,26 @@ function mvSearch(v){
   const found=EMPS.find(e=>e.name.includes(v));
   if(found){vEid=found.id;renderMonthly();}
 }
-function sbDrop(ev,i){ev.preventDefault();if(dragIdx===null||dragIdx===i)return;const mv=EMPS.splice(dragIdx,1)[0];EMPS.splice(i,0,mv);dragIdx=null;saveLS();renderSb();renderTable();renderEmps();}
+function sbDrop(ev,i){
+  ev.preventDefault();
+  if(dragIdx===null||dragIdx===i)return;
+  const sbItems=document.querySelectorAll('#sb-list .ei');
+  const fromId=sbItems[dragIdx]?parseInt(sbItems[dragIdx].dataset.eid):null;
+  const toId=sbItems[i]?parseInt(sbItems[i].dataset.eid):null;
+  if(fromId&&toId&&fromId!==toId){
+    const fromIdx=EMPS.findIndex(e=>e.id===fromId);
+    const toIdx=EMPS.findIndex(e=>e.id===toId);
+    if(fromIdx>=0&&toIdx>=0){
+      const mv=EMPS.splice(fromIdx,1)[0];
+      EMPS.splice(toIdx,0,mv);
+    }
+  }
+  dragIdx=null;
+  saveLS();
+  renderSb(document.getElementById('sb-search-inp')?.value||'');
+  renderTable();
+  renderEmps();
+}
 
 function nd(f,d){
   if(f==='year'){cY+=d;}
