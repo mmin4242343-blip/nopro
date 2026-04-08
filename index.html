@@ -6,6 +6,7 @@
 <title>노무관리 Pro v5</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:13px;background:#F1F5F9;color:#0F172A}
 :root{
@@ -377,7 +378,6 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 
 <!-- ══ 랜딩페이지 ══ -->
 <div id="landing-overlay" style="position:fixed;inset:0;z-index:99997;display:block;overflow-y:auto;overflow-x:hidden;background:#fff;">
-<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{--bd:#1a2f6e;--bm:#2347b5;--bl:#5b82e8;--bp:#f0f4fd;--bdim:rgba(35,71,181,.10);--bdim2:rgba(35,71,181,.05);--wh:#fff;--tx:#111827;--t2:#6b7280;--t3:#9ca3af;--br:#e5e9f2;--br2:#d1d9f0;--bg:#f7f9fe;}
 #lo{font-family:'Pretendard',-apple-system,sans-serif;color:var(--tx);-webkit-font-smoothing:antialiased;overflow-x:hidden;}
@@ -756,11 +756,11 @@ document.addEventListener('click',e=>{
     <!-- 로그인 폼 -->
     <div id="auth-login-form" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:26px;box-shadow:0 1px 0 rgba(255,255,255,.05) inset">
       <div style="margin-bottom:14px">
-        <label class="auth-label">이메일</label>
+        <label class="auth-label" for="al-email">이메일</label>
         <input id="al-email" type="email" placeholder="company@example.com" autocomplete="email" class="auth-input">
       </div>
       <div style="margin-bottom:10px">
-        <label class="auth-label">비밀번호</label>
+        <label class="auth-label" for="al-pw">비밀번호</label>
         <input id="al-pw" type="password" placeholder="비밀번호 입력" autocomplete="current-password" onkeydown="if(event.key==='Enter')doAuthLogin()" class="auth-input">
       </div>
       <div id="al-error" style="display:none;font-size:12.5px;color:#F87171;margin-bottom:12px;padding:10px 13px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:10px;font-family:'Plus Jakarta Sans',sans-serif"></div>
@@ -777,28 +777,28 @@ document.addEventListener('click',e=>{
     <div id="auth-signup-form" style="display:none;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:26px;box-shadow:0 1px 0 rgba(255,255,255,.05) inset;max-height:65vh;overflow-y:auto">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
         <div>
-          <label class="auth-label">회사명 *</label>
+          <label class="auth-label" for="as-company">회사명 *</label>
           <input id="as-company" placeholder="(주)명민산업" class="auth-input">
         </div>
         <div>
-          <label class="auth-label">담당자 *</label>
+          <label class="auth-label" for="as-name">담당자 *</label>
           <input id="as-name" placeholder="홍길동" class="auth-input">
         </div>
       </div>
       <div style="margin-bottom:12px">
-        <label class="auth-label">휴대폰 번호 *</label>
+        <label class="auth-label" for="as-phone">휴대폰 번호 *</label>
         <input id="as-phone" placeholder="010-0000-0000" class="auth-input">
       </div>
       <div style="margin-bottom:12px">
-        <label class="auth-label">이메일 *</label>
+        <label class="auth-label" for="as-email">이메일 *</label>
         <input id="as-email" type="email" placeholder="admin@company.com" autocomplete="email" class="auth-input">
       </div>
       <div style="margin-bottom:12px">
-        <label class="auth-label">비밀번호 * <span style="font-weight:400;color:rgba(240,244,255,.25)">(8자 이상)</span></label>
+        <label class="auth-label" for="as-pw">비밀번호 * <span style="font-weight:400;color:rgba(240,244,255,.25)">(8자 이상)</span></label>
         <input id="as-pw" type="password" placeholder="••••••••" autocomplete="new-password" onkeydown="if(event.key==='Enter')doAuthSignup()" class="auth-input">
       </div>
       <div style="margin-bottom:16px">
-        <label class="auth-label">직원 수</label>
+        <label class="auth-label" for="as-size">직원 수</label>
         <select id="as-size" class="auth-select">
           <option value="10이하">10인 이하 — 월 5만원</option>
           <option value="50이하" selected>50인 이하 — 월 15만원</option>
