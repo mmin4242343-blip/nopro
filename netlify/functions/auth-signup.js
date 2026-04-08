@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { supabase } from './_shared/supabase.js';
-import { signToken, ok, err, options } from './_shared/auth.js';
+import { signToken, okWithCookie, err, options } from './_shared/auth.js';
 
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return options(event);
@@ -37,7 +37,6 @@ export const handler = async (event) => {
         phone,
         email,
         password_hash: passwordHash,
-        // password_plain 저장하지 않음
         size: size || '50이하',
         address: addr || '',
         join_date: new Date().toISOString().slice(0, 10),
@@ -54,8 +53,7 @@ export const handler = async (event) => {
       role: 'user'
     });
 
-    return ok({
-      token,
+    return okWithCookie({
       session: {
         email: newCompany.email,
         company: newCompany.company_name,
@@ -63,7 +61,7 @@ export const handler = async (event) => {
         role: 'user',
         companyId: newCompany.id
       }
-    }, event);
+    }, token, event);
 
   } catch (e) {
     return err(500, '서버 오류가 발생했습니다', event);

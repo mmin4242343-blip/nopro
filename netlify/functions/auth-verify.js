@@ -1,5 +1,5 @@
 import { supabase } from './_shared/supabase.js';
-import { verifyToken, signToken, ok, err, options } from './_shared/auth.js';
+import { verifyToken, signToken, ok, okWithCookie, err, options } from './_shared/auth.js';
 
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return options(event);
@@ -10,9 +10,11 @@ export const handler = async (event) => {
 
     // 관리자
     if (decoded.role === 'admin') {
-      // 만료 2시간 이내면 토큰 갱신
-      const newToken = shouldRefresh(decoded) ? signToken({ email: decoded.email, role: 'admin' }) : null;
-      return ok({ valid: true, session: { email: decoded.email, role: 'admin' }, newToken }, event);
+      if (shouldRefresh(decoded)) {
+        const newToken = signToken({ email: decoded.email, role: 'admin' });
+        return okWithCookie({ valid: true, session: { email: decoded.email, role: 'admin' } }, newToken, event);
+      }
+      return ok({ valid: true, session: { email: decoded.email, role: 'admin' } }, event);
     }
 
     // 일반 사용자 - 회사 정보 확인
@@ -25,19 +27,20 @@ export const handler = async (event) => {
     if (rows[0].status !== 'active') return err(401, '비활성 계정입니다', event);
 
     const company = rows[0];
-    const newToken = shouldRefresh(decoded) ? signToken({ companyId: company.id, email: company.email, role: 'user' }) : null;
+    const session = {
+      email: company.email,
+      company: company.company_name,
+      name: company.manager_name,
+      role: 'user',
+      companyId: company.id
+    };
 
-    return ok({
-      valid: true,
-      session: {
-        email: company.email,
-        company: company.company_name,
-        name: company.manager_name,
-        role: 'user',
-        companyId: company.id
-      },
-      newToken
-    }, event);
+    if (shouldRefresh(decoded)) {
+      const newToken = signToken({ companyId: company.id, email: company.email, role: 'user' });
+      return okWithCookie({ valid: true, session }, newToken, event);
+    }
+
+    return ok({ valid: true, session }, event);
 
   } catch (e) {
     return err(401, '세션이 만료되었습니다', event);

@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { supabase } from './_shared/supabase.js';
-import { signToken, ok, err, options, cors } from './_shared/auth.js';
+import { signToken, okWithCookie, err, options, cors } from './_shared/auth.js';
 import { checkRateLimit, recordLoginAttempt, clearLoginAttempts } from './_shared/rate-limit.js';
 
 export const handler = async (event) => {
@@ -32,12 +32,12 @@ export const handler = async (event) => {
       const match = await bcrypt.compare(password, adminHash);
       if (!match) {
         await recordLoginAttempt(email, clientIp);
-        return err(401, '비밀번호가 올바르지 않습니다', event);
+        return err(401, '이메일 또는 비밀번호가 올바르지 않습니다', event);
       }
 
       await clearLoginAttempts(email);
       const token = signToken({ email, role: 'admin' });
-      return ok({ token, session: { email, role: 'admin' } }, event);
+      return okWithCookie({ session: { email, role: 'admin' } }, token, event);
     }
 
     // 일반 사용자 로그인
@@ -49,7 +49,7 @@ export const handler = async (event) => {
     if (dbErr) return err(500, '서버 오류가 발생했습니다', event);
     if (!rows || rows.length === 0) {
       await recordLoginAttempt(email, clientIp);
-      return err(401, '등록되지 않은 이메일입니다', event);
+      return err(401, '이메일 또는 비밀번호가 올바르지 않습니다', event);
     }
 
     const company = rows[0];
@@ -62,7 +62,7 @@ export const handler = async (event) => {
     const passwordMatch = await bcrypt.compare(password, company.password_hash);
     if (!passwordMatch) {
       await recordLoginAttempt(email, clientIp);
-      return err(401, '비밀번호가 올바르지 않습니다', event);
+      return err(401, '이메일 또는 비밀번호가 올바르지 않습니다', event);
     }
 
     // 로그인 성공 → 시도 기록 초기화
@@ -74,8 +74,7 @@ export const handler = async (event) => {
       role: 'user'
     });
 
-    return ok({
-      token,
+    return okWithCookie({
       session: {
         email: company.email,
         company: company.company_name,
@@ -83,7 +82,7 @@ export const handler = async (event) => {
         role: 'user',
         companyId: company.id
       }
-    }, event);
+    }, token, event);
 
   } catch (e) {
     return err(500, '서버 오류가 발생했습니다', event);
