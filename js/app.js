@@ -691,8 +691,26 @@ function gp(p){
   if(p==='company')renderCompany();
   if(p==='folder')renderFolder();
 }
+// ══ 사이드바 필터 상태 ══
+const SBF = { shift:'all', pay:'all' };
+
+function setSbFilter(key, val, btn){
+  SBF[key] = val;
+  if(btn){
+    const grp = btn.closest('div');
+    if(grp) grp.querySelectorAll('.sb-fb').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on');
+  }
+  renderSb(document.getElementById('sb-search-inp')?.value||'');
+}
+
 function renderSb(filter=''){
-  const sbSorted=[...EMPS].filter(e=>!filter||e.name.includes(filter));
+  const sbSorted=[...EMPS].filter(e=>{
+    if(filter && !e.name.includes(filter)) return false;
+    if(SBF.shift!=='all' && (e.shift||'day')!==SBF.shift) return false;
+    if(SBF.pay!=='all' && (e.payMode||'fixed')!==SBF.pay) return false;
+    return true;
+  });
   document.getElementById('sb-list').innerHTML=sbSorted.map((e,i)=>`
     <div class="ei ${e.id===vEid?'on':''}" draggable="true"
       ondragstart="dragIdx=${i}" ondragover="event.preventDefault()"

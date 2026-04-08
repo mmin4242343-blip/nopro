@@ -77,11 +77,11 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .en{font-size:12px;font-weight:600;color:var(--ink)}
 .er{font-size:10px;color:var(--ink3)}
 .main{flex:1;overflow:auto;background:var(--surf)}
-.pg{padding:20px 22px;display:none}
-.pg.on{display:block;animation:fadeIn .2s ease}
+.pg{padding:0;display:none;overflow-y:auto}
+.pg.on{display:block;animation:fadeIn .2s ease;overflow-y:auto;height:100%;}
 
 /* ── 페이지 헤더 ── */
-.ph{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px}
+.ph{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;padding:20px 22px 0}
 .pt{font-size:18px;font-weight:800;color:var(--ink);letter-spacing:-.4px}
 .pt-s{font-size:11px;color:var(--ink3);margin-top:3px;font-weight:400}
 
@@ -870,6 +870,10 @@ document.addEventListener('click',e=>{
 .shift-btn-primary{padding:7px 16px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;}
 .shift-btn-ghost{padding:7px 16px;background:transparent;color:var(--navy2);border:1px solid var(--navy2);border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;}
 .shift-unreg{font-size:11px;color:#e97d2b;background:#fff8f0;border:1px solid #e97d2b;border-radius:4px;padding:2px 7px;}
+/* ── 사이드바 필터 버튼 ── */
+.sb-fb{padding:2px 7px;border-radius:5px;font-size:10px;border:1px solid var(--bd2);cursor:pointer;background:transparent;color:var(--ink3);font-family:inherit;}
+.sb-fb:hover{background:var(--surf);}
+.sb-fb.on{background:var(--navy);color:#fff;border-color:var(--navy);}
 </style>
 
   <!-- 사이드바 -->
@@ -936,6 +940,22 @@ document.addEventListener('click',e=>{
 <div class="sb">
   <div class="sb-hd"><div class="sb-t">직원 목록</div><div class="sb-s">드래그 순서 변경</div></div>
   <div class="sb-search"><input type="text" id="sb-search-inp" placeholder="이름 검색..." oninput="filterSb(this.value)"></div>
+
+  <!-- 주간/야간 필터 -->
+  <div style="padding:4px 8px;border-bottom:1px solid var(--bd);display:flex;flex-wrap:wrap;gap:3px;">
+    <button class="sb-fb on" onclick="setSbFilter('shift','all',this)">전체</button>
+    <button class="sb-fb" onclick="setSbFilter('shift','day',this)">주간</button>
+    <button class="sb-fb" onclick="setSbFilter('shift','night',this)" style="color:#afa9ec;border-color:#534ab7;">야간</button>
+  </div>
+
+  <!-- 급여형태 필터 -->
+  <div style="padding:4px 8px;border-bottom:1px solid var(--bd);display:flex;flex-wrap:wrap;gap:3px;">
+    <button class="sb-fb on" onclick="setSbFilter('pay','all',this)">전체</button>
+    <button class="sb-fb" onclick="setSbFilter('pay','fixed',this)">소정</button>
+    <button class="sb-fb" onclick="setSbFilter('pay','hourly',this)">시급</button>
+    <button class="sb-fb" onclick="setSbFilter('pay','monthly',this)">포괄</button>
+  </div>
+
   <div id="sb-list" style="overflow-y:auto;flex:1"></div>
   <div style="padding:7px 10px;border-top:1px solid var(--bd)">
     <button class="btn btn-sm" style="width:100%" onclick="gp('emps')">+ 직원 추가</button>
