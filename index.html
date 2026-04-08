@@ -32,7 +32,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .fade-in{animation:fadeIn .22s ease}
 
 /* ── 앱 구조 ── */
-.app{display:none;flex-direction:column;height:100vh;overflow:hidden}
+.app{display:none;flex-direction:column;height:100vh;max-height:100vh;overflow:hidden;position:relative;}
 
 /* ── 네비게이션 ── */
 .nav{background:var(--grad1);display:flex;align-items:center;padding:0 20px;height:54px;gap:2px;flex-shrink:0;
@@ -78,7 +78,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .er{font-size:10px;color:var(--ink3)}
 .main{flex:1;overflow-y:auto;background:var(--surf);height:100%;}
 .pg{padding:0;display:none;}
-.pg.on{display:block;animation:fadeIn .2s ease;}
+.pg.on{display:block;animation:fadeIn .2s ease;min-height:100%;}
 
 /* ── 페이지 헤더 ── */
 .ph{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;padding:20px 22px 0}
@@ -874,6 +874,10 @@ document.addEventListener('click',e=>{
 .sb-fb{padding:2px 7px;border-radius:5px;font-size:10px;border:1px solid var(--bd2);cursor:pointer;background:transparent;color:var(--ink3);font-family:inherit;}
 .sb-fb:hover{background:var(--surf);}
 .sb-fb.on{background:var(--navy);color:#fff;border-color:var(--navy);}
+#sb-list::-webkit-scrollbar{width:4px;}
+#sb-list::-webkit-scrollbar-track{background:transparent;}
+#sb-list::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:4px;}
+#sb-list::-webkit-scrollbar-thumb:hover{background:var(--ink3);}
 </style>
 
   <!-- 사이드바 -->
@@ -963,7 +967,7 @@ document.addEventListener('click',e=>{
     <button class="sb-fb" onclick="setSbFilter('pay','monthly',this)">포괄</button>
   </div>
 
-  <div id="sb-list" style="overflow-y:auto;flex:1"></div>
+  <div id="sb-list" style="overflow-y:auto;flex:1;min-height:0;"></div>
   <div style="padding:7px 10px;border-top:1px solid var(--bd)">
     <button class="btn btn-sm" style="width:100%" onclick="gp('emps')">+ 직원 추가</button>
   </div>

@@ -2124,7 +2124,7 @@ function renderEmps(){
       else if(_curGroup==='leave') _groupHdr=`<tr><td colspan="18" style="padding:5px 14px;background:linear-gradient(90deg,#FEE2E2,#FFF1F2);font-size:10px;font-weight:800;color:#E11D48;letter-spacing:.5px;border-bottom:1px solid #FECDD3">🚪 퇴사자</td></tr>`;
     }
     _prevGroup = _curGroup;
-    return _groupHdr+`<tr draggable="true"
+    return _groupHdr+`<tr draggable="true" data-eid="${e.id}"
       ondragstart="empDragIdx=${i};this.style.opacity='.4';this.style.background='var(--nbg)';this.style.transform='scale(.98)'"
       ondragend="this.style.opacity='';this.style.background='';this.style.transform=''"
       ondragover="event.preventDefault();this.style.borderTop='2px solid var(--navy2)'"
@@ -2234,7 +2234,26 @@ function refreshAllAges(){
   const msToMidnight=(new Date(now.getFullYear(),now.getMonth(),now.getDate()+1)-now)+1000;
   setTimeout(refreshAllAges,msToMidnight);
 }
-function empDrop(ev,i){ev.preventDefault();if(empDragIdx===null||empDragIdx===i)return;const mv=EMPS.splice(empDragIdx,1)[0];EMPS.splice(i,0,mv);empDragIdx=null;saveLS();renderEmps();renderSb();renderTable();}
+function empDrop(ev,i){
+  ev.preventDefault();
+  if(empDragIdx===null||empDragIdx===i)return;
+  const rows=document.querySelectorAll('#emp-tbody tr[data-eid]');
+  const fromId=rows[empDragIdx]?parseInt(rows[empDragIdx].dataset.eid):null;
+  const toId=rows[i]?parseInt(rows[i].dataset.eid):null;
+  if(fromId&&toId&&fromId!==toId){
+    const fromIdx=EMPS.findIndex(e=>e.id===fromId);
+    const toIdx=EMPS.findIndex(e=>e.id===toId);
+    if(fromIdx>=0&&toIdx>=0){
+      const mv=EMPS.splice(fromIdx,1)[0];
+      EMPS.splice(toIdx,0,mv);
+    }
+  }
+  empDragIdx=null;
+  saveLS();
+  renderEmps();
+  renderSb(document.getElementById('sb-search-inp')?.value||'');
+  renderTable();
+}
 // EMPS 배열 자체를 주간→야간→퇴사 순으로 정렬
 function sortEMPS(){
   EMPS.sort((a,b)=>{
