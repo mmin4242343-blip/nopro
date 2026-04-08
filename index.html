@@ -581,11 +581,56 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
     </div>
     <div class="ls-frame">
       <div class="ls-bar"><div class="ls-dot"></div><div class="ls-dot"></div><div class="ls-dot"></div><div class="ls-url">noprohr.netlify.app · 노무관리 Pro v5</div></div>
-      <div id="lo-sc0" class="ls-panel active">출퇴근 기록 화면 미리보기</div>
-      <div id="lo-sc1" class="ls-panel">근태 현황 화면 미리보기</div>
-      <div id="lo-sc2" class="ls-panel">급여 관리 화면 미리보기</div>
-      <div id="lo-sc3" class="ls-panel">연차 관리 화면 미리보기</div>
-      <div id="lo-sc4" class="ls-panel">직원 관리 화면 미리보기</div>
+      <div id="lo-sc0" class="ls-panel active" style="flex-direction:column;gap:12px;padding:40px 32px;">
+        <div style="font-size:36px;">📝</div>
+        <div style="font-size:18px;font-weight:700;color:var(--bd);">출퇴근 기록</div>
+        <div style="font-size:13px;color:var(--t2);line-height:1.7;max-width:420px;">직원별 출퇴근 시간을 입력하면<br>야간·연장·휴일 근무시간이 <strong style="color:var(--bm);">자동 분류</strong>됩니다.<br>결근·휴가·외출도 한 화면에서 관리하세요.</div>
+        <div style="display:flex;gap:10px;margin-top:8px;">
+          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">야간 자동감지</span>
+          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">휴게시간 차감</span>
+          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">화살표키 이동</span>
+        </div>
+      </div>
+      <div id="lo-sc1" class="ls-panel" style="flex-direction:column;gap:12px;padding:40px 32px;">
+        <div style="font-size:36px;">📅</div>
+        <div style="font-size:18px;font-weight:700;color:var(--bd);">근태 현황</div>
+        <div style="font-size:13px;color:var(--t2);line-height:1.7;max-width:420px;">월별 캘린더 뷰로 직원별 근태를 한눈에 확인.<br><strong style="color:var(--bm);">야간·연장·휴일 수당</strong>이 자동 집계됩니다.</div>
+        <div style="display:flex;gap:10px;margin-top:8px;">
+          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">캘린더 뷰</span>
+          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">직원별 필터</span>
+          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">수당 집계</span>
+        </div>
+      </div>
+      <div id="lo-sc2" class="ls-panel" style="flex-direction:column;gap:12px;padding:40px 32px;">
+        <div style="font-size:36px;">💰</div>
+        <div style="font-size:18px;font-weight:700;color:var(--bd);">급여 관리</div>
+        <div style="font-size:13px;color:var(--t2);line-height:1.7;max-width:420px;">카드뷰·스프레드시트뷰로 급여를 확인하고<br><strong style="color:var(--bm);">상여금·수당·세금</strong>까지 한 번에 정산.<br>엑셀로 즉시 내보내기 가능합니다.</div>
+        <div style="display:flex;gap:10px;margin-top:8px;">
+          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">카드뷰</span>
+          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">엑셀 출력</span>
+          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">세금 계산</span>
+        </div>
+      </div>
+      <div id="lo-sc3" class="ls-panel" style="flex-direction:column;gap:12px;padding:40px 32px;">
+        <div style="font-size:36px;">🗓</div>
+        <div style="font-size:18px;font-weight:700;color:var(--bd);">연차 관리</div>
+        <div style="font-size:13px;color:var(--t2);line-height:1.7;max-width:420px;">입사일 기준 <strong style="color:var(--bm);">연차 자동 생성</strong> 및 잔여일수 실시간 확인.<br>직원별 오버라이드로 유연하게 관리하세요.</div>
+        <div style="display:flex;gap:10px;margin-top:8px;">
+          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">자동 생성</span>
+          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">잔여일수</span>
+          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">오버라이드</span>
+        </div>
+      </div>
+      <div id="lo-sc4" class="ls-panel" style="flex-direction:column;gap:12px;padding:40px 32px;">
+        <div style="font-size:36px;">👥</div>
+        <div style="font-size:18px;font-weight:700;color:var(--bd);">직원 관리</div>
+        <div style="font-size:13px;color:var(--t2);line-height:1.7;max-width:420px;">직원 추가·수정·삭제, <strong style="color:var(--bm);">주민번호 암호화</strong> 저장.<br>시급제·월급제·포괄임금제 등 다양한 급여 방식 지원.</div>
+        <div style="display:flex;gap:10px;margin-top:8px;">
+          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">암호화 저장</span>
+          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">드래그 정렬</span>
+          <span style="background:var(--bdim);color:var(--bm);padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;">4가지 급여방식</span>
+        </div>
+      </div>
       <div class="ls-cap" id="lo-cap">
         <div class="ls-cap-icon">📝</div>
         <div><div class="ls-cap-title">출퇴근 기록 입력</div><div class="ls-cap-desc">출퇴근 시간만 입력하면 야간·연장·휴일 수당이 자동 계산됩니다.</div></div>
@@ -674,7 +719,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
     <div><div class="lfoot-col-title">법적 정보</div><ul class="lfoot-links"><li><a href="#">개인정보처리방침</a></li><li><a href="#">이용약관</a></li></ul></div>
     <div><div class="lfoot-col-title">고객센터</div><ul class="lfoot-links"><li><a href="tel:01023494208">010-2349-4208</a></li><li><a href="mailto:sangmin275@naver.com">sangmin275@naver.com</a></li></ul></div>
   </div>
-  <div class="lfoot-bottom"><div class="lfoot-copy">© 2025 노프로. All rights reserved.</div></div>
+  <div class="lfoot-bottom"><div class="lfoot-copy">© 2025-2026 노프로. All rights reserved.</div></div>
 </div>
 
 </div>

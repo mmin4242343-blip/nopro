@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { supabase } from './_shared/supabase.js';
-import { signToken, ok, err, options } from './_shared/auth.js';
+import { signToken, ok, err, options, cors } from './_shared/auth.js';
+import { checkRateLimit, recordLoginAttempt, clearLoginAttempts } from './_shared/rate-limit.js';
 
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return options(event);
@@ -10,66 +11,62 @@ export const handler = async (event) => {
     const { email, password } = JSON.parse(event.body);
     if (!email || !password) return err(400, '이메일과 비밀번호를 입력해주세요', event);
 
-    // 관리자 로그인
+    // Rate limiting 체크
+    const clientIp = event.headers['x-forwarded-for'] || event.headers['client-ip'] || 'unknown';
+    const rateCheck = await checkRateLimit(email, clientIp);
+    if (!rateCheck.allowed) {
+      const wait = Math.ceil((rateCheck.retryAfter || 60) / 60);
+      return {
+        statusCode: 429,
+        headers: { ...cors(event), 'Retry-After': String(rateCheck.retryAfter || 60) },
+        body: JSON.stringify({ error: `로그인 시도가 너무 많습니다. ${wait}분 후에 다시 시도해주세요.` })
+      };
+    }
+
+    // 관리자 로그인 (bcrypt only)
     if (email === process.env.ADMIN_EMAIL) {
       const adminHash = process.env.ADMIN_PASSWORD_HASH;
-      // bcrypt 해시 비교
-      if (adminHash && adminHash.startsWith('$2')) {
-        try {
-          if (await bcrypt.compare(password, adminHash)) {
-            const token = signToken({ email, role: 'admin' });
-            return ok({ token, session: { email, role: 'admin' } }, event);
-          }
-        } catch(e) {}
+      if (!adminHash || !adminHash.startsWith('$2')) {
+        return err(500, '관리자 비밀번호 설정 오류', event);
       }
-      // SHA-256 비교 (마이그레이션 전 호환)
-      const sha = await sha256(password);
-      if (adminHash && sha === adminHash) {
-        const token = signToken({ email, role: 'admin' });
-        return ok({ token, session: { email, role: 'admin' } }, event);
+      const match = await bcrypt.compare(password, adminHash);
+      if (!match) {
+        await recordLoginAttempt(email, clientIp);
+        return err(401, '비밀번호가 올바르지 않습니다', event);
       }
-      return err(401, '비밀번호가 올바르지 않습니다', event);
+
+      await clearLoginAttempts(email);
+      const token = signToken({ email, role: 'admin' });
+      return ok({ token, session: { email, role: 'admin' } }, event);
     }
 
     // 일반 사용자 로그인
     const { data: rows, error: dbErr } = await supabase
       .from('companies')
-      .select('*')
+      .select('id, email, company_name, manager_name, password_hash')
       .eq('email', email);
 
     if (dbErr) return err(500, '서버 오류가 발생했습니다', event);
-    if (!rows || rows.length === 0) return err(401, '등록되지 않은 이메일입니다', event);
+    if (!rows || rows.length === 0) {
+      await recordLoginAttempt(email, clientIp);
+      return err(401, '등록되지 않은 이메일입니다', event);
+    }
 
     const company = rows[0];
 
-    // bcrypt 해시 비교 시도
-    let passwordMatch = false;
-    if (company.password_hash) {
-      if (company.password_hash.startsWith('$2')) {
-        // bcrypt 해시
-        passwordMatch = await bcrypt.compare(password, company.password_hash);
-      } else {
-        // SHA-256 해시 (마이그레이션 전 호환)
-        const sha = await sha256(password);
-        passwordMatch = (sha === company.password_hash);
-        // 성공하면 bcrypt로 업그레이드
-        if (passwordMatch) {
-          const newHash = await bcrypt.hash(password, 12);
-          await supabase.from('companies').update({ password_hash: newHash, password_plain: null }).eq('id', company.id);
-        }
-      }
+    // bcrypt 해시 비교 (bcrypt only)
+    if (!company.password_hash || !company.password_hash.startsWith('$2')) {
+      return err(401, '비밀번호 마이그레이션이 필요합니다. 관리자에게 문의하세요.', event);
     }
 
-    // password_plain 폴백 (마이그레이션 전)
-    if (!passwordMatch && company.password_plain) {
-      passwordMatch = (password === company.password_plain);
-      if (passwordMatch) {
-        const newHash = await bcrypt.hash(password, 12);
-        await supabase.from('companies').update({ password_hash: newHash, password_plain: null }).eq('id', company.id);
-      }
+    const passwordMatch = await bcrypt.compare(password, company.password_hash);
+    if (!passwordMatch) {
+      await recordLoginAttempt(email, clientIp);
+      return err(401, '비밀번호가 올바르지 않습니다', event);
     }
 
-    if (!passwordMatch) return err(401, '비밀번호가 올바르지 않습니다', event);
+    // 로그인 성공 → 시도 기록 초기화
+    await clearLoginAttempts(email);
 
     const token = signToken({
       companyId: company.id,
@@ -91,9 +88,4 @@ export const handler = async (event) => {
   } catch (e) {
     return err(500, '서버 오류가 발생했습니다', event);
   }
-}
-
-async function sha256(text) {
-  const { createHash } = await import('crypto');
-  return createHash('sha256').update(text).digest('hex');
 }
