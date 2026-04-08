@@ -514,12 +514,11 @@ function monthSummary(eid,y,m){
   let tExtraWorkH=0,tExtraWorkPay=0,tHolPayNew=0;
   // 월급제 휴일수당 별도 집계
   let tMonthlyHolStdPay=0,tMonthlyHolOtPay=0;
-  const empPayMode=getEmpPayMode(emp);
+  const empPayMode=getEmpPayModeAt(emp, y, m, 1);
   // 소정근로 1일 기준시간: 고정/월급제=8h, 시급제=sot기반
   const dailyStd = (empPayMode==='fixed'||empPayMode==='monthly') ? 8 : sot/4.345/5;
   // 해당 월 첫날 기준으로 시급/모드 이력 적용
-  const monthDateStr = y+'-'+String(m).padStart(2,'0')+'-01';
-  const rate = getEmpRate(emp);
+  const rate = getEmpRateAt(emp, y, m, 1);
   for(let d=1;d<=days;d++){
     const rec=REC[rk(eid,y,m,d)];if(!rec)continue;
     if(rec.annual){aldays+=1;continue;}
@@ -538,7 +537,7 @@ function monthSummary(eid,y,m){
         // 월급제: 주말/공휴일 결근은 공제 안 함 (원래 안 나와도 되는 날)
         const isHolDay = isAutoHol(y,m,d,emp);
         if(!isHolDay && (POL.dedMonthly??true)){
-          const monthlyBase=getEmpMonthly(emp);
+          const monthlyBase=getEmpMonthlyAt(emp, y, m, 1);
           const workDaysInMonth=Array.from({length:days},(_,i)=>i+1).filter(dd=>{
             return !isAutoHol(y,m,dd,emp);
           }).length;
@@ -588,7 +587,7 @@ function monthSummary(eid,y,m){
     }
   }
   if(empPayMode==='fixed')tBase=rate*sot;
-  else if(empPayMode==='monthly')tBase=getEmpMonthly(emp);
+  else if(empPayMode==='monthly')tBase=getEmpMonthlyAt(emp, y, m, 1);
   else if(empPayMode==='hourly'){
     // 시급제: calcSession에서 이미 basePay 계산됨 (아래 루프에서 tNt/tOt와 함께 집계)
   }
@@ -670,7 +669,7 @@ function monthSummary(eid,y,m){
 // ══════════════════════════════════════
 // 페이지
 // ══════════════════════════════════════
-const PAGES=['daily','monthly','payroll','leave','company','emps','safety','folder','settings'];
+const PAGES=['daily','monthly','payroll','leave','company','emps','shift','safety','folder','settings'];
 function gp(p){
   PAGES.forEach(x=>{
     const pe=document.getElementById('pg-'+x);if(pe)pe.classList.toggle('on',x===p);
@@ -686,6 +685,7 @@ function gp(p){
   }
   if(p==='emps')renderEmps();
   if(p==='settings'){renderDefBk();renderAllowanceList();}
+  if(p==='shift')renderShiftList();
   if(p==='safety')renderSafety();
   if(p==='leave')renderLeave();
   if(p==='company')renderCompany();
@@ -861,38 +861,95 @@ function setR(eid,f,v){
   }
 }
 
-// ── 급여방식 필터 ──
-let payFilter = 'all';
-function setPayFilter(f){
-  payFilter=f;
-  document.querySelectorAll('.pf-btn').forEach(b=>{
-    b.classList.toggle('on', b.dataset.f===f);
-  });
-  // 현재 열린 탭에 맞게 렌더
-  const pages = {
-    'pg-daily':   ()=>renderTable(),
-    'pg-payroll': ()=>renderPayroll(),
-    'pg-leave':   ()=>renderLeave(),
-  };
-  Object.entries(pages).forEach(([id, fn])=>{
-    const el=document.getElementById(id);
-    if(el&&el.classList.contains('on')) fn();
+// ══ 공통 필터 상태 ══
+const F = {
+  daily:   { shift:'all', nation:'all', pay:'all', search:'' },
+  payroll: { shift:'all', nation:'all', pay:'all', search:'' },
+  leave:   { shift:'all', nation:'all', pay:'all', search:'' },
+  emps:    { shift:'all', nation:'all', pay:'all', search:'' },
+};
+
+function setFilter(tab, key, val, btn){
+  F[tab][key] = val;
+  if(btn){
+    const grp = btn.closest('.filter-group');
+    if(grp) grp.querySelectorAll('.fb').forEach(b=>b.classList.remove('on','on-night','on-foreign'));
+    if(val==='night')   btn.classList.add('on-night');
+    else if(val==='foreign') btn.classList.add('on-foreign');
+    else if(val!=='all') btn.classList.add('on');
+    else btn.classList.add('on');
+  }
+  if(tab==='daily')   renderTable();
+  if(tab==='payroll') renderPayroll();
+  if(tab==='leave')   renderLeave();
+  if(tab==='emps')    renderEmps();
+}
+
+function setSearch(tab, val){
+  F[tab].search = val.toLowerCase();
+  if(tab==='daily')   renderTable();
+  if(tab==='payroll') renderPayroll();
+  if(tab==='leave')   renderLeave();
+  if(tab==='emps')    renderEmps();
+}
+
+function applyCommonFilter(emps, tab){
+  const f = F[tab];
+  return emps.filter(emp=>{
+    if(f.shift!=='all' && (emp.shift||'day')!==f.shift) return false;
+    const isFor = emp.nation==='foreign' || emp.foreigner===true;
+    if(f.nation==='korean'  && isFor)  return false;
+    if(f.nation==='foreign' && !isFor) return false;
+    if(f.pay!=='all' && (emp.payMode||'fixed')!==f.pay) return false;
+    if(f.search && !(emp.name||'').toLowerCase().includes(f.search)) return false;
+    return true;
   });
 }
+
+function makeFilterBar(tab){
+  const f = F[tab];
+  return `
+  <div class="filter-bar">
+    <div class="filter-group">
+      <button class="fb${f.shift==='all'?' on':''}" onclick="setFilter('${tab}','shift','all',this)">전체</button>
+      <button class="fb${f.shift==='day'?' on':''}" onclick="setFilter('${tab}','shift','day',this)">주간</button>
+      <button class="fb${f.shift==='night'?' on-night':''}" onclick="setFilter('${tab}','shift','night',this)">야간</button>
+    </div>
+    <div class="filter-group">
+      <button class="fb${f.nation==='all'?' on':''}" onclick="setFilter('${tab}','nation','all',this)">전체</button>
+      <button class="fb${f.nation==='korean'?' on':''}" onclick="setFilter('${tab}','nation','korean',this)">내국인</button>
+      <button class="fb${f.nation==='foreign'?' on-foreign':''}" onclick="setFilter('${tab}','nation','foreign',this)">외국인</button>
+    </div>
+    <div class="filter-group">
+      <button class="fb${f.pay==='all'?' on':''}" onclick="setFilter('${tab}','pay','all',this)">전체</button>
+      <button class="fb${f.pay==='fixed'?' on':''}" onclick="setFilter('${tab}','pay','fixed',this)">소정근무제</button>
+      <button class="fb${f.pay==='hourly'?' on':''}" onclick="setFilter('${tab}','pay','hourly',this)">시급제</button>
+      <button class="fb${f.pay==='monthly'?' on':''}" onclick="setFilter('${tab}','pay','monthly',this)">포괄임금제</button>
+    </div>
+    <div class="filter-search">
+      <span class="fs-icon">🔍</span>
+      <input placeholder="이름 검색..." value="${f.search}"
+        oninput="setSearch('${tab}',this.value)">
+    </div>
+  </div>`;
+}
+
+let payFilter = 'all';
+function setPayFilter(f){ payFilter=f; }
 function filterEmpsByPay(emps){
-  if(payFilter==='all') return emps;
-  return emps.filter(e=>(e.payMode||'fixed')===payFilter);
+  return applyCommonFilter(emps, 'payroll');
 }
 function renderTable(){
+  const _dfb = document.getElementById('daily-filter-bar');
+  if(_dfb) _dfb.innerHTML = makeFilterBar('daily');
   const bks=getActiveBk(cY,cM,cD);
-  const activeDayEmps = EMPS.filter(emp=>{
+  const activeDayEmps = applyCommonFilter(EMPS.filter(emp=>{
     if(!emp.join) return true;
     const jd=new Date(emp.join);
     const dayDate=new Date(cY,cM-1,cD);
     if(jd>dayDate) return false;
-    if(payFilter!=='all' && (emp.payMode||'fixed')!==payFilter) return false;
     return true;
-  });
+  }), 'daily');
   document.getElementById('daily-tbody').innerHTML=activeDayEmps.map(emp=>{
     const k=rk(emp.id,cY,cM,cD);
     const todayStr = `${cY}-${pad(cM)}-${pad(cD)}`;
@@ -931,6 +988,9 @@ function renderTable(){
     const rowCls=rec.absent?'ab-row':rec.annual?'al-row':rec.halfAnnual?'al-row':autoH?'hol-row':'';
     const phName=getPhName(cY,cM,cD);
     const holTag=autoH?`<span style="font-size:9px;color:#9A3412;background:#FED7AA;padding:1px 5px;border-radius:5px;font-weight:700;margin-left:3px">${phName||'휴일'}</span>`:'';
+    const cbTd=`<td style="width:32px;text-align:center;">
+  <input type="checkbox" class="daily-row-cb" data-eid="${emp.id}" style="accent-color:var(--navy);">
+</td>`;
     const nameTd=`<td class="td-nm">
       <div style="display:flex;align-items:center;gap:5px">
         <div class="av" style="width:26px;height:26px;font-size:11px;background:${emp.color||'#DBEAFE'};color:${emp.tc||'#1E3A5F'}">${esc(emp.name)[0]}</div>
@@ -944,7 +1004,7 @@ function renderTable(){
     if(isPohalEmp){
       const isWork=!rec.absent&&!rec.annual;
       return`<tr class="${rowCls}">
-        ${nameTd}
+        ${cbTd}${nameTd}
         <td colspan="6" style="padding:6px 8px">
           <div class="pohal-row">
             <span class="pohal-label">포괄임금</span>
@@ -966,7 +1026,7 @@ function renderTable(){
       const holPay=c?(c.holDayStdPay+c.holDayOtPay):0;
       const holWorkH=c&&autoH?fmtH(c.work):'';
       return`<tr class="${rowCls}">
-        ${nameTd}
+        ${cbTd}${nameTd}
         <td><input class="time-inp ${rec.absent||rec.annual?'dis':''}" value="${rec.start||''}" placeholder="0900" ${rec.absent||rec.annual?'disabled':''} data-eid="${emp.id}" data-field="start"
           onblur="handleTimeInput(${emp.id},'start',this.value)"></td>
         <td><input class="time-inp ${c&&c.crossed?'cross':autoH?'hol-t':''} ${rec.absent||rec.annual?'dis':''}" value="${rec.end||''}" placeholder="1800" ${rec.absent||rec.annual?'disabled':''} data-eid="${emp.id}" data-field="end"
@@ -1016,7 +1076,7 @@ function renderTable(){
       <button class="bk-add" onclick="addCustomBk(${emp.id})" style="font-size:9px;margin-top:2px;padding:2px 8px">+ 세트 추가</button>
     </div>` : '';
     return`<tr class="${rowCls}">
-      ${nameTd}
+      ${cbTd}${nameTd}
       <td><input class="time-inp ${sCls} ${rec.absent||rec.annual?'dis':''}" value="${rec.start||''}" placeholder="0900" ${rec.absent||rec.annual?'disabled':''} data-eid="${emp.id}" data-field="start"
         onblur="handleTimeInput(${emp.id},'start',this.value)"></td>
       <td><input class="time-inp ${eCls} ${rec.absent||rec.annual?'dis':''}" value="${rec.end||''}" placeholder="1800" ${rec.absent||rec.annual?'disabled':''} data-eid="${emp.id}" data-field="end"
@@ -1406,15 +1466,16 @@ function setPvMode(m){
   if(!isCard)renderXlPreview();
 }
 function renderPayroll(){
+  const _pfb = document.getElementById('payroll-filter-bar');
+  if(_pfb) _pfb.innerHTML = makeFilterBar('payroll');
   document.getElementById('pv-title').textContent=`${pY}년 ${pM}월 급여 요약`;
   let gt={base:0,nt:0,ot:0,hol:0,al:0,bonus:0,allow:0,ded:0,total:0};
   // 해당 월에 재직 중인 직원만
-  const activePayEmps = EMPS.filter(emp=>{
+  const activePayEmps = applyCommonFilter(EMPS.filter(emp=>{
     if(emp.join){const jd=new Date(emp.join);if(jd>new Date(pY,pM,0))return false;}
     if(emp.leave){const ld=new Date(emp.leave);if(ld<new Date(pY,pM-1,1))return false;}
-    if(payFilter!=='all' && (emp.payMode||'fixed')!==payFilter) return false;
     return true;
-  });
+  }), 'payroll');
   document.getElementById('pay-grid').innerHTML=activePayEmps.map(emp=>{
     const s=monthSummary(emp.id,pY,pM);
     const rate=getEmpRate(emp);
@@ -1993,15 +2054,9 @@ function xlEdit(empId, field, rawText) {
 // 직원 관리
 // ══════════════════════════════════════
 
-let empFilter = 'all';
-function setEmpFilter(f){
-  empFilter = f;
-  document.querySelectorAll('.empf-btn').forEach(b=>{
-    b.classList.toggle('on', b.dataset.f===f);
-  });
-  renderEmps();
-}
 function renderEmps(){
+  const _efb = document.getElementById('emps-filter-bar');
+  if(_efb) _efb.innerHTML = makeFilterBar('emps');
   let sorted=[...EMPS].sort((a,b)=>{
     // 퇴사자 맨 뒤
     if(!a.leave&&b.leave)return -1;
@@ -2011,7 +2066,7 @@ function renderEmps(){
     const bS=(b.shift||'day')==='day'?0:1;
     return aS-bS;
   });
-  if(empFilter!=='all') sorted=sorted.filter(e=>(e.payMode||'fixed')===empFilter);
+  sorted = applyCommonFilter(sorted, 'emps');
   let _prevGroup = null;
   document.getElementById('emp-tbody').innerHTML=sorted.map((e,i)=>{
     const al=calcAnnualLeave(e);
@@ -4345,6 +4400,8 @@ function getLeavePayAmount(emp, year) {
 }
 
 function renderLeave() {
+  const _lfb = document.getElementById('leave-filter-bar');
+  if(_lfb) _lfb.innerHTML = makeFilterBar('leave');
   document.getElementById('leave-year-disp').textContent = leaveYear;
 
   // payMode select 동기화
@@ -4365,12 +4422,7 @@ function renderLeave() {
   const tbody = document.getElementById('leave-tbody');
   if (!tbody) return;
 
-  const leaveEmps = typeof mvFilter !== 'undefined' ? EMPS : EMPS;
-  // payFilter 기준으로 연차도 필터
-  const filteredLeaveEmps = EMPS.filter(emp => {
-    if(payFilter==='all') return true;
-    return (emp.payMode||'fixed')===payFilter;
-  });
+  const filteredLeaveEmps = applyCommonFilter([...EMPS], 'leave');
   tbody.innerHTML = filteredLeaveEmps.map(emp => {
     const lv = calcLeaveForYear(emp, leaveYear);
     const payAmt = getLeavePayAmount(emp, leaveYear);
@@ -5962,6 +6014,343 @@ function initLandingEffects(){
       obs.observe(el);
     });
   },300);
+}
+
+// ══ 근무형태 관리 ══
+let shiftSelected=new Set(),shiftFilter='전체';
+
+function renderShiftList(){
+  const search=(document.getElementById('shift-search')?.value||'').toLowerCase();
+  const list=document.getElementById('shift-list');
+  if(!list)return;
+  const counts={'전체':0,'미등록':0,'fixed':0,'hourly':0,'monthly':0};
+  let html='',visible=0;
+  EMPS.forEach(emp=>{
+    const mode=emp.payMode||'fixed';
+    const hasShift=!!(emp.workStart&&emp.workEnd);
+    const fk=hasShift?mode:'미등록';
+    counts['전체']++;counts[fk]=(counts[fk]||0)+1;
+    if(shiftFilter!=='전체'&&fk!==shiftFilter)return;
+    if(search&&!(emp.name||'').toLowerCase().includes(search))return;
+    visible++;
+    const isNight=emp.shift==='night';
+    const sBadge=isNight
+      ?`<span style="background:#26215c;color:#afa9ec;font-size:11px;padding:2px 8px;border-radius:100px;">야간</span>`
+      :`<span style="background:#e8eef9;color:#1a2f6e;font-size:11px;padding:2px 8px;border-radius:100px;">주간</span>`;
+    const pC={fixed:'background:#e1f5ee;color:#0f6e56',hourly:'background:#faeeda;color:#854f0b',monthly:'background:#eeedfe;color:#534ab7'};
+    const pL={fixed:'소정근무제',hourly:'시급제',monthly:'포괄임금제'};
+    const pBadge=hasShift
+      ?`<span style="${pC[mode]||''};font-size:11px;padding:2px 8px;border-radius:100px;">${pL[mode]||mode}</span>`
+      :`<span style="background:#f1efe8;color:#5f5e5a;font-size:11px;padding:2px 8px;border-radius:100px;">미등록</span>`;
+    const mini=hasShift
+      ?`<strong style="color:var(--ink);font-size:11px;">${emp.shiftName||emp.workStart+'~'+emp.workEnd}</strong><br><span style="color:var(--ink3);font-size:10px;">${(emp.workBks||[]).map(b=>b.start+'~'+b.end).join(', ')||'휴게 미설정'}</span>`
+      :`<span class="shift-unreg">미등록</span>`;
+    const days=(emp.workDays||[]).join('');
+    const dBtn=hasShift
+      ?`<button onclick="event.stopPropagation();openShiftDetail(${emp.id})" style="font-size:11px;color:var(--navy2);border:1px solid var(--navy2);border-radius:4px;padding:3px 8px;background:transparent;cursor:pointer;font-family:inherit;">상세보기</button>`
+      :`<button onclick="event.stopPropagation();shiftSelected.add(${emp.id});updateShiftToolbar();openShiftModal('register')" style="font-size:11px;color:#e97d2b;border:1px solid #e97d2b;border-radius:4px;padding:3px 8px;background:transparent;cursor:pointer;font-family:inherit;">등록</button>`;
+    const chk=shiftSelected.has(emp.id);
+    html+=`<div class="shift-emp-row${chk?' checked':''}" id="shift-row-${emp.id}" onclick="shiftToggleRow(${emp.id})">
+      <input type="checkbox" ${chk?'checked':''} style="accent-color:var(--navy);" onclick="event.stopPropagation();shiftCheckRow(${emp.id},this)">
+      <span style="color:var(--ink3);">${String(emp.id).padStart(3,'0')}</span>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <div style="width:26px;height:26px;border-radius:50%;background:var(--nbg);color:var(--navy2);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;">${(emp.name||'?')[0]}</div>
+        <span style="font-weight:500;">${emp.name||''}</span>
+      </div>
+      <div>${sBadge}</div><div>${pBadge}</div>
+      <div style="font-size:11px;color:var(--ink3);">${days||'—'}</div>
+      <div style="font-size:11px;line-height:1.5;">${mini}</div>
+      <div style="text-align:center;">${dBtn}</div>
+    </div>`;
+  });
+  if(!visible)html=`<div style="padding:32px;text-align:center;font-size:12px;color:var(--ink3);">검색 결과가 없습니다.</div>`;
+  list.innerHTML=html;
+  const rc=document.getElementById('shift-result-count');if(rc)rc.textContent=`총 ${visible}명`;
+  Object.keys(counts).forEach(k=>{const el=document.getElementById('sf-cnt-'+k);if(el)el.textContent=counts[k];});
+}
+
+function setShiftFilter(btn){
+  document.querySelectorAll('.shift-ftab').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');shiftFilter=btn.dataset.f;shiftSelected.clear();updateShiftToolbar();renderShiftList();
+}
+function shiftToggleRow(id){const row=document.getElementById('shift-row-'+id);const cb=row?.querySelector('input[type=checkbox]');if(cb){cb.checked=!cb.checked;shiftCheckRow(id,cb);}}
+function shiftCheckRow(id,cb){const row=document.getElementById('shift-row-'+id);if(cb.checked){shiftSelected.add(id);row?.classList.add('checked');}else{shiftSelected.delete(id);row?.classList.remove('checked');}updateShiftToolbar();}
+function shiftSelectAll(cb){document.querySelectorAll('#shift-list .shift-emp-row').forEach(row=>{const id=parseInt(row.id.replace('shift-row-',''));const c=row.querySelector('input[type=checkbox]');if(c){c.checked=cb.checked;shiftCheckRow(id,c);}});}
+function updateShiftToolbar(){
+  const cnt=shiftSelected.size;
+  const si=document.getElementById('shift-sel-info');if(si)si.textContent=cnt+'명 선택';
+  ['shift-btn-register','shift-btn-edit'].forEach(id=>{
+    const btn=document.getElementById(id);if(!btn)return;
+    btn.disabled=cnt===0;btn.style.opacity=cnt>0?'1':'0.4';btn.style.cursor=cnt>0?'pointer':'not-allowed';
+  });
+}
+function openShiftModal(type){
+  document.getElementById('shift-modal-title').textContent=type==='register'?'근무형태 등록':'근무형태 수정';
+  document.getElementById('shift-modal-notice').textContent=`선택한 ${shiftSelected.size}명에게 아래 근무형태가 일괄 적용됩니다.`;
+  const fromInput=document.getElementById('shift-history-from');
+  if(fromInput)fromInput.value=new Date().toISOString().slice(0,10);
+  if(type==='edit'&&shiftSelected.size>0){
+    const emp=EMPS.find(e=>e.id===[...shiftSelected][0]);
+    if(emp){
+      document.getElementById('sm-name').value=emp.shiftName||'';
+      document.getElementById('sm-start').value=emp.workStart||'09:00';
+      document.getElementById('sm-end').value=emp.workEnd||'18:00';
+      document.querySelectorAll('.sm-day-btn:not(.hol)').forEach(btn=>{
+        const on=(emp.workDays||[]).includes(btn.textContent);
+        btn.classList.toggle('on',on);
+        btn.style.background=on?'var(--navy)':'transparent';
+        btn.style.borderColor=on?'var(--navy)':'var(--bd2)';
+        btn.style.color=on?'#fff':'var(--ink3)';
+      });
+      const bkList=document.getElementById('sm-bk-list');bkList.innerHTML='';
+      (emp.workBks||[{start:'12:00',end:'13:00'}]).forEach(bk=>addSmBkWithVal(bk.start,bk.end));
+      const shiftRadio=document.querySelector(`input[name="sm-shift"][value="${emp.shift||'day'}"]`);
+      if(shiftRadio)shiftRadio.checked=true;
+    }
+  }
+  document.getElementById('shift-modal').style.display='flex';
+}
+function saveShiftModal(){
+  const name=document.getElementById('sm-name').value||'';
+  const start=document.getElementById('sm-start').value;
+  const end=document.getElementById('sm-end').value;
+  const isNight=document.querySelector('input[name="sm-shift"]:checked')?.value==='night';
+  const days=[...document.querySelectorAll('.sm-day-btn.on')].map(b=>b.textContent);
+  const bks=[...document.querySelectorAll('.sm-bk-row')].map(row=>({
+    start:row.querySelector('.sm-bk-s')?.value||'12:00',
+    end:row.querySelector('.sm-bk-e')?.value||'13:00'
+  }));
+  if(!name){if(typeof showSyncToast==='function')showSyncToast('형태명을 입력해주세요.','warn');else alert('형태명을 입력해주세요.');return;}
+  shiftSelected.forEach(id=>{
+    saveEmpWithHistory(id, {
+      shiftName: name,
+      workStart: start,
+      workEnd: end,
+      shift: isNight ? 'night' : 'day',
+      workDays: days,
+      workBks: bks,
+    });
+  });
+  saveLS();renderShiftList();renderTable();
+  document.getElementById('shift-modal').style.display='none';
+  shiftSelected.clear();updateShiftToolbar();
+  if(typeof showSyncToast==='function')showSyncToast('근무형태가 저장되었습니다.','ok');
+}
+function openShiftDetail(id){
+  const emp=EMPS.find(e=>e.id===id);if(!emp)return;
+  document.getElementById('sd-name').textContent=(emp.name||'')+'  근무형태 상세';
+  document.getElementById('sd-shift-name').textContent=emp.shiftName||'—';
+  document.getElementById('sd-pay').textContent={fixed:'소정근무제',hourly:'시급제',monthly:'포괄임금제'}[emp.payMode]||'—';
+  document.getElementById('sd-days').textContent=(emp.workDays||[]).join(' ')||'—';
+  document.getElementById('sd-time').textContent=(emp.workStart||'—')+' ~ '+(emp.workEnd||'—');
+  document.getElementById('sd-bks').textContent=(emp.workBks||[]).map(b=>b.start+'~'+b.end).join(', ')||'—';
+  shiftSelected.clear();shiftSelected.add(id);updateShiftToolbar();
+  document.getElementById('shift-detail-modal').style.display='flex';
+}
+function addSmBk(){addSmBkWithVal('12:00','13:00');}
+function addSmBkWithVal(s,e){
+  const list=document.getElementById('sm-bk-list');
+  const row=document.createElement('div');row.className='sm-bk-row';
+  row.innerHTML=`<input class="sm-bk-s shift-time-input" type="time" value="${s}"><span style="font-size:12px;color:var(--ink3);">~</span><input class="sm-bk-e shift-time-input" type="time" value="${e}"><button onclick="this.closest('.sm-bk-row').remove()" class="shift-bk-del">✕</button>`;
+  list.appendChild(row);
+}
+function toggleSmDay(el){
+  if(el.classList.contains('hol'))return;
+  el.classList.toggle('on');const on=el.classList.contains('on');
+  el.style.background=on?'var(--navy)':'transparent';
+  el.style.borderColor=on?'var(--navy)':'var(--bd2)';
+  el.style.color=on?'#fff':'var(--ink3)';
+}
+
+// ══ 출퇴근 기록 체크박스 + 정상출퇴근 ══
+function dailySelectAll(cb){
+  document.querySelectorAll('.daily-row-cb').forEach(c=>c.checked=cb.checked);
+}
+function fillNormalAttendSelected(){
+  const checked=[...document.querySelectorAll('.daily-row-cb:checked')].map(c=>parseInt(c.dataset.eid));
+  if(checked.length===0){
+    if(typeof showSyncToast==='function')showSyncToast('직원을 선택해주세요.','warn');
+    return;
+  }
+  fillNormalAttend(checked);
+}
+function fillNormalAttend(empIds){
+  const targets=empIds||EMPS.map(e=>e.id);
+  let blocked=[],filled=0;
+  targets.forEach(id=>{
+    const emp=EMPS.find(e=>e.id===id);
+    if(!emp||!emp.workStart||!emp.workEnd)return;
+    const autoH=isAutoHol(cY,cM,cD,emp);
+    if(autoH){blocked.push(emp.name);return;}
+    const k=rk(id,cY,cM,cD);
+    if(!REC[k])REC[k]={empId:id,start:'',end:'',absent:false,annual:false,note:'',outTimes:[]};
+    REC[k].start=emp.workStart;REC[k].end=emp.workEnd;
+    REC[k].absent=false;REC[k].annual=false;filled++;
+  });
+  if(blocked.length>0&&typeof showSyncToast==='function')
+    showSyncToast('휴일 입력 불가: '+blocked.join(', '),'warn');
+  if(filled>0){
+    saveLS();renderTable();
+    if(typeof showSyncToast==='function')showSyncToast(filled+'명 정상출퇴근 완료','ok');
+  }
+}
+
+// ══ 직원 정보 이력 관리 ══
+function getEmpHistoryAt(emp, y, m, d) {
+  const dateStr = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  if (!emp.history || emp.history.length === 0) return null;
+  const valid = emp.history
+    .filter(h => h.from <= dateStr)
+    .sort((a, b) => b.from.localeCompare(a.from));
+  return valid[0] || null;
+}
+
+function getEmpRateAt(emp, y, m, d) {
+  const hist = getEmpHistoryAt(emp, y, m, d);
+  if (hist && hist.rate) return hist.rate;
+  return emp.rate || POL.baseRate || 0;
+}
+
+function getEmpPayModeAt(emp, y, m, d) {
+  const hist = getEmpHistoryAt(emp, y, m, d);
+  const mode = hist ? (hist.payMode || emp.payMode) : emp.payMode;
+  return mode === 'monthly' ? 'monthly' : (mode === 'hourly' ? 'hourly' : 'fixed');
+}
+
+function getEmpMonthlyAt(emp, y, m, d) {
+  const hist = getEmpHistoryAt(emp, y, m, d);
+  if (hist && hist.monthly) return hist.monthly;
+  return emp.monthly || 0;
+}
+
+function getEmpShiftAt(emp, y, m, d) {
+  const hist = getEmpHistoryAt(emp, y, m, d);
+  if (hist) return {
+    shift: hist.shift || emp.shift,
+    shiftName: hist.shiftName || emp.shiftName,
+    workStart: hist.workStart || emp.workStart,
+    workEnd: hist.workEnd || emp.workEnd,
+    workBks: hist.workBks || emp.workBks || [],
+    workDays: hist.workDays || emp.workDays || [],
+  };
+  return {
+    shift: emp.shift,
+    shiftName: emp.shiftName,
+    workStart: emp.workStart,
+    workEnd: emp.workEnd,
+    workBks: emp.workBks || [],
+    workDays: emp.workDays || [],
+  };
+}
+
+function saveEmpWithHistory(empId, newData) {
+  const emp = EMPS.find(e => e.id === empId);
+  if (!emp) return;
+
+  const fromDate = document.getElementById('shift-history-from')?.value
+    || document.getElementById('emp-history-from')?.value
+    || new Date().toISOString().slice(0, 10);
+
+  if (!emp.history) {
+    emp.history = [{
+      from: emp.join || '2020-01-01',
+      payMode: emp.payMode,
+      rate: emp.rate,
+      monthly: emp.monthly,
+      shift: emp.shift,
+      shiftName: emp.shiftName,
+      workStart: emp.workStart,
+      workEnd: emp.workEnd,
+      workBks: emp.workBks || [],
+      workDays: emp.workDays || [],
+    }];
+  }
+
+  const existing = emp.history.findIndex(h => h.from === fromDate);
+  const histEntry = {
+    from: fromDate,
+    payMode: newData.payMode ?? emp.payMode,
+    rate: newData.rate ?? emp.rate,
+    monthly: newData.monthly ?? emp.monthly,
+    shift: newData.shift ?? emp.shift,
+    shiftName: newData.shiftName ?? emp.shiftName,
+    workStart: newData.workStart ?? emp.workStart,
+    workEnd: newData.workEnd ?? emp.workEnd,
+    workBks: newData.workBks ?? emp.workBks ?? [],
+    workDays: newData.workDays ?? emp.workDays ?? [],
+  };
+
+  if (existing >= 0) {
+    emp.history[existing] = histEntry;
+  } else {
+    emp.history.push(histEntry);
+    emp.history.sort((a, b) => a.from.localeCompare(b.from));
+  }
+
+  Object.assign(emp, newData);
+  saveLS();
+}
+
+function renderEmpHistory(emp) {
+  if (!emp.history || emp.history.length === 0) return '<div style="color:var(--ink3);font-size:12px;">이력 없음</div>';
+  return emp.history
+    .slice().reverse()
+    .map(h => `
+      <div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd);font-size:11px;">
+        <span style="color:var(--navy2);font-weight:600;white-space:nowrap;">${h.from}</span>
+        <span style="color:var(--ink3);">${{fixed:'소정',hourly:'시급',monthly:'포괄'}[h.payMode]||h.payMode||''}</span>
+        <span style="color:var(--ink3);">${h.shiftName||''}</span>
+        <span style="color:var(--ink3);">${h.rate ? h.rate.toLocaleString()+'원/h' : ''}</span>
+      </div>`).join('');
+}
+
+// ══ 휴게���간 우선순위 팝업 ══
+function showBkPriorityTip(){
+  const existing = document.getElementById('bk-priority-layer');
+  if(existing){ existing.remove(); return; }
+  const bg = document.createElement('div');
+  bg.id = 'bk-priority-layer';
+  bg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  bg.onclick = e => { if(e.target===bg) bg.remove(); };
+  bg.innerHTML = `
+    <div style="background:var(--card);border-radius:14px;width:460px;max-width:100%;max-height:85vh;overflow-y:auto;border:1px solid var(--bd);">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--card);z-index:1;">
+        <span style="font-size:14px;font-weight:700;color:var(--ink);">휴게시간 적용 우선순위</span>
+        <button onclick="document.getElementById('bk-priority-layer').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ink3);">×</button>
+      </div>
+      <div style="padding:16px;display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:#EFF6FF;border-radius:8px;border-left:3px solid #2347b5;">
+          <span style="font-size:14px;font-weight:700;color:#2347b5;flex-shrink:0;min-width:44px;">1순위</span>
+          <div>
+            <div style="font-size:12px;font-weight:700;color:#1a2f6e;">개별휴게 (직원 개인 설정)</div>
+            <div style="font-size:11px;color:#6b7280;margin-top:3px;line-height:1.6;">직원 개인에게 지정된 ���정 휴게시간</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:#F0FFF8;border-radius:8px;border-left:3px solid #0f6e56;">
+          <span style="font-size:14px;font-weight:700;color:#0f6e56;flex-shrink:0;min-width:44px;">2순위</span>
+          <div>
+            <div style="font-size:12px;font-weight:700;color:#085041;">오늘만 수정</div>
+            <div style="font-size:11px;color:#6b7280;margin-top:3px;line-height:1.6;">당일 임시로 변경한 휴게시간 (다음�� 자동 복원)</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:#FAEEDA;border-radius:8px;border-left:3px solid #854f0b;">
+          <span style="font-size:14px;font-weight:700;color:#854f0b;flex-shrink:0;min-width:44px;">3순위</span>
+          <div>
+            <div style="font-size:12px;font-weight:700;color:#633806;">근무형태 기본 휴게시간</div>
+            <div style="font-size:11px;color:#6b7280;margin-top:3px;line-height:1.6;">근무형태 탭에서 등록한 근로계약서 기준 휴게</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:#F1EFE8;border-radius:8px;border-left:3px solid #5f5e5a;">
+          <span style="font-size:14px;font-weight:700;color:#5f5e5a;flex-shrink:0;min-width:44px;">4순위</span>
+          <div>
+            <div style="font-size:12px;font-weight:700;color:#444441;">급여설정 기본값</div>
+            <div style="font-size:11px;color:#6b7280;margin-top:3px;line-height:1.6;">급여 설정에서 지정한 회사 전체 기본 휴게시간</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(bg);
 }
 
 // ── 랜딩 서비스 화면 탭 (랜딩페이지 inline script로 이동됨) ──

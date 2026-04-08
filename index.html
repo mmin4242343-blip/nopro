@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>노무관리 Pro v5</title>
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:13px;background:#F1F5F9;color:#0F172A}
 :root{
@@ -836,6 +836,40 @@ document.addEventListener('click',e=>{
 .adm-del-btn:hover{background:rgba(239,68,68,.2);border-color:rgba(239,68,68,.4);color:#fff}
 .adm-stat{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:22px;transition:all .2s}
 .adm-stat:hover{background:rgba(255,255,255,.07);transform:translateY(-2px)}
+/* ── 공통 필터바 ── */
+.filter-bar{display:flex;align-items:center;gap:6px;padding:7px 12px;border-bottom:1px solid var(--bd);flex-wrap:wrap;background:var(--surf);}
+.filter-group{display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:3px;}
+.fb{padding:4px 10px;border-radius:6px;font-size:11px;border:none;cursor:pointer;background:transparent;color:var(--ink3);font-family:inherit;font-weight:500;}
+.fb:hover{background:rgba(0,0,0,.07);}
+.fb.on{background:var(--navy);color:#fff;}
+.fb.on-night{background:#26215c;color:#afa9ec;}
+.fb.on-foreign{background:#FEF3C7;border:1px solid #F59E0B;color:#92400E;font-weight:700;}
+.filter-search{position:relative;margin-left:auto;}
+.filter-search input{height:28px;border:1px solid var(--bd2);border-radius:6px;padding:0 8px 0 24px;font-size:12px;font-family:inherit;background:var(--card);color:var(--ink);width:130px;}
+.filter-search input:focus{outline:none;border-color:var(--navy2);}
+.filter-search .fs-icon{position:absolute;left:7px;top:50%;transform:translateY(-50%);font-size:11px;opacity:.4;pointer-events:none;}
+/* ── 근무형태 ── */
+.shift-ftab{padding:4px 10px;border-radius:100px;font-size:11px;border:1px solid var(--bd2);cursor:pointer;background:transparent;color:var(--ink3);font-family:inherit;}
+.shift-ftab.on{background:var(--navy);color:#fff;border-color:var(--navy);}
+.shift-list-header{display:grid;grid-template-columns:36px 60px 1fr 80px 100px 70px 1fr 80px;padding:7px 12px;background:var(--surf);border-bottom:1px solid var(--bd);font-size:11px;color:var(--ink3);font-weight:600;}
+.shift-emp-row{display:grid;grid-template-columns:36px 60px 1fr 80px 100px 70px 1fr 80px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--bd);cursor:pointer;font-size:12px;color:var(--ink);}
+.shift-emp-row:hover{background:var(--surf);}
+.shift-emp-row.checked{background:#EFF6FF;}
+.shift-sec-title{font-size:11px;font-weight:600;color:var(--ink3);margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--bd);}
+.shift-form-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.shift-label{font-size:12px;color:var(--ink3);width:80px;flex-shrink:0;}
+.shift-input{flex:1;height:30px;border:1px solid var(--bd2);border-radius:6px;padding:0 8px;font-size:12px;font-family:inherit;background:var(--card);color:var(--ink);}
+.shift-time-input{width:90px;height:30px;border:1px solid var(--bd2);border-radius:6px;padding:0 6px;font-size:12px;font-family:inherit;background:var(--card);color:var(--ink);}
+.shift-divider{height:1px;background:var(--bd);margin:12px 0;}
+.sm-day-btn{width:30px;height:30px;border-radius:50%;border:1px solid var(--bd2);font-size:11px;font-weight:600;cursor:pointer;background:transparent;color:var(--ink3);display:flex;align-items:center;justify-content:center;user-select:none;}
+.sm-day-btn.on{background:var(--navy);border-color:var(--navy);color:#fff;}
+.sm-day-btn.hol{background:#FEF3C7;border-color:#F59E0B;color:#92400E;cursor:default;}
+.sm-bk-row{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+.shift-bk-del{width:22px;height:22px;border-radius:4px;border:1px solid var(--bd2);background:transparent;color:var(--ink3);cursor:pointer;font-size:12px;font-family:inherit;}
+.shift-add-bk{font-size:11px;color:var(--navy2);border:1px dashed var(--navy2);border-radius:4px;padding:4px 10px;background:transparent;cursor:pointer;width:100%;margin-top:2px;font-family:inherit;}
+.shift-btn-primary{padding:7px 16px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;}
+.shift-btn-ghost{padding:7px 16px;background:transparent;color:var(--navy2);border:1px solid var(--navy2);border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;}
+.shift-unreg{font-size:11px;color:#e97d2b;background:#fff8f0;border:1px solid #e97d2b;border-radius:4px;padding:2px 7px;}
 </style>
 
   <!-- 사이드바 -->
@@ -890,6 +924,7 @@ document.addEventListener('click',e=>{
   <div class="nt" id="nt-leave" onclick="gp('leave')">연차 관리</div>
   <div class="nt" id="nt-company" onclick="gp('company')">인원 현황 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:12px;padding:0 2px;opacity:.7" onclick="showTip('인원 현황','연도별 월별 직원 수, 입퇴사 현황, 급여 지급총액을 보여줍니다.\n\n[전체]: 회사 전체 월별 집계\n[개별]: 직원 한 명의 1~12월 급여 내역 추적')">💡</button></span></div>
   <div class="nt" id="nt-emps" onclick="gp('emps')">직원 관리</div>
+  <div class="nt" id="nt-shift" onclick="gp('shift')">근무형태</div>
   <div class="nt" id="nt-safety" onclick="gp('safety')">안전교육 일지</div>
   <div class="nt" id="nt-folder" onclick="gp('folder')">📁 폴더 관리</div>
   <div class="nt" id="nt-settings" onclick="gp('settings')">급여 설정 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:12px;padding:0 2px;opacity:.7" onclick="showTip('급여 설정','급여 계산에 필요한 기본 설정을 합니다.\n\n• 급여 방식 선택 (소정근무제·시간급·월정액제·고정급제)\n• 야간/연장/휴일 가산수당 ON/OFF\n• 주말·공휴일 기준 설정\n• 휴게시간 기본값 설정')">💡</button></span></div>
@@ -917,16 +952,13 @@ document.addEventListener('click',e=>{
     </div>
     <div style="display:flex;gap:6px;align-items:center">
       <span id="sv-msg" style="font-size:11px;color:var(--teal);background:var(--tbg);padding:4px 12px;border-radius:9px;display:none;font-weight:700">✓ 저장되었습니다</span>
-      <div style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:3px">
-        <button class="pf-btn btn btn-xs on" data-f="all" onclick="setPayFilter('all')">전체</button>
-        <button class="pf-btn btn btn-xs" data-f="fixed" onclick="setPayFilter('fixed')">소정근무제</button>
-        <button class="pf-btn btn btn-xs" data-f="hourly" onclick="setPayFilter('hourly')">시급</button>
-  
-      </div>
+      <button class="btn btn-sm" onclick="fillNormalAttend()" style="color:var(--navy);border-color:var(--navy);">✅ 전체 정상출퇴근</button>
+      <button class="btn btn-sm" onclick="fillNormalAttendSelected()" style="color:var(--teal);border-color:var(--teal);">☑ 선택 정상출퇴근</button>
       <button class="btn btn-sm" onclick="applyRecentAll()" title="직원별 가장 최근 출퇴근 기록을 오늘에 불러옵니다" style="color:var(--purple);border-color:var(--purple)">📋 최근 데이터 불러오기</button>
       <button class="btn btn-n btn-sm" onclick="saveDay()">저장</button>
     </div>
   </div>
+  <div id="daily-filter-bar"></div>
   <div class="dbar">
     <div class="ds">
       <div class="dar" onclick="nd('year',-1)">‹</div><div class="dl">연도</div><div class="dv" id="dy">2025</div><div class="dar" onclick="nd('year',1)">›</div>
@@ -944,7 +976,7 @@ document.addEventListener('click',e=>{
     <div class="bk-hd">
       <div style="display:flex;align-items:center;gap:7px"><span>휴게시간</span><span id="bk-mod" class="bk-mod" style="display:none">오늘만 수정됨</span></div>
       <div style="display:flex;gap:5px;align-items:center">
-        <span class="bk-note">출퇴근 범위 내 자동 차감 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:13px;padding:0 2px" onclick="showTip('휴게시간 자동 차감','휴게시간은 출근~퇴근 사이에 있을 때만 차감\n범위 밖이면 자동으로 무시됩니다.\n\n[오늘만 수정]: 오늘 날짜만 다른 휴게시간 적용\n다음 날 이후엔 다시 기본값으로 복원\n\n예) 오늘은 손님이 많아 12시 대신 13시 휴게\n→ 오늘만 수정으로 처리')">💡</button></span></span>
+        <span class="bk-note">출퇴근 범위 내 자동 차감 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:13px;padding:0 2px" onclick="showBkPriorityTip()">💡</button></span></span>
         <button class="btn btn-xs" id="bk-eb" onclick="toggleBkEdit()" style="color:#fff;border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.12)">오늘만 수정</button>
         <button class="btn btn-xs" id="bk-rb" onclick="resetBkToday()" style="display:none;color:#fff;border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.12)">기본값으로</button>
       </div>
@@ -955,11 +987,12 @@ document.addEventListener('click',e=>{
   <div class="tw">
     <table class="et">
       <colgroup>
-        <col style="width:86px"><col style="width:88px"><col style="width:88px">
+        <col style="width:32px"><col style="width:86px"><col style="width:88px"><col style="width:88px">
         <col style="width:72px"><col style="width:58px"><col style="width:58px"><col style="width:58px"><col>
       </colgroup>
       <thead>
         <tr>
+          <th rowspan="2" style="background:var(--navy);width:32px;"><input type="checkbox" id="daily-all-cb" style="accent-color:#fff;" onchange="dailySelectAll(this)"></th>
           <th rowspan="2" style="background:var(--navy)">직원</th>
           <th rowspan="2" style="background:var(--navy)">출근</th>
           <th rowspan="2" style="background:var(--navy)">퇴근</th>
@@ -1021,17 +1054,12 @@ document.addEventListener('click',e=>{
       <button class="btn btn-sm" onclick="cpm(1)">›</button>
     </div>
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-      <div style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:3px">
-        <button class="pf-btn btn btn-xs on" data-f="all" onclick="setPayFilter('all')" id="pf-all">전체</button>
-        <button class="pf-btn btn btn-xs" data-f="fixed" onclick="setPayFilter('fixed')" id="pf-fixed">소정근무제</button>
-        <button class="pf-btn btn btn-xs" data-f="hourly" onclick="setPayFilter('hourly')" id="pf-hourly">시급</button>
-  
-      </div>
       <button class="btn btn-sm" id="pv-tab-card" onclick="setPvMode('card')" style="background:var(--nbg);color:var(--navy2);border-color:var(--navy2)">급여 카드 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:12px;padding:0 2px;opacity:.7" onclick="showTip('급여 카드','직원별 카드 형태로 이번 달 급여를 확인합니다.\n수당·상여금 직접 입력 가능\n\n카드에서 금액 입력 → 상세 명세에도 자동 반영')">💡</button></span></button>
       <button class="btn btn-sm" id="pv-tab-xl" onclick="setPvMode('xl')">상세 명세 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:12px;padding:0 2px;opacity:.7" onclick="showTip('상세 명세','전체 직원 급여를 스프레드시트 형태로 한눈에 봅니다.\n\n• 셀 클릭 → 수당·세금 직접 입력 가능\n• 4대보험·소득세·지방소득세 입력 시 실지급액 자동 계산\n• [엑셀 내보내기]로 급여대장 파일 저장 가능')">💡</button></span></button>
       <button class="btn btn-sm btn-t" onclick="exportExcel()" style="display:flex;align-items:center;gap:4px">⬇ 엑셀 내보내기</button>
     </div>
   </div>
+  <div id="payroll-filter-bar"></div>
   <div id="pay-card-view">
     <div class="pg2" id="pay-grid"></div>
     <div class="ptb">
@@ -1079,19 +1107,14 @@ document.addEventListener('click',e=>{
           <option value="custom">직접 입력</option>
         </select>
       </div>
-      <div style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:3px">
-        <button class="pf-btn btn btn-xs on" data-f="all" onclick="setPayFilter('all')">전체</button>
-        <button class="pf-btn btn btn-xs" data-f="fixed" onclick="setPayFilter('fixed')">소정근무제</button>
-        <button class="pf-btn btn btn-xs" data-f="hourly" onclick="setPayFilter('hourly')">시급</button>
-  
-      </div>
       <button class="btn btn-sm btn-t" onclick="exportLeaveExcel()">⬇ 엑셀 내보내기</button>
     </div>
   </div>
+  <div id="leave-filter-bar"></div>
 
   <!-- 연차수당 금액 설명 -->
   <div id="leave-pay-desc" class="info" style="margin-bottom:12px">연차수당 = 시급 × 8h (기본값)</div>
-  <div id="leave-custom-wrap" style="display:none;margin-bottom:12px;align-items:center;gap:8px"><label style="font-size:12px;font-weight:700;color:var(--ink)">1일 연차수당 금액:</label><input type="number" id="leave-custom-amount" placeholder="금액 입력" min="0" style="width:120px;padding:6px 10px;font-size:12px;border:1.5px solid var(--bd2);border-radius:8px;font-weight:700" onchange="saveLeaveCustomAmount(this.value)"><span style="font-size:11px;color:var(--ink3)">원</span></div>
+  <div id="leave-custom-wrap" style="display:none;margin-bottom:12px;align-items:center;gap:8px"><label for="leave-custom-amount" style="font-size:12px;font-weight:700;color:var(--ink)">1일 연차수당 금액:</label><input type="number" id="leave-custom-amount" placeholder="금액 입력" min="0" style="width:120px;padding:6px 10px;font-size:12px;border:1.5px solid var(--bd2);border-radius:8px;font-weight:700" onchange="saveLeaveCustomAmount(this.value)"><span style="font-size:11px;color:var(--ink3)">원</span></div>
 
   <!-- 연차 테이블 -->
   <div style="background:var(--card);border:1px solid var(--bd);border-radius:16px;overflow:hidden;overflow-x:auto;box-shadow:var(--shadow-sm)">
@@ -1152,12 +1175,6 @@ document.addEventListener('click',e=>{
   <div class="ph">
     <div><div class="pt">직원 관리</div><div class="pt-s">주민번호 입력 시 나이 자동 계산 · 드래그로 순서 변경</div></div>
     <div style="display:flex;gap:6px;align-items:center">
-      <div style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:3px">
-        <button class="empf-btn btn btn-xs on" data-f="all" onclick="setEmpFilter('all')">전체</button>
-        <button class="empf-btn btn btn-xs" data-f="fixed" onclick="setEmpFilter('fixed')">소정근무제</button>
-        <button class="empf-btn btn btn-xs" data-f="hourly" onclick="setEmpFilter('hourly')">시급제</button>
-  
-      </div>
       <div style="display:flex;gap:4px">
       <button class="btn btn-sm btn-t" onclick="exportEmpsExcel()">⬇ 엑셀 내보내기</button>
       <button class="btn btn-sm" onclick="document.getElementById('excel-upload-input').click()" style="color:var(--green);border-color:#6EE7B7;background:#ECFDF5">⬆ 엑셀 업로드</button>
@@ -1168,6 +1185,7 @@ document.addEventListener('click',e=>{
     </div>
     </div>
   </div>
+  <div id="emps-filter-bar"></div>
   <div style="background:var(--card);border:1px solid var(--bd);border-radius:16px;overflow:hidden;overflow-x:auto;box-shadow:0 1px 3px rgba(0,0,0,.05)">
     <table class="emt" style="width:100%">
       <thead><tr>
@@ -1277,6 +1295,127 @@ document.addEventListener('click',e=>{
   <div id="folder-body"></div>
 </div>
 
+
+<!-- 근무형태 관리 -->
+<div class="pg" id="pg-shift">
+  <div class="ph">
+    <div><div class="pt">근무형태 관리</div></div>
+    <div style="position:relative;">
+      <input id="shift-search" placeholder="이름 검색..." oninput="renderShiftList()"
+        style="height:30px;border:1px solid var(--bd2);border-radius:6px;padding:0 8px 0 26px;font-size:12px;font-family:inherit;background:var(--card);color:var(--ink);">
+      <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:11px;opacity:.5;">🔍</span>
+    </div>
+  </div>
+  <div style="display:flex;gap:6px;padding:8px 12px;border-bottom:1px solid var(--bd);flex-wrap:wrap;">
+    <button class="shift-ftab on" data-f="전체" onclick="setShiftFilter(this)">전체 <span id="sf-cnt-전체">0</span></button>
+    <button class="shift-ftab" data-f="미등록" onclick="setShiftFilter(this)" style="color:#e97d2b;border-color:#e97d2b;">미등록 <span id="sf-cnt-미등록">0</span></button>
+    <button class="shift-ftab" data-f="fixed" onclick="setShiftFilter(this)">소정근무제 <span id="sf-cnt-fixed">0</span></button>
+    <button class="shift-ftab" data-f="hourly" onclick="setShiftFilter(this)">시급제 <span id="sf-cnt-hourly">0</span></button>
+    <button class="shift-ftab" data-f="monthly" onclick="setShiftFilter(this)">포괄임금제 <span id="sf-cnt-monthly">0</span></button>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--bd);background:var(--surf);flex-wrap:wrap;">
+    <input type="checkbox" id="shift-select-all" onchange="shiftSelectAll(this)" style="accent-color:var(--navy);">
+    <span id="shift-sel-info" style="font-size:12px;color:var(--navy2);">0명 선택</span>
+    <button id="shift-btn-register" onclick="openShiftModal('register')" disabled
+      style="padding:5px 12px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:not-allowed;opacity:0.4;font-family:inherit;">근무형태 등록</button>
+    <button id="shift-btn-edit" onclick="openShiftModal('edit')" disabled
+      style="padding:5px 12px;background:transparent;color:var(--navy2);border:1px solid var(--navy2);border-radius:6px;font-size:12px;cursor:not-allowed;opacity:0.4;font-family:inherit;">수정하기</button>
+    <span id="shift-result-count" style="margin-left:auto;font-size:11px;color:var(--ink3);"></span>
+  </div>
+  <div class="shift-list-header">
+    <div></div><div>사원번호</div><div>이름</div><div>주/야간</div>
+    <div>급여형태</div><div>근무요일</div><div>근무형태</div><div style="text-align:center;">상세보기</div>
+  </div>
+  <div id="shift-list"></div>
+</div>
+
+<!-- 근무형태 등록/수정 모달 -->
+<div id="shift-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;align-items:center;justify-content:center;">
+  <div style="background:var(--card);border-radius:12px;width:480px;max-height:85vh;overflow-y:auto;border:1px solid var(--bd);">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--card);z-index:1;">
+      <span id="shift-modal-title" style="font-size:14px;font-weight:600;color:var(--ink);">근무형태 등록</span>
+      <button onclick="document.getElementById('shift-modal').style.display='none'" style="background:none;border:none;font-size:16px;cursor:pointer;color:var(--ink3);">✕</button>
+    </div>
+    <div style="padding:16px;">
+      <div id="shift-modal-notice" style="font-size:11px;color:var(--navy2);background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;padding:7px 10px;margin-bottom:14px;"></div>
+      <div style="background:#fff8f0;border:1px solid #f59e0b;border-radius:6px;padding:8px 12px;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:12px;color:#854f0b;font-weight:600;">📅 적용 시작일</span>
+        <input type="date" id="shift-history-from"
+          style="height:28px;border:1px solid var(--bd2);border-radius:6px;padding:0 8px;font-size:12px;font-family:inherit;">
+        <span style="font-size:11px;color:#854f0b;">이 날짜부터 변경 적용</span>
+      </div>
+      <div class="shift-sec-title">기본 정보</div>
+      <div class="shift-form-row"><span class="shift-label">형태명</span><input id="sm-name" placeholder="예: 주간 09~18시" class="shift-input"></div>
+      <div class="shift-form-row">
+        <span class="shift-label">주간/야간</span>
+        <div style="display:flex;gap:12px;">
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;color:var(--ink);"><input type="radio" name="sm-shift" value="day" checked style="accent-color:var(--navy);"> 주간</label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;color:var(--ink);"><input type="radio" name="sm-shift" value="night" style="accent-color:var(--navy);"> 야간</label>
+        </div>
+      </div>
+      <div class="shift-divider"></div>
+      <div class="shift-sec-title">근무 요일</div>
+      <div style="display:flex;gap:4px;margin-bottom:12px;">
+        <div class="sm-day-btn hol">일</div>
+        <div class="sm-day-btn on" onclick="toggleSmDay(this)">월</div>
+        <div class="sm-day-btn on" onclick="toggleSmDay(this)">화</div>
+        <div class="sm-day-btn on" onclick="toggleSmDay(this)">수</div>
+        <div class="sm-day-btn on" onclick="toggleSmDay(this)">목</div>
+        <div class="sm-day-btn on" onclick="toggleSmDay(this)">금</div>
+        <div class="sm-day-btn" onclick="toggleSmDay(this)">토</div>
+      </div>
+      <div class="shift-divider"></div>
+      <div class="shift-sec-title">근무 시간</div>
+      <div class="shift-form-row">
+        <span class="shift-label">출퇴근</span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input id="sm-start" type="time" value="09:00" class="shift-time-input">
+          <span style="font-size:12px;color:var(--ink3);">~</span>
+          <input id="sm-end" type="time" value="18:00" class="shift-time-input">
+        </div>
+      </div>
+      <div class="shift-divider"></div>
+      <div class="shift-sec-title">기본 휴게시간</div>
+      <div id="sm-bk-list">
+        <div class="sm-bk-row">
+          <input class="sm-bk-s shift-time-input" type="time" value="12:00">
+          <span style="font-size:12px;color:var(--ink3);">~</span>
+          <input class="sm-bk-e shift-time-input" type="time" value="13:00">
+          <button onclick="this.closest('.sm-bk-row').remove()" class="shift-bk-del">✕</button>
+        </div>
+      </div>
+      <button onclick="addSmBk()" class="shift-add-bk">+ 휴게시간 추가</button>
+    </div>
+    <div style="padding:12px 16px;border-top:1px solid var(--bd);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);">
+      <button onclick="document.getElementById('shift-modal').style.display='none'" class="shift-btn-ghost">취소</button>
+      <button onclick="saveShiftModal()" class="shift-btn-primary">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 상세보기 모달 -->
+<div id="shift-detail-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;align-items:center;justify-content:center;">
+  <div style="background:var(--card);border-radius:12px;width:420px;border:1px solid var(--bd);">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;">
+      <span id="sd-name" style="font-size:14px;font-weight:600;color:var(--ink);"></span>
+      <button onclick="document.getElementById('shift-detail-modal').style.display='none'" style="background:none;border:none;font-size:16px;cursor:pointer;color:var(--ink3);">✕</button>
+    </div>
+    <div style="padding:16px;">
+      <div class="shift-sec-title">근무형태 정보</div>
+      <table style="width:100%;font-size:12px;border-collapse:collapse;">
+        <tr><td style="color:var(--ink3);padding:6px 0;width:80px;">형태명</td><td id="sd-shift-name" style="font-weight:500;color:var(--ink);"></td></tr>
+        <tr><td style="color:var(--ink3);padding:6px 0;">급여방식</td><td id="sd-pay" style="color:var(--ink);"></td></tr>
+        <tr><td style="color:var(--ink3);padding:6px 0;">근무요일</td><td id="sd-days" style="color:var(--ink);"></td></tr>
+        <tr><td style="color:var(--ink3);padding:6px 0;">근무시간</td><td id="sd-time" style="color:var(--ink);"></td></tr>
+        <tr><td style="color:var(--ink3);padding:6px 0;">휴게시간</td><td id="sd-bks" style="color:var(--ink);"></td></tr>
+      </table>
+    </div>
+    <div style="padding:12px 16px;border-top:1px solid var(--bd);display:flex;gap:8px;justify-content:flex-end;">
+      <button onclick="document.getElementById('shift-detail-modal').style.display='none'" class="shift-btn-ghost">닫기</button>
+      <button onclick="document.getElementById('shift-detail-modal').style.display='none';openShiftModal('edit')" class="shift-btn-primary">수정하기</button>
+    </div>
+  </div>
+</div>
 
 <!-- 안전교육 일지 -->
 <div class="pg" id="pg-safety">
