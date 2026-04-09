@@ -82,6 +82,8 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 
 /* ── 페이지 헤더 ── */
 .ph{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;padding:20px 22px 0}
+.sticky-hd{position:sticky;top:0;z-index:50;background:var(--surf);border-bottom:1px solid var(--bd);}
+.sticky-hd .ph{margin-bottom:0;border-bottom:none;}
 .pt{font-size:18px;font-weight:800;color:var(--ink);letter-spacing:-.4px}
 .pt-s{font-size:11px;color:var(--ink3);margin-top:3px;font-weight:400}
 
@@ -987,6 +989,7 @@ document.addEventListener('click',e=>{
 
 <!-- 일일 근태 -->
 <div class="pg on" id="pg-daily">
+  <div class="sticky-hd">
   <div class="ph">
     <div>
       <div class="pt">출퇴근 기록 입력 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:12px;padding:0 2px;opacity:.7" onclick="showTip('출퇴근 기록 사용법','① 날짜 선택 후 직원별 출근·퇴근 시간 입력 (예: 0900 / 1800)\n② Tab키로 빠르게 다음 칸 이동\n③ 야간·연장·휴일 수당은 자동 계산됩니다.\n\n[연차] 체크 시 → 연차수당 자동 적용\n[결근] 체크 시 → 급여 차감 적용\n[외출] 버튼 → 외출 시간 차감 처리')">💡</button></span></div>
@@ -1016,6 +1019,7 @@ document.addEventListener('click',e=>{
     </div>
     <div class="ds" style="border-right:none"><div class="ddow" id="ddow">토요일</div></div>
   </div>
+  </div><!-- /sticky-hd -->
   <div id="hol-alert" style="display:none;margin-bottom:10px;padding:8px 13px;background:#FFF0F3;border:1px solid #FECDD3;border-radius:9px;font-size:12px;color:#9D174D;font-weight:600"></div>
   <div class="bk-box">
     <div class="bk-hd">
@@ -1131,6 +1135,7 @@ document.addEventListener('click',e=>{
 
 <!-- 연차 관리 -->
 <div class="pg" id="pg-leave">
+  <div class="sticky-hd">
   <div class="ph">
     <div>
       <div class="pt">연차 관리</div>
@@ -1155,6 +1160,7 @@ document.addEventListener('click',e=>{
     </div>
   </div>
   <div id="leave-filter-bar"></div>
+  </div><!-- /sticky-hd -->
 
   <!-- 연차수당 금액 설명 -->
   <div id="leave-pay-desc" class="info" style="margin-bottom:12px">연차수당 = 시급 × 8h (기본값)</div>
@@ -1216,6 +1222,7 @@ document.addEventListener('click',e=>{
 
 <!-- 직원 관리 -->
 <div class="pg" id="pg-emps">
+  <div class="sticky-hd">
   <div class="ph">
     <div><div class="pt">직원 관리</div><div class="pt-s">주민번호 입력 시 나이 자동 계산 · 드래그로 순서 변경</div></div>
     <div style="display:flex;gap:6px;align-items:center">
@@ -1230,6 +1237,7 @@ document.addEventListener('click',e=>{
     </div>
   </div>
   <div id="emps-filter-bar"></div>
+  </div><!-- /sticky-hd -->
   <div style="background:var(--card);border:1px solid var(--bd);border-radius:16px;overflow:hidden;overflow-x:auto;box-shadow:0 1px 3px rgba(0,0,0,.05)">
     <table class="emt" style="width:100%">
       <thead><tr>
@@ -1342,6 +1350,7 @@ document.addEventListener('click',e=>{
 
 <!-- 근무형태 관리 -->
 <div class="pg" id="pg-shift">
+  <div class="sticky-hd">
   <div class="ph">
     <div><div class="pt">근무형태 관리</div></div>
     <div style="position:relative;">
@@ -1378,6 +1387,7 @@ document.addEventListener('click',e=>{
       style="padding:5px 12px;background:transparent;color:var(--navy2);border:1px solid var(--navy2);border-radius:6px;font-size:12px;cursor:not-allowed;opacity:0.4;font-family:inherit;">수정하기</button>
     <span id="shift-result-count" style="margin-left:auto;font-size:11px;color:var(--ink3);"></span>
   </div>
+  </div><!-- /sticky-hd -->
   <div class="shift-list-header">
     <div></div><div>사원번호</div><div>이름</div><div>주/야간</div>
     <div>급여형태</div><div>근무요일</div><div>근무형태</div><div style="text-align:center;">상세보기</div>
@@ -1515,7 +1525,7 @@ document.addEventListener('click',e=>{
       <div class="pt-s">회사 정보 및 계정 설정</div>
     </div>
   </div>
-  <div id="myinfo-content" style="padding:20px 22px;max-width:600px;"></div>
+  <div id="myinfo-content" style="padding:0;"></div>
 </div>
 
 <!-- 정책 설정 -->

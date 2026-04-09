@@ -6714,6 +6714,43 @@ function renderMyInfo(){
     return;
   }
 
+  // 세션 키 정규화
+  const co = sess.company || sess.company_name || '-';
+  const nm = sess.name || sess.manager_name || '-';
+  const ph = sess.phone || sess.manager_phone || '-';
+  const em = sess.email || '-';
+  const sz = sess.size || sess.employee_size || '-';
+  const jd = sess.joinDate || sess.join_date || sess.created_at || '-';
+
+  // 통계 데이터
+  const activeEmps = EMPS.filter(e=>!e.leave);
+  const leftEmps = EMPS.filter(e=>e.leave);
+  const dayEmps = activeEmps.filter(e=>(e.shift||'day')==='day');
+  const nightEmps = activeEmps.filter(e=>e.shift==='night');
+  const fixedCnt = activeEmps.filter(e=>(e.payMode||'fixed')==='fixed').length;
+  const hourlyCnt = activeEmps.filter(e=>e.payMode==='hourly').length;
+  const monthlyCnt = activeEmps.filter(e=>e.payMode==='monthly').length;
+  const korCnt = activeEmps.filter(e=>e.nation!=='foreign'&&e.foreigner!==true).length;
+  const forCnt = activeEmps.filter(e=>e.nation==='foreign'||e.foreigner===true).length;
+  const totalActive = activeEmps.length||1;
+
+  // 입사연도 분포
+  const yearMap={};
+  activeEmps.forEach(e=>{if(e.join){const y=e.join.slice(0,4);yearMap[y]=(yearMap[y]||0)+1;}});
+  const yearEntries=Object.entries(yearMap).sort((a,b)=>a[0].localeCompare(b[0])).slice(-5);
+  const yearMax=Math.max(...yearEntries.map(e=>e[1]),1);
+
+  function barHtml(label, cnt, total, color){
+    const pct=Math.round(cnt/total*100);
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <span style="width:56px;font-size:11px;color:var(--ink3);text-align:right;">${label}</span>
+      <div style="flex:1;height:18px;background:var(--bd);border-radius:4px;overflow:hidden;">
+        <div style="width:${pct}%;height:100%;background:${color};border-radius:4px;transition:width .3s;"></div>
+      </div>
+      <span style="width:40px;font-size:11px;font-weight:700;color:var(--ink);">${cnt}명</span>
+    </div>`;
+  }
+
   cont.innerHTML=`
   <style>
   .mi-section{background:var(--card);border:1px solid var(--bd);border-radius:14px;overflow:hidden;margin-bottom:16px;}
@@ -6728,65 +6765,105 @@ function renderMyInfo(){
   .mi-input:focus{border-color:var(--navy2);}
   .mi-save-btn{padding:5px 14px;background:var(--navy);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;}
   .mi-cancel-btn{padding:5px 12px;background:transparent;color:var(--ink3);border:1px solid var(--bd2);border-radius:7px;font-size:12px;cursor:pointer;font-family:inherit;}
+  .mi-stat{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;text-align:center;}
+  .mi-stat-val{font-size:24px;font-weight:800;letter-spacing:-1px;}
+  .mi-stat-lbl{font-size:10px;color:var(--ink3);margin-top:4px;font-weight:600;}
   </style>
 
-  <div style="padding:28px 24px 16px;">
-    <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;">
-      <div style="width:60px;height:60px;border-radius:50%;background:var(--nbg);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:var(--navy2);">
-        ${(sess.company||'?')[0]}
+  <div style="padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
+    <!-- 좌측 -->
+    <div>
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;">
+        <div style="width:60px;height:60px;border-radius:50%;background:var(--nbg);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:var(--navy2);">
+          ${(co)[0]}
+        </div>
+        <div>
+          <div style="font-size:18px;font-weight:700;color:var(--ink);">${esc(co)}</div>
+          <div style="font-size:13px;color:var(--ink3);margin-top:3px;">${esc(em)}</div>
+        </div>
       </div>
-      <div>
-        <div style="font-size:18px;font-weight:700;color:var(--ink);">${esc(sess.company||'-')}</div>
-        <div style="font-size:13px;color:var(--ink3);margin-top:3px;">${esc(sess.email||'-')}</div>
+
+      <div id="mi-edit-panel" style="display:none;background:var(--card);border:1.5px solid var(--navy2);border-radius:14px;padding:20px;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:14px;" id="mi-edit-title"></div>
+        <div id="mi-edit-body"></div>
+        <div id="mi-status" style="font-size:12px;padding:6px 12px;border-radius:7px;display:none;margin-top:8px;"></div>
+      </div>
+
+      <div class="mi-section">
+        <div class="mi-section-hd">회사 정보</div>
+        <div class="mi-row">
+          <span class="mi-label">회사명</span>
+          <span class="mi-value" id="disp-company">${esc(co)}</span>
+          <button class="mi-edit-btn" onclick="miStartEdit('company','${esc(co)}')">수정</button>
+        </div>
+        <div class="mi-row">
+          <span class="mi-label">담당자</span>
+          <span class="mi-value" id="disp-name">${esc(nm)}</span>
+          <button class="mi-edit-btn" onclick="miStartEdit('name','${esc(nm)}')">수정</button>
+        </div>
+        <div class="mi-row">
+          <span class="mi-label">연락처</span>
+          <span class="mi-value" id="disp-phone">${esc(ph)}</span>
+          <button class="mi-edit-btn" onclick="miStartEdit('phone','${esc(ph)}')">수정</button>
+        </div>
+        <div class="mi-row">
+          <span class="mi-label">직원수</span>
+          <span class="mi-value">${esc(sz)}</span>
+        </div>
+        <div class="mi-row">
+          <span class="mi-label">가입일</span>
+          <span class="mi-value">${esc(jd)}</span>
+        </div>
+      </div>
+
+      <div class="mi-section">
+        <div class="mi-section-hd">계정 정보</div>
+        <div class="mi-row">
+          <span class="mi-label">이메일</span>
+          <span class="mi-value" id="disp-email">${esc(em)}</span>
+          <button class="mi-edit-btn" onclick="miStartEdit('email','${esc(em)}')">수정</button>
+        </div>
+        <div class="mi-row">
+          <span class="mi-label">비밀번호</span>
+          <span class="mi-value" id="disp-pw">••••••••</span>
+          <button class="mi-edit-btn" onclick="miTogglePw('${esc(sess.password||sess.pw||'')}')">보기</button>
+          <button class="mi-edit-btn" onclick="miStartEdit('password','')">변경</button>
+        </div>
       </div>
     </div>
 
-    <div id="mi-edit-panel" style="display:none;background:var(--card);border:1.5px solid var(--navy2);border-radius:14px;padding:20px;margin-bottom:16px;">
-      <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:14px;" id="mi-edit-title"></div>
-      <div id="mi-edit-body"></div>
-      <div id="mi-status" style="font-size:12px;padding:6px 12px;border-radius:7px;display:none;margin-top:8px;"></div>
-    </div>
+    <!-- 우측: 통계 -->
+    <div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+        <div class="mi-stat"><div class="mi-stat-val" style="color:var(--navy2);">${activeEmps.length}</div><div class="mi-stat-lbl">재직 인원</div></div>
+        <div class="mi-stat"><div class="mi-stat-val" style="color:var(--ink3);">${leftEmps.length}</div><div class="mi-stat-lbl">퇴직 인원</div></div>
+        <div class="mi-stat"><div class="mi-stat-val" style="color:var(--teal);">${dayEmps.length}</div><div class="mi-stat-lbl">주간 근무</div></div>
+        <div class="mi-stat"><div class="mi-stat-val" style="color:#7C3AED;">${nightEmps.length}</div><div class="mi-stat-lbl">야간 근무</div></div>
+      </div>
 
-    <div class="mi-section">
-      <div class="mi-section-hd">회사 정보</div>
-      <div class="mi-row">
-        <span class="mi-label">회사명</span>
-        <span class="mi-value" id="disp-company">${esc(sess.company||'-')}</span>
-        <button class="mi-edit-btn" onclick="miStartEdit('company','${esc(sess.company||'')}')">수정</button>
+      <div class="mi-section">
+        <div class="mi-section-hd">급여형태 분포</div>
+        <div style="padding:14px 20px;">
+          ${barHtml('소정',fixedCnt,totalActive,'#0F766E')}
+          ${barHtml('시급',hourlyCnt,totalActive,'#D97706')}
+          ${barHtml('포괄',monthlyCnt,totalActive,'#7C3AED')}
+        </div>
       </div>
-      <div class="mi-row">
-        <span class="mi-label">담당자</span>
-        <span class="mi-value" id="disp-name">${esc(sess.name||'-')}</span>
-        <button class="mi-edit-btn" onclick="miStartEdit('name','${esc(sess.name||'')}')">수정</button>
-      </div>
-      <div class="mi-row">
-        <span class="mi-label">연락처</span>
-        <span class="mi-value" id="disp-phone">${esc(sess.phone||'-')}</span>
-        <button class="mi-edit-btn" onclick="miStartEdit('phone','${esc(sess.phone||'')}')">수정</button>
-      </div>
-      <div class="mi-row">
-        <span class="mi-label">직원수</span>
-        <span class="mi-value">${esc(sess.size||'-')}</span>
-      </div>
-      <div class="mi-row">
-        <span class="mi-label">가입일</span>
-        <span class="mi-value">${esc(sess.joinDate||'-')}</span>
-      </div>
-    </div>
 
-    <div class="mi-section">
-      <div class="mi-section-hd">계정 정보</div>
-      <div class="mi-row">
-        <span class="mi-label">이메일</span>
-        <span class="mi-value" id="disp-email">${esc(sess.email||'-')}</span>
-        <button class="mi-edit-btn" onclick="miStartEdit('email','${esc(sess.email||'')}')">수정</button>
+      <div class="mi-section">
+        <div class="mi-section-hd">내/외국인 분포</div>
+        <div style="padding:14px 20px;">
+          ${barHtml('내국인',korCnt,totalActive,'var(--navy)')}
+          ${barHtml('외국인',forCnt,totalActive,'#D97706')}
+        </div>
       </div>
-      <div class="mi-row">
-        <span class="mi-label">비밀번호</span>
-        <span class="mi-value" id="disp-pw">••••••••</span>
-        <button class="mi-edit-btn" onclick="miTogglePw('${esc(sess.password||sess.pw||'')}')">보기</button>
-        <button class="mi-edit-btn" onclick="miStartEdit('password','')">변경</button>
-      </div>
+
+      ${yearEntries.length?`<div class="mi-section">
+        <div class="mi-section-hd">입사 연도별 현황</div>
+        <div style="padding:14px 20px;">
+          ${yearEntries.map(([y,c])=>barHtml(y+'년',c,yearMax,'var(--navy2)')).join('')}
+        </div>
+      </div>`:''}
     </div>
   </div>`;
 }
@@ -6884,18 +6961,21 @@ async function miSaveField(){
   const curPw=document.getElementById('mi-cur-pw')?.value;
   const newVal=document.getElementById('mi-new-val')?.value?.trim();
   const confirmPw=document.getElementById('mi-confirm-pw')?.value;
+  const btn=document.querySelector('.mi-save-btn');
 
   if(!curPw){ miShowStatus('현재 비밀번호를 입력해주세요.',false); return; }
   if(!newVal){ miShowStatus('새 값을 입력해주세요.',false); return; }
   if(miEditField==='password'&&newVal!==confirmPw){ miShowStatus('새 비밀번호가 일치하지 않습니다.',false); return; }
   if(miEditField==='password'&&newVal.length<6){ miShowStatus('비밀번호는 6자 이상이어야 합니다.',false); return; }
 
+  if(btn){ btn.disabled=true; btn.textContent='저장 중...'; }
   try {
-    const body={currentPassword:curPw};
-    body[miEditField]=newVal;
-    await apiFetch('/auth-update','POST',body);
+    const reqBody={currentPassword:curPw};
+    reqBody[miEditField]=newVal;
+    const res = await apiFetch('/auth-update','POST',reqBody);
 
-    const updatedSess={...sess,[miEditField]:newVal};
+    let updatedSess={...sess,[miEditField]:newVal};
+    if(res && res.session) updatedSess={...sess,...res.session};
     setNoproSession(updatedSess);
 
     const dispMap={company:'disp-company',name:'disp-name',phone:'disp-phone',email:'disp-email'};
@@ -6906,7 +6986,7 @@ async function miSaveField(){
 
     const labels={company:'회사명',name:'담당자명',phone:'연락처',email:'이메일',password:'비밀번호'};
     admSendNotify('profile_change',{
-      company:updatedSess.company,
+      company:updatedSess.company||updatedSess.company_name,
       email:updatedSess.email,
       fields:labels[miEditField]||miEditField
     });
@@ -6916,6 +6996,8 @@ async function miSaveField(){
 
   } catch(e){
     miShowStatus(e.message||'현재 비밀번호가 올바르지 않습니다.',false);
+  } finally {
+    if(btn){ btn.disabled=false; btn.textContent='저장'; }
   }
 }
 
