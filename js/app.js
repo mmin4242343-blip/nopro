@@ -198,7 +198,7 @@ function saveLS(){
     localStorage.setItem(LS.R,JSON.stringify(REC));
     localStorage.setItem(LS.BN,JSON.stringify(BONUS_REC));
     localStorage.setItem(LS.AL,JSON.stringify(ALLOWANCE_REC));
-    localStorage.setItem(SF_KEY,JSON.stringify(SAFETY_REC));
+    sfSave();
   }catch(e){console.warn(e);}
   // Supabase 자동 동기화 (즉시 실행, debounce)
   try{
@@ -3478,10 +3478,30 @@ function loadStorageImages(container) {
 // 📁 폴더 관리
 // ══════════════════════════════════════
 let FOLDERS = JSON.parse(localStorage.getItem('npm5_folders')||'[]');
-// 구조: [{id, name, parentId:null|id, files:[{name,storagePath,size,type,date} | {name,dataUrl(레거시)}], open:bool}]
-// 루트 폴더: parentId=null
+// 구조: [{id, name, parentId:null|id, files:[{name,storagePath,size,type,date}], open:bool}]
 
-function saveFolders(){localStorage.setItem('npm5_folders',JSON.stringify(FOLDERS));}
+// localStorage에는 base64(dataUrl) 제거 후 메타데이터만 저장
+function saveFolders(){
+  const slim = FOLDERS.map(f=>({
+    ...f,
+    files:(f.files||[]).map(({dataUrl, ...rest})=>rest)
+  }));
+  try{localStorage.setItem('npm5_folders',JSON.stringify(slim));}
+  catch(e){console.warn('폴더 저장 용량 초과, 정리 중...');
+    // 그래도 실패하면 파일 메타만 최소한으로
+    const minimal=slim.map(f=>({id:f.id,name:f.name,parentId:f.parentId,open:f.open,
+      files:(f.files||[]).map(x=>({id:x.id,name:x.name,storagePath:x.storagePath,size:x.size,type:x.type,date:x.date}))}));
+    try{localStorage.setItem('npm5_folders',JSON.stringify(minimal));}catch(e2){console.error('폴더 저장 실패',e2);}
+  }
+}
+// 기존 base64 데이터 정리 (최초 1회)
+(function cleanLegacyFolders(){
+  let cleaned=false;
+  FOLDERS.forEach(f=>{(f.files||[]).forEach(file=>{
+    if(file.dataUrl){delete file.dataUrl;cleaned=true;}
+  });});
+  if(cleaned){saveFolders();console.log('레거시 base64 폴더 데이터 정리 완료');}
+})();
 
 function showFolderInput(title, defaultVal, onConfirm){
   // 기존 모달 제거
@@ -4427,7 +4447,25 @@ function exportFile(){
 let sfY=new Date().getFullYear(), sfM=new Date().getMonth()+1, sfD=new Date().getDate();
 const SF_KEY='npm5_safety';
 let SAFETY_REC=load(SF_KEY,{});
-function sfSave(){try{localStorage.setItem(SF_KEY,JSON.stringify(SAFETY_REC));}catch(e){alert('저장 공간 부족! 오래된 사진을 삭제해주세요.');}}
+function sfSave(){
+  // localStorage에는 base64(data) 제거 후 메타데이터만 저장
+  const slim={};
+  Object.entries(SAFETY_REC).forEach(([k,v])=>{
+    if(Array.isArray(v)){
+      slim[k]=v.map(({data, ...rest})=>rest);
+    } else { slim[k]=v; }
+  });
+  try{localStorage.setItem(SF_KEY,JSON.stringify(slim));}
+  catch(e){console.warn('안전교육 저장 용량 초과:',e);}
+}
+// 기존 base64 사진 데이터 정리 (최초 1회)
+(function cleanLegacySafety(){
+  let cleaned=false;
+  Object.values(SAFETY_REC).forEach(v=>{
+    if(Array.isArray(v)) v.forEach(p=>{if(p.data){delete p.data;cleaned=true;}});
+  });
+  if(cleaned){sfSave();console.log('레거시 base64 안전교육 데이터 정리 완료');}
+})();
 function sfKey(){return`${sfY}-${pad(sfM)}-${pad(sfD)}`;}
 let sfEditMode=false;
 
@@ -6515,8 +6553,8 @@ async function sbSaveAll(companyId) {
     {key:'tax', value:JSON.parse(localStorage.getItem('npm5_tax')||'{}')},
     {key:'leave_settings', value:JSON.parse(localStorage.getItem('npm5_leave_settings')||'{}')},
     {key:'leave_overrides', value:JSON.parse(localStorage.getItem('npm5_leave_overrides')||'{}')},
-    {key:'folders', value:JSON.parse(localStorage.getItem('npm5_folders')||'[]')},
-    {key:'safety', value:SAFETY_REC},
+    {key:'folders', value:FOLDERS.map(f=>({...f,files:(f.files||[]).map(({dataUrl,...r})=>r)}))},
+    {key:'safety', value:(()=>{const s={};Object.entries(SAFETY_REC).forEach(([k,v])=>{s[k]=Array.isArray(v)?v.map(({data,...r})=>r):v;});return s;})()},
   ];
   await apiFetch('/data-save','POST',{items});
 }
