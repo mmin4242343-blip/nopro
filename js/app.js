@@ -6740,14 +6740,20 @@ function renderMyInfo(){
   const yearEntries=Object.entries(yearMap).sort((a,b)=>a[0].localeCompare(b[0])).slice(-5);
   const yearMax=Math.max(...yearEntries.map(e=>e[1]),1);
 
-  function barHtml(label, cnt, total, color){
-    const pct=Math.round(cnt/total*100);
-    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-      <span style="width:56px;font-size:11px;color:var(--ink3);text-align:right;">${label}</span>
-      <div style="flex:1;height:18px;background:var(--bd);border-radius:4px;overflow:hidden;">
-        <div style="width:${pct}%;height:100%;background:${color};border-radius:4px;transition:width .3s;"></div>
+  const statCard = (num, lbl, color, bg) => `
+    <div style="background:${bg};border-radius:14px;padding:18px 20px;display:flex;flex-direction:column;gap:6px;">
+      <div style="font-size:28px;font-weight:900;color:${color};letter-spacing:-1.5px;line-height:1;">${num}</div>
+      <div style="font-size:10px;font-weight:700;color:${color};opacity:.6;letter-spacing:.08em;text-transform:uppercase;">${lbl}</div>
+    </div>`;
+
+  function barHtml(label, cnt, maxV, color, labelColor){
+    const pct=Math.round(cnt/maxV*100);
+    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+      <span style="font-size:11px;font-weight:600;color:${labelColor||'var(--ink3)'};min-width:34px;text-align:right;">${label}</span>
+      <div style="flex:1;height:8px;background:var(--bd);border-radius:100px;overflow:hidden;position:relative;">
+        <div style="position:absolute;left:0;top:0;height:100%;width:${pct}%;background:${color};border-radius:100px;transition:width .8s cubic-bezier(.4,0,.2,1);"></div>
       </div>
-      <span style="width:40px;font-size:11px;font-weight:700;color:var(--ink);">${cnt}명</span>
+      <span style="font-size:11px;font-weight:700;color:var(--ink2);min-width:28px;text-align:right;">${cnt}<span style="font-size:9px;font-weight:500;color:var(--ink3);margin-left:1px;">명</span></span>
     </div>`;
   }
 
@@ -6765,9 +6771,6 @@ function renderMyInfo(){
   .mi-input:focus{border-color:var(--navy2);}
   .mi-save-btn{padding:5px 14px;background:var(--navy);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;}
   .mi-cancel-btn{padding:5px 12px;background:transparent;color:var(--ink3);border:1px solid var(--bd2);border-radius:7px;font-size:12px;cursor:pointer;font-family:inherit;}
-  .mi-stat{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;text-align:center;}
-  .mi-stat-val{font-size:24px;font-weight:800;letter-spacing:-1px;}
-  .mi-stat-lbl{font-size:10px;color:var(--ink3);margin-top:4px;font-weight:600;}
   </style>
 
   <div style="padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
@@ -6808,11 +6811,11 @@ function renderMyInfo(){
         </div>
         <div class="mi-row">
           <span class="mi-label">직원수</span>
-          <span class="mi-value">${esc(sz)}</span>
+          <span class="mi-value">${sz==='undefined'||!sz||sz==='-'?'미입력':esc(sz)}</span>
         </div>
         <div class="mi-row">
           <span class="mi-label">가입일</span>
-          <span class="mi-value">${esc(jd)}</span>
+          <span class="mi-value">${jd==='undefined'||!jd||jd==='-'?'미입력':esc(String(jd).slice(0,10))}</span>
         </div>
       </div>
 
@@ -6826,7 +6829,7 @@ function renderMyInfo(){
         <div class="mi-row">
           <span class="mi-label">비밀번호</span>
           <span class="mi-value" id="disp-pw">••••••••</span>
-          <button class="mi-edit-btn" onclick="miTogglePw('${esc(sess.password||sess.pw||'')}')">보기</button>
+          <button class="mi-edit-btn" onclick="miTogglePw()">보기</button>
           <button class="mi-edit-btn" onclick="miStartEdit('password','')">변경</button>
         </div>
       </div>
@@ -6835,10 +6838,10 @@ function renderMyInfo(){
     <!-- 우측: 통계 -->
     <div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
-        <div class="mi-stat"><div class="mi-stat-val" style="color:var(--navy2);">${activeEmps.length}</div><div class="mi-stat-lbl">재직 인원</div></div>
-        <div class="mi-stat"><div class="mi-stat-val" style="color:var(--ink3);">${leftEmps.length}</div><div class="mi-stat-lbl">퇴직 인원</div></div>
-        <div class="mi-stat"><div class="mi-stat-val" style="color:var(--teal);">${dayEmps.length}</div><div class="mi-stat-lbl">주간 근무</div></div>
-        <div class="mi-stat"><div class="mi-stat-val" style="color:#7C3AED;">${nightEmps.length}</div><div class="mi-stat-lbl">야간 근무</div></div>
+        ${statCard(activeEmps.length,'재직 인원','#2347b5','rgba(35,71,181,.07)')}
+        ${statCard(leftEmps.length,'퇴직 인원','#64748b','rgba(100,116,139,.07)')}
+        ${statCard(dayEmps.length,'주간 근무','#0891b2','rgba(8,145,178,.07)')}
+        ${statCard(nightEmps.length,'야간 근무','#7c3aed','rgba(124,58,237,.07)')}
       </div>
 
       <div class="mi-section">
@@ -6855,13 +6858,20 @@ function renderMyInfo(){
         <div style="padding:14px 20px;">
           ${barHtml('내국인',korCnt,totalActive,'var(--navy)')}
           ${barHtml('외국인',forCnt,totalActive,'#D97706')}
+          <div style="height:6px;border-radius:100px;overflow:hidden;display:flex;margin-top:4px;">
+            <div style="width:${Math.round(korCnt/totalActive*100)}%;background:var(--navy);transition:width .8s;"></div>
+            <div style="flex:1;background:#f59e0b;"></div>
+          </div>
         </div>
       </div>
 
       ${yearEntries.length?`<div class="mi-section">
         <div class="mi-section-hd">입사 연도별 현황</div>
         <div style="padding:14px 20px;">
-          ${yearEntries.map(([y,c])=>barHtml(y+'년',c,yearMax,'var(--navy2)')).join('')}
+          ${yearEntries.map(([y,c])=>{
+            const isRecent=parseInt(y)>=new Date().getFullYear()-1;
+            return barHtml(y+'년',c,yearMax,isRecent?'var(--navy)':'var(--bd2)',isRecent?'var(--navy)':'var(--ink3)');
+          }).join('')}
         </div>
       </div>`:''}
     </div>
@@ -6869,18 +6879,71 @@ function renderMyInfo(){
 }
 
 let miEditField = '';
+let miPwVisible = false;
 
-function miTogglePw(pw){
-  const el = document.getElementById('disp-pw');
-  if(!el) return;
-  if(el.textContent === '••••••••'){
-    el.textContent = pw || '-';
-    el.style.color = 'var(--navy2)';
-    el.style.fontFamily = 'monospace';
-  } else {
-    el.textContent = '••••••••';
-    el.style.color = '';
-    el.style.fontFamily = '';
+function miTogglePw(){
+  if(miPwVisible){
+    miPwVisible = false;
+    const el = document.getElementById('disp-pw');
+    if(el){ el.textContent='••••••••'; el.style.color=''; el.style.fontFamily=''; }
+    const btn = document.querySelector('[onclick="miTogglePw()"]');
+    if(btn) btn.textContent='보기';
+    document.getElementById('mi-pw-panel')?.remove();
+    return;
+  }
+
+  const panel = document.createElement('div');
+  panel.id = 'mi-pw-panel';
+  panel.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;';
+  panel.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;padding:24px;width:320px;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+      <div style="font-size:15px;font-weight:700;color:var(--ink);margin-bottom:6px;">🔑 비밀번호 확인</div>
+      <div style="font-size:12px;color:var(--ink3);margin-bottom:16px;">본인 확인을 위해 현재 비밀번호를 입력해주세요.</div>
+      <input id="mi-pw-check-inp" type="password" placeholder="현재 비밀번호 입력"
+        style="width:100%;height:36px;border:1.5px solid var(--bd2);border-radius:9px;padding:0 12px;font-size:13px;font-family:inherit;background:var(--card);color:var(--ink);outline:none;margin-bottom:8px;box-sizing:border-box;"
+        onkeydown="if(event.key==='Enter') miConfirmPwView()">
+      <div id="mi-pw-check-err" style="font-size:11px;color:#DC2626;display:none;margin-bottom:8px;"></div>
+      <div style="display:flex;gap:8px;margin-top:4px;">
+        <button onclick="miConfirmPwView()"
+          style="flex:1;padding:8px;background:var(--navy);color:#fff;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">확인</button>
+        <button onclick="document.getElementById('mi-pw-panel').remove()"
+          style="padding:8px 14px;background:transparent;color:var(--ink3);border:1px solid var(--bd2);border-radius:9px;font-size:12px;cursor:pointer;font-family:inherit;">취소</button>
+      </div>
+    </div>`;
+  document.body.appendChild(panel);
+  setTimeout(()=>document.getElementById('mi-pw-check-inp')?.focus(), 100);
+}
+
+async function miConfirmPwView(){
+  const inp = document.getElementById('mi-pw-check-inp');
+  const errEl = document.getElementById('mi-pw-check-err');
+  const pw = inp?.value?.trim();
+  if(!pw){ if(errEl){errEl.textContent='비밀번호를 입력해주세요.';errEl.style.display='block';} return; }
+
+  try {
+    const sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
+    await apiFetch('/auth-update','POST',{
+      currentPassword: pw,
+      company: sess?.company||sess?.company_name||''
+    });
+
+    document.getElementById('mi-pw-panel')?.remove();
+    miPwVisible = true;
+    const el = document.getElementById('disp-pw');
+    if(el){
+      el.textContent = sess?.password||sess?.pw||pw;
+      el.style.color = 'var(--navy2)';
+      el.style.fontFamily = 'monospace';
+    }
+    const btn = document.querySelector('[onclick="miTogglePw()"]');
+    if(btn) btn.textContent='숨기기';
+
+  } catch(e){
+    if(errEl){
+      errEl.textContent = '비밀번호가 올바르지 않습니다.';
+      errEl.style.display='block';
+    }
+    inp?.select();
   }
 }
 
