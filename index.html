@@ -905,6 +905,16 @@ document.addEventListener('click',e=>{
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
         회원 관리
       </div>
+      <div class="adm-sb-item" id="adm-m-alerts" onclick="admPage('alerts')" style="position:relative;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/>
+        </svg>
+        알림
+        <span id="adm-alert-badge"
+          style="position:absolute;right:10px;top:50%;transform:translateY(-50%);
+                 background:#ef4444;color:#fff;font-size:9px;font-weight:700;
+                 padding:1px 6px;border-radius:100px;display:none;">0</span>
+      </div>
     </nav>
 
     <div style="padding:14px 8px;border-top:1px solid rgba(255,255,255,.07)">
@@ -935,6 +945,7 @@ document.addEventListener('click',e=>{
   <div class="nt" id="nt-shift" onclick="gp('shift')">근무형태</div>
   <div class="nt" id="nt-safety" onclick="gp('safety')">안전교육 일지</div>
   <div class="nt" id="nt-folder" onclick="gp('folder')">📁 폴더 관리</div>
+  <div class="nt" id="nt-myinfo" onclick="gp('myinfo')">내 정보</div>
   <div class="nt" id="nt-settings" onclick="gp('settings')">급여 설정 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:12px;padding:0 2px;opacity:.7" onclick="showTip('급여 설정','급여 계산에 필요한 기본 설정을 합니다.\n\n• 급여 방식 선택 (소정근무제·시간급·월정액제·고정급제)\n• 야간/연장/휴일 가산수당 ON/OFF\n• 주말·공휴일 기준 설정\n• 휴게시간 기본값 설정')">💡</button></span></div>
   <div class="nsp"></div>
   
@@ -1493,6 +1504,17 @@ document.addEventListener('click',e=>{
 
   <!-- 메인 콘텐츠 -->
   <div id="sf-body"></div>
+</div>
+
+<!-- 내 정보 -->
+<div class="pg" id="pg-myinfo">
+  <div class="ph">
+    <div>
+      <div class="pt">내 정보</div>
+      <div class="pt-s">회사 정보 및 계정 설정</div>
+    </div>
+  </div>
+  <div id="myinfo-content" style="padding:20px 22px;max-width:600px;"></div>
 </div>
 
 <!-- 정책 설정 -->

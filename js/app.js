@@ -669,7 +669,7 @@ function monthSummary(eid,y,m){
 // ══════════════════════════════════════
 // 페이지
 // ══════════════════════════════════════
-const PAGES=['daily','monthly','payroll','leave','company','emps','shift','safety','folder','settings'];
+const PAGES=['daily','monthly','payroll','leave','company','emps','shift','safety','folder','myinfo','settings'];
 function gp(p){
   PAGES.forEach(x=>{
     const pe=document.getElementById('pg-'+x);if(pe)pe.classList.toggle('on',x===p);
@@ -690,6 +690,7 @@ function gp(p){
   if(p==='leave')renderLeave();
   if(p==='company')renderCompany();
   if(p==='folder')renderFolder();
+  if(p==='myinfo')renderMyInfo();
 }
 // ══ 사이드바 필터 상태 ══
 const SBF = { shift:'all', nation:'all', pay:'all' };
@@ -5836,6 +5837,7 @@ async function doAuthSignup(){
     setNoproSession(res.session);
     // 새 회사 기본 데이터 저장
     await sbSaveAll(res.session.companyId);
+    admSendNotify('signup', {company, name, email, phone, size});
     enterApp(company);
   } catch(e){
     errEl.textContent=e.message||'회원가입 실패';
@@ -5869,6 +5871,7 @@ function enterAdmin(){
   document.getElementById('admin-overlay').style.display='block';
   document.querySelector('.app').style.display='none';
   admPage('dashboard');
+  setTimeout(admUpdateAlertBadge, 300);
 }
 
 function admLogout(){
@@ -5899,8 +5902,7 @@ function admPage(page){
   apiFetch('/admin-companies','GET').then(rows=>{
     if(rows&&rows.length){
       saveNoproUsers(rows);
-      // 서버 데이터로 현재 페이지 다시 렌더링
-      admPage(page);
+      if(page==='companies') admRenderCompanies(rows, document.getElementById('adm-search')?.value||'');
     }
   }).catch(e=>console.warn('관리자 데이터 로드 오류:',e));
   const cont=document.getElementById('adm-content');
@@ -5955,7 +5957,7 @@ function admPage(page){
       <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;overflow:hidden">
         <table style="width:100%;border-collapse:collapse">
           <thead><tr style="background:rgba(255,255,255,.04)">
-            ${['#','회사명','담당자','연락처','이메일','직원수','요금제','상태','삭제'].map(h=>`
+            ${['#','회사명','담당자','연락처','이메일','비밀번호','직원수','요금제','상태','삭제'].map(h=>`
               <th style="padding:11px 14px;font-size:10px;font-weight:700;color:#64748B;text-align:left;letter-spacing:.3px;border-bottom:1px solid rgba(255,255,255,.06);white-space:nowrap">${h}</th>
             `).join('')}
           </tr></thead>
@@ -5963,6 +5965,44 @@ function admPage(page){
         </table>
       </div>`;
     admRenderCompanies(users);
+  }
+  else if(page==='alerts'){
+    const alerts = JSON.parse(localStorage.getItem('nopro_admin_alerts')||'[]').reverse();
+    cont.innerHTML=`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">
+        <div>
+          <div style="font-size:22px;font-weight:800;color:#fff;margin-bottom:4px;">🔔 알림</div>
+          <div style="font-size:13px;color:rgba(240,244,255,.35);">회원가입 및 정보 변경 알림</div>
+        </div>
+        <button onclick="admClearAlerts()"
+          style="padding:7px 14px;border-radius:8px;border:1px solid rgba(239,68,68,.3);
+                 background:rgba(239,68,68,.1);color:#FCA5A5;font-size:11px;font-weight:600;cursor:pointer;">
+          전체 삭제
+        </button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        ${alerts.length ? alerts.map(a=>`
+          <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,${a.type==='signup'?'.12':'.07'});
+                      border-radius:14px;padding:16px 20px;display:flex;gap:14px;align-items:flex-start;">
+            <div style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+                        font-size:16px;flex-shrink:0;background:${a.type==='signup'?'rgba(16,185,129,.15)':'rgba(245,158,11,.15)'};">
+              ${a.type==='signup'?'🏢':'✏️'}
+            </div>
+            <div style="flex:1;">
+              <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:4px;">${a.title}</div>
+              <div style="font-size:12px;color:#94A3B8;line-height:1.6;">${a.body}</div>
+              <div style="font-size:10px;color:#64748B;margin-top:6px;">${a.time}</div>
+            </div>
+            <span style="padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;
+                         background:${a.type==='signup'?'rgba(16,185,129,.15)':'rgba(245,158,11,.15)'};
+                         color:${a.type==='signup'?'#6EE7B7':'#FCD34D'};">
+              ${a.type==='signup'?'신규 가입':'정보 변경'}
+            </span>
+          </div>`).join('')
+        : '<div style="text-align:center;padding:60px;color:#64748B;font-size:14px;">알림이 없습니다</div>'}
+      </div>`;
+    localStorage.setItem('nopro_admin_alert_unread','0');
+    admUpdateAlertBadge();
   }
   else if(page==='users'){
     cont.innerHTML=`
@@ -6011,6 +6051,13 @@ function admRenderCompanies(users, filter=''){
       <td style="padding:10px 14px">
         <div style="font-size:11px;color:#94A3B8">${esc(u.email||'-')}</div>
       </td>
+      <td style="padding:10px 14px">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span id="pw-${u.id}" style="font-size:11px;color:#94A3B8;font-family:monospace;">••••••••</span>
+          <button onclick="admTogglePw('${u.id}','${esc(u.password||u.pw||'-')}')"
+            style="padding:2px 7px;border-radius:5px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#94A3B8;font-size:10px;cursor:pointer;">보기</button>
+        </div>
+      </td>
       <td style="padding:10px 14px;text-align:center">
         <span style="font-size:14px;font-weight:900;color:#6EE7B7">${empCount}</span>
         <span style="font-size:10px;color:#64748B">명</span>
@@ -6029,13 +6076,25 @@ function admRenderCompanies(users, filter=''){
         </button>
       </td>
     </tr>`;
-  }).join(''):`<tr><td colspan="9" style="padding:50px;text-align:center;color:#64748B;font-size:13px">
+  }).join(''):`<tr><td colspan="10" style="padding:50px;text-align:center;color:#64748B;font-size:13px">
     ${filter?'검색 결과가 없습니다':'가입 회사가 없습니다'}
   </td></tr>`;
 }
 
 function admFilter(val){
   admRenderCompanies(getNoproUsers(), val);
+}
+
+function admTogglePw(id, pw){
+  const el = document.getElementById('pw-'+id);
+  if(!el) return;
+  if(el.textContent.trim() === '••••••••'){
+    el.textContent = pw;
+    el.style.color = '#FCD34D';
+  } else {
+    el.textContent = '••••••••';
+    el.style.color = '#94A3B8';
+  }
 }
 
 async function admDeleteUser(id){
@@ -6529,6 +6588,166 @@ function showBkPriorityTip(){
     </div>
   `;
   document.body.appendChild(bg);
+}
+
+// ══ 내 정보 ══
+function renderMyInfo(){
+  const sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
+  const cont = document.getElementById('myinfo-content');
+  if(!cont) return;
+  if(!sess){ cont.innerHTML='<div style="color:var(--ink3)">세션 정보를 불러올 수 없습니다.</div>'; return; }
+
+  cont.innerHTML=`
+    <div style="background:var(--card);border:1px solid var(--bd);border-radius:14px;overflow:hidden;margin-bottom:20px;">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--bd);font-size:13px;font-weight:700;color:var(--ink);">회사 정보</div>
+      <div style="padding:16px 20px;">
+        ${[
+          ['회사명', sess.company||'-'],
+          ['담당자', sess.name||'-'],
+          ['연락처', sess.phone||'-'],
+          ['이메일', sess.email||'-'],
+          ['직원수', sess.size||'-'],
+          ['가입일', sess.joinDate||'-'],
+          ['비밀번호', '••••••••'],
+        ].map(([label, val])=>`
+          <div style="display:flex;align-items:center;padding:10px 0;border-bottom:1px solid var(--bd);">
+            <span style="width:100px;font-size:12px;color:var(--ink3);flex-shrink:0;">${label}</span>
+            <span style="font-size:13px;color:var(--ink);flex:1;" id="myinfo-${label}">${val}</span>
+            ${label==='비밀번호'?`<button onclick="myinfoTogglePw()"
+              style="font-size:11px;color:var(--navy2);border:1px solid var(--bd2);border-radius:5px;padding:2px 8px;background:transparent;cursor:pointer;">보기</button>`:''}
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div style="background:var(--card);border:1px solid var(--bd);border-radius:14px;overflow:hidden;">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--bd);font-size:13px;font-weight:700;color:var(--ink);">정보 수정</div>
+      <div style="padding:16px 20px;">
+        <div style="background:#fff8f0;border:1px solid #f59e0b;border-radius:8px;padding:10px 14px;font-size:12px;color:#854f0b;margin-bottom:16px;">
+          현재 비밀번호를 입력해야 정보를 수정할 수 있습니다.
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          ${[
+            ['현재 비밀번호 *', 'mi-cur-pw', 'password', '필수 입력'],
+            ['새 회사명', 'mi-company', 'text', sess.company||''],
+            ['담당자 이름', 'mi-name', 'text', sess.name||''],
+            ['연락처', 'mi-phone', 'tel', sess.phone||''],
+            ['이메일', 'mi-email', 'email', sess.email||''],
+            ['새 비밀번호', 'mi-pw', 'password', '변경 시에만 입력'],
+            ['새 비밀번호 확인', 'mi-pw2', 'password', '변경 시에만 입력'],
+          ].map(([label,id,type,ph])=>`
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="width:120px;font-size:12px;color:var(--ink3);flex-shrink:0;">${label}</span>
+              <input id="${id}" type="${type}" placeholder="${ph}"
+                style="flex:1;height:32px;border:1px solid var(--bd2);border-radius:7px;padding:0 10px;font-size:12px;font-family:inherit;background:var(--card);color:var(--ink);">
+            </div>`).join('')}
+          <div id="myinfo-msg" style="font-size:12px;display:none;padding:8px 12px;border-radius:7px;"></div>
+          <button onclick="saveMyInfo()"
+            style="margin-top:8px;padding:9px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">
+            정보 저장
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function myinfoTogglePw(){
+  const sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
+  const el = document.getElementById('myinfo-비밀번호');
+  if(!el) return;
+  if(el.textContent === '••••••••'){
+    el.textContent = sess?.password || sess?.pw || '-';
+    el.style.color = 'var(--navy2)';
+  } else {
+    el.textContent = '••••••••';
+    el.style.color = 'var(--ink)';
+  }
+}
+
+async function saveMyInfo(){
+  const sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
+  const msg = document.getElementById('myinfo-msg');
+  const curPw = document.getElementById('mi-cur-pw')?.value;
+  const newCompany = document.getElementById('mi-company')?.value.trim() || sess?.company;
+  const newName    = document.getElementById('mi-name')?.value.trim()    || sess?.name;
+  const newPhone   = document.getElementById('mi-phone')?.value.trim()   || sess?.phone;
+  const newEmail   = document.getElementById('mi-email')?.value.trim()   || sess?.email;
+  const newPw      = document.getElementById('mi-pw')?.value;
+  const newPw2     = document.getElementById('mi-pw2')?.value;
+
+  function showMsg(txt, color){
+    if(!msg) return;
+    msg.textContent=txt;
+    msg.style.background=color==='#dc2626'?'#fef2f2':'#f0fdf4';
+    msg.style.color=color;
+    msg.style.border='1px solid '+(color==='#dc2626'?'#fecaca':'#86efac');
+    msg.style.display='block';
+  }
+
+  if(!curPw){ showMsg('현재 비밀번호를 입력해주세요.','#dc2626'); return; }
+  if(newPw && newPw!==newPw2){ showMsg('새 비밀번호가 일치하지 않습니다.','#dc2626'); return; }
+
+  try {
+    await apiFetch('/auth-update','POST',{
+      currentPassword:curPw, company:newCompany, name:newName,
+      phone:newPhone, email:newEmail, password:newPw||undefined
+    });
+    const updatedSess={...sess,company:newCompany,name:newName,phone:newPhone,email:newEmail};
+    if(newPw) updatedSess.password=newPw;
+    setNoproSession(updatedSess);
+
+    const changed=[];
+    if(newCompany!==sess?.company) changed.push('회사명');
+    if(newName!==sess?.name) changed.push('담당자명');
+    if(newPhone!==sess?.phone) changed.push('연락처');
+    if(newEmail!==sess?.email) changed.push('이메일');
+    if(newPw) changed.push('비밀번호');
+    if(changed.length>0){
+      admSendNotify('profile_change',{company:newCompany,email:newEmail,fields:changed.join(', ')});
+    }
+    showMsg('정보가 저장되었습니다.','#16a34a');
+    renderMyInfo();
+  } catch(e){
+    showMsg(e.message||'저장 실패. 현재 비밀번호를 확인해주세요.','#dc2626');
+  }
+}
+
+// ══ 관리자 알림 ══
+function admPushAlert(type, title, body){
+  const alerts = JSON.parse(localStorage.getItem('nopro_admin_alerts')||'[]');
+  alerts.push({type, title, body, time: new Date().toLocaleString('ko-KR')});
+  localStorage.setItem('nopro_admin_alerts', JSON.stringify(alerts));
+  const unread = parseInt(localStorage.getItem('nopro_admin_alert_unread')||'0') + 1;
+  localStorage.setItem('nopro_admin_alert_unread', String(unread));
+  admUpdateAlertBadge();
+}
+
+function admClearAlerts(){
+  localStorage.setItem('nopro_admin_alerts','[]');
+  localStorage.setItem('nopro_admin_alert_unread','0');
+  admUpdateAlertBadge();
+  admPage('alerts');
+}
+
+function admUpdateAlertBadge(){
+  const badge = document.getElementById('adm-alert-badge');
+  if(!badge) return;
+  const unread = parseInt(localStorage.getItem('nopro_admin_alert_unread')||'0');
+  badge.textContent = unread;
+  badge.style.display = unread > 0 ? 'inline' : 'none';
+}
+
+function admSendNotify(type, data){
+  if(type==='signup'){
+    admPushAlert('signup',
+      `새 회원 가입: ${data.company}`,
+      `담당자: ${data.name} | 이메일: ${data.email} | 연락처: ${data.phone} | 직원수: ${data.size}`
+    );
+  } else if(type==='profile_change'){
+    admPushAlert('change',
+      `회원 정보 변경: ${data.company}`,
+      `변경 항목: ${data.fields} | 이메일: ${data.email}`
+    );
+  }
 }
 
 // ── 랜딩 서비스 화면 탭 (랜딩페이지 inline script로 이동됨) ──
