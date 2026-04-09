@@ -986,6 +986,7 @@ document.addEventListener('click',e=>{
       <button class="btn btn-sm" onclick="fillNormalAttend()" style="color:var(--navy);border-color:var(--navy);">✅ 전체 정상출퇴근</button>
       <button class="btn btn-sm" onclick="fillNormalAttendSelected()" style="color:var(--teal);border-color:var(--teal);">☑ 선택 정상출퇴근</button>
       <button class="btn btn-sm" onclick="applyRecentAll()" title="직원별 가장 최근 출퇴근 기록을 오늘에 불러옵니다" style="color:var(--purple);border-color:var(--purple)">📋 최근 데이터 불러오기</button>
+      <button class="btn btn-sm" onclick="exportDailyExcel()" style="color:#065F46;border-color:#065F46;">⬇ 당일 엑셀</button>
       <button class="btn btn-n btn-sm" onclick="saveDay()">저장</button>
     </div>
   </div>
@@ -1337,12 +1338,24 @@ document.addEventListener('click',e=>{
       <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:11px;opacity:.5;">🔍</span>
     </div>
   </div>
-  <div style="display:flex;gap:6px;padding:8px 12px;border-bottom:1px solid var(--bd);flex-wrap:wrap;">
-    <button class="shift-ftab on" data-f="전체" onclick="setShiftFilter(this)">전체 <span id="sf-cnt-전체">0</span></button>
-    <button class="shift-ftab" data-f="미등록" onclick="setShiftFilter(this)" style="color:#e97d2b;border-color:#e97d2b;">미등록 <span id="sf-cnt-미등록">0</span></button>
-    <button class="shift-ftab" data-f="fixed" onclick="setShiftFilter(this)">소정근무제 <span id="sf-cnt-fixed">0</span></button>
-    <button class="shift-ftab" data-f="hourly" onclick="setShiftFilter(this)">시급제 <span id="sf-cnt-hourly">0</span></button>
-    <button class="shift-ftab" data-f="monthly" onclick="setShiftFilter(this)">포괄임금제 <span id="sf-cnt-monthly">0</span></button>
+  <div style="display:flex;gap:6px;padding:7px 12px;border-bottom:1px solid var(--bd);flex-wrap:wrap;align-items:center;">
+    <div style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:2px;">
+      <button class="shift-ftab on" onclick="setShiftSubFilter('shift','all',this)">전체</button>
+      <button class="shift-ftab" onclick="setShiftSubFilter('shift','day',this)">주간</button>
+      <button class="shift-ftab" onclick="setShiftSubFilter('shift','night',this)">야간</button>
+    </div>
+    <div style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:2px;">
+      <button class="shift-ftab on" onclick="setShiftSubFilter('nation','all',this)">전체</button>
+      <button class="shift-ftab" onclick="setShiftSubFilter('nation','korean',this)">내국인</button>
+      <button class="shift-ftab" onclick="setShiftSubFilter('nation','foreign',this)" style="color:#92400e;border-color:#f59e0b;">외국인</button>
+    </div>
+    <div style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:2px;">
+      <button class="shift-ftab on" data-f="전체" onclick="setShiftFilter(this)">전체 <span id="sf-cnt-전체">0</span></button>
+      <button class="shift-ftab" data-f="미등록" onclick="setShiftFilter(this)" style="color:#e97d2b;border-color:#e97d2b;">미등록 <span id="sf-cnt-미등록">0</span></button>
+      <button class="shift-ftab" data-f="fixed" onclick="setShiftFilter(this)">소정 <span id="sf-cnt-fixed">0</span></button>
+      <button class="shift-ftab" data-f="hourly" onclick="setShiftFilter(this)">시급 <span id="sf-cnt-hourly">0</span></button>
+      <button class="shift-ftab" data-f="monthly" onclick="setShiftFilter(this)">포괄 <span id="sf-cnt-monthly">0</span></button>
+    </div>
   </div>
   <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--bd);background:var(--surf);flex-wrap:wrap;">
     <input type="checkbox" id="shift-select-all" onchange="shiftSelectAll(this)" style="accent-color:var(--navy);">

@@ -1600,12 +1600,11 @@ function renderXlPreview(){
   const sot = POL.sot || 209;
   const isMonthlyView = false;
 
-  const payEmps = EMPS.filter(emp=>{
+  const payEmps = applyCommonFilter(EMPS.filter(emp=>{
     if(emp.join){const jd=new Date(emp.join);if(jd>new Date(pY,pM,0))return false;}
     if(emp.leave){const ld=new Date(emp.leave);if(ld<new Date(pY,pM-1,1))return false;}
-    if(payFilter!=='all'&&(emp.payMode||'fixed')!==payFilter)return false;
     return true;
-  });
+  }), 'payroll');
 
   // ── 헤더 ──
   const hdr = `<thead><tr>
@@ -4011,18 +4010,114 @@ function exportExcel(){
   }
 
   // 3개 시트
-  const getEmps = mode => EMPS.filter(e=>{
+  const getEmps = mode => applyCommonFilter(EMPS.filter(e=>{
     if((e.payMode||'fixed')!==mode) return false;
     if(e.join&&new Date(e.join)>new Date(pY,pM,0)) return false;
     if(e.leave&&new Date(e.leave)<new Date(pY,pM-1,1)) return false;
     return true;
-  });
+  }), 'payroll');
 
   writePaySheet(getEmps('fixed'), '소정근무제', false);
   writePaySheet(getEmps('hourly'), '시급제', false);
   writePaySheet(getEmps('monthly'), '월급제', true);
 
   XLSX.writeFile(wb, `급여명세_${pY}년${pM}월_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+function exportDailyExcel(){
+  const C = XLS.C; const S = XLS.S;
+  const wb = XLSX.utils.book_new();
+  const ws = {};
+  const dateStr = `${cY}-${String(cM).padStart(2,'0')}-${String(cD).padStart(2,'0')}`;
+  const dowNames = ['일','월','화','수','목','금','토'];
+  const dow = dowNames[new Date(cY,cM-1,cD).getDay()];
+
+  // 타이틀
+  xlsWrite(ws,XLSX.utils.encode_cell({r:0,c:0}),`${cY}년 ${cM}월 ${cD}일 (${dow}) 출퇴근 기록`,{
+    font:{bold:true,sz:16,color:{rgb:C.navy},name:'맑은 고딕'},
+    fill:{fgColor:{rgb:'EFF6FF'}},
+    alignment:{horizontal:'left',vertical:'center'},
+  });
+  xlsMerge(ws,0,0,0,10);
+  xlsWrite(ws,XLSX.utils.encode_cell({r:1,c:0}),
+    `출력일: ${new Date().toLocaleDateString('ko-KR')}`,{
+    font:{sz:9,color:{rgb:C.gray2},italic:true,name:'맑은 고딕'},
+    fill:{fgColor:{rgb:'EFF6FF'}},
+    alignment:{horizontal:'left',vertical:'center'},
+  });
+  xlsMerge(ws,1,0,1,10);
+  ws['!rows']=[{hpt:28},{hpt:16}];
+
+  // 헤더
+  const hdrs=['순번','이름','급여형태','출근','퇴근','근무시간','야간h','연장h','휴일h','상태','급여','비고'];
+  let R=2;
+  hdrs.forEach((h,ci)=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),h,S.mainHdr(C.navy,'FFFFFF','center')));
+  ws['!rows'].push({hpt:26});
+  R++;
+
+  // 직원 필터링 (renderTable과 동일)
+  const bks=getActiveBk(cY,cM,cD);
+  const activeDayEmps = applyCommonFilter(EMPS.filter(emp=>{
+    if(!emp.join) return true;
+    const jd=new Date(emp.join);
+    const dayDate=new Date(cY,cM-1,cD);
+    if(jd>dayDate) return false;
+    return true;
+  }), 'daily');
+
+  const payModeLabel={fixed:'소정근무제',hourly:'시급제',monthly:'월급제',pohal:'포괄임금'};
+
+  activeDayEmps.forEach((emp,ei)=>{
+    const k=rk(emp.id,cY,cM,cD);
+    const rec=REC[k]||{start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
+    const autoH=isAutoHol(cY,cM,cD,emp);
+    const rate=getEmpRate(emp);
+    const empPayMode=getEmpPayMode(emp);
+    const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
+
+    let c=null;
+    if(rec.annual){
+      c={work:480,nightM:0,ot:0,basePay:rate*8,nightPay:0,otPay:0,holPay:0,totalPay:rate*8};
+    } else if(rec.halfAnnual){
+      if(rec.start&&rec.end){
+        c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],empPayMode);
+      } else {
+        c={work:240,nightM:0,ot:0,basePay:rate*4,nightPay:0,otPay:0,holPay:0,totalPay:rate*4};
+      }
+    } else if(!rec.absent&&rec.start&&rec.end){
+      c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],empPayMode);
+    }
+
+    let status='';
+    if(rec.annual) status='연차';
+    else if(rec.halfAnnual) status='반차';
+    else if(rec.absent) status='결근';
+    else if(c) status='출근';
+    else status='-';
+
+    const bg = xlsRowBg(ei);
+    let ci=0;
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),ei+1,S.cell(C.gray,bg,false,'center'));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),emp.name||'',S.cell(C.gray,bg,false,'center'));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),payModeLabel[empPayMode]||empPayMode,S.cell(C.gray,bg,false,'center'));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),rec.start||'',S.cell(C.gray,bg,false,'center'));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),rec.end||'',S.cell(C.gray,bg,false,'center'));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c?Math.round(c.work/60*100)/100:0,S.num(C.gray,bg,false,'center'));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c?Math.round(c.nightM/60*100)/100:0,S.num(C.gray,bg,false,'center'));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c?Math.round(c.ot/60*100)/100:0,S.num(C.gray,bg,false,'center'));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c&&autoH?Math.round(c.work/60*100)/100:0,S.num(C.gray,bg,false,'center'));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),status,S.cell(
+      status==='연차'||status==='반차'?C.green:status==='결근'?C.rose:C.gray,bg,false,'center'));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c?Math.round(c.totalPay):0,S.num(C.gray,bg,false,'right'));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),rec.note||'',S.cell(C.gray,bg,false,'left'));
+    ws['!rows'].push({hpt:22});
+    R++;
+  });
+
+  xlsRange(ws,0,0,R-1,hdrs.length-1);
+  ws['!cols']=hdrs.map((_,i)=>({wch:i===1?12:i===2?12:i===10?14:i===11?16:10}));
+  XLSX.utils.book_append_sheet(wb,ws,'출퇴근기록');
+  XLSX.writeFile(wb,`출퇴근기록_${dateStr}.xlsx`);
 }
 
 
@@ -6087,7 +6182,7 @@ function initLandingEffects(){
 }
 
 // ══ 근무형태 관리 ══
-let shiftSelected=new Set(),shiftFilter='전체';
+let shiftSelected=new Set(),shiftFilter='전체',shiftSubF={shift:'all',nation:'all'};
 
 function renderShiftList(){
   const search=(document.getElementById('shift-search')?.value||'').toLowerCase();
@@ -6102,6 +6197,10 @@ function renderShiftList(){
     counts['전체']++;counts[fk]=(counts[fk]||0)+1;
     if(shiftFilter!=='전체'&&fk!==shiftFilter)return;
     if(search&&!(emp.name||'').toLowerCase().includes(search))return;
+    if(shiftSubF.shift!=='all'&&(emp.shift||'day')!==shiftSubF.shift)return;
+    const isFor=emp.nation==='foreign'||emp.foreigner===true;
+    if(shiftSubF.nation==='korean'&&isFor)return;
+    if(shiftSubF.nation==='foreign'&&!isFor)return;
     visible++;
     const isNight=emp.shift==='night';
     const sBadge=isNight
@@ -6139,8 +6238,17 @@ function renderShiftList(){
   Object.keys(counts).forEach(k=>{const el=document.getElementById('sf-cnt-'+k);if(el)el.textContent=counts[k];});
 }
 
+function setShiftSubFilter(key, val, btn){
+  shiftSubF[key] = val;
+  if(btn){
+    const grp = btn.closest('div');
+    if(grp) grp.querySelectorAll('.shift-ftab').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on');
+  }
+  renderShiftList();
+}
 function setShiftFilter(btn){
-  document.querySelectorAll('.shift-ftab').forEach(b=>b.classList.remove('on'));
+  btn.closest('div').querySelectorAll('.shift-ftab').forEach(b=>b.classList.remove('on'));
   btn.classList.add('on');shiftFilter=btn.dataset.f;shiftSelected.clear();updateShiftToolbar();renderShiftList();
 }
 function shiftToggleRow(id){const row=document.getElementById('shift-row-'+id);const cb=row?.querySelector('input[type=checkbox]');if(cb){cb.checked=!cb.checked;shiftCheckRow(id,cb);}}
