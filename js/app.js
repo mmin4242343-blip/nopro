@@ -6487,6 +6487,8 @@ async function admDeleteUser(id){
   document.querySelector('.app').style.display='none';
   const sess=getNoproSession();
   if(!sess){ showLanding(); return; }
+  // 세션이 있으면 랜딩페이지를 즉시 숨김 (깜빡임 방지)
+  document.getElementById('landing-overlay').style.display='none';
   try{
     const res=await apiFetch('/auth-verify','POST');
     if(!res.valid) throw new Error('invalid');
