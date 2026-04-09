@@ -3392,10 +3392,93 @@ const _origApply = typeof applyChangeDate === 'function' ? applyChangeDate : nul
 
 
 // ══════════════════════════════════════
+// 📁 파일 스토리지 헬퍼 (Supabase Storage)
+// ══════════════════════════════════════
+const _fileUrlCache = {};
+async function getFileUrls(paths) {
+  if (!paths.length) return {};
+  const now = Date.now();
+  const uncached = paths.filter(p => !_fileUrlCache[p] || _fileUrlCache[p].expires < now);
+  if (uncached.length > 0) {
+    try {
+      const res = await apiFetch('/file-url', 'POST', { paths: uncached });
+      Object.entries(res.urls || {}).forEach(([path, url]) => {
+        _fileUrlCache[path] = { url, expires: now + 50 * 60 * 1000 };
+      });
+    } catch (e) { console.warn('File URL fetch failed:', e); }
+  }
+  const result = {};
+  paths.forEach(p => { if (_fileUrlCache[p]) result[p] = _fileUrlCache[p].url; });
+  return result;
+}
+
+async function uploadFileToStorage(file, category, categoryId) {
+  let processedFile = file;
+  if (file.type.startsWith('image/') && file.size > 800 * 1024) {
+    processedFile = await compressImage(file);
+  }
+  const base64 = await fileToBase64(processedFile);
+  const res = await apiFetch('/file-upload', 'POST', {
+    fileName: file.name,
+    fileData: base64,
+    fileType: processedFile.type || file.type || 'application/octet-stream',
+    category,
+    categoryId: String(categoryId || 'general')
+  });
+  return res;
+}
+
+async function deleteFileFromStorage(path) {
+  if (!path) return;
+  try { await apiFetch('/file-delete', 'POST', { path }); } catch (e) { console.warn('File delete failed:', e); }
+}
+
+function fileToBase64(file) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function compressImage(file, maxWidth = 1920, quality = 0.82) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if (w <= maxWidth && file.size <= 1.5 * 1024 * 1024) { URL.revokeObjectURL(img.src); resolve(file); return; }
+      if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => {
+        URL.revokeObjectURL(img.src);
+        if (blob) resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+        else resolve(file);
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(img.src); resolve(file); };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function loadStorageImages(container) {
+  const imgs = container.querySelectorAll('img[data-spath]');
+  if (!imgs.length) return;
+  const paths = Array.from(imgs).map(img => img.dataset.spath);
+  getFileUrls(paths).then(urls => {
+    imgs.forEach(img => {
+      const url = urls[img.dataset.spath];
+      if (url) { img.src = url; img.style.opacity = '1'; }
+    });
+  });
+}
+
+// ══════════════════════════════════════
 // 📁 폴더 관리
 // ══════════════════════════════════════
 let FOLDERS = JSON.parse(localStorage.getItem('npm5_folders')||'[]');
-// 구조: [{id, name, parentId:null|id, files:[{name,dataUrl,size,type,date}], open:bool}]
+// 구조: [{id, name, parentId:null|id, files:[{name,storagePath,size,type,date} | {name,dataUrl(레거시)}], open:bool}]
 // 루트 폴더: parentId=null
 
 function saveFolders(){localStorage.setItem('npm5_folders',JSON.stringify(FOLDERS));}
@@ -3463,14 +3546,18 @@ function renameFolder(id){
 }
 
 function deleteFolder(id){
-  // 삭제 확인 (confirm 대신 즉시 삭제)
-  // 하위 폴더도 모두 삭제
   const toDelete=[id];
   let changed=true;
   while(changed){
     changed=false;
     FOLDERS.forEach(f=>{if(!toDelete.includes(f.id)&&toDelete.includes(f.parentId)){toDelete.push(f.id);changed=true;}});
   }
+  // 삭제 대상 폴더의 파일들을 스토리지에서도 삭제
+  const storagePaths=[];
+  FOLDERS.filter(f=>toDelete.includes(f.id)).forEach(f=>{
+    (f.files||[]).forEach(file=>{if(file.storagePath) storagePaths.push(file.storagePath);});
+  });
+  if(storagePaths.length) apiFetch('/file-delete','POST',{paths:storagePaths}).catch(e=>console.warn(e));
   FOLDERS=FOLDERS.filter(f=>!toDelete.includes(f.id));
   saveFolders(); renderFolder();
 }
@@ -3478,40 +3565,85 @@ function deleteFolder(id){
 function uploadFile(folderId){
   const input=document.createElement('input');
   input.type='file'; input.multiple=true;
-  input.onchange=()=>{
+  input.onchange=async()=>{
     const folder=FOLDERS.find(f=>f.id===folderId);
     if(!folder) return;
-    Array.from(input.files).forEach(file=>{
-      const reader=new FileReader();
-      reader.onload=e=>{
+    if(typeof showSyncToast==='function') showSyncToast('파일 업로드 중...','info');
+    for(const file of Array.from(input.files)){
+      try{
+        const res=await uploadFileToStorage(file,'folder',folderId);
         folder.files.push({
           id:Date.now()+Math.random(),
           name:file.name,
-          dataUrl:e.target.result,
-          size:file.size,
+          storagePath:res.path,
+          size:res.size||file.size,
           type:file.type,
           date:new Date().toLocaleDateString('ko-KR')
         });
-        saveFolders(); renderFolder();
-      };
-      reader.readAsDataURL(file);
-    });
+        saveFolders();
+      }catch(e){
+        console.error('Upload failed:',e);
+        if(typeof showSyncToast==='function') showSyncToast(file.name+' 업로드 실패','warn');
+      }
+    }
+    if(typeof showSyncToast==='function') showSyncToast('업로드 완료','ok');
+    renderFolder();
   };
   input.click();
 }
 
-function downloadFile(folderId, fileId){
+async function downloadFile(folderId, fileId){
   const folder=FOLDERS.find(f=>f.id===folderId);
   if(!folder) return;
   const file=folder.files.find(f=>f.id===fileId);
   if(!file) return;
-  const a=document.createElement('a');
-  a.href=file.dataUrl; a.download=file.name; a.click();
+  if(file.dataUrl){
+    const a=document.createElement('a');
+    a.href=file.dataUrl; a.download=file.name; a.click();
+    return;
+  }
+  if(file.storagePath){
+    try{
+      const urls=await getFileUrls([file.storagePath]);
+      const url=urls[file.storagePath];
+      if(url){const a=document.createElement('a');a.href=url;a.download=file.name;a.target='_blank';a.click();}
+    }catch(e){if(typeof showSyncToast==='function') showSyncToast('다운로드 실패','warn');}
+  }
+}
+
+async function previewFile(folderId, fileId){
+  const folder=FOLDERS.find(f=>f.id===folderId);
+  if(!folder) return;
+  const file=folder.files.find(f=>f.id===fileId);
+  if(!file) return;
+  let url=file.dataUrl||'';
+  if(file.storagePath){
+    const urls=await getFileUrls([file.storagePath]);
+    url=urls[file.storagePath]||'';
+  }
+  if(!url) return;
+  const lb=document.createElement('div');
+  lb.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(4px)';
+  if(file.type&&file.type.startsWith('image/')){
+    lb.innerHTML=`<img src="${url}" style="max-width:90vw;max-height:90vh;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.4)">`;
+  }else{
+    lb.innerHTML=`<div style="background:#fff;border-radius:16px;padding:32px;text-align:center;max-width:400px">
+      <div style="font-size:48px;margin-bottom:12px">${getFileIcon(file.type)}</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:8px">${esc(file.name)}</div>
+      <div style="font-size:12px;color:#666;margin-bottom:16px">${fmtSize(file.size)}</div>
+      <a href="${url}" download="${esc(file.name)}" target="_blank" onclick="event.stopPropagation()"
+        style="display:inline-block;padding:10px 24px;background:var(--navy);color:#fff;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px">다운로드</a>
+    </div>`;
+  }
+  lb.addEventListener('click',e=>{if(e.target===lb)lb.remove();});
+  document.body.appendChild(lb);
 }
 
 function deleteFile(folderId, fileId){
   const folder=FOLDERS.find(f=>f.id===folderId);
   if(!folder) return;
+  const file=folder.files.find(f=>f.id===fileId);
+  if(file&&file.storagePath) deleteFileFromStorage(file.storagePath);
   folder.files=folder.files.filter(f=>f.id!==fileId);
   saveFolders(); renderFolder();
 }
@@ -3663,6 +3795,7 @@ function renderFolder(){
             <div style="font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${file.name}</div>
             <div style="font-size:10px;color:var(--ink3)">${fmtSize(file.size)} · ${file.date}</div>
           </div>
+          <button class="btn btn-xs" onclick="previewFile(${currentFolderId},${file.id})" title="미리보기">👁️</button>
           <button class="btn btn-xs" onclick="downloadFile(${currentFolderId},${file.id})" title="다운로드">⬇️</button>
           <button class="btn btn-xs" onclick="deleteFile(${currentFolderId},${file.id})" style="color:var(--rose)" title="삭제">✕</button>
         </div>`).join('') : `
@@ -4425,7 +4558,9 @@ function renderSafety(){
       const card=document.createElement('div');
       card.className='sf-img-card';
       const img=document.createElement('img');
-      img.src=p.data; img.alt=`서명일지 ${i+1}`; img.style.cursor='zoom-in';
+      if(p.data) img.src=p.data;
+      else if(p.storagePath){img.dataset.spath=p.storagePath;img.src='';img.style.opacity='0.3';img.style.transition='opacity .3s';}
+      img.alt=`서명일지 ${i+1}`; img.style.cursor='zoom-in';
       img.addEventListener('click',()=>sfZoom(p.id,key));
       card.appendChild(img);
       const btnRow=document.createElement('div');
@@ -4449,6 +4584,7 @@ function renderSafety(){
             setTimeout(()=>{if(delReady){delReady=false;delBtn.textContent='🗑 삭제';delBtn.style.background='#FEE2E2';delBtn.style.color='var(--rose)';delBtn.style.borderColor='#FECACA';}},2500);
           } else {
             if(!SAFETY_REC[key])return;
+            if(p.storagePath) deleteFileFromStorage(p.storagePath);
             SAFETY_REC[key]=SAFETY_REC[key].filter(ph=>ph.id!==p.id);
             if(SAFETY_REC[key].length===0)delete SAFETY_REC[key];
             sfSave();renderSafety();
@@ -4464,31 +4600,47 @@ function renderSafety(){
       grid.appendChild(card);
     });
     el.appendChild(grid);
+    loadStorageImages(grid);
   }
 }
-function sfHandleFiles(files){
+async function sfHandleFiles(files){
   if(!files||files.length===0)return;
   const key=sfKey();
   if(!SAFETY_REC[key])SAFETY_REC[key]=[];
-  let loaded=0;
-  Array.from(files).forEach(file=>{
-    if(!file.type.startsWith('image/'))return;
-    const reader=new FileReader();
-    reader.onload=ev=>{
-      SAFETY_REC[key].push({id:'sf_'+Date.now()+'_'+Math.random().toString(36).slice(2),data:ev.target.result,name:file.name,ts:Date.now()});
-      loaded++;
-      if(loaded===files.length||loaded===Array.from(files).filter(f=>f.type.startsWith('image/')).length){sfSave();renderSafety();}
-    };
-    reader.readAsDataURL(file);
-  });
+  const imageFiles=Array.from(files).filter(f=>f.type.startsWith('image/'));
+  if(!imageFiles.length)return;
+  if(typeof showSyncToast==='function') showSyncToast('사진 업로드 중...','info');
+  for(const file of imageFiles){
+    try{
+      const res=await uploadFileToStorage(file,'safety',key);
+      SAFETY_REC[key].push({
+        id:'sf_'+Date.now()+'_'+Math.random().toString(36).slice(2),
+        storagePath:res.path,
+        name:file.name,
+        ts:Date.now()
+      });
+    }catch(e){
+      console.error('Safety photo upload failed:',e);
+      if(typeof showSyncToast==='function') showSyncToast(file.name+' 업로드 실패','warn');
+    }
+  }
+  sfSave();
+  if(typeof showSyncToast==='function') showSyncToast('업로드 완료','ok');
+  renderSafety();
 }
-function sfZoom(id, key){
+async function sfZoom(id, key){
   if(!key)key=sfKey();
   const photos=SAFETY_REC[key]||[];
   const p=photos.find(x=>x.id===id);
   if(!p)return;
+  let src=p.data||'';
+  if(p.storagePath&&!src){
+    const urls=await getFileUrls([p.storagePath]);
+    src=urls[p.storagePath]||'';
+  }
+  if(!src)return;
   const lb=document.createElement('div');lb.className='sf-lightbox';
-  const img=document.createElement('img');img.src=p.data;img.alt='확대';
+  const img=document.createElement('img');img.src=src;img.alt='확대';
   lb.appendChild(img);lb.addEventListener('click',()=>lb.remove());
   document.body.appendChild(lb);
 }
