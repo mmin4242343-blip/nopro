@@ -6364,6 +6364,7 @@ async function sbSaveAll(companyId) {
     {key:'leave_settings', value:JSON.parse(localStorage.getItem('npm5_leave_settings')||'{}')},
     {key:'leave_overrides', value:JSON.parse(localStorage.getItem('npm5_leave_overrides')||'{}')},
     {key:'folders', value:JSON.parse(localStorage.getItem('npm5_folders')||'[]')},
+    {key:'safety', value:SAFETY_REC},
   ];
   await apiFetch('/data-save','POST',{items});
 }
@@ -6385,6 +6386,7 @@ async function sbLoadAll(companyId) {
   if(map.leave_settings) localStorage.setItem('npm5_leave_settings', JSON.stringify(map.leave_settings));
   if(map.leave_overrides)localStorage.setItem('npm5_leave_overrides', JSON.stringify(map.leave_overrides));
   if(map.folders)        localStorage.setItem('npm5_folders', JSON.stringify(map.folders));
+  if(map.safety)         { SAFETY_REC = map.safety; localStorage.setItem('npm5_safety', JSON.stringify(SAFETY_REC)); }
 
   return map;
 }

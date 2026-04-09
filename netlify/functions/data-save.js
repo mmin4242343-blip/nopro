@@ -3,7 +3,7 @@ import { verifyToken, ok, err, options } from './_shared/auth.js';
 import { encryptEmps } from './_shared/crypto.js';
 
 // 대용량 키는 감사 로그에서 old_value를 생략 (저장 공간 절약)
-const SKIP_OLD_VALUE_KEYS = ['rec', 'tbk'];
+const SKIP_OLD_VALUE_KEYS = ['rec', 'tbk', 'folders', 'safety'];
 
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return options(event);
@@ -18,7 +18,7 @@ export const handler = async (event) => {
     const body = JSON.parse(event.body);
 
     // 단일 저장 또는 bulk 저장
-    const ALLOWED_KEYS = ['emps','pol','bk','tbk','rec','bonus','allow','tax','leave_settings','leave_overrides'];
+    const ALLOWED_KEYS = ['emps','pol','bk','tbk','rec','bonus','allow','tax','leave_settings','leave_overrides','folders','safety'];
     const items = body.items || [{ key: body.key, value: body.value }];
 
     for (const item of items) {
