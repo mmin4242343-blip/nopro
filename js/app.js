@@ -980,14 +980,40 @@ function makeFilterBar(tab){
   </div>`;
 }
 
+function renderFilterBar(containerId, tab){
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  const existing = el.querySelector('.filter-search input');
+  if(existing && document.activeElement === existing){
+    // 검색 input에 포커스 중이면 버튼 상태만 업데이트하고 input은 보존
+    const f = F[tab];
+    el.querySelectorAll('.filter-group').forEach((grp, gi)=>{
+      const key = ['shift','nation','pay'][gi];
+      if(!key) return;
+      grp.querySelectorAll('.fb').forEach(b=>{
+        b.classList.remove('on','on-night','on-foreign');
+        const vals = [['all','day','night'],['all','korean','foreign'],['all','fixed','hourly','monthly']][gi];
+        const idx = Array.from(grp.children).indexOf(b);
+        const bVal = vals[idx];
+        if(bVal === f[key]){
+          if(bVal==='night') b.classList.add('on-night');
+          else if(bVal==='foreign') b.classList.add('on-foreign');
+          else b.classList.add('on');
+        }
+      });
+    });
+    return;
+  }
+  el.innerHTML = makeFilterBar(tab);
+}
+
 let payFilter = 'all';
 function setPayFilter(f){ payFilter=f; }
 function filterEmpsByPay(emps){
   return applyCommonFilter(emps, 'payroll');
 }
 function renderTable(){
-  const _dfb = document.getElementById('daily-filter-bar');
-  if(_dfb) _dfb.innerHTML = makeFilterBar('daily');
+  renderFilterBar('daily-filter-bar','daily');
   const bks=getActiveBk(cY,cM,cD);
   const activeDayEmps = applyCommonFilter(EMPS.filter(emp=>{
     if(!emp.join) return true;
@@ -1603,8 +1629,7 @@ function setPvMode(m){
   if(!isCard)renderXlPreview();
 }
 function renderPayroll(){
-  const _pfb = document.getElementById('payroll-filter-bar');
-  if(_pfb) _pfb.innerHTML = makeFilterBar('payroll');
+  renderFilterBar('payroll-filter-bar','payroll');
   document.getElementById('pv-title').textContent=`${pY}년 ${pM}월 급여 요약`;
   let gt={base:0,nt:0,ot:0,hol:0,al:0,bonus:0,allow:0,ded:0,total:0};
   // 해당 월에 재직 중인 직원만
@@ -2191,8 +2216,7 @@ function xlEdit(empId, field, rawText) {
 // ══════════════════════════════════════
 
 function renderEmps(){
-  const _efb = document.getElementById('emps-filter-bar');
-  if(_efb) _efb.innerHTML = makeFilterBar('emps');
+  renderFilterBar('emps-filter-bar','emps');
   let sorted=[...EMPS].sort((a,b)=>{
     // 퇴사자 맨 뒤
     if(!a.leave&&b.leave)return -1;
@@ -4657,8 +4681,7 @@ function getLeavePayAmount(emp, year) {
 }
 
 function renderLeave() {
-  const _lfb = document.getElementById('leave-filter-bar');
-  if(_lfb) _lfb.innerHTML = makeFilterBar('leave');
+  renderFilterBar('leave-filter-bar','leave');
   document.getElementById('leave-year-disp').textContent = leaveYear;
 
   // payMode select 동기화
