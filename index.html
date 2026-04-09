@@ -1243,8 +1243,7 @@ document.addEventListener('click',e=>{
       <button class="btn btn-sm btn-t" onclick="exportEmpsExcel()">⬇ 엑셀 내보내기</button>
       <button class="btn btn-sm" onclick="document.getElementById('excel-upload-input').click()" style="color:var(--green);border-color:#6EE7B7;background:#ECFDF5">⬆ 엑셀 업로드</button>
       <input type="file" id="excel-upload-input" accept=".xlsx,.xls" style="display:none" onchange="importEmpsExcel(this)">
-      <button class="btn btn-n btn-sm" onclick="addEmp()">+ 직원 추가</button>
-      <button class="btn btn-sm" onclick="openBulkAdd()" style="color:var(--navy2);border-color:var(--navy2)">📋 일괄 추가</button>
+      <button class="btn btn-n btn-sm" onclick="openBulkAdd()" style="color:var(--navy2);border-color:var(--navy2)">📋 직원 등록</button>
       <button class="btn btn-sm" onclick="rmAllEmps()" style="color:var(--rose);border-color:#FECACA">🗑 전직원 삭제</button>
     </div>
     </div>

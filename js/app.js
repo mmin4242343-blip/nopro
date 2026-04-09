@@ -2436,7 +2436,7 @@ function updE(id,f,v){
 }
 
 // ══════════════════════════════════════
-// 📋 직원 일괄 추가
+// 📋 직원 등록
 // ══════════════════════════════════════
 
 const BULK_COLS = [
@@ -2493,7 +2493,7 @@ function openBulkAdd(){
     <div style="background:#fff;border-radius:16px;width:100%;max-width:1260px;box-shadow:0 24px 80px rgba(0,0,0,.3);display:flex;flex-direction:column;height:100%;max-height:calc(100vh - 40px)">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:2px solid var(--bd2);flex-shrink:0;background:#F8FAFC;border-radius:16px 16px 0 0">
         <div>
-          <div style="font-size:16px;font-weight:700;color:var(--ink)">📋 직원 일괄 추가</div>
+          <div style="font-size:16px;font-weight:700;color:var(--ink)">📋 직원 등록</div>
           <div style="font-size:10.5px;color:var(--ink3);margin-top:2px">
             Tab/→: 이동 · Enter: 아래 · Shift+클릭/드래그: 범위선택 · Ctrl+C: 복사 · Ctrl+V: 붙여넣기(엑셀 복붙 가능!) · Delete: 지우기
           </div>
