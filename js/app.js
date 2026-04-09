@@ -4116,8 +4116,8 @@ function exportDailyExcel(){
 
   xlsRange(ws,0,0,R-1,hdrs.length-1);
   ws['!cols']=hdrs.map((_,i)=>({wch:i===1?12:i===2?12:i===10?14:i===11?16:10}));
-  XLSX.utils.book_append_sheet(wb,ws,'출퇴근기록');
-  XLSX.writeFile(wb,`출퇴근기록_${dateStr}.xlsx`);
+  XLSX.utils.book_append_sheet(wb,ws,`${cM}M${cD}D`);
+  XLSX.writeFile(wb,`출퇴근기록_${dateStr}.xlsx`,{bookType:'xlsx',type:'binary'});
 }
 
 
