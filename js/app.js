@@ -1356,6 +1356,97 @@ function saveDay(){
 
 function clearDay(){EMPS.forEach(e=>delete REC[rk(e.id,cY,cM,cD)]);saveLS();renderTable();}
 
+function openMoveDate(){
+  const empCount=EMPS.filter(e=>{
+    const k=rk(e.id,cY,cM,cD);const rec=REC[k]||{};
+    return rec.start||rec.end||rec.absent||rec.annual;
+  }).length;
+  if(empCount===0){showSyncToast('이 날 입력된 데이터가 없습니다.','warn');return;}
+  const fromStr=`${cY}년 ${cM}월 ${cD}일`;
+  const bg=document.createElement('div');
+  bg.id='move-date-modal';
+  bg.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;';
+  bg.innerHTML=`
+    <div style="background:var(--card);border-radius:16px;padding:24px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+      <div style="font-size:15px;font-weight:700;color:var(--ink);margin-bottom:6px;">📅 날짜 이동</div>
+      <div style="font-size:12px;color:var(--ink3);margin-bottom:16px;">
+        <b style="color:var(--ink)">${fromStr}</b> 데이터를 다른 날짜로 이동합니다.<br>
+        <span style="display:inline-block;margin-top:4px;padding:3px 8px;background:var(--nbg);border-radius:6px;font-size:11px;color:var(--navy2);">
+          이동할 직원 수: ${empCount}명 (전체 통으로 이동)
+        </span>
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="font-size:12px;font-weight:600;color:var(--ink);display:block;margin-bottom:6px;">이동할 날짜 선택</label>
+        <input type="date" id="move-date-input"
+          style="width:100%;height:36px;border:1.5px solid var(--bd2);border-radius:8px;padding:0 10px;font-size:13px;font-family:inherit;background:var(--card);color:var(--ink);"
+          value="${cY}-${String(cM).padStart(2,'0')}-${String(cD).padStart(2,'0')}">
+      </div>
+      <div id="move-date-conflict" style="display:none;background:#FFF8F0;border:1px solid #F59E0B;border-radius:8px;padding:10px 12px;font-size:12px;color:#854F0B;margin-bottom:14px;"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="closeMoveDate()" style="padding:7px 16px;border:1px solid var(--bd2);border-radius:8px;background:transparent;font-size:12px;color:var(--ink3);cursor:pointer;font-family:inherit;">취소</button>
+        <button onclick="checkMoveDate()" style="padding:7px 16px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">다음 →</button>
+      </div>
+    </div>`;
+  document.body.appendChild(bg);
+}
+
+function closeMoveDate(){
+  const el=document.getElementById('move-date-modal');
+  if(el) el.remove();
+}
+
+function checkMoveDate(){
+  const inp=document.getElementById('move-date-input');
+  if(!inp||!inp.value){showSyncToast('날짜를 선택해주세요.','warn');return;}
+  const d=new Date(inp.value);
+  const tY=d.getFullYear(),tM=d.getMonth()+1,tD=d.getDate();
+  if(tY===cY&&tM===cM&&tD===cD){showSyncToast('현재와 같은 날짜입니다.','warn');return;}
+
+  const srcEmps=EMPS.filter(e=>{const k=rk(e.id,cY,cM,cD);const rec=REC[k]||{};return rec.start||rec.end||rec.absent||rec.annual;});
+  const conflictEmps=srcEmps.filter(e=>{const k=rk(e.id,tY,tM,tD);const rec=REC[k]||{};return rec.start||rec.end||rec.absent||rec.annual;});
+  const toStr=`${tY}년 ${tM}월 ${tD}일`;
+
+  if(conflictEmps.length>0){
+    const div=document.getElementById('move-date-conflict');
+    if(div){
+      div.style.display='block';
+      div.innerHTML=`
+        ⚠️ <b>${toStr}</b>에 이미 ${conflictEmps.length}명의 데이터가 있습니다.<br>
+        <span style="color:#6B7280">${conflictEmps.map(e=>e.name).join(', ')}</span><br>
+        <div style="display:flex;gap:6px;margin-top:10px;">
+          <button onclick="execMoveDate(${tY},${tM},${tD},'overwrite')"
+            style="padding:5px 12px;background:#EF4444;color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;">기존 데이터 덮어쓰기</button>
+          <button onclick="execMoveDate(${tY},${tM},${tD},'keep')"
+            style="padding:5px 12px;background:var(--navy);color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;">기존 데이터 유지</button>
+        </div>`;
+    }
+  } else {
+    execMoveDate(tY,tM,tD,'overwrite');
+  }
+}
+
+function execMoveDate(tY,tM,tD,mode){
+  const srcEmps=EMPS.filter(e=>{const k=rk(e.id,cY,cM,cD);const rec=REC[k]||{};return rec.start||rec.end||rec.absent||rec.annual;});
+  const fromStr=`${cY}년 ${cM}월 ${cD}일`;
+  const toStr=`${tY}년 ${tM}월 ${tD}일`;
+  let moved=0;
+  srcEmps.forEach(e=>{
+    const srcKey=rk(e.id,cY,cM,cD);
+    const dstKey=rk(e.id,tY,tM,tD);
+    const srcRec=REC[srcKey];
+    if(!srcRec) return;
+    const dstExists=REC[dstKey]&&(REC[dstKey].start||REC[dstKey].end||REC[dstKey].absent||REC[dstKey].annual);
+    if(!(dstExists&&mode==='keep')) REC[dstKey]={...srcRec};
+    delete REC[srcKey];
+    moved++;
+  });
+  saveLS();
+  closeMoveDate();
+  showSyncToast(`${fromStr} → ${toStr} 이동 완료 (${moved}명)`,'ok');
+  cY=tY;cM=tM;cD=tD;
+  updDbar();renderBks();renderTable();
+}
+
 // 개별 휴게시간 함수
 function setCustomBk(eid,idx,field,raw){
   const k=rk(eid,cY,cM,cD);
@@ -6595,119 +6686,213 @@ function renderMyInfo(){
   const sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
   const cont = document.getElementById('myinfo-content');
   if(!cont) return;
-  if(!sess){ cont.innerHTML='<div style="color:var(--ink3)">세션 정보를 불러올 수 없습니다.</div>'; return; }
+  if(!sess){
+    cont.innerHTML='<div style="color:var(--ink3);padding:40px;text-align:center;">로그인 정보를 불러올 수 없습니다.</div>';
+    return;
+  }
 
   cont.innerHTML=`
-    <div style="background:var(--card);border:1px solid var(--bd);border-radius:14px;overflow:hidden;margin-bottom:20px;">
-      <div style="padding:16px 20px;border-bottom:1px solid var(--bd);font-size:13px;font-weight:700;color:var(--ink);">회사 정보</div>
-      <div style="padding:16px 20px;">
-        ${[
-          ['회사명', sess.company||'-'],
-          ['담당자', sess.name||'-'],
-          ['연락처', sess.phone||'-'],
-          ['이메일', sess.email||'-'],
-          ['직원수', sess.size||'-'],
-          ['가입일', sess.joinDate||'-'],
-          ['비밀번호', '••••••••'],
-        ].map(([label, val])=>`
-          <div style="display:flex;align-items:center;padding:10px 0;border-bottom:1px solid var(--bd);">
-            <span style="width:100px;font-size:12px;color:var(--ink3);flex-shrink:0;">${label}</span>
-            <span style="font-size:13px;color:var(--ink);flex:1;" id="myinfo-${label}">${val}</span>
-            ${label==='비밀번호'?`<button onclick="myinfoTogglePw()"
-              style="font-size:11px;color:var(--navy2);border:1px solid var(--bd2);border-radius:5px;padding:2px 8px;background:transparent;cursor:pointer;">보기</button>`:''}
-          </div>`).join('')}
+  <style>
+  .mi-section{background:var(--card);border:1px solid var(--bd);border-radius:14px;overflow:hidden;margin-bottom:16px;}
+  .mi-section-hd{padding:14px 20px;font-size:12px;font-weight:700;color:var(--ink3);letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid var(--bd);background:var(--surf);}
+  .mi-row{display:flex;align-items:center;padding:14px 20px;border-bottom:1px solid var(--bd);gap:12px;}
+  .mi-row:last-child{border-bottom:none;}
+  .mi-label{font-size:13px;font-weight:500;color:var(--ink);min-width:100px;}
+  .mi-value{font-size:13px;color:var(--ink2);flex:1;}
+  .mi-edit-btn{font-size:12px;color:var(--navy2);border:1px solid var(--bd2);border-radius:7px;padding:4px 12px;background:transparent;cursor:pointer;font-family:inherit;white-space:nowrap;}
+  .mi-edit-btn:hover{background:var(--surf);}
+  .mi-input{flex:1;height:34px;border:1.5px solid var(--bd2);border-radius:8px;padding:0 10px;font-size:13px;font-family:inherit;background:var(--card);color:var(--ink);outline:none;transition:border-color .15s;}
+  .mi-input:focus{border-color:var(--navy2);}
+  .mi-save-btn{padding:5px 14px;background:var(--navy);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;}
+  .mi-cancel-btn{padding:5px 12px;background:transparent;color:var(--ink3);border:1px solid var(--bd2);border-radius:7px;font-size:12px;cursor:pointer;font-family:inherit;}
+  </style>
+
+  <div style="padding:28px 24px 16px;">
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;">
+      <div style="width:60px;height:60px;border-radius:50%;background:var(--nbg);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:var(--navy2);">
+        ${(sess.company||'?')[0]}
+      </div>
+      <div>
+        <div style="font-size:18px;font-weight:700;color:var(--ink);">${esc(sess.company||'-')}</div>
+        <div style="font-size:13px;color:var(--ink3);margin-top:3px;">${esc(sess.email||'-')}</div>
       </div>
     </div>
 
-    <div style="background:var(--card);border:1px solid var(--bd);border-radius:14px;overflow:hidden;">
-      <div style="padding:16px 20px;border-bottom:1px solid var(--bd);font-size:13px;font-weight:700;color:var(--ink);">정보 수정</div>
-      <div style="padding:16px 20px;">
-        <div style="background:#fff8f0;border:1px solid #f59e0b;border-radius:8px;padding:10px 14px;font-size:12px;color:#854f0b;margin-bottom:16px;">
-          현재 비밀번호를 입력해야 정보를 수정할 수 있습니다.
-        </div>
-        <div style="display:flex;flex-direction:column;gap:10px;">
-          ${[
-            ['현재 비밀번호 *', 'mi-cur-pw', 'password', '필수 입력'],
-            ['새 회사명', 'mi-company', 'text', sess.company||''],
-            ['담당자 이름', 'mi-name', 'text', sess.name||''],
-            ['연락처', 'mi-phone', 'tel', sess.phone||''],
-            ['이메일', 'mi-email', 'email', sess.email||''],
-            ['새 비밀번호', 'mi-pw', 'password', '변경 시에만 입력'],
-            ['새 비밀번호 확인', 'mi-pw2', 'password', '변경 시에만 입력'],
-          ].map(([label,id,type,ph])=>`
-            <div style="display:flex;align-items:center;gap:10px;">
-              <span style="width:120px;font-size:12px;color:var(--ink3);flex-shrink:0;">${label}</span>
-              <input id="${id}" type="${type}" placeholder="${ph}"
-                style="flex:1;height:32px;border:1px solid var(--bd2);border-radius:7px;padding:0 10px;font-size:12px;font-family:inherit;background:var(--card);color:var(--ink);">
-            </div>`).join('')}
-          <div id="myinfo-msg" style="font-size:12px;display:none;padding:8px 12px;border-radius:7px;"></div>
-          <button onclick="saveMyInfo()"
-            style="margin-top:8px;padding:9px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">
-            정보 저장
-          </button>
-        </div>
+    <div id="mi-edit-panel" style="display:none;background:var(--card);border:1.5px solid var(--navy2);border-radius:14px;padding:20px;margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:14px;" id="mi-edit-title"></div>
+      <div id="mi-edit-body"></div>
+      <div id="mi-status" style="font-size:12px;padding:6px 12px;border-radius:7px;display:none;margin-top:8px;"></div>
+    </div>
+
+    <div class="mi-section">
+      <div class="mi-section-hd">회사 정보</div>
+      <div class="mi-row">
+        <span class="mi-label">회사명</span>
+        <span class="mi-value" id="disp-company">${esc(sess.company||'-')}</span>
+        <button class="mi-edit-btn" onclick="miStartEdit('company','${esc(sess.company||'')}')">수정</button>
       </div>
-    </div>`;
+      <div class="mi-row">
+        <span class="mi-label">담당자</span>
+        <span class="mi-value" id="disp-name">${esc(sess.name||'-')}</span>
+        <button class="mi-edit-btn" onclick="miStartEdit('name','${esc(sess.name||'')}')">수정</button>
+      </div>
+      <div class="mi-row">
+        <span class="mi-label">연락처</span>
+        <span class="mi-value" id="disp-phone">${esc(sess.phone||'-')}</span>
+        <button class="mi-edit-btn" onclick="miStartEdit('phone','${esc(sess.phone||'')}')">수정</button>
+      </div>
+      <div class="mi-row">
+        <span class="mi-label">직원수</span>
+        <span class="mi-value">${esc(sess.size||'-')}</span>
+      </div>
+      <div class="mi-row">
+        <span class="mi-label">가입일</span>
+        <span class="mi-value">${esc(sess.joinDate||'-')}</span>
+      </div>
+    </div>
+
+    <div class="mi-section">
+      <div class="mi-section-hd">계정 정보</div>
+      <div class="mi-row">
+        <span class="mi-label">이메일</span>
+        <span class="mi-value" id="disp-email">${esc(sess.email||'-')}</span>
+        <button class="mi-edit-btn" onclick="miStartEdit('email','${esc(sess.email||'')}')">수정</button>
+      </div>
+      <div class="mi-row">
+        <span class="mi-label">비밀번호</span>
+        <span class="mi-value" id="disp-pw">••••••••</span>
+        <button class="mi-edit-btn" onclick="miTogglePw('${esc(sess.password||sess.pw||'')}')">보기</button>
+        <button class="mi-edit-btn" onclick="miStartEdit('password','')">변경</button>
+      </div>
+    </div>
+  </div>`;
 }
 
-function myinfoTogglePw(){
-  const sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
-  const el = document.getElementById('myinfo-비밀번호');
+let miEditField = '';
+
+function miTogglePw(pw){
+  const el = document.getElementById('disp-pw');
   if(!el) return;
   if(el.textContent === '••••••••'){
-    el.textContent = sess?.password || sess?.pw || '-';
+    el.textContent = pw || '-';
     el.style.color = 'var(--navy2)';
+    el.style.fontFamily = 'monospace';
   } else {
     el.textContent = '••••••••';
-    el.style.color = 'var(--ink)';
+    el.style.color = '';
+    el.style.fontFamily = '';
   }
 }
 
-async function saveMyInfo(){
-  const sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
-  const msg = document.getElementById('myinfo-msg');
-  const curPw = document.getElementById('mi-cur-pw')?.value;
-  const newCompany = document.getElementById('mi-company')?.value.trim() || sess?.company;
-  const newName    = document.getElementById('mi-name')?.value.trim()    || sess?.name;
-  const newPhone   = document.getElementById('mi-phone')?.value.trim()   || sess?.phone;
-  const newEmail   = document.getElementById('mi-email')?.value.trim()   || sess?.email;
-  const newPw      = document.getElementById('mi-pw')?.value;
-  const newPw2     = document.getElementById('mi-pw2')?.value;
+function miStartEdit(field, currentVal){
+  miEditField = field;
+  const panel = document.getElementById('mi-edit-panel');
+  const title = document.getElementById('mi-edit-title');
+  const body  = document.getElementById('mi-edit-body');
+  const status= document.getElementById('mi-status');
+  if(!panel||!body) return;
+  status.style.display='none';
 
-  function showMsg(txt, color){
-    if(!msg) return;
-    msg.textContent=txt;
-    msg.style.background=color==='#dc2626'?'#fef2f2':'#f0fdf4';
-    msg.style.color=color;
-    msg.style.border='1px solid '+(color==='#dc2626'?'#fecaca':'#86efac');
-    msg.style.display='block';
+  const labels={company:'회사명',name:'담당자 이름',phone:'연락처',email:'이메일',password:'비밀번호'};
+  title.textContent = labels[field]+' 수정';
+
+  let fields='';
+  if(field==='password'){
+    fields=`
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="width:110px;font-size:12px;color:var(--ink3);flex-shrink:0;">현재 비밀번호</span>
+          <input id="mi-cur-pw" type="password" placeholder="현재 비밀번호 입력" class="mi-input">
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="width:110px;font-size:12px;color:var(--ink3);flex-shrink:0;">새 비밀번호</span>
+          <input id="mi-new-val" type="password" placeholder="새 비밀번호 (6자 이상)" class="mi-input">
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="width:110px;font-size:12px;color:var(--ink3);flex-shrink:0;">비밀번호 확인</span>
+          <input id="mi-confirm-pw" type="password" placeholder="새 비밀번호 재입력" class="mi-input">
+        </div>
+      </div>`;
+  } else {
+    fields=`
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="width:110px;font-size:12px;color:var(--ink3);flex-shrink:0;">현재 비밀번호</span>
+          <input id="mi-cur-pw" type="password" placeholder="본인 확인을 위해 입력" class="mi-input">
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="width:110px;font-size:12px;color:var(--ink3);flex-shrink:0;">${labels[field]}</span>
+          <input id="mi-new-val" type="${field==='email'?'email':'text'}" value="${currentVal}"
+            placeholder="새 ${labels[field]} 입력" class="mi-input">
+        </div>
+      </div>`;
   }
 
-  if(!curPw){ showMsg('현재 비밀번호를 입력해주세요.','#dc2626'); return; }
-  if(newPw && newPw!==newPw2){ showMsg('새 비밀번호가 일치하지 않습니다.','#dc2626'); return; }
+  body.innerHTML = fields + `
+    <div style="display:flex;gap:8px;">
+      <button class="mi-save-btn" onclick="miSaveField()">저장</button>
+      <button class="mi-cancel-btn" onclick="miCancelEdit()">취소</button>
+    </div>`;
+
+  panel.style.display='block';
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+  document.getElementById('mi-cur-pw')?.focus();
+}
+
+function miCancelEdit(){
+  const panel=document.getElementById('mi-edit-panel');
+  if(panel) panel.style.display='none';
+  miEditField='';
+}
+
+function miShowStatus(msg, ok){
+  const el=document.getElementById('mi-status');
+  if(!el) return;
+  el.textContent=msg;
+  el.style.display='block';
+  el.style.background=ok?'var(--tbg)':'#FEF2F2';
+  el.style.color=ok?'var(--teal)':'#DC2626';
+  el.style.border='1px solid '+(ok?'#6EE7B7':'#FECACA');
+}
+
+async function miSaveField(){
+  const sess=JSON.parse(localStorage.getItem('nopro_session')||'null');
+  if(!sess) return;
+  const curPw=document.getElementById('mi-cur-pw')?.value;
+  const newVal=document.getElementById('mi-new-val')?.value?.trim();
+  const confirmPw=document.getElementById('mi-confirm-pw')?.value;
+
+  if(!curPw){ miShowStatus('현재 비밀번호를 입력해주세요.',false); return; }
+  if(!newVal){ miShowStatus('새 값을 입력해주세요.',false); return; }
+  if(miEditField==='password'&&newVal!==confirmPw){ miShowStatus('새 비밀번호가 일치하지 않습니다.',false); return; }
+  if(miEditField==='password'&&newVal.length<6){ miShowStatus('비밀번호는 6자 이상이어야 합니다.',false); return; }
 
   try {
-    await apiFetch('/auth-update','POST',{
-      currentPassword:curPw, company:newCompany, name:newName,
-      phone:newPhone, email:newEmail, password:newPw||undefined
-    });
-    const updatedSess={...sess,company:newCompany,name:newName,phone:newPhone,email:newEmail};
-    if(newPw) updatedSess.password=newPw;
+    const body={currentPassword:curPw};
+    body[miEditField]=newVal;
+    await apiFetch('/auth-update','POST',body);
+
+    const updatedSess={...sess,[miEditField]:newVal};
     setNoproSession(updatedSess);
 
-    const changed=[];
-    if(newCompany!==sess?.company) changed.push('회사명');
-    if(newName!==sess?.name) changed.push('담당자명');
-    if(newPhone!==sess?.phone) changed.push('연락처');
-    if(newEmail!==sess?.email) changed.push('이메일');
-    if(newPw) changed.push('비밀번호');
-    if(changed.length>0){
-      admSendNotify('profile_change',{company:newCompany,email:newEmail,fields:changed.join(', ')});
+    const dispMap={company:'disp-company',name:'disp-name',phone:'disp-phone',email:'disp-email'};
+    if(dispMap[miEditField]){
+      const el=document.getElementById(dispMap[miEditField]);
+      if(el) el.textContent=newVal;
     }
-    showMsg('정보가 저장되었습니다.','#16a34a');
-    renderMyInfo();
+
+    const labels={company:'회사명',name:'담당자명',phone:'연락처',email:'이메일',password:'비밀번호'};
+    admSendNotify('profile_change',{
+      company:updatedSess.company,
+      email:updatedSess.email,
+      fields:labels[miEditField]||miEditField
+    });
+
+    miShowStatus('저장되었습니다!',true);
+    setTimeout(()=>{ miCancelEdit(); renderMyInfo(); },1500);
+
   } catch(e){
-    showMsg(e.message||'저장 실패. 현재 비밀번호를 확인해주세요.','#dc2626');
+    miShowStatus(e.message||'현재 비밀번호가 올바르지 않습니다.',false);
   }
 }
 

@@ -998,6 +998,8 @@ document.addEventListener('click',e=>{
       <button class="btn btn-sm" onclick="fillNormalAttendSelected()" style="color:var(--teal);border-color:var(--teal);">☑ 선택 정상출퇴근</button>
       <button class="btn btn-sm" onclick="applyRecentAll()" title="직원별 가장 최근 출퇴근 기록을 오늘에 불러옵니다" style="color:var(--purple);border-color:var(--purple)">📋 최근 데이터 불러오기</button>
       <button class="btn btn-sm" onclick="exportDailyExcel()" style="color:#065F46;border-color:#065F46;">⬇ 당일 엑셀</button>
+      <button class="btn btn-xs" onclick="clearDay()" style="color:var(--rose);border-color:#FECACA">이 날 초기화</button>
+      <button class="btn btn-sm" onclick="openMoveDate()" style="color:var(--navy2);border-color:var(--navy2);">📅 날짜 이동</button>
       <button class="btn btn-n btn-sm" onclick="saveDay()">저장</button>
     </div>
   </div>
@@ -1054,7 +1056,6 @@ document.addEventListener('click',e=>{
       <tbody id="daily-tbody"></tbody>
     </table>
   </div>
-  <button class="btn btn-xs" onclick="clearDay()" style="color:var(--rose);border-color:#FECACA">이 날 초기화</button>
 </div>
 
 <!-- 월별 현황 -->
