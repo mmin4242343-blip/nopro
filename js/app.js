@@ -909,10 +909,10 @@ function setR(eid,f,v){
 
 // ══ 공통 필터 상태 ══
 const F = {
-  daily:   { shift:'all', nation:'all', pay:'all', search:'' },
-  payroll: { shift:'all', nation:'all', pay:'all', search:'' },
-  leave:   { shift:'all', nation:'all', pay:'all', search:'' },
-  emps:    { shift:'all', nation:'all', pay:'all', search:'' },
+  daily:   { shift:'all', nation:'all', pay:'all', dept:'all', search:'' },
+  payroll: { shift:'all', nation:'all', pay:'all', dept:'all', search:'' },
+  leave:   { shift:'all', nation:'all', pay:'all', dept:'all', search:'' },
+  emps:    { shift:'all', nation:'all', pay:'all', dept:'all', search:'' },
 };
 
 function setFilter(tab, key, val, btn){
@@ -947,6 +947,7 @@ function applyCommonFilter(emps, tab){
     if(f.nation==='korean'  && isFor)  return false;
     if(f.nation==='foreign' && !isFor) return false;
     if(f.pay!=='all' && (emp.payMode||'fixed')!==f.pay) return false;
+    if(f.dept && f.dept!=='all' && (emp.dept||'').trim()!==(f.dept||'').trim()) return false;
     if(f.search && !(emp.name||'').toLowerCase().includes(f.search)) return false;
     return true;
   });
@@ -972,6 +973,18 @@ function makeFilterBar(tab){
       <button class="fb${f.pay==='hourly'?' on':''}" onclick="setFilter('${tab}','pay','hourly',this)">시급제</button>
       <button class="fb${f.pay==='monthly'?' on':''}" onclick="setFilter('${tab}','pay','monthly',this)">포괄임금제</button>
     </div>
+    ${(()=>{
+      const depts=[...new Set(EMPS.map(e=>(e.dept||'').trim()).filter(d=>d))].sort();
+      if(!depts.length) return '';
+      const cur=f.dept||'all';
+      return '<div class="filter-group" style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:2px;">'
+        +[['all','전체'],...depts.map(d=>[d,d])].map(([v,l])=>
+          `<button class="fb${cur===v?' on':''}"
+            style="padding:4px 10px;border-radius:6px;font-size:11px;border:none;cursor:pointer;font-family:inherit;
+              background:${cur===v?'var(--navy)':'transparent'};color:${cur===v?'#fff':'var(--ink3)'};"
+            onclick="setFilter('${tab}','dept','${v}',this)">${l}</button>`
+        ).join('')+'</div>';
+    })()}
     <div class="filter-search">
       <span class="fs-icon">🔍</span>
       <input placeholder="이름 검색..." value="${f.search}"
@@ -1503,6 +1516,16 @@ function cvm(d){vM+=d;if(vM>12){vM=1;vY++;}if(vM<1){vM=12;vY--;}renderMonthly();
 function setMvMode(m){vMode=m;['mv-cal','mv-ov'].forEach((id,i)=>{const el=document.getElementById(id);if(!el)return;const a=(i===0&&m==='cal')||(i===1&&m==='ov');el.style.background=a?'var(--nbg)':'';el.style.color=a?'var(--navy2)':'';el.style.borderColor=a?'var(--navy2)':'var(--bd2)';});renderMonthly();}
 
 let mvFilter = 'all';
+const MF = { shift:'all', nation:'all', dept:'all' };
+function setMvSubFilter(key, val, btn){
+  MF[key] = val;
+  if(btn){
+    const grp = btn.closest('div');
+    if(grp) grp.querySelectorAll('.mvf-sub').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on');
+  }
+  renderMonthly();
+}
 function setMvFilter(f){
   mvFilter = f;
   document.querySelectorAll('.mvf-btn').forEach(b=>{
@@ -1512,9 +1535,28 @@ function setMvFilter(f){
 }
 function renderMonthly(){
   document.getElementById('mv-title').textContent=`${vY}년 ${vM}월 근태 현황`;
+  // 소속 필터 동적 생성
+  const mvDeptDiv = document.getElementById('mv-dept-filter');
+  if(mvDeptDiv){
+    const depts=[...new Set(EMPS.map(e=>(e.dept||'').trim()).filter(d=>d))].sort();
+    if(depts.length){
+      mvDeptDiv.style.display='flex';
+      mvDeptDiv.innerHTML=['all',...depts].map(v=>`
+        <button class="mvf-sub btn btn-xs${MF.dept===v?' on':''}"
+          onclick="setMvSubFilter('dept','${v}',this)"
+          style="font-size:10px;background:${MF.dept===v?'var(--navy)':'transparent'};color:${MF.dept===v?'#fff':'var(--ink3)'};">
+          ${v==='all'?'전체':v}
+        </button>`).join('');
+    } else { mvDeptDiv.style.display='none'; }
+  }
   const mvEmps = EMPS.filter(e=>{
-    if(mvFilter==='all') return true;
-    return (e.payMode||'fixed')===mvFilter;
+    if(mvFilter!=='all' && (e.payMode||'fixed')!==mvFilter) return false;
+    if(MF.shift!=='all' && (e.shift||'day')!==MF.shift) return false;
+    const isFor = e.nation==='foreign'||e.foreigner===true;
+    if(MF.nation==='korean' && isFor) return false;
+    if(MF.nation==='foreign' && !isFor) return false;
+    if(MF.dept!=='all' && (e.dept||'').trim()!==MF.dept) return false;
+    return true;
   });
   // 현재 선택 직원이 필터에 없으면 첫 번째로 리셋
   if(!mvEmps.find(e=>e.id===vEid) && mvEmps.length>0) vEid=mvEmps[0].id;
@@ -4671,12 +4713,7 @@ function countUsedLeave(empId, year) {
 }
 
 function getLeavePayAmount(emp, year) {
-  const mode = leaveSettings.payMode || 'hourly';
   const rate = getEmpRate(emp);
-  const sot = emp.sot || POL.sot || 209;
-  if (mode === 'hourly') return rate * 8;
-  if (mode === 'daily') return rate * (sot / 4.345 / 5);
-  if (mode === 'custom') return leaveSettings.customAmount || rate * 8;
   return rate * 8;
 }
 
@@ -4746,6 +4783,21 @@ function renderLeave() {
           <button onclick="setLeaveType(${emp.id},'promote')"
             style="padding:3px 7px;font-size:9px;border-radius:6px;cursor:pointer;border:1px solid ${leaveType==='promote'?'var(--amber)':'var(--bd)'};background:${leaveType==='promote'?'var(--abg)':'#fff'};color:${leaveType==='promote'?'var(--amber)':'var(--ink3)'};font-weight:700">연차촉진</button>
         </div>
+      </td>
+      <td style="padding:10px 8px;text-align:center;background:#0d2a40">
+        ${(()=>{
+          const hr = getEmpRate(emp);
+          return `<div style="font-size:12px;font-weight:700;color:#7dd3fc">${hr.toLocaleString()}원</div>
+                  <div style="font-size:9px;color:rgba(255,255,255,.5)">시급</div>`;
+        })()}
+      </td>
+      <td style="padding:10px 8px;text-align:center;background:#1e0a33">
+        ${(()=>{
+          const hr = getEmpRate(emp);
+          const remainPay = Math.round(lv.remain * hr * 8);
+          return `<div style="font-size:12px;font-weight:700;color:#c4b5fd">${remainPay.toLocaleString()}원</div>
+                  <div style="font-size:9px;color:rgba(255,255,255,.5)">잔여${lv.remain}일×시급×8h</div>`;
+        })()}
       </td>
       <td style="padding:10px 8px;text-align:center">
         <div style="font-size:12px;font-weight:700;color:var(--purple)">${Math.round(payAmt).toLocaleString()}원</div>
@@ -6536,7 +6588,12 @@ function fillNormalAttend(empIds){
     const k=rk(id,cY,cM,cD);
     if(!REC[k])REC[k]={empId:id,start:'',end:'',absent:false,annual:false,note:'',outTimes:[]};
     REC[k].start=emp.workStart;REC[k].end=emp.workEnd;
-    REC[k].absent=false;REC[k].annual=false;filled++;
+    REC[k].absent=false;REC[k].annual=false;
+    if(emp.workBks && emp.workBks.length > 0){
+      REC[k].customBk = true;
+      REC[k].customBkList = emp.workBks.map(b=>({start:b.start||b.s, end:b.end||b.e}));
+    }
+    filled++;
   });
   if(blocked.length>0&&typeof showSyncToast==='function')
     showSyncToast('휴일 입력 불가: '+blocked.join(', '),'warn');

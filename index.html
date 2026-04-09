@@ -1083,6 +1083,17 @@ document.addEventListener('click',e=>{
         <button class="mvf-btn btn btn-xs" data-f="hourly" onclick="setMvFilter('hourly')">시급</button>
 
       </div>
+      <div style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:3px">
+        <button class="mvf-sub btn btn-xs on" onclick="setMvSubFilter('shift','all',this)" style="font-size:10px">전체</button>
+        <button class="mvf-sub btn btn-xs" onclick="setMvSubFilter('shift','day',this)" style="font-size:10px">주간</button>
+        <button class="mvf-sub btn btn-xs" onclick="setMvSubFilter('shift','night',this)" style="font-size:10px">야간</button>
+      </div>
+      <div style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:3px">
+        <button class="mvf-sub btn btn-xs on" onclick="setMvSubFilter('nation','all',this)" style="font-size:10px">전체</button>
+        <button class="mvf-sub btn btn-xs" onclick="setMvSubFilter('nation','korean',this)" style="font-size:10px">내국인</button>
+        <button class="mvf-sub btn btn-xs" onclick="setMvSubFilter('nation','foreign',this)" style="font-size:10px">외국인</button>
+      </div>
+      <div id="mv-dept-filter" style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:3px"></div>
       <div id="mv-tabs" style="display:flex;gap:3px;flex-wrap:wrap"></div>
       <div style="width:1px;height:14px;background:var(--bd);margin:0 4px"></div>
       <button class="btn btn-sm" id="mv-cal" onclick="setMvMode('cal')" style="background:var(--nbg);color:var(--navy2);border-color:var(--navy2)">캘린더</button>
@@ -1167,16 +1178,18 @@ document.addEventListener('click',e=>{
   <div id="leave-custom-wrap" style="display:none;margin-bottom:12px;align-items:center;gap:8px"><label for="leave-custom-amount" style="font-size:12px;font-weight:700;color:var(--ink)">1일 연차수당 금액:</label><input type="number" id="leave-custom-amount" placeholder="금액 입력" min="0" style="width:120px;padding:6px 10px;font-size:12px;border:1.5px solid var(--bd2);border-radius:8px;font-weight:700" onchange="saveLeaveCustomAmount(this.value)"><span style="font-size:11px;color:var(--ink3)">원</span></div>
 
   <!-- 연차 테이블 -->
-  <div style="background:var(--card);border:1px solid var(--bd);border-radius:16px;overflow:hidden;overflow-x:auto;box-shadow:var(--shadow-sm)">
+  <div style="background:var(--card);border:1px solid var(--bd);border-radius:16px;overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 280px);box-shadow:var(--shadow-sm)">
     <table style="width:100%;border-collapse:collapse;min-width:900px" id="leave-table">
       <thead>
-        <tr style="background:var(--navy)">
+        <tr style="background:var(--navy);position:sticky;top:0;z-index:10;">
           <th style="padding:10px 8px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);text-align:left;padding-left:14px;min-width:80px">이름</th>
           <th style="padding:10px 8px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);text-align:center;min-width:90px">입사일</th>
           <th style="padding:10px 8px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);text-align:center;min-width:70px">총 연차</th>
           <th style="padding:10px 8px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);text-align:center;min-width:70px;background:#0E4D2E">사용 연차</th>
           <th style="padding:10px 8px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);text-align:center;min-width:70px;background:#0A3D5C">잔여 연차</th>
           <th style="padding:10px 8px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);text-align:center;min-width:80px">연차 형태</th>
+          <th style="padding:10px 8px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);text-align:center;min-width:75px;background:#1a3a5c">시급</th>
+          <th style="padding:10px 8px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);text-align:center;min-width:100px;background:#2d1a4f">잔여연차수당</th>
           <th style="padding:10px 8px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);text-align:center;min-width:90px">연차수당</th>
           <th style="padding:10px 8px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);text-align:center;min-width:80px">직접수정</th>
           <th style="padding:10px 8px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);text-align:center;min-width:120px">적립 현황</th>
