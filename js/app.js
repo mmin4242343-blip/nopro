@@ -381,11 +381,33 @@ function calcNightMins(sMin,eMin,bks,outTimes){
   }
   return n;
 }
+// 휴게시간 중 야간대(22~06시)에 해당하는 분 계산
+function calcNightBkMins(sMin,eMin,bks){
+  const ns=(POL.nightStart||22)*60;
+  let n=0;
+  if(!bks||!bks.length) return 0;
+  bks.forEach(b=>{
+    let bs=pT(b.start!==undefined?b.start:b.s);
+    let be=pT(b.end!==undefined?b.end:b.e);
+    if(bs===null||be===null)return;
+    if(eMin>1440){ if(bs<sMin) bs+=1440; if(be<=bs&&be<sMin) be+=1440; else if(be<bs) be+=1440; }
+    if(be<bs) be+=1440;
+    const os=Math.max(sMin,bs), oe=Math.min(eMin,be);
+    if(oe<=os) return;
+    for(let t=os;t<oe;t++){
+      const h=t%1440;
+      if(h>=ns||h<360) n++;
+    }
+  });
+  return n;
+}
+
 function calcSession(start,end,rate,isHol,bks,outTimes,empMode){
   const s=pT(start),eR=pT(end);if(s===null||eR===null)return null;
   const e=rEnd(s,eR);
   const gross=e-s;
   const bkMins=calcBkDeduct(s,e,bks);
+  const nightBkMins=calcNightBkMins(s,e,bks);
   const deduct=bkMins+(calcOutMins(outTimes)||0);
   const work=Math.max(0,gross-deduct);
   const nightM=calcNightMins(s,e,bks,outTimes); // 22~06 야간 분
@@ -400,7 +422,7 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode){
   const otDay=Math.max(0, ot-otNight);
 
   if(mode==='pohal'){
-    return{gross,deduct,bkMins,work,nightM,otDay,otNight,ot,crossed,
+    return{gross,deduct,bkMins,nightBkMins,work,nightM,otDay,otNight,ot,crossed,
       basePay:0,nightPay:0,otDayPay:0,otNightPay:0,
       holDayStdPay:0,holNightStdPay:0,holDayOtPay:0,holNightOtPay:0,totalPay:0};
   }
@@ -418,7 +440,7 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode){
       if(_holMO) holDayOtPay =r10(rate*2.0*(otM/60));
     }
     const totalPay=holDayStdPay+holDayOtPay;
-    return{gross,deduct,bkMins,work,nightM:0,otDay:0,otNight:0,ot:Math.max(0,work-480),crossed,
+    return{gross,deduct,bkMins,nightBkMins,work,nightM:0,otDay:0,otNight:0,ot:Math.max(0,work-480),crossed,
       basePay:0,nightPay:0,otDayPay:0,otNightPay:0,
       holDayStdPay,holNightStdPay:0,holDayOtPay,holNightOtPay:0,totalPay};
   }
@@ -465,7 +487,7 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode){
     const holNightOtPay = 0;
 
     const totalPay=extraWorkPay+otDayPay+nightPay+otNightPay+holPay;
-    return{gross,deduct,bkMins,work,nightM,otDay,otNight,ot,crossed,
+    return{gross,deduct,bkMins,nightBkMins,work,nightM,otDay,otNight,ot,crossed,
       basePay,nightPay,otDayPay,otNightPay,
       holDayStdPay,holNightStdPay,holDayOtPay,holNightOtPay,
       extraWorkPay,holPay,totalPay};
@@ -495,7 +517,7 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode){
       if(_otH&&otNight>0) otNightPay= r10(rate*2.0*(otNight/60));
     }
     const totalPay=basePay+nightPay+otDayPay+otNightPay+holDayStdPay+holNightStdPay+holDayOtPay+holNightOtPay;
-    return{gross,deduct,bkMins,work,nightM,otDay,otNight,ot,crossed,
+    return{gross,deduct,bkMins,nightBkMins,work,nightM,otDay,otNight,ot,crossed,
       basePay,nightPay,otDayPay,otNightPay,
       holDayStdPay,holNightStdPay,holDayOtPay,holNightOtPay,totalPay};
   }
@@ -1118,7 +1140,7 @@ function renderTable(){
         <td><input class="time-inp ${c&&c.crossed?'cross':autoH?'hol-t':''} ${rec.absent||rec.annual?'dis':''}" value="${rec.end||''}" placeholder="1800" ${rec.absent||rec.annual?'disabled':''} data-eid="${emp.id}" data-field="end"
           onblur="handleTimeInput(${emp.id},'end',this.value)"></td>
         <td class="td-w">${c&&isWork?`<div>${holWorkH||fmtH(c.work)}</div><div style="margin-top:1px">${chips.join('')}</div>`:rec.absent?'<span class="chip ch-ab">결근</span>':rec.annual?'<span class="chip ch-al">연차</span>':''}</td>
-        <td class="td-bk" style="font-size:10px;color:#2D6A4F">${c&&c.bkMins>0?fmtH(c.bkMins):''}</td>
+        <td class="td-bk" style="font-size:10px;color:#2D6A4F">${c&&c.bkMins>0?fmtH(c.bkMins)+(c.nightBkMins>0?`<div style="font-size:8px;color:#7C3AED;margin-top:1px">야간${fmtH(c.nightBkMins)}</div>`:''):''}</td>
         <td class="td-nt" style="font-size:10px;color:var(--ink3)"></td>
         <td class="td-ot" style="font-size:10px;color:var(--ink3)"></td>
         <td class="td-hol">${autoH&&holPay>0?`<span style="color:#854F0B;font-weight:700;font-size:11px">${Math.round(holPay/1000)}k</span>`:autoH&&c?fmtH(c.work):''}</td>
@@ -1169,7 +1191,7 @@ function renderTable(){
       <td><input class="time-inp ${eCls} ${rec.absent||rec.annual?'dis':''}" value="${rec.end||''}" placeholder="1800" ${rec.absent||rec.annual?'disabled':''} data-eid="${emp.id}" data-field="end"
         onblur="handleTimeInput(${emp.id},'end',this.value)"></td>
       <td class="td-w">${c?`<div>${fmtH(c.work)}</div><div style="margin-top:1px">${chips.join('')}</div>`:rec.absent?'<span class="chip ch-ab">결근</span>':rec.halfAnnual?'<div><span class="chip" style="background:#E0E7FF;color:#3730A3;font-weight:700">반차</span></div><div style="font-size:9px;color:#0891B2;margin-top:2px">4h</div>':''}</td>
-      <td class="td-bk" style="font-size:10px;color:#2D6A4F">${c&&c.bkMins>0?fmtH(c.bkMins):''}</td>
+      <td class="td-bk" style="font-size:10px;color:#2D6A4F">${c&&c.bkMins>0?fmtH(c.bkMins)+(c.nightBkMins>0?`<div style="font-size:8px;color:#7C3AED;margin-top:1px">야간${fmtH(c.nightBkMins)}</div>`:''):''}</td>
       <td class="td-nt">${c&&!rec.annual&&c.nightM>30?fmtH(c.nightM):''}</td>
       <td class="td-ot">${c&&!rec.annual&&c.ot>0?fmtH(c.ot):''}</td>
       <td class="td-hol">${c&&!rec.annual&&autoH?fmtH(c.work):''}</td>
