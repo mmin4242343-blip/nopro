@@ -2290,7 +2290,7 @@ function renderEmps(){
       style="transition:all .15s;${e.leave?'opacity:.5;background:var(--rose-dim);':''}cursor:pointer;">
       <td><span style="cursor:grab;color:var(--ink3);font-size:14px;padding:0 4px;">⠿</span></td>
       <td style="text-align:center;font-size:11px;font-weight:700;color:#94A3B8;padding:0 4px">${rowNum}</td>
-      <td><input class="ei2" value="${e.empNo||''}" onchange="updE(${e.id},'empNo',this.value)" style="width:40px;text-align:center" placeholder="번호"></td>
+      <td><input class="ei2" value="${e.empNo||''}" onchange="updE(${e.id},'empNo',this.value)" style="width:88px;text-align:center;font-size:10px" placeholder="사번"></td>
       <td><input class="ei2" value="${esc(e.name)}" onchange="updE(${e.id},'name',this.value)" style="width:56px" placeholder="이름"></td>
       <td><input class="ei2" value="${esc(e.role)}" onchange="updE(${e.id},'role',this.value)" style="width:52px"></td>
       <td><input class="ei2" value="${esc(e.grade||'')}" onchange="updE(${e.id},'grade',this.value)" style="width:52px" placeholder="직급"></td>
@@ -2354,7 +2354,42 @@ function renderEmps(){
       </td>
     </tr>`;
   }).join('');
+  initColResize();
 }
+
+// 직원관리 테이블 헤더 드래그 리사이즈
+function initColResize(){
+  const table=document.querySelector('.emt');
+  if(!table)return;
+  const ths=table.querySelectorAll('thead th');
+  ths.forEach(th=>{
+    if(th.querySelector('.col-resize'))return;
+    const handle=document.createElement('div');
+    handle.className='col-resize';
+    th.appendChild(handle);
+    let startX,startW;
+    handle.addEventListener('mousedown',function(e){
+      e.preventDefault();
+      startX=e.pageX;
+      startW=th.offsetWidth;
+      handle.classList.add('active');
+      function onMove(ev){
+        const diff=ev.pageX-startX;
+        const newW=Math.max(30,startW+diff);
+        th.style.width=newW+'px';
+        th.style.minWidth=newW+'px';
+      }
+      function onUp(){
+        handle.classList.remove('active');
+        document.removeEventListener('mousemove',onMove);
+        document.removeEventListener('mouseup',onUp);
+      }
+      document.addEventListener('mousemove',onMove);
+      document.addEventListener('mouseup',onUp);
+    });
+  });
+}
+
 function updRrn(id,field,val){
   const e=EMPS.find(x=>x.id===id);if(!e)return;
   if(field==='rrnBack'){

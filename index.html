@@ -229,8 +229,10 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .ptb{background:var(--card);border:1.5px solid var(--bd);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-md)}
 .pth{background:var(--grad1);color:#fff;padding:12px 18px;font-size:13px;font-weight:700;letter-spacing:-.2px}
 /* ── 직원관리 ── */
-.emt{width:100%;border-collapse:collapse}
-.emt th{text-align:left;padding:10px 7px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);background:var(--navy);border-right:1px solid rgba(255,255,255,.1);letter-spacing:.3px}
+.emt{width:100%;border-collapse:collapse;table-layout:fixed}
+.emt th{text-align:left;padding:10px 7px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);background:var(--navy);border-right:1px solid rgba(255,255,255,.1);letter-spacing:.3px;position:relative}
+.emt th .col-resize{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:2}
+.emt th .col-resize:hover,.emt th .col-resize.active{background:rgba(255,255,255,.3)}
 .emt td{padding:7px 5px;font-size:11px;border-bottom:1px solid #F1F5F9}
 .emt tr:last-child td{border-bottom:none}
 .emt tr:hover td{background:#F8FAFF}
@@ -1257,7 +1259,7 @@ document.addEventListener('click',e=>{
       <thead><tr>
         <th style="width:20px"></th>
         <th style="width:32px;text-align:center;color:#94A3B8">No.</th>
-        <th style="width:46px">사원번호</th>
+        <th style="width:96px">사원번호</th>
         <th style="width:60px">이름</th>
         <th style="width:56px">직종</th>
         <th style="width:52px">직급</th>
