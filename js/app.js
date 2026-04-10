@@ -1633,7 +1633,16 @@ function renderOv(){
   let th=`<th style="position:sticky;left:0;z-index:2;background:var(--navy);min-width:76px">직원</th>`;
   for(let d=1;d<=days;d++){const dow=(fdow(vY,vM)+d-1)%7;const ph=getPhName(vY,vM,d);const autoH=isAutoHol(vY,vM,d);th+=`<th style="${dow===0||autoH?'color:#FCA5A5':dow===6?'color:#93C5FD':''}" title="${ph||''}">${d}${ph?'🎌':''}<br><span style="font-weight:400;font-size:8px;opacity:.7">${DOW[dow]}</span></th>`;}
   th+=`<th style="background:#0E4D2E">근무일</th><th style="background:#0E4D2E">연차</th><th style="background:#0E4D2E">실근무</th><th style="background:#0E4D2E">월급여</th>`;
-  const rows=EMPS.map(emp=>{
+  const mvEmps = EMPS.filter(e=>{
+    if(mvFilter!=='all' && (e.payMode||'fixed')!==mvFilter) return false;
+    if(MF.shift!=='all' && (e.shift||'day')!==MF.shift) return false;
+    const isFor = e.nation==='foreign' || e.foreigner===true;
+    if(MF.nation==='korean' && isFor) return false;
+    if(MF.nation==='foreign' && !isFor) return false;
+    if(MF.dept!=='all' && (e.dept||'').trim()!==MF.dept) return false;
+    return true;
+  });
+  const rows=mvEmps.map(emp=>{
     const rate=getEmpRate(emp);
     let tr=`<td class="ec"><div style="display:flex;align-items:center;gap:4px"><div class="av" style="width:19px;height:19px;font-size:9px;background:${emp.color||'#DBEAFE'};color:${emp.tc||'#1E3A5F'}">${esc(emp.name)[0]}</div>${esc(emp.name)}</div></td>`;
     for(let d=1;d<=days;d++){
@@ -5393,7 +5402,7 @@ function exportMonthlyExcel(){
     const colCount = days+10;
 
     // 타이틀 블록
-    R = xlsTitleBlock(ws, `📊 ${monthStr} 근태 전체 현황`, `출력일: ${new Date().toLocaleDateString('ko-KR')} · 총 ${EMPS.filter(e=>!e.leave).length}명`, colCount, R);
+    R = xlsTitleBlock(ws, `📊 ${monthStr} 근태 전체 현황`, `출력일: ${new Date().toLocaleDateString('ko-KR')} · 총 ${(()=>{return EMPS.filter(e=>{if(mvFilter!=='all'&&(e.payMode||'fixed')!==mvFilter)return false;if(MF.shift!=='all'&&(e.shift||'day')!==MF.shift)return false;const isFor=e.nation==='foreign'||e.foreigner===true;if(MF.nation==='korean'&&isFor)return false;if(MF.nation==='foreign'&&!isFor)return false;if(MF.dept!=='all'&&(e.dept||'').trim()!==MF.dept)return false;return !e.leave;}).length})()}명`, colCount, R);
     ws['!rows'] = [{hpt:28},{hpt:16}];
 
     // 헤더행
@@ -5426,6 +5435,11 @@ function exportMonthlyExcel(){
       if(!e.join||new Date(e.join)>new Date(vY,vM,0)) return false;
       if(e.leave&&new Date(e.leave)<new Date(vY,vM-1,1)) return false;
       if(mvFilter!=='all'&&(e.payMode||'fixed')!==mvFilter) return false;
+      if(MF.shift!=='all'&&(e.shift||'day')!==MF.shift) return false;
+      const isFor=e.nation==='foreign'||e.foreigner===true;
+      if(MF.nation==='korean'&&isFor) return false;
+      if(MF.nation==='foreign'&&!isFor) return false;
+      if(MF.dept!=='all'&&(e.dept||'').trim()!==MF.dept) return false;
       return true;
     });
 
