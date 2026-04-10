@@ -3110,52 +3110,47 @@ function importEmpNoExcel(input){
 
     if(rows.length<2){excelToast('데이터가 없습니다');return;}
 
-    // 헤더에서 이름/사번 열 찾기
-    const hdr=rows[0].map(h=>String(h).trim());
-    let nameCol=-1, codeCol=-1;
-    hdr.forEach((h,i)=>{
-      const lc=h.toLowerCase();
-      if(h==='이름'||h==='사원명'||h==='성명'||lc==='name') nameCol=i;
-      if(h==='사번'||h==='신규사번'||h==='사원번호'||h==='사번코드'||lc==='empno'||lc==='employee id') codeCol=i;
-    });
+    // 헤더 행 찾기 (첫 10행 내에서 '이름' + '사번' 열이 모두 있는 행)
+    const isNameH=h=>{const s=String(h).trim();const lc=s.toLowerCase();return s==='이름'||s==='사원명'||s==='성명'||lc==='name';};
+    const isCodeH=h=>{const s=String(h).trim();const lc=s.toLowerCase();return s==='사번'||s==='신규사번'||s==='사원번호'||s==='사번코드'||lc==='empno'||lc==='employee id';};
 
-    // 첫 몇 행에서 헤더 재탐색 (타이틀 행이 있을 수 있음)
-    if(nameCol===-1||codeCol===-1){
-      for(let r=1;r<Math.min(5,rows.length);r++){
-        const rh=rows[r].map(h=>String(h).trim());
-        rh.forEach((h,i)=>{
-          const lc=h.toLowerCase();
-          if(nameCol===-1&&(h==='이름'||h==='사원명'||h==='성명'||lc==='name')) nameCol=i;
-          if(codeCol===-1&&(h==='사번'||h==='신규사번'||h==='사원번호'||h==='사번코드'||lc==='empno'||lc==='employee id')) codeCol=i;
-        });
-        if(nameCol!==-1&&codeCol!==-1) break;
-      }
+    let nameCol=-1, codeCol=-1, headerRow=-1;
+    for(let r=0;r<Math.min(10,rows.length);r++){
+      let nc=-1, cc=-1;
+      rows[r].forEach((cell,i)=>{
+        if(isNameH(cell)) nc=i;
+        if(isCodeH(cell)) cc=i;
+      });
+      if(nc!==-1&&cc!==-1){ nameCol=nc; codeCol=cc; headerRow=r; break; }
     }
 
-    if(nameCol===-1){excelToast('이름 열을 찾을 수 없습니다');return;}
-    if(codeCol===-1){excelToast('사번 열을 찾을 수 없습니다');return;}
+    if(nameCol===-1||codeCol===-1){excelToast('이름 또는 사번 열을 찾을 수 없습니다');return;}
 
-    // 매핑 구축
+    // 매핑 구축 (헤더 다음 행부터)
     const mapping={};
-    for(let r=1;r<rows.length;r++){
+    for(let r=headerRow+1;r<rows.length;r++){
       const name=String(rows[r][nameCol]||'').trim();
       const code=String(rows[r][codeCol]||'').trim();
-      if(name&&code) mapping[name]=code;
+      if(name&&code&&name!=='합 계') mapping[name]=code;
     }
 
     if(Object.keys(mapping).length===0){excelToast('매핑 데이터가 없습니다');return;}
+    console.log('[사번 업로드] 매핑 '+Object.keys(mapping).length+'건 로드, 헤더행='+headerRow+', 이름열='+nameCol+', 사번열='+codeCol);
 
     // EMPS에서 이름 매칭 → empNo만 업데이트
-    let updated=0, notFound=[];
+    let updated=0;
+    const used={};
     for(const emp of EMPS){
       const name=(emp.name||'').trim();
-      if(mapping[name]){
+      if(mapping[name]&&!used[name]){
+        const oldNo=emp.empNo||'(없음)';
         emp.empNo=mapping[name];
+        console.log('[사번 업로드] '+name+': '+oldNo+' → '+emp.empNo);
         updated++;
-        delete mapping[name];
+        used[name]=true;
       }
     }
-    notFound=Object.keys(mapping);
+    const notFound=Object.keys(mapping).filter(n=>!used[n]);
 
     saveLS();renderEmps();renderSb();
     let msg=updated+'명 사번 업데이트 완료';
