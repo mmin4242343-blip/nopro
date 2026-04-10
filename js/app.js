@@ -4486,18 +4486,18 @@ function exportDailyExcel(){
     fill:{fgColor:{rgb:'EFF6FF'}},
     alignment:{horizontal:'left',vertical:'center'},
   });
-  xlsMerge(ws,0,0,0,13);
+  xlsMerge(ws,0,0,0,12);
   xlsWrite(ws,XLSX.utils.encode_cell({r:1,c:0}),
     `출력일: ${new Date().toLocaleDateString('ko-KR')}`,{
     font:{sz:9,color:{rgb:C.gray2},italic:true,name:'맑은 고딕'},
     fill:{fgColor:{rgb:'EFF6FF'}},
     alignment:{horizontal:'left',vertical:'center'},
   });
-  xlsMerge(ws,1,0,1,13);
+  xlsMerge(ws,1,0,1,12);
   ws['!rows']=[{hpt:28},{hpt:16}];
 
   // 헤더
-  const hdrs=['순번','이름','급여형태','출근','퇴근','근무시간','휴게h','야간휴게h','야간h','연장h','휴일h','상태','급여','비고'];
+  const hdrs=['순번','이름','급여형태','출근','퇴근','근무시간','휴게h','야간h','연장h','휴일h','상태','급여','비고'];
   let R=2;
   hdrs.forEach((h,ci)=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),h,S.mainHdr(C.navy,'FFFFFF','center')));
   ws['!rows'].push({hpt:26});
@@ -4551,8 +4551,10 @@ function exportDailyExcel(){
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),rec.start||'',S.cell(C.gray,bg,false,'center'));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),rec.end||'',S.cell(C.gray,bg,false,'center'));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c?Math.round(c.work/60*100)/100:0,S.num(C.gray,bg,false,'center'));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c&&c.bkMins?Math.round(c.bkMins/60*100)/100:0,S.num('#2D6A4F',bg,false,'center'));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c&&c.nightBkMins?Math.round(c.nightBkMins/60*100)/100:0,S.num('#7C3AED',bg,false,'center'));
+    const bkVal = c&&c.bkMins ? Math.round(c.bkMins/60*100)/100 : 0;
+    const nightBkVal = c&&c.nightBkMins ? Math.round(c.nightBkMins/60*100)/100 : 0;
+    const bkText = nightBkVal > 0 ? `${bkVal}h (야간${nightBkVal}h)` : (bkVal > 0 ? bkVal : 0);
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),bkText,S.num('#2D6A4F',bg,false,'center'));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c?Math.round(c.nightM/60*100)/100:0,S.num(C.gray,bg,false,'center'));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c?Math.round(c.ot/60*100)/100:0,S.num(C.gray,bg,false,'center'));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c&&autoH?Math.round(c.work/60*100)/100:0,S.num(C.gray,bg,false,'center'));
