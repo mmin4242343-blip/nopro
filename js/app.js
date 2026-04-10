@@ -7207,45 +7207,131 @@ function renderMyInfo(){
       </div>
     </div>
 
-    <!-- 우측: 통계 -->
+    <!-- 우측: 통계 대시보드 -->
     <div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
-        ${statCard(activeEmps.length,'재직 인원','#2347b5','rgba(35,71,181,.07)')}
-        ${statCard(leftEmps.length,'퇴직 인원','#64748b','rgba(100,116,139,.07)')}
-        ${statCard(dayEmps.length,'주간 근무','#0891b2','rgba(8,145,178,.07)')}
-        ${statCard(nightEmps.length,'야간 근무','#7c3aed','rgba(124,58,237,.07)')}
-      </div>
+      ${(()=>{
+        const active = activeEmps;
+        const retired = leftEmps.length;
+        const total = EMPS.length||1;
+        const foreign = forCnt;
 
-      <div class="mi-section">
-        <div class="mi-section-hd">급여형태 분포</div>
-        <div style="padding:14px 20px;">
-          ${barHtml('소정',fixedCnt,totalActive,'#0F766E')}
-          ${barHtml('시급',hourlyCnt,totalActive,'#D97706')}
-          ${barHtml('포괄',monthlyCnt,totalActive,'#7C3AED')}
-        </div>
-      </div>
+        const avgRate = active.length ? Math.round(active.reduce((s,e)=>s+getEmpRate(e),0)/active.length) : 0;
+        const monthlyLabor = Math.round(active.reduce((s,e)=>{
+          const m = getEmpPayMode(e)==='monthly' ? (e.monthly||0) : getEmpRate(e)*209;
+          return s+m;
+        },0)/10000);
+        const now2=new Date(); const thisY2=now2.getFullYear(); const thisM2=now2.getMonth()+1;
+        const newHires = EMPS.filter(e=>{
+          if(!e.join) return false;
+          const d=new Date(e.join);
+          return d.getFullYear()===thisY2 && d.getMonth()+1===thisM2;
+        }).length;
+        const turnoverRate = EMPS.length ? Math.round(retired/EMPS.length*100) : 0;
+        const foreignRate = Math.round(foreign/totalActive*100);
 
-      <div class="mi-section">
-        <div class="mi-section-hd">내/외국인 분포</div>
-        <div style="padding:14px 20px;">
-          ${barHtml('내국인',korCnt,totalActive,'var(--navy)')}
-          ${barHtml('외국인',forCnt,totalActive,'#D97706')}
-          <div style="height:6px;border-radius:100px;overflow:hidden;display:flex;margin-top:4px;">
-            <div style="width:${Math.round(korCnt/totalActive*100)}%;background:var(--navy);transition:width .8s;"></div>
-            <div style="flex:1;background:#f59e0b;"></div>
+        const kpiBig = (val, lbl, sub, color) => `
+          <div style="background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px 18px;position:relative;overflow:hidden;">
+            <div style="position:absolute;top:0;left:0;width:3px;height:100%;background:${color};border-radius:14px 0 0 14px;"></div>
+            <div style="font-size:26px;font-weight:900;color:${color};letter-spacing:-1.5px;line-height:1;margin-bottom:4px;">${val}</div>
+            <div style="font-size:11px;font-weight:700;color:var(--ink);">${lbl}</div>
+            ${sub ? `<div style="font-size:10px;color:var(--ink3);margin-top:2px;">${sub}</div>` : ''}
+          </div>`;
+
+        const kpiSmall = (val, lbl, color, bg) => `
+          <div style="background:${bg};border-radius:10px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:11px;color:var(--ink3);font-weight:500;">${lbl}</span>
+            <span style="font-size:14px;font-weight:800;color:${color};">${val}</span>
+          </div>`;
+
+        const bar2 = (label, cnt, maxV, color, labelColor, pctOverride) => {
+          const pct = pctOverride !== undefined ? pctOverride : Math.round(cnt/maxV*100);
+          return `<div style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+              <span style="font-size:11px;font-weight:600;color:${labelColor};">${label}</span>
+              <span style="font-size:11px;font-weight:700;color:var(--ink2);">${cnt}명 <span style="font-size:9px;color:var(--ink3);">(${pct}%)</span></span>
+            </div>
+            <div style="height:7px;background:var(--bd);border-radius:100px;overflow:hidden;">
+              <div style="height:100%;width:${pct}%;background:${color};border-radius:100px;transition:width .8s cubic-bezier(.4,0,.2,1);"></div>
+            </div>
+          </div>`;
+        };
+
+        const fixPct=Math.round(fixedCnt/totalActive*100);
+        const hourPct=Math.round(hourlyCnt/totalActive*100);
+        const monPct=Math.round(monthlyCnt/totalActive*100);
+        const korPct=Math.round(korCnt/totalActive*100);
+        const forPct=Math.round(forCnt/totalActive*100);
+
+        return `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+            ${kpiBig(active.length+'명','재직 인원','퇴사 '+retired+'명 포함 총 '+EMPS.length+'명','#2347b5')}
+            ${kpiBig(monthlyLabor.toLocaleString()+'만','월 인건비 추정','시급×209h / 월급 기준','#0F766E')}
+            ${kpiBig(dayEmps.length+'명','주간 근무','전체 재직의 '+Math.round(dayEmps.length/totalActive*100)+'%','#0891b2')}
+            ${kpiBig(avgRate.toLocaleString()+'원','평균 통상시급','재직자 기준','#D97706')}
           </div>
-        </div>
-      </div>
 
-      ${yearEntries.length?`<div class="mi-section">
-        <div class="mi-section-hd">입사 연도별 현황</div>
-        <div style="padding:14px 20px;">
-          ${yearEntries.map(([y,c])=>{
-            const isRecent=parseInt(y)>=new Date().getFullYear()-1;
-            return barHtml(y+'년',c,yearMax,isRecent?'var(--navy)':'var(--bd2)',isRecent?'var(--navy)':'var(--ink3)');
-          }).join('')}
-        </div>
-      </div>`:''}
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px;">
+            ${kpiSmall(newHires+'명','이번달 신규입사','#059669','#ECFDF5')}
+            ${kpiSmall(turnoverRate+'%','퇴사율','#DC2626','#FEF2F2')}
+            ${kpiSmall(foreignRate+'%','외국인 비율','#D97706','#FFFBEB')}
+          </div>
+
+          <div class="mi-section">
+            <div class="mi-section-hd">급여형태 분포</div>
+            <div style="padding:14px 20px;">
+              <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
+                <span style="font-size:10px;font-weight:700;color:#0F766E;background:#F0FDF4;padding:3px 9px;border-radius:20px;">소정근무 ${fixedCnt}명 (${fixPct}%)</span>
+                <span style="font-size:10px;font-weight:700;color:#D97706;background:#FFFBEB;padding:3px 9px;border-radius:20px;">시급제 ${hourlyCnt}명 (${hourPct}%)</span>
+                <span style="font-size:10px;font-weight:700;color:#7C3AED;background:#F5F3FF;padding:3px 9px;border-radius:20px;">월급제 ${monthlyCnt}명 (${monPct}%)</span>
+              </div>
+              ${bar2('소정근무',fixedCnt,totalActive,'#0F766E','#0F766E',fixPct)}
+              ${bar2('시급제',hourlyCnt,totalActive,'#D97706','#D97706',hourPct)}
+              ${bar2('월급제',monthlyCnt,totalActive,'#7C3AED','#7C3AED',monPct)}
+              <div style="height:6px;border-radius:100px;overflow:hidden;display:flex;margin-top:4px;">
+                <div style="width:${fixPct}%;background:#0F766E;"></div>
+                <div style="width:${hourPct}%;background:#D97706;"></div>
+                <div style="flex:1;background:#7C3AED;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mi-section">
+            <div class="mi-section-hd">내/외국인 현황</div>
+            <div style="padding:14px 20px;">
+              ${bar2('내국인',korCnt,totalActive,'var(--navy)','var(--navy)',korPct)}
+              ${bar2('외국인',forCnt,totalActive,'#D97706','#D97706',forPct)}
+              <div style="height:6px;border-radius:100px;overflow:hidden;display:flex;margin-top:4px;">
+                <div style="width:${korPct}%;background:var(--navy);transition:width .8s;"></div>
+                <div style="flex:1;background:#f59e0b;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mi-section">
+            <div class="mi-section-hd">주/야간 현황</div>
+            <div style="padding:14px 20px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div style="background:rgba(8,145,178,.07);border-radius:12px;padding:14px;text-align:center;">
+                <div style="font-size:24px;font-weight:900;color:#0891b2;">${dayEmps.length}명</div>
+                <div style="font-size:11px;font-weight:600;color:#0891b2;margin-top:2px;">주간 (${Math.round(dayEmps.length/totalActive*100)}%)</div>
+              </div>
+              <div style="background:rgba(124,58,237,.07);border-radius:12px;padding:14px;text-align:center;">
+                <div style="font-size:24px;font-weight:900;color:#7c3aed;">${nightEmps.length}명</div>
+                <div style="font-size:11px;font-weight:600;color:#7c3aed;margin-top:2px;">야간 (${Math.round(nightEmps.length/totalActive*100)}%)</div>
+              </div>
+            </div>
+          </div>
+
+          ${yearEntries.length?`<div class="mi-section">
+            <div class="mi-section-hd">입사 연도별 현황</div>
+            <div style="padding:14px 20px;">
+              ${yearEntries.map(([y,c])=>{
+                const isRecent=parseInt(y)>=new Date().getFullYear()-1;
+                return bar2(y+'년',c,yearMax,isRecent?'var(--navy)':'var(--bd2)',isRecent?'var(--navy)':'var(--ink3)');
+              }).join('')}
+            </div>
+          </div>`:''}
+        `;
+      })()}
     </div>
   </div>`;
 }
