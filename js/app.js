@@ -5495,6 +5495,7 @@ function exportMonthlyExcel(){
 // ══════════════════════════════════════════════════════
 // 👥 직원관리 엑셀 - 프리미엄
 // ══════════════════════════════════════════════════════
+let empFilter = 'all';
 function exportEmpsExcel(){
   const wb = XLSX.utils.book_new();
   const ws = {}; let R=0;
