@@ -3096,6 +3096,79 @@ function importEmpsExcel(input){
   reader.readAsArrayBuffer(file);
 }
 
+// 📎 사번 엑셀 업로드 → 이름 매칭으로 empNo만 업데이트
+function importEmpNoExcel(input){
+  const file=input.files[0];
+  input.value='';
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const data=new Uint8Array(e.target.result);
+    const wb=XLSX.read(data,{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+
+    if(rows.length<2){excelToast('데이터가 없습니다');return;}
+
+    // 헤더에서 이름/사번 열 찾기
+    const hdr=rows[0].map(h=>String(h).trim());
+    let nameCol=-1, codeCol=-1;
+    hdr.forEach((h,i)=>{
+      const lc=h.toLowerCase();
+      if(h==='이름'||h==='사원명'||h==='성명'||lc==='name') nameCol=i;
+      if(h==='사번'||h==='신규사번'||h==='사원번호'||h==='사번코드'||lc==='empno'||lc==='employee id') codeCol=i;
+    });
+
+    // 첫 몇 행에서 헤더 재탐색 (타이틀 행이 있을 수 있음)
+    if(nameCol===-1||codeCol===-1){
+      for(let r=1;r<Math.min(5,rows.length);r++){
+        const rh=rows[r].map(h=>String(h).trim());
+        rh.forEach((h,i)=>{
+          const lc=h.toLowerCase();
+          if(nameCol===-1&&(h==='이름'||h==='사원명'||h==='성명'||lc==='name')) nameCol=i;
+          if(codeCol===-1&&(h==='사번'||h==='신규사번'||h==='사원번호'||h==='사번코드'||lc==='empno'||lc==='employee id')) codeCol=i;
+        });
+        if(nameCol!==-1&&codeCol!==-1) break;
+      }
+    }
+
+    if(nameCol===-1){excelToast('이름 열을 찾을 수 없습니다');return;}
+    if(codeCol===-1){excelToast('사번 열을 찾을 수 없습니다');return;}
+
+    // 매핑 구축
+    const mapping={};
+    for(let r=1;r<rows.length;r++){
+      const name=String(rows[r][nameCol]||'').trim();
+      const code=String(rows[r][codeCol]||'').trim();
+      if(name&&code) mapping[name]=code;
+    }
+
+    if(Object.keys(mapping).length===0){excelToast('매핑 데이터가 없습니다');return;}
+
+    // EMPS에서 이름 매칭 → empNo만 업데이트
+    let updated=0, notFound=[];
+    for(const emp of EMPS){
+      const name=(emp.name||'').trim();
+      if(mapping[name]){
+        emp.empNo=mapping[name];
+        updated++;
+        delete mapping[name];
+      }
+    }
+    notFound=Object.keys(mapping);
+
+    saveLS();renderEmps();renderSb();
+    let msg=updated+'명 사번 업데이트 완료';
+    if(notFound.length>0) msg+=' / '+notFound.length+'명 매칭 실패';
+    excelToast(msg);
+
+    if(notFound.length>0){
+      console.log('[사번 업로드] 매칭 실패 목록:', notFound);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
 function addEmp(){
   const nid=EMPS.length>0?Math.max(...EMPS.map(e=>e.id))+1:1;
   const colors=['#DBEAFE','#FEF3C7','#D1FAE5','#EDE9FE','#FCE7F3','#FFF7ED'];
