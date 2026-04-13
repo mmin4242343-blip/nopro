@@ -7089,15 +7089,23 @@ async function admDeleteUser(id){
   // 세션이 있으면 랜딩페이지를 즉시 숨김 (깜빡임 방지)
   document.getElementById('landing-overlay').style.display='none';
   try{
-    // auth-verify는 직접 fetch (apiFetch의 자동 로그아웃 방지)
     const res=await fetch('/api/auth-verify',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       credentials:'include'
     });
     if(!res.ok){
-      console.warn('auth-verify 실패:', res.status);
-      throw new Error('verify-failed');
+      let reason='unknown';
+      try{const j=await res.json();reason=j.reason||j.error||res.status;}catch(e){}
+      console.warn('auth-verify 실패:', res.status, reason);
+      // 500(서버오류)이면 로그아웃하지 않고 로컬 세션으로 진입
+      if(res.status>=500){
+        console.warn('서버 오류 — 로컬 세션으로 진입');
+        if(sess.role==='admin'){ enterAdmin(); }
+        else { enterApp(sess.company||''); }
+        return;
+      }
+      throw new Error('verify-failed:'+reason);
     }
     const data=await res.json();
     if(!data.valid) throw new Error('invalid');
