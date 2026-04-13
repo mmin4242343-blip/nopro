@@ -1207,6 +1207,27 @@ function renderTable(){
       const isWork=!rec.absent&&!rec.annual;
       const holPay=c?(c.holDayStdPay+c.holDayOtPay):0;
       const holWorkH=c&&autoH?fmtH(c.work):'';
+      // 개별휴게 UI
+      const monthlyBkUI = rec.customBk ? `<div style="margin-top:4px;padding:5px 8px;background:var(--gbg);border:1px solid #BBF7D0;border-radius:6px">
+        <div style="font-size:9px;font-weight:700;color:var(--green);margin-bottom:3px">개인 휴게시간</div>
+        ${(rec.customBkList||[{s:'',e:''}]).map((b,bi)=>`<div style="display:flex;align-items:center;gap:3px;margin-bottom:2px">
+          <input class="out-time" value="${b.s||''}" placeholder="1200" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'s',this.value)" onkeydown="if(event.key==='Enter')setCustomBk(${emp.id},${bi},'s',this.value)">
+          <span style="font-size:10px;color:var(--ink3)">~</span>
+          <input class="out-time" value="${b.e||''}" placeholder="1300" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'e',this.value)" onkeydown="if(event.key==='Enter')setCustomBk(${emp.id},${bi},'e',this.value)">
+          <button class="out-x" onclick="delCustomBk(${emp.id},${bi})" style="color:#065F46">×</button>
+        </div>`).join('')}
+        <button class="bk-add" onclick="addCustomBk(${emp.id})" style="font-size:9px;margin-top:2px;padding:2px 8px">+ 세트 추가</button>
+      </div>` : '';
+      // 외출 UI
+      const monthlyOutUI=(rec.outTimes&&rec.outTimes.length>0)?`<div style="margin-top:4px;padding:5px 7px;background:var(--abg);border-radius:6px;border:1px solid #FCD34D">
+        ${(rec.outTimes||[]).map((o,oi)=>`<div class="out-row">
+          <span style="font-size:9px;font-weight:700;color:var(--amber)">외출${oi+1}</span>
+          <input class="out-time" value="${o.s||''}" placeholder="0900" onblur="setOutTime(${emp.id},${oi},'s',this.value)" onkeydown="if(event.key==='Enter')setOutTime(${emp.id},${oi},'s',this.value)">
+          <span style="font-size:11px;color:var(--ink3)">~</span>
+          <input class="out-time" value="${o.e||''}" placeholder="1000" onblur="setOutTime(${emp.id},${oi},'e',this.value)" onkeydown="if(event.key==='Enter')setOutTime(${emp.id},${oi},'e',this.value)">
+          <button class="out-x" onclick="delOutTime(${emp.id},${oi})">×</button>
+        </div>`).join('')}
+      </div>`:'';
       return`<tr class="${rowCls}">
         ${cbTd}${nameTd}
         <td><input class="time-inp ${rec.absent||rec.annual?'dis':''}" value="${rec.start||''}" placeholder="0900" ${rec.absent||rec.annual?'disabled':''} data-eid="${emp.id}" data-field="start"
@@ -1229,8 +1250,14 @@ function renderTable(){
             <label style="font-size:10px;color:var(--ink2);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:500">
               <input type="checkbox" ${rec.absent?'checked':''} onchange="setR(${emp.id},'absent',this.checked)">결근
             </label>
+            <label style="font-size:10px;color:var(--green);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600" title="전체 휴게시간 무시하고 개인 휴게시간 적용">
+              <input type="checkbox" ${rec.customBk?'checked':''} onchange="setR(${emp.id},'customBk',this.checked)">개별휴게
+            </label>
+            <button class="out-btn ${(rec.outTimes&&rec.outTimes.length>0)?'active':''}" onclick="addOutTime(${emp.id})">+ 외출</button>
             <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" onchange="setR(${emp.id},'note',this.value)">
           </div>
+          ${monthlyOutUI}
+          ${monthlyBkUI}
         </td>
         <td style="padding:4px 6px;font-size:10px">
           ${autoH&&holPay>0?`<span style="color:#854F0B;font-weight:700">휴일수당 ${fmt$(holPay)}</span>`:isWork?'<span style="color:var(--green);font-weight:600">월급 지급</span>':rec.annual?'<span style="color:var(--green)">연차</span>':rec.halfAnnual?'<span style="color:#0891B2">반차</span>':autoH?'<span style="color:var(--ink3)">휴일</span>':'<span style="color:var(--rose)">결근차감</span>'}
