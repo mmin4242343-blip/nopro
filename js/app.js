@@ -4946,96 +4946,210 @@ function sfMakeRec(e){
 }
 
 function sfDoExcel(){
-  if(typeof XLSX==='undefined'){
+  if(typeof ExcelJS==='undefined'){
+    const btn=event?.target;
+    if(btn){btn.textContent='⏳ 로딩중...';btn.disabled=true;}
     const s=document.createElement('script');
-    s.src='https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js';
-    s.onload=()=>sfExcelCore();
-    s.onerror=()=>alert('엑셀 라이브러리 로드에 실패했습니다. 인터넷 연결을 확인해주세요.');
+    s.src='https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+    s.onload=()=>{if(btn){btn.textContent='📊 엑셀 내보내기';btn.disabled=false;}sfExcelCore();};
+    s.onerror=()=>{if(btn){btn.textContent='📊 엑셀 내보내기';btn.disabled=false;}alert('엑셀 라이브러리 로드 실패');};
     document.head.appendChild(s);
   } else { sfExcelCore(); }
 }
 
-function sfExcelCore(){
-  const wb=XLSX.utils.book_new();
+function sf_b64toAB(b64){const bin=atob(b64);const buf=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)buf[i]=bin.charCodeAt(i);return buf.buffer;}
+function sf_imgExt(b64){if(b64.includes('image/png'))return'png';if(b64.includes('image/gif'))return'gif';return'jpeg';}
+
+async function sfExcelCore(){
+  const wb=new ExcelJS.Workbook();
   const emps=sfGetFilteredEmps();
   const days=sfGetMonthDays(sfMY,sfMMo);
   const DNW=['일','월','화','수','목','금','토'];
+  const NAVY={argb:'FF1E3A5F'};const WHITE={argb:'FFFFFFFF'};const GREEN_BG={argb:'FFC6EFCE'};
+  const RED_BG={argb:'FFFFC7CE'};const BLUE_BG={argb:'FFDDEBF7'};const GRAY_BG={argb:'FFF2F2F2'};
+  const GREEN_FT={argb:'FF276221'};const RED_FT={argb:'FF9C0006'};const TEAL_BG={argb:'FF059669'};
 
   // ── 시트1: 월별 서명현황표 ──
-  const sh1=[];
+  const ws1=wb.addWorksheet(sfMMo+'월 현황표');
+  // 타이틀
+  ws1.addRow([sfMY+'년 '+sfMMo+'월 TBM 서명 현황표']);
+  ws1.getRow(1).font={bold:true,size:14,color:{argb:'FF1E3A5F'}};
+  ws1.mergeCells(1,1,1,6+days.length+3);
+  // 헤더
   const hdr=['직원명','영문명','주야간','국적','소속','급여방식'];
   days.forEach(d=>hdr.push(sfMMo+'/'+d+'('+DNW[new Date(sfMY,sfMMo-1,d).getDay()]+')'));
   hdr.push('완료수','전체','완료율');
-  sh1.push(hdr);
+  const hRow=ws1.addRow(hdr);
+  hRow.eachCell((c,i)=>{
+    c.fill={type:'pattern',pattern:'solid',fgColor:NAVY};
+    c.font={bold:true,size:9,color:WHITE};
+    c.alignment={horizontal:'center',vertical:'middle'};
+    c.border={bottom:{style:'thin',color:{argb:'FF94A3B8'}}};
+    // 요일별 색상
+    if(i>6&&i<=6+days.length){
+      const dw=new Date(sfMY,sfMMo-1,days[i-7]).getDay();
+      if(dw===0)c.font={bold:true,size:9,color:{argb:'FFEF4444'}};
+      else if(dw===6)c.font={bold:true,size:9,color:{argb:'FF93C5FD'}};
+      else c.font={bold:true,size:9,color:WHITE};
+      c.fill={type:'pattern',pattern:'solid',fgColor:NAVY};
+    }
+    if(i>6+days.length){c.fill={type:'pattern',pattern:'solid',fgColor:TEAL_BG};c.font={bold:true,size:9,color:WHITE};}
+  });
+  // 데이터
   emps.forEach(e=>{
     const rec=sfMakeRec(e);
     const total=rec.reduce((a,b)=>a+b,0);
-    const pm2=typeof sfPmLabel==='function'?sfPmLabel(e).t:(e.payMode||'소정근무제');
-    const row=[e.name||'',e.nameEn||e.name||'',
-      e.shift==='night'?'야간':'주간',
-      e.nation==='foreign'?'외국인':'내국인',
-      e.dept||'',pm2];
-    rec.forEach(v=>row.push(v===1?'\u2713':'\u2014'));
-    row.push(total,days.length,Math.round(total/days.length*100)+'%');
-    sh1.push(row);
-  });
-  const ws1=XLSX.utils.aoa_to_sheet(sh1);
-  ws1['!cols']=[{wch:12},{wch:18},{wch:6},{wch:7},{wch:10},{wch:9},
-    ...days.map(()=>({wch:7})),{wch:6},{wch:6},{wch:7}];
-  XLSX.utils.book_append_sheet(wb,ws1,sfMMo+'월 현황표');
-
-  // ── 시트2: 일자별 현황 ──
-  const sh2=[];
-  sh2.push([sfMY+'년 '+sfMMo+'월 일자별 TBM 현황']);
-  sh2.push([]);
-  days.forEach(d=>{
-    const k=sfMY+'-'+(sfMMo<10?'0':'')+sfMMo+'-'+(d<10?'0':'')+d;
-    const tbm=SAFETY_REC[k+'_tbm']||'(교육내용 없음)';
-    const photos=(SAFETY_REC[k]||[]).length;
-    const dw=new Date(sfMY,sfMMo-1,d).getDay();
-    sh2.push(['\u25b6 '+sfMMo+'월 '+d+'일('+DNW[dw]+')','교육내용: '+tbm,'현장사진: '+photos+'장']);
-    sh2.push(['','서명여부','직원명','영문명','주야간','소속']);
-    const signs=SAFETY_REC[k+'_signs']||{};
-    emps.forEach(e=>{
-      const signed=!!signs[String(e.id)];
-      sh2.push(['',signed?'\u2713 완료':'\u2014 미서명',
-        e.name||'',e.nameEn||e.name||'',
-        e.shift==='night'?'야간':'주간',e.dept||'']);
+    const pct=days.length?Math.round(total/days.length*100):0;
+    const pm2=sfPmLabel(e).t;
+    const row=[e.name||'',e.nameEn||'',e.shift==='night'?'야간':'주간',
+      (e.nation==='foreign'||e.foreigner)?'외국인':'내국인',e.dept||'',pm2];
+    rec.forEach(v=>row.push(v===1?'✓':'—'));
+    row.push(total,days.length,pct/100);
+    const r=ws1.addRow(row);
+    r.eachCell((c,i)=>{
+      c.alignment={horizontal:'center',vertical:'middle'};
+      c.font={size:9};
+      c.border={bottom:{style:'hair',color:{argb:'FFE2E8F0'}}};
+      if(i===1){c.alignment={horizontal:'left'};c.font={size:10,bold:true};}
+      if(i>6&&i<=6+days.length){
+        const v=rec[i-7];
+        if(v===1){c.fill={type:'pattern',pattern:'solid',fgColor:GREEN_BG};c.font={size:9,bold:true,color:GREEN_FT};}
+      }
+      if(i===6+days.length+3){
+        c.numFmt='0%';
+        const pc=pct;
+        c.font={size:10,bold:true,color:{argb:pc>=90?'FF059669':pc>=60?'FF1D4ED8':'FFE11D48'}};
+      }
     });
-    sh2.push([]);
   });
-  const ws2=XLSX.utils.aoa_to_sheet(sh2);
-  ws2['!cols']=[{wch:3},{wch:10},{wch:14},{wch:20},{wch:7},{wch:10}];
-  XLSX.utils.book_append_sheet(wb,ws2,sfMMo+'월 일자별');
+  // 열 너비
+  ws1.getColumn(1).width=14;ws1.getColumn(2).width=18;
+  for(let i=3;i<=6;i++)ws1.getColumn(i).width=9;
+  for(let i=7;i<=6+days.length;i++)ws1.getColumn(i).width=6;
+  ws1.getColumn(6+days.length+1).width=7;ws1.getColumn(6+days.length+2).width=5;ws1.getColumn(6+days.length+3).width=8;
+  // 틀 고정
+  ws1.views=[{state:'frozen',xSplit:6,ySplit:2}];
+
+  // ── 시트2: 일자별 현황 + 사진 ──
+  const ws2=wb.addWorksheet(sfMMo+'월 일자별');
+  ws2.getColumn(1).width=18;ws2.getColumn(2).width=18;
+  for(let i=3;i<=7;i++)ws2.getColumn(i).width=14;
+  let r2=1;
+  ws2.addRow([sfMY+'년 '+sfMMo+'월 일자별 TBM 현황']);
+  ws2.getRow(r2).font={bold:true,size:13,color:{argb:'FF1E3A5F'}};
+  ws2.mergeCells(r2,1,r2,7);r2++;r2++;
+  for(const d of days){
+    const k=sfMY+'-'+pad(sfMMo)+'-'+pad(d);
+    const tbm=SAFETY_REC[k+'_tbm']||'';
+    const photos=SAFETY_REC[k]||[];
+    const signs=SAFETY_REC[k+'_signs']||{};
+    const dw=new Date(sfMY,sfMMo-1,d).getDay();
+    // 날짜 헤더
+    const titleRow=ws2.addRow([sfMMo+'월 '+d+'일('+DNW[dw]+') TBM','','사진: '+photos.length+'장','서명여부','직원명','주야간','소속']);
+    titleRow.eachCell(c=>{c.fill={type:'pattern',pattern:'solid',fgColor:NAVY};c.font={bold:true,size:10,color:WHITE};});
+    ws2.mergeCells(r2,1,r2,2);r2++;
+    // 교육내용
+    if(tbm){
+      const tbmRow=ws2.addRow(['교육: '+tbm]);
+      tbmRow.getCell(1).font={size:9,color:{argb:'FF1D4ED8'}};
+      ws2.mergeCells(r2,1,r2,7);r2++;
+    }
+    // 사진 + 서명자 명단
+    const empList=emps.slice();
+    const maxRows=Math.max(photos.length||1,empList.length);
+    const photoStartRow=r2;
+    for(let i=0;i<maxRows;i++){
+      const emp=empList[i];
+      const signed=emp?!!signs[String(emp.id)]:false;
+      const rowData=['','',
+        i===0&&photos.length===0?'(사진 없음)':'',
+        emp?(signed?'✓ 완료':'— 미서명'):'',
+        emp?(emp.name||''):'',
+        emp?(emp.shift==='night'?'야간':'주간'):'',
+        emp?(emp.dept||''):''];
+      const dataRow=ws2.addRow(rowData);
+      if(emp){
+        const sc=dataRow.getCell(4);
+        if(signed){sc.fill={type:'pattern',pattern:'solid',fgColor:GREEN_BG};sc.font={size:9,bold:true,color:GREEN_FT};}
+        else{sc.fill={type:'pattern',pattern:'solid',fgColor:RED_BG};sc.font={size:9,color:RED_FT};}
+      }
+      r2++;
+    }
+    // 사진 삽입
+    for(let pi=0;pi<photos.length;pi++){
+      const p=photos[pi];
+      const imgData=p.data||'';
+      if(imgData&&imgData.startsWith('data:image')){
+        try{
+          const b64=imgData.split(',')[1];
+          const ext=sf_imgExt(imgData);
+          const imgId=wb.addImage({buffer:sf_b64toAB(b64),extension:ext});
+          ws2.addImage(imgId,{
+            tl:{col:0,row:photoStartRow+pi-1},
+            br:{col:2,row:photoStartRow+pi},
+            editAs:'oneCell'
+          });
+          ws2.getRow(photoStartRow+pi).height=80;
+        }catch(e){console.warn('사진 삽입 실패:',e);}
+      } else if(p.storagePath){
+        // Storage 사진 — URL로 대체 텍스트
+        const row=ws2.getRow(photoStartRow+pi);
+        row.getCell(1).value='[사진'+(pi+1)+'] '+p.name;
+        row.getCell(1).font={size:8,color:{argb:'FF6B7280'},italic:true};
+      }
+    }
+    // 구분선
+    ws2.addRow([]);r2++;
+  }
 
   // ── 시트3: 요약통계 ──
-  const sh3=[];
-  sh3.push([sfMY+'년 '+sfMMo+'월 안전교육 요약통계']);
-  sh3.push([]);
-  sh3.push(['TBM 실시 횟수',days.length+'회']);
-  sh3.push(['필터 적용 인원',emps.length+'명']);
-  const avg=emps.length?Math.round(emps.map(e=>{
-    const r=sfMakeRec(e);
-    return r.reduce((a,b)=>a+b,0)/days.length*100;
-  }).reduce((a,b)=>a+b,0)/emps.length):0;
-  sh3.push(['평균 완료율',avg+'%']);
-  sh3.push([]);
-  sh3.push(['직원명','영문명','완료수','전체','완료율','주야간','국적','소속','급여방식']);
+  const ws3=wb.addWorksheet('요약통계');
+  ws3.getColumn(1).width=20;ws3.getColumn(2).width=20;ws3.getColumn(3).width=10;
+  ws3.getColumn(4).width=8;ws3.getColumn(5).width=10;ws3.getColumn(6).width=8;
+  ws3.getColumn(7).width=8;ws3.getColumn(8).width=12;ws3.getColumn(9).width=12;
+  let r3=1;
+  ws3.addRow([sfMY+'년 '+sfMMo+'월 안전교육 요약통계']);
+  ws3.getRow(r3).font={bold:true,size:14,color:{argb:'FF1E3A5F'}};
+  ws3.mergeCells(r3,1,r3,4);r3++;r3++;
+  // KPI
+  const tbmCount=days.filter(d=>{const k=sfMY+'-'+pad(sfMMo)+'-'+pad(d);return SAFETY_REC[k+'_tbm']||SAFETY_REC[k+'_signs'];}).length;
+  const avg=emps.length?Math.round(emps.map(e=>{const r=sfMakeRec(e);return r.reduce((a,b)=>a+b,0)/days.length*100;}).reduce((a,b)=>a+b,0)/emps.length):0;
+  const kpis=[['TBM 실시',tbmCount+'회'],['필터 인원',emps.length+'명'],['평균 완료율',avg+'%']];
+  kpis.forEach(([label,val])=>{
+    const row=ws3.addRow([label,val]);
+    row.getCell(1).font={bold:true,size:11,color:{argb:'FF1E3A5F'}};
+    row.getCell(1).fill={type:'pattern',pattern:'solid',fgColor:BLUE_BG};
+    row.getCell(2).font={bold:true,size:12,color:{argb:'FF059669'}};
+    row.getCell(2).alignment={horizontal:'center'};
+    r3++;
+  });
+  r3++;ws3.addRow([]);r3++;
+  // 개인별 완료율
+  const hdrRow=ws3.addRow(['직원명','영문명','완료수','전체','완료율','주야간','국적','소속','급여방식']);
+  hdrRow.eachCell(c=>{c.fill={type:'pattern',pattern:'solid',fgColor:NAVY};c.font={bold:true,size:9,color:WHITE};c.alignment={horizontal:'center'};});
+  r3++;
   emps.forEach(e=>{
     const rec=sfMakeRec(e);
     const total=rec.reduce((a,b)=>a+b,0);
-    const pm2=typeof sfPmLabel==='function'?sfPmLabel(e).t:(e.payMode||'소정근무제');
-    sh3.push([e.name||'',e.nameEn||e.name||'',total,days.length,
-      Math.round(total/days.length*100)+'%',
-      e.shift==='night'?'야간':'주간',
-      e.nation==='foreign'?'외국인':'내국인',
+    const pct=days.length?total/days.length:0;
+    const pm2=sfPmLabel(e).t;
+    const row=ws3.addRow([e.name||'',e.nameEn||'',total,days.length,pct,
+      e.shift==='night'?'야간':'주간',(e.nation==='foreign'||e.foreigner)?'외국인':'내국인',
       e.dept||'',pm2]);
+    row.getCell(5).numFmt='0%';
+    row.getCell(5).font={bold:true,color:{argb:pct>=0.9?'FF059669':pct>=0.6?'FF1D4ED8':'FFE11D48'}};
+    row.eachCell(c=>{c.alignment={horizontal:'center',vertical:'middle'};if(!c.font)c.font={size:9};});
+    row.getCell(1).alignment={horizontal:'left'};
+    r3++;
   });
-  const ws3=XLSX.utils.aoa_to_sheet(sh3);
-  ws3['!cols']=[{wch:14},{wch:18},{wch:7},{wch:6},{wch:8},{wch:7},{wch:7},{wch:10},{wch:10}];
-  XLSX.utils.book_append_sheet(wb,ws3,'요약통계');
 
-  XLSX.writeFile(wb,'노프로_안전교육_'+sfMY+'년'+sfMMo+'월.xlsx');
+  // 다운로드
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;
+  a.download='노프로_안전교육_'+sfMY+'년'+sfMMo+'월.xlsx';
+  a.click();URL.revokeObjectURL(url);
 }
 
 // 사진 업로드
