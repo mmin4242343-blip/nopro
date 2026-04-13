@@ -95,58 +95,23 @@ let DATA=null,selectedEmp=null,lang='ko';
 const DOW_K=['일','월','화','수','목','금','토'];
 const DOW_E=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-// 안전교육 용어 한→영 사전
-const SAFETY_DICT={
-  // 작업 유형
-  '고소작업':'work at heights','화기작업':'hot work','중량물 취급':'heavy load handling',
-  '전기작업':'electrical work','용접작업':'welding work','굴착작업':'excavation work',
-  '밀폐공간':'confined space','크레인 작업':'crane operation','지게차 작업':'forklift operation',
-  '해체작업':'demolition work','비계작업':'scaffolding work','도장작업':'painting work',
-  '배관작업':'piping work','철골작업':'steel frame work','콘크리트 작업':'concrete work',
-  // 안전 주제
-  '안전수칙':'safety rules','안전교육':'safety training','안전점검':'safety inspection',
-  '안전보건':'occupational safety & health','안전관리':'safety management',
-  '허가절차':'permit procedure','작업허가':'work permit','작업계획':'work plan',
-  '위험성평가':'risk assessment','안전회의':'safety meeting',
-  // 보호구/장비
-  '개인보호구':'PPE (Personal Protective Equipment)','보호구 착용':'wearing PPE',
-  '안전모':'safety helmet','안전화':'safety shoes','안전대':'safety harness',
-  '안전벨트':'safety belt','보안경':'safety goggles','방진마스크':'dust mask',
-  '귀마개':'ear plugs','안전장갑':'safety gloves','방호장치':'safety guard',
-  // 사고 유형
-  '추락 방지':'fall prevention','추락':'fall','감전예방':'electric shock prevention',
-  '감전':'electric shock','협착사고':'caught-in/between accident','협착':'pinch point',
-  '화재예방':'fire prevention','폭발':'explosion','질식':'suffocation',
-  '낙하물':'falling objects','전도':'collapse/tip-over','충돌':'collision',
-  // 환경/물질
-  '화학물질 취급':'chemical handling','화학물질':'chemicals','유해물질':'hazardous materials',
-  '고압가스 취급':'high-pressure gas handling','고압가스':'high-pressure gas',
-  '폐수처리':'wastewater treatment','소음':'noise','진동':'vibration',
-  '분진':'dust','석면':'asbestos',
-  // 시설/장소
-  '작업장 정리정돈':'workplace housekeeping','정리정돈':'housekeeping',
-  '비상구 대피요령':'emergency exit & evacuation procedures','비상구':'emergency exit',
-  '대피요령':'evacuation procedures','대피경로':'evacuation route',
-  '안전보건 표지판':'safety & health signs','안전표지':'safety signs',
-  '소화기':'fire extinguisher','비상연락망':'emergency contact list',
-  // 체크리스트/기타
-  '안전점검 체크리스트':'safety inspection checklist','체크리스트':'checklist',
-  '작업 전 점검':'pre-work inspection','작업 중 주의사항':'precautions during work',
-  '작업 후 정리':'post-work cleanup','교대 시 인수인계':'shift handover',
-  '음주 금지':'no alcohol','흡연 금지':'no smoking',
-  '방호장치 점검':'safety guard inspection','안전난간':'safety railing',
-  '신호수 배치':'signal person placement','유도자 배치':'guide person placement',
-};
+// 번역 캐시 (같은 텍스트 재번역 방지)
+const translateCache={};
 
-function translateTBM(text){
+async function translateToEn(text){
   if(!text)return '';
-  let result=text;
-  // 긴 문구부터 먼저 치환 (부분 매칭 방지)
-  const keys=Object.keys(SAFETY_DICT).sort((a,b)=>b.length-a.length);
-  keys.forEach(ko=>{
-    result=result.split(ko).join(SAFETY_DICT[ko]);
-  });
-  return result;
+  if(translateCache[text])return translateCache[text];
+  try{
+    const res=await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q='+encodeURIComponent(text));
+    const json=await res.json();
+    // 응답: [[["translated","original",...],...],...]
+    const translated=json[0].map(s=>s[0]).join('');
+    translateCache[text]=translated;
+    return translated;
+  }catch(e){
+    console.warn('번역 실패:',e);
+    return text; // 실패 시 원문 반환
+  }
 }
 
 async function init(){
@@ -190,7 +155,7 @@ function render(){
     </div>
     <div class="tbm-box">
       <div class="tbm-lbl">${lang==='ko'?'오늘의 TBM 교육내용':"Today's TBM Content"}</div>
-      <div class="tbm-content">${lang==='ko'?(DATA.tbm||''):translateTBM(DATA.tbm)}</div>
+      <div class="tbm-content" id="tbm-text">${DATA.tbm||''}</div>
       ${lang==='en'&&DATA.tbm?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #E2E8F0;font-size:10px;color:#94A3B8;line-height:1.5">원문(Korean): '+DATA.tbm+'</div>':''}
     </div>
     <div class="status-bar">
@@ -207,6 +172,17 @@ function render(){
   `;
   app.innerHTML=h;
   renderList();
+  // 영어 모드: TBM 내용 비동기 번역
+  if(lang==='en'&&DATA.tbm){
+    const tbmEl=document.getElementById('tbm-text');
+    if(tbmEl){
+      tbmEl.innerHTML=DATA.tbm+' <span style="color:#0D9488;font-size:10px;font-weight:600">translating...</span>';
+      translateToEn(DATA.tbm).then(translated=>{
+        const el=document.getElementById('tbm-text');
+        if(el) el.textContent=translated;
+      });
+    }
+  }
 }
 
 function renderList(){
