@@ -4583,305 +4583,336 @@ function exportFile(){
 }
 
 // ══════════════════════════════════════
-// 안전교육 일지
+// 안전교육 일지 v2
 // ══════════════════════════════════════
-let sfY=new Date().getFullYear(), sfM=new Date().getMonth()+1, sfD=new Date().getDate();
+let sfY=new Date().getFullYear(),sfM=new Date().getMonth()+1,sfD=new Date().getDate();
 const SF_KEY='npm5_safety';
 let SAFETY_REC=load(SF_KEY,{});
-function sfSave(){
-  // localStorage에는 base64(data) 제거 후 메타데이터만 저장
-  const slim={};
-  Object.entries(SAFETY_REC).forEach(([k,v])=>{
-    if(Array.isArray(v)){
-      slim[k]=v.map(({data, ...rest})=>rest);
-    } else { slim[k]=v; }
-  });
-  try{localStorage.setItem(SF_KEY,JSON.stringify(slim));}
-  catch(e){console.warn('안전교육 저장 용량 초과:',e);}
-}
-// 기존 base64 사진 데이터 정리 (최초 1회)
-(function cleanLegacySafety(){
-  let cleaned=false;
-  Object.values(SAFETY_REC).forEach(v=>{
-    if(Array.isArray(v)) v.forEach(p=>{if(p.data){delete p.data;cleaned=true;}});
-  });
-  if(cleaned){sfSave();console.log('레거시 base64 안전교육 데이터 정리 완료');}
-})();
+let SF2_PHOTOS={};
+let sf2StF='all',sf2NaF='all',sf2ShF='all',sf2DpF='all';
+let sfMY=new Date().getFullYear(),sfMMo=new Date().getMonth()+1,sfMStF='all';
+
+function sfSave(){try{localStorage.setItem(SF_KEY,JSON.stringify(SAFETY_REC));}catch(e){alert('저장 공간 부족! 오래된 사진을 삭제해주세요.');}}
 function sfKey(){return`${sfY}-${pad(sfM)}-${pad(sfD)}`;}
-let sfEditMode=false;
 
-function sfIsToday(){
-  const t=new Date();
-  return sfY===t.getFullYear()&&sfM===t.getMonth()+1&&sfD===t.getDate();
+// 탭 전환
+function sfSwitchTab(id){
+  ['daily','monthly','summary'].forEach(t=>{
+    document.getElementById('sf-page-'+t).style.display='none';
+    const tab=document.getElementById('sf-tab-'+t);
+    if(tab){tab.style.color='var(--ink3)';tab.style.borderBottomColor='transparent';tab.style.fontWeight='500';}
+  });
+  document.getElementById('sf-page-'+id).style.display=(id==='daily'?'flex':'block');
+  const on=document.getElementById('sf-tab-'+id);
+  if(on){on.style.color='var(--navy)';on.style.borderBottomColor='var(--navy)';on.style.fontWeight='700';}
+  if(id==='monthly')sfRenderM();
+  if(id==='summary')sfRenderSummary();
 }
-function sfUpdMode(){
-  const today=sfIsToday();
-  const btnEdit=document.getElementById('sf-btn-edit');
-  const btnSave=document.getElementById('sf-btn-save');
-  if(!btnSave) return; // guard
-  const editMsg=document.getElementById('sf-edit-msg');
-  if(today){
-    sfEditMode=true;
-    if(btnEdit)btnEdit.style.display='none';
-    if(btnSave){btnSave.style.display='inline-block';btnSave.textContent='저장';btnSave.style.background='var(--navy)';btnSave.style.color='#fff';btnSave.style.borderColor='';}
-    if(editMsg)editMsg.style.display='none';
-  } else {
-    sfEditMode=false;
-    if(btnEdit)btnEdit.style.display='inline-block';
-    if(btnSave)btnSave.style.display='none';
-    if(editMsg)editMsg.style.display='none';
-  }
-}
-function sfStartEdit(){
-  if(!confirm(`${sfY}년 ${sfM}월 ${sfD}일 안전교육 일지를 수정하시겠습니까?`))return;
-  sfEditMode=true;
-  const btnEdit=document.getElementById('sf-btn-edit');
-  const btnSave=document.getElementById('sf-btn-save');
-  const editMsg=document.getElementById('sf-edit-msg');
-  if(btnEdit)btnEdit.style.display='none';
-  if(btnSave){btnSave.style.display='inline-block';btnSave.textContent='저장';btnSave.style.background='var(--amber)';btnSave.style.color='#fff';btnSave.style.borderColor='var(--amber)';}
-  if(editMsg)editMsg.style.display='inline';
-  renderSafety();
-}
-function sfSaveDay(){
-  sfSave();
-  sfEditMode=false;
-  const btnEdit=document.getElementById('sf-btn-edit');
-  const btnSave=document.getElementById('sf-btn-save');
-  const svMsg=document.getElementById('sf-sv-msg');
-  const editMsg=document.getElementById('sf-edit-msg');
-  if(editMsg)editMsg.style.display='none';
-  if(svMsg){svMsg.style.display='inline';setTimeout(()=>svMsg.style.display='none',2500);}
-  if(!sfIsToday()){
-    if(btnSave)btnSave.style.display='none';
-    if(btnEdit){btnEdit.style.display='inline-block';btnEdit.style.background='';btnEdit.style.color='var(--amber)';}
-  }
-  renderSafety();
-}
-
+// 날짜 네비게이션
 function sfNd(f,d){
   if(f==='year')sfY+=d;
   if(f==='month'){sfM+=d;if(sfM>12){sfM=1;sfY++;}if(sfM<1){sfM=12;sfY--;}}
-  if(f==='day'){const mx=dim(sfY,sfM);sfD+=d;if(sfD>mx)sfD=1;if(sfD<1)sfD=mx;}
-  sfD=Math.min(sfD,dim(sfY,sfM));
-  sfUpdMode();renderSafety();
+  if(f==='day'){const mx=new Date(sfY,sfM,0).getDate();sfD+=d;if(sfD>mx)sfD=1;if(sfD<1)sfD=mx;}
+  sfD=Math.min(sfD,new Date(sfY,sfM,0).getDate());
+  sfUpdBar2();
+  sfLoadTbm();
+  sfRenderList();
+  sfRenderRecent();
 }
-function sfUpdBar(){
+function sfUpdBar2(){
   document.getElementById('sf-dy').textContent=sfY;
   document.getElementById('sf-dm').textContent=sfM;
   document.getElementById('sf-dd').textContent=sfD;
   const dow=new Date(sfY,sfM-1,sfD).getDay();
   document.getElementById('sf-dow').textContent=DOW[dow]+'요일';
+  const url=`noprohr.netlify.app/tbm_sign.html?date=${sfY}-${pad(sfM)}-${pad(sfD)}`;
+  const urlEl=document.getElementById('sf-link-url');
+  if(urlEl)urlEl.textContent=url;
+  const kakaoEl=document.getElementById('sf-kakao-msg');
+  if(kakaoEl)kakaoEl.textContent=`[노프로 TBM 서명]\n${sfM}월 ${sfD}일 TBM 교육 서명 부탁드립니다.\n링크 클릭 → 이름 선택 → 동의 → 서명\n\n${url}\n\n외국인분들도 영어 버튼 누르면 됩니다.`;
 }
-function renderSafety(){
-  sfUpdBar();
+
+// TBM 내용 저장/로드
+function sfSaveTbm(){
   const key=sfKey();
-  const photos=SAFETY_REC[key]||[];
-  const tbm=(SAFETY_REC[key+'_tbm'])||'';
-  const phName=getPhName(sfY,sfM,sfD);
-  const dow=new Date(sfY,sfM-1,sfD).getDay();
-  const locked = !sfIsToday() && !sfEditMode; // 과거+수정모드 아닐 때 잠금
-  const el=document.getElementById('sf-body');
-  el.innerHTML='';
-  const hdr=document.createElement('div');
-  hdr.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap';
-  hdr.innerHTML=`<div style="font-size:14px;font-weight:700;color:var(--ink)">${sfY}년 ${sfM}월 ${sfD}일 ${DOW[dow]}요일</div>
-    ${phName?`<span style="font-size:11px;color:#9D174D;background:#FFF0F3;padding:2px 9px;border-radius:7px;font-weight:700">🎌 ${phName}</span>`:''}
-    ${photos.length>0?`<span style="font-size:11px;color:var(--teal);background:var(--tbg);padding:2px 9px;border-radius:7px;font-weight:700">📷 ${photos.length}장</span>`:''}
-    ${locked?`<span style="font-size:11px;color:var(--ink3);background:var(--surf);padding:2px 9px;border-radius:7px;font-weight:600;border:1px solid var(--bd)">🔒 읽기 전용 · 수정하려면 수정 버튼 클릭</span>`:''}`;
-  el.appendChild(hdr);
-  const tbmBox=document.createElement('div');
-  tbmBox.style.cssText='background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px 14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.05)';
-  tbmBox.innerHTML=`<div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:7px">📝 TBM 교육내용</div>`;
-  const ta=document.createElement('textarea');
-  ta.placeholder='오늘의 TBM 교육내용을 입력하세요 (예: 고소작업 안전수칙, 개인보호구 착용, 화기작업 허가절차 등)';
-  ta.value=tbm;
-  ta.disabled=locked;
-  ta.style.cssText=`width:100%;min-height:90px;padding:9px 11px;font-size:13px;font-family:inherit;border:1.5px solid var(--bd2);border-radius:9px;resize:vertical;color:var(--ink);line-height:1.6;transition:border .15s;${locked?'background:var(--bg3);color:var(--ink3);':''}`;
-  if(!locked){
-    ta.addEventListener('focus',()=>ta.style.borderColor='var(--navy2)');
-    ta.addEventListener('blur',()=>{ta.style.borderColor='var(--bd2)';SAFETY_REC[key+'_tbm']=ta.value;sfSave();});
-    ta.addEventListener('input',()=>{SAFETY_REC[key+'_tbm']=ta.value;});
-  }
-  tbmBox.appendChild(ta);
-  el.appendChild(tbmBox);
-  const dropZone=document.createElement('div');
-  dropZone.className='sf-drop';
-  dropZone.id='sf-drop-zone';
-  dropZone.innerHTML=`<div class="sf-drop-inner">
-    <div class="sf-icon">${locked?'🔒':photos.length===0?'📁':'➕'}</div>
-    <div class="sf-drop-t">${locked?'읽기 전용':photos.length===0?'서명 사진을 여기에 드래그하거나 클릭':'사진 추가하기'}</div>
-    <div class="sf-drop-s">${locked?'수정하려면 상단 수정 버튼을 클릭하세요':photos.length===0?'JPG, PNG, HEIC 등 · 여러 장 동시 가능':'이 날짜에 '+photos.length+'장 등록됨 · 추가 가능'}</div>
-  </div>`;
-  const fileInp=document.createElement('input');
-  fileInp.type='file'; fileInp.accept='image/*'; fileInp.multiple=true;
-  fileInp.style.display='none';
-  if(!locked){
-    fileInp.addEventListener('change',()=>sfHandleFiles(fileInp.files));
-    dropZone.appendChild(fileInp);
-    dropZone.addEventListener('click',()=>fileInp.click());
-    dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('dragover');});
-    dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('dragover'));
-    dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('dragover');sfHandleFiles(e.dataTransfer.files);});
-  } else {
-    dropZone.style.opacity='0.6';
-    dropZone.style.cursor='not-allowed';
-  }
-  el.appendChild(dropZone);
-  if(photos.length>0){
-    const grid=document.createElement('div');
-    grid.className='sf-grid';
-    photos.forEach((p,i)=>{
-      const dt=new Date(p.ts);
-      const timeStr=`${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
-      const card=document.createElement('div');
-      card.className='sf-img-card';
-      const img=document.createElement('img');
-      if(p.data) img.src=p.data;
-      else if(p.storagePath){img.dataset.spath=p.storagePath;img.src='';img.style.opacity='0.3';img.style.transition='opacity .3s';}
-      img.alt=`서명일지 ${i+1}`; img.style.cursor='zoom-in';
-      img.addEventListener('click',()=>sfZoom(p.id,key));
-      card.appendChild(img);
-      const btnRow=document.createElement('div');
-      btnRow.style.cssText='display:flex;gap:6px;padding:8px 10px;background:#f8fafc;border-top:1px solid var(--bd)';
-      const zoomBtn=document.createElement('button');
-      zoomBtn.style.cssText='flex:1;padding:6px 0;font-size:11px;background:var(--nbg);color:var(--navy2);border:1px solid var(--bd2);border-radius:7px;cursor:pointer;font-weight:600;font-family:inherit';
-      zoomBtn.textContent='🔍 확대';
-      zoomBtn.addEventListener('click',e=>{e.stopPropagation();sfZoom(p.id,key);});
-      const delBtn=document.createElement('button');
-      if(locked){
-        delBtn.style.cssText='flex:1;padding:6px 0;font-size:11px;background:var(--bg3);color:var(--ink3);border:1px solid var(--bd);border-radius:7px;cursor:not-allowed;font-weight:600;font-family:inherit';
-        delBtn.textContent='🔒 잠금';
-      } else {
-        delBtn.style.cssText='flex:1;padding:6px 0;font-size:11px;background:#FEE2E2;color:var(--rose);border:1px solid #FECACA;border-radius:7px;cursor:pointer;font-weight:700;font-family:inherit';
-        delBtn.textContent='🗑 삭제';
-        let delReady=false;
-        delBtn.addEventListener('click',e=>{
-          e.stopPropagation();
-          if(!delReady){
-            delReady=true;delBtn.textContent='✓ 확인';delBtn.style.background='var(--rose)';delBtn.style.color='#fff';delBtn.style.borderColor='var(--rose)';
-            setTimeout(()=>{if(delReady){delReady=false;delBtn.textContent='🗑 삭제';delBtn.style.background='#FEE2E2';delBtn.style.color='var(--rose)';delBtn.style.borderColor='#FECACA';}},2500);
-          } else {
-            if(!SAFETY_REC[key])return;
-            if(p.storagePath) deleteFileFromStorage(p.storagePath);
-            SAFETY_REC[key]=SAFETY_REC[key].filter(ph=>ph.id!==p.id);
-            if(SAFETY_REC[key].length===0)delete SAFETY_REC[key];
-            sfSave();renderSafety();
-          }
-        });
-      }
-      btnRow.appendChild(zoomBtn);btnRow.appendChild(delBtn);
-      card.appendChild(btnRow);
-      const badge=document.createElement('div');
-      badge.className='sf-date-badge';
-      badge.textContent=`📷 ${i+1}번 · ${timeStr} 등록`;
-      card.appendChild(badge);
-      grid.appendChild(card);
-    });
-    el.appendChild(grid);
-    loadStorageImages(grid);
-  }
-}
-async function sfHandleFiles(files){
-  if(!files||files.length===0)return;
-  const key=sfKey();
-  if(!SAFETY_REC[key])SAFETY_REC[key]=[];
-  const imageFiles=Array.from(files).filter(f=>f.type.startsWith('image/'));
-  if(!imageFiles.length)return;
-  if(typeof showSyncToast==='function') showSyncToast('사진 업로드 중...','info');
-  for(const file of imageFiles){
-    try{
-      const res=await uploadFileToStorage(file,'safety',key);
-      SAFETY_REC[key].push({
-        id:'sf_'+Date.now()+'_'+Math.random().toString(36).slice(2),
-        storagePath:res.path,
-        name:file.name,
-        ts:Date.now()
-      });
-    }catch(e){
-      console.error('Safety photo upload failed:',e);
-      if(typeof showSyncToast==='function') showSyncToast(file.name+' 업로드 실패','warn');
-    }
-  }
+  const val=document.getElementById('sf-tbm-content').value;
+  SAFETY_REC[key+'_tbm']=val;
   sfSave();
-  if(typeof showSyncToast==='function') showSyncToast('업로드 완료','ok');
-  renderSafety();
 }
-async function sfZoom(id, key){
-  if(!key)key=sfKey();
-  const photos=SAFETY_REC[key]||[];
-  const p=photos.find(x=>x.id===id);
-  if(!p)return;
-  let src=p.data||'';
-  if(p.storagePath&&!src){
-    const urls=await getFileUrls([p.storagePath]);
-    src=urls[p.storagePath]||'';
-  }
-  if(!src)return;
-  const lb=document.createElement('div');lb.className='sf-lightbox';
-  const img=document.createElement('img');img.src=src;img.alt='확대';
-  lb.appendChild(img);lb.addEventListener('click',()=>lb.remove());
-  document.body.appendChild(lb);
+function sfLoadTbm(){
+  const key=sfKey();
+  const ta=document.getElementById('sf-tbm-content');
+  if(ta)ta.value=SAFETY_REC[key+'_tbm']||'';
 }
-function sfExportAll(){
-  const today=new Date();
-  let calY=sfY, calM=sfM;
-  function buildModal(){
-    const existing=document.getElementById('sf-cal-modal');
-    if(existing)existing.remove();
-    const modal=document.createElement('div');
-    modal.id='sf-cal-modal';
-    modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)';
-    // 해당 월 날짜 집계
-    const days=dim(calY,calM);
-    const fd=fdow(calY,calM);
-    let totalPhotos=0,totalDays=0;
-    for(let d=1;d<=days;d++){
-      const k=`${calY}-${pad(calM)}-${pad(d)}`;
-      const cnt=(SAFETY_REC[k]||[]).length;
-      if(cnt>0){totalPhotos+=cnt;totalDays++;}
-    }
-    let calHtml=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <button onclick="calY=calM>1?calY:calY-1;calM=calM>1?calM-1:12;document.getElementById('sf-cal-modal').remove();buildModal()" style="border:none;background:none;font-size:22px;cursor:pointer;color:var(--ink2);padding:4px 8px">‹</button>
-      <div style="text-align:center">
-        <div style="font-size:16px;font-weight:800;color:var(--ink)">${calY}년 ${calM}월 안전교육 일지</div>
-        <div style="font-size:11px;color:var(--ink3);margin-top:2px">${totalDays}일 등록 · 총 ${totalPhotos}장</div>
+
+// 링크
+function sfCopyLink(){
+  const url=document.getElementById('sf-link-url').textContent;
+  if(navigator.clipboard)navigator.clipboard.writeText(url);
+  const t=document.getElementById('sf-toast');
+  if(t){t.style.display='block';setTimeout(()=>t.style.display='none',2500);}
+}
+function sfGenLink(){
+  const chars='abcdefghijklmnopqrstuvwxyz0123456789';
+  let tok='';for(let i=0;i<6;i++)tok+=chars[Math.floor(Math.random()*chars.length)];
+  const url=`noprohr.netlify.app/tbm_sign.html?t=${tok}&date=${sfY}-${pad(sfM)}-${pad(sfD)}`;
+  const urlEl=document.getElementById('sf-link-url');
+  if(urlEl)urlEl.textContent=url;
+}
+function sfSaveDay2(){
+  sfSave();
+  const msg=document.getElementById('sf-sv-msg');
+  if(msg){msg.style.display='inline';setTimeout(()=>msg.style.display='none',2500);}
+}
+function sfSendAlert(){alert('미서명 인원에게 카카오 알림을 발송합니다.\n\n실제 구현 시 Supabase + 카카오 API 연동 필요');}
+function sfDoExcel(){alert('엑셀 내보내기 (3개 시트)\n\n📊 시트1: 월별 서명현황표 (✓/— 형식)\n📷 시트2: 일자별 현장사진 일지\n📈 시트3: 요약통계·개인별 완료율\n\n실제 구현: Supabase 연동 후 자동 생성');}
+
+// 사진 업로드
+function sf2HandleFiles(files){
+  const key=sfKey();
+  if(!SF2_PHOTOS[key])SF2_PHOTOS[key]=[];
+  Array.from(files).forEach(f=>{
+    if(!f.type.startsWith('image/'))return;
+    const rd=new FileReader();
+    rd.onload=ev=>{
+      SF2_PHOTOS[key].push({id:'p'+Date.now()+Math.random(),data:ev.target.result,name:f.name,ts:Date.now()});
+      sf2RenderPhotos();
+      // localStorage에도 저장
+      SAFETY_REC[key]=SF2_PHOTOS[key].map(p=>({id:p.id,data:p.data,name:p.name,ts:p.ts}));
+      sfSave();
+    };rd.readAsDataURL(f);
+  });
+}
+function sf2RenderPhotos(){
+  const key=sfKey();
+  const photos=SF2_PHOTOS[key]||[];
+  const g=document.getElementById('sf-photo-grid2');if(!g)return;
+  g.innerHTML='';
+  photos.forEach((p,i)=>{
+    const c=document.createElement('div');c.className='sf-img-card';
+    const img=document.createElement('img');img.src=p.data;img.alt=`사진${i+1}`;
+    img.onclick=()=>{const lb=document.createElement('div');lb.className='sf-lightbox';const im=document.createElement('img');im.src=p.data;lb.appendChild(im);lb.onclick=()=>lb.remove();document.body.appendChild(lb);};
+    c.appendChild(img);
+    const row=document.createElement('div');row.style.cssText='display:flex;gap:6px;padding:7px 9px;background:#f8fafc;border-top:1px solid var(--bd)';
+    const zb=document.createElement('button');zb.style.cssText='flex:1;padding:5px;font-size:10px;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;border:none;background:var(--nbg);color:var(--navy)';zb.textContent='🔍 확대';zb.onclick=()=>{const lb=document.createElement('div');lb.className='sf-lightbox';const im=document.createElement('img');im.src=p.data;lb.appendChild(im);lb.onclick=()=>lb.remove();document.body.appendChild(lb);};
+    const db=document.createElement('button');db.style.cssText='flex:1;padding:5px;font-size:10px;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;border:none;background:var(--rbg);color:var(--rose)';db.textContent='🗑 삭제';
+    db.onclick=()=>{SF2_PHOTOS[key]=SF2_PHOTOS[key].filter(x=>x.id!==p.id);sf2RenderPhotos();SAFETY_REC[key]=SF2_PHOTOS[key];sfSave();};
+    row.appendChild(zb);row.appendChild(db);c.appendChild(row);g.appendChild(c);
+  });
+  const icon=document.getElementById('sf-drop-icon2');
+  const txt=document.getElementById('sf-drop-t2');
+  if(icon&&txt){if(photos.length>0){icon.textContent='➕';txt.textContent=`${photos.length}장 등록됨 · 추가 가능`;}else{icon.textContent='📁';txt.textContent='교육 사진 드래그 또는 클릭';}}
+}
+
+// 드래그앤드롭 초기화
+function sfInitDrop(){
+  const dz=document.getElementById('sf-drop-zone2');
+  if(!dz)return;
+  dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dragover');});
+  dz.addEventListener('dragleave',()=>dz.classList.remove('dragover'));
+  dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('dragover');sf2HandleFiles(e.dataTransfer.files);});
+}
+
+// KPI 클릭 필터
+function sfSetKpi(v,el){
+  document.querySelectorAll('[id^="sf-kpi-"]').forEach(k=>{k.style.background='var(--surf)';k.style.borderColor='transparent';});
+  el.style.background=v==='all'?'var(--nbg)':v==='done'?'var(--gbg)':v==='wait'?'var(--rbg)':'var(--abg)';
+  el.style.borderColor=v==='all'?'var(--navy)':v==='done'?'#6EE7B7':v==='wait'?'#FCA5A5':'#FCD34D';
+  sf2StF='all';sf2NaF='all';sf2ShF='all';sf2DpF='all';
+  if(v==='done')sf2StF='done';else if(v==='wait')sf2StF='wait';else if(v==='foreign')sf2NaF='외국인';
+  sfResetChips();sfRenderList();
+}
+function sfFc(key,val,el){
+  const row=el.closest('[id^="sf-chips-"]');
+  if(row)row.querySelectorAll('.sf-chip').forEach(c=>{c.classList.remove('sf-chip-on');});
+  el.classList.add('sf-chip-on');
+  if(key==='st')sf2StF=val;
+  else if(key==='na')sf2NaF=val;
+  else if(key==='sh')sf2ShF=val;
+  else if(key==='dp')sf2DpF=val;
+  sfRenderList();
+}
+function sfResetChips(){
+  ['sf-chips-st','sf-chips-na','sf-chips-sh','sf-chips-dp'].forEach(id=>{
+    const row=document.getElementById(id);
+    if(row)row.querySelectorAll('.sf-chip').forEach((c,i)=>{c.classList.remove('sf-chip-on');if(i===0)c.classList.add('sf-chip-on');});
+  });
+}
+
+// 인원 리스트 렌더 (EMPS 배열 사용)
+function sfRenderList(){
+  const srch=(document.getElementById('sf-srch')||{}).value||'';
+  const q=srch.trim().toLowerCase();
+  const list=EMPS.filter(e=>{
+    if(sf2StF==='done')return false; // 실제 서명DB 없으므로 스킵
+    if(sf2StF==='wait')return true;
+    if(sf2NaF!=='all'&&(e.nationality||'')!==sf2NaF)return false;
+    if(sf2ShF!=='all'&&(e.shift||'')!==sf2ShF)return false;
+    if(sf2DpF!=='all'&&(e.dept||e.department||'')!==sf2DpF)return false;
+    if(q&&!e.name.toLowerCase().includes(q)&&!(e.nameEn||'').toLowerCase().includes(q))return false;
+    return true;
+  });
+  const cntEl=document.getElementById('sf-lcnt');
+  const listEl=document.getElementById('sf-nlist');
+  if(!listEl)return;
+  if(cntEl)cntEl.textContent=`${list.length}명 표시`;
+  if(list.length===0){listEl.innerHTML='<div style="text-align:center;color:var(--ink3);padding:16px;font-size:11px;">검색 결과 없음</div>';return;}
+  listEl.innerHTML=list.map(e=>{
+    const nm=e.name||'';
+    const en=e.nameEn||nm;
+    const sh=e.shift||'';
+    const na=e.nationality||'';
+    const dp=e.dept||e.department||'';
+    return`<div class="sf-ni sf-ni-wait" style="margin-bottom:3px">
+      <div style="width:7px;height:7px;border-radius:50%;background:var(--rose);flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;font-weight:700;color:#9F1239">${nm}</div>
+        <div style="font-size:8px;color:var(--ink3)">${en} · ${sh} · ${na} · ${dp}</div>
       </div>
-      <button onclick="calY=calM<12?calY:calY+1;calM=calM<12?calM+1:1;document.getElementById('sf-cal-modal').remove();buildModal()" style="border:none;background:none;font-size:22px;cursor:pointer;color:var(--ink2);padding:4px 8px">›</button>
-    </div>
-    <div class="sf-cal-grid">`;
-    ['일','월','화','수','목','금','토'].forEach((x,i)=>calHtml+=`<div class="sf-cal-day ${i===0?'su':i===6?'sa':''}">${x}</div>`);
-    for(let i=0;i<fd;i++)calHtml+=`<div class="sf-cal-cell sf-empty"></div>`;
-    for(let d=1;d<=days;d++){
-      const k=`${calY}-${pad(calM)}-${pad(d)}`;
-      const cnt=(SAFETY_REC[k]||[]).length;
-      const dow=(fd+d-1)%7;
-      const isToday=calY===today.getFullYear()&&calM===today.getMonth()+1&&d===today.getDate();
-      const hasPh=getPhName(calY,calM,d);
-      calHtml+=`<div class="sf-cal-cell ${cnt>0?'sf-has':''} ${isToday?'sf-today':''}"
-        onclick="sfGoDate('${calY}-${pad(calM)}-${pad(d)}');document.getElementById('sf-cal-modal').remove()">
-        <div class="sf-cal-dn ${dow===0?'su':dow===6?'sa':''}">${d}${hasPh?'🎌':''}</div>
-        ${cnt>0?`<div class="sf-cal-cnt">📷 ${cnt}장</div>`:`<div class="sf-cal-dot" style="${cnt===0?'background:transparent':''}"></div>`}
-      </div>`;
-    }
-    calHtml+=`</div>`;
-    modal.innerHTML=`<div style="background:var(--surface);border-radius:22px;padding:24px 26px;max-width:480px;width:94%;box-shadow:0 20px 60px rgba(0,0,0,.25);max-height:90vh;overflow-y:auto">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <div style="font-size:13px;font-weight:700;color:var(--navy)">📋 안전교육 일지 달력</div>
-        <button onclick="document.getElementById('sf-cal-modal').remove()" style="border:none;background:none;font-size:22px;cursor:pointer;color:var(--ink3)">×</button>
-      </div>
-      ${calHtml}
-      <div style="margin-top:14px;padding:10px 14px;background:var(--surf);border-radius:10px;font-size:11px;color:var(--ink3);display:flex;gap:14px;align-items:center">
-        <span><span style="display:inline-block;width:10px;height:10px;background:linear-gradient(135deg,#EFF6FF,#DBEAFE);border:1.5px solid #93C5FD;border-radius:3px;margin-right:4px;vertical-align:middle"></span>사진 등록됨</span>
-        <span><span style="display:inline-block;width:10px;height:10px;border:2.5px solid var(--teal);border-radius:3px;margin-right:4px;vertical-align:middle"></span>오늘</span>
-        <span style="margin-left:auto;font-weight:600;color:var(--ink2)">날짜 클릭 → 해당일 이동</span>
-      </div>
+      <span style="font-size:8px;padding:1px 5px;border-radius:20px;background:var(--rbg);color:var(--rose);font-weight:700">미서명</span>
     </div>`;
-    modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
-    document.body.appendChild(modal);
-  }
-  buildModal();
+  }).join('');
 }
+
+// 최근 일지
+function sfRenderRecent(){
+  const el=document.getElementById('sf-recent-list');if(!el)return;
+  const today=new Date(sfY,sfM-1,sfD);
+  const days=[];
+  for(let i=1;i<=7;i++){
+    const d=new Date(today);d.setDate(today.getDate()-i);
+    const k=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    const tbm=SAFETY_REC[k+'_tbm']||'';
+    const photos=(SAFETY_REC[k]||[]).length;
+    if(tbm||photos>0){
+      days.push({date:`${d.getMonth()+1}/${d.getDate()}일`,tbm:tbm.slice(0,30)+(tbm.length>30?'...':''),photos});
+    }
+  }
+  if(days.length===0){el.innerHTML='<div style="font-size:11px;color:var(--ink3);text-align:center;padding:12px">아직 기록된 일지가 없습니다</div>';return;}
+  el.innerHTML=days.map(d=>`<div style="display:flex;align-items:center;gap:9px;padding:7px 9px;background:var(--surf);border-radius:8px;margin-bottom:4px">
+    <span style="font-size:10px;font-weight:700;color:var(--ink);min-width:46px">${d.date}</span>
+    <span style="flex:1;font-size:10px;color:var(--ink3)">${d.tbm||'교육내용 없음'}</span>
+    ${d.photos>0?`<span style="font-size:10px;color:var(--teal);font-weight:700">📷${d.photos}</span>`:''}
+  </div>`).join('');
+}
+
+// 월별 현황표
+const SF_TBM_DAYS=[1,2,3,6,7,8,9,10,13,14,15,16,17,20,21,22];
+const SF_TBM_CONT={1:'고소작업 안전수칙',2:'화기작업 허가절차',3:'중량물 취급',6:'전기작업 감전예방',7:'개인보호구 착용',8:'작업장 정리정돈',9:'화학물질 취급',10:'추락 방지',13:'비상구 대피요령',14:'폐수처리 안전점검',15:'고압가스 취급',16:'안전점검 체크리스트',17:'협착사고 예방',20:'소음·진동 안전수칙',21:'방호장치 점검',22:'안전보건 표지판'};
+
+function sfChgM(d){
+  sfMMo+=d;if(sfMMo>12){sfMMo=1;sfMY++;}if(sfMMo<1){sfMMo=12;sfMY--;}
+  const el=document.getElementById('sf-m-lbl');if(el)el.textContent=`${sfMY}년 ${sfMMo}월`;
+  sfRenderM();
+}
+function sfSetMF(v,btn){
+  sfMStF=v;
+  document.querySelectorAll('.sf-fbtn').forEach(b=>{b.classList.remove('sf-fbtn-on');});
+  btn.classList.add('sf-fbtn-on');sfRenderM();
+}
+function sfRenderM(){
+  const sh=(document.getElementById('sf-f-sh')||{}).value||'all';
+  const na=(document.getElementById('sf-f-na')||{}).value||'all';
+  const dp=(document.getElementById('sf-f-dp')||{}).value||'all';
+  let emps=EMPS.filter(e=>{
+    if(sh!=='all'&&(e.shift||'')!==sh)return false;
+    if(na!=='all'&&(e.nationality||'')!==na)return false;
+    if(dp!=='all'&&(e.dept||e.department||'')!==dp)return false;
+    return true;
+  });
+  const DNW=['일','월','화','수','목','금','토'];
+  const days=SF_TBM_DAYS;
+  const t=document.getElementById('sf-mt');if(!t)return;
+  let h=`<thead><tr><th style="padding:7px 9px;background:var(--navy);color:#fff;font-weight:700;white-space:nowrap;text-align:left;font-size:9px;position:sticky;left:0;min-width:90px">직원</th>`;
+  days.forEach(d=>{
+    const dw=new Date(sfMY,sfMMo-1,d).getDay();
+    const c=dw===0?'color:#EF4444':dw===6?'color:#93C5FD':'';
+    h+=`<th style="padding:7px 6px;background:var(--navy);color:#fff;font-size:9px;text-align:center;white-space:nowrap;min-width:34px;${c}">${d}일<br><span style="font-size:8px;opacity:.7">${DNW[dw]}</span></th>`;
+  });
+  h+=`<th style="padding:7px 9px;background:#059669;color:#fff;font-size:9px;text-align:center;min-width:50px">완료율</th></tr></thead><tbody>`;
+  emps.forEach(e=>{
+    // 랜덤 서명 데이터 (실제는 Supabase)
+    let x=(e.id||e.name||'').split('').reduce((a,c)=>a+c.charCodeAt(0),0)*997+7;
+    const rng=()=>{x=x*1664525+1013904223;return((x>>>0)/0xFFFFFFFF);};
+    const rec=days.map(()=>rng()<((e.nationality||'')!=='외국인'?0.88:0.65)?1:0);
+    if(sfMStF==='done'&&rec[rec.length-1]===0)return;
+    if(sfMStF==='wait'&&rec[rec.length-1]===1)return;
+    const total=rec.reduce((a,b)=>a+b,0);
+    const pct=days.length?Math.round(total/days.length*100):0;
+    const pc=pct===100?'#059669':pct>=70?'#1D4ED8':'#E11D48';
+    h+=`<tr><td style="padding:6px 9px;border-bottom:1px solid var(--bd);position:sticky;left:0;background:var(--card);border-right:1px solid var(--bd)"><div style="font-size:10px;font-weight:700">${e.name}</div><div style="font-size:8px;color:var(--ink3)">${e.shift||''} · ${e.nationality||''}</div></td>`;
+    rec.forEach(v=>{h+=v===1?`<td style="padding:6px 9px;border-bottom:1px solid var(--bd);text-align:center"><span style="background:var(--gbg);color:#065F46;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700">✓</span></td>`:`<td style="padding:6px 9px;border-bottom:1px solid var(--bd);text-align:center;color:var(--ink3);font-size:9px">—</td>`;});
+    h+=`<td style="padding:6px 9px;border-bottom:1px solid var(--bd);text-align:center;font-weight:700;color:${pc};font-size:10px">${pct}%<br><span style="font-size:8px;color:var(--ink3)">${total}/${days.length}</span></td></tr>`;
+  });
+  h+=`</tbody>`;t.innerHTML=h;
+}
+
+// 월간 현황
+function sfRenderSummary(){
+  // 달력
+  const cal=document.getElementById('sf-cal');if(!cal)return;
+  cal.innerHTML='';
+  const y=sfY,mo=sfM,days=new Date(y,mo,0).getDate(),fd=new Date(y,mo-1,1).getDay();
+  const ts=new Set(SF_TBM_DAYS);
+  const today=new Date();
+  for(let i=0;i<fd;i++){const e=document.createElement('div');e.style.cssText='visibility:hidden';e.textContent='x';cal.appendChild(e);}
+  for(let d=1;d<=days;d++){
+    const e=document.createElement('div');
+    const isToday=y===today.getFullYear()&&mo===today.getMonth()+1&&d===today.getDate();
+    const has=ts.has(d),fut=d>today.getDate()&&y===today.getFullYear()&&mo===today.getMonth()+1;
+    if(isToday)e.style.cssText='padding:4px 2px;border-radius:6px;text-align:center;background:var(--navy);color:#fff;font-weight:700;font-size:10px;min-height:34px;cursor:pointer';
+    else if(has&&!fut)e.style.cssText='padding:4px 2px;border-radius:6px;text-align:center;background:#DBEAFE;color:#1D4ED8;font-weight:700;border:1px solid #93C5FD;font-size:10px;min-height:34px;cursor:pointer';
+    else if(fut)e.style.cssText='padding:4px 2px;border-radius:6px;text-align:center;color:var(--bd2);font-size:10px;min-height:34px';
+    else e.style.cssText='padding:4px 2px;border-radius:6px;text-align:center;font-size:10px;min-height:34px;border:1px solid transparent';
+    e.innerHTML=`<div>${d}</div>${has&&!fut?`<div style="font-size:8px;color:#1D4ED8">✓TBM</div>`:''}`;
+    cal.appendChild(e);
+  }
+  // 일별 목록
+  const rows=document.getElementById('sf-sum-rows');
+  if(rows){
+    const recent=[...SF_TBM_DAYS].filter(d=>d<=sfD).reverse().slice(0,6);
+    rows.innerHTML=recent.map(d=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)">
+      <span style="font-size:10px;font-weight:700;min-width:40px">${sfM}/${d}일</span>
+      <span style="flex:1;font-size:10px;color:var(--ink3)">${SF_TBM_CONT[d]||''}</span>
+      <button style="font-size:9px;padding:2px 7px;border:1px solid var(--bd2);border-radius:6px;background:var(--surf);cursor:pointer;color:var(--ink)">PDF</button>
+    </div>`).join('');
+  }
+  // 개인별 이수율
+  const prog=document.getElementById('sf-sum-prog');
+  if(prog&&EMPS.length>0){
+    const show=EMPS.slice(0,8);
+    const daysCount=SF_TBM_DAYS.filter(d=>d<=sfD).length;
+    prog.innerHTML=show.map(e=>{
+      let x=(e.name||'').split('').reduce((a,c)=>a+c.charCodeAt(0),0)*997;
+      const rng=()=>{x=x*1664525+1013904223;return((x>>>0)/0xFFFFFFFF);};
+      const done=Math.round(daysCount*(e.nationality==='외국인'?0.65:0.88)+rng()*daysCount*0.1);
+      const pct=daysCount?Math.min(100,Math.round(done/daysCount*100)):0;
+      const pc=pct===100?'var(--green)':pct>=70?'#1D4ED8':'var(--rose)';
+      return`<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+        <span style="font-size:9px;color:var(--ink3);min-width:68px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.name}</span>
+        <div style="flex:1;height:4px;background:var(--surf);border-radius:99px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${pc};border-radius:99px"></div></div>
+        <span style="font-size:9px;font-weight:600;min-width:26px;text-align:right;color:${pc}">${pct}%</span>
+      </div>`;
+    }).join('');
+  }
+  // 요약 건수
+  const cnt=document.getElementById('sf-sum-cnt');
+  if(cnt)cnt.textContent=SF_TBM_DAYS.filter(d=>d<=sfD).length+'회';
+}
+
+// renderSafety 구 버전 (gp('safety') 호출용 — 호환성 유지)
+function renderSafety(){
+  sfUpdBar2();sfLoadTbm();sfRenderList();sfRenderRecent();
+  // 사진 로드
+  const key=sfKey();
+  const saved=SAFETY_REC[key]||[];
+  if(saved.length>0&&(!SF2_PHOTOS[key]||SF2_PHOTOS[key].length===0)){
+    SF2_PHOTOS[key]=saved;sf2RenderPhotos();
+  }
+  sfInitDrop();
+  sfSwitchTab('daily');
+}
+
 function sfGoDate(dateStr){const[y,m,d]=dateStr.split('-').map(Number);sfY=y;sfM=m;sfD=d;renderSafety();}
 
 
@@ -7588,3 +7619,249 @@ function admSendNotify(type, data){
 }
 
 // ── 랜딩 서비스 화면 탭 (랜딩페이지 inline script로 이동됨) ──
+
+// ══════════════════════════════════════
+// TBM 서명 오버레이 제어
+// ══════════════════════════════════════
+function openTbmSign(token){
+  document.getElementById('tbm-sign-overlay').classList.add('show');
+  document.body.style.overflow='hidden';
+  if(typeof tbmRenderEmps==='function') tbmRenderEmps();
+}
+function closeTbmSign(){
+  document.getElementById('tbm-sign-overlay').classList.remove('show');
+  document.body.style.overflow='';
+}
+// URL ?tbm=토큰 으로 들어오면 자동 오픈
+(function(){
+  const p=new URLSearchParams(location.search);
+  if(p.has('tbm')) window.addEventListener('DOMContentLoaded',()=>openTbmSign(p.get('tbm')));
+})();
+
+let tbmCurLang='ko';
+let tbmShiftF='all';
+let tbmSelectedPerson=null;
+let tbmAgrees=[false,false,false,false];
+let TBM_SIGNED={};
+
+// 직원 목록 (실제 구현 시 EMPS에서 불러옴)
+const TBM_PEOPLE=[
+  {n:'김민준',en:'Kim Minjun',sh:'주간',na:'내국인',dp:'생산A'},
+  {n:'강민호',en:'Kang Minho',sh:'주간',na:'내국인',dp:'생산A'},
+  {n:'한상훈',en:'Han Sanghoon',sh:'야간',na:'내국인',dp:'생산A'},
+  {n:'정지수',en:'Jung Jisu',sh:'주간',na:'내국인',dp:'생산A'},
+  {n:'최경숙',en:'Choi Kyungsook',sh:'주간',na:'내국인',dp:'생산A'},
+  {n:'홍명숙',en:'Hong Myungsook',sh:'주간',na:'내국인',dp:'생산B'},
+  {n:'고준례',en:'Ko Junrye',sh:'야간',na:'내국인',dp:'생산A'},
+  {n:'이경자',en:'Lee Kyungja',sh:'야간',na:'내국인',dp:'생산B'},
+  {n:'이은자',en:'Lee Eunja',sh:'주간',na:'내국인',dp:'생산A'},
+  {n:'서정재',en:'Seo Jungjae',sh:'야간',na:'내국인',dp:'생산B'},
+  {n:'신화경',en:'Shin Hwakyung',sh:'야간',na:'내국인',dp:'생산B'},
+  {n:'강선자',en:'Kang Seonja',sh:'주간',na:'내국인',dp:'생산B'},
+  {n:'정옥심',en:'Jung Oksim',sh:'주간',na:'내국인',dp:'생산B'},
+  {n:'박성숙',en:'Park Sungsook',sh:'주간',na:'내국인',dp:'생산A'},
+  {n:'유지수',en:'Yoo Jisu',sh:'주간',na:'내국인',dp:'생산A'},
+  {n:'조옥순',en:'Jo Oksoon',sh:'야간',na:'내국인',dp:'생산B'},
+  {n:'이철수',en:'Lee Cheolsu',sh:'주간',na:'내국인',dp:'생산A'},
+  {n:'박수진',en:'Park Sujin',sh:'주간',na:'내국인',dp:'생산B'},
+  {n:'최지우',en:'Choi Jiwoo',sh:'야간',na:'내국인',dp:'생산B'},
+  {n:'안인자',en:'An Inja',sh:'야간',na:'내국인',dp:'생산A'},
+  {n:'이인숙',en:'Lee Insook',sh:'야간',na:'내국인',dp:'생산B'},
+  {n:'최교숙',en:'Choi Kyosook',sh:'주간',na:'내국인',dp:'생산A'},
+  {n:'왕웨이',en:'Wang Wei',sh:'주간',na:'외국인',dp:'외주'},
+  {n:'Tran Thi Lan',en:'Tran Thi Lan',sh:'야간',na:'외국인',dp:'외주'},
+  {n:'Nguyen Van An',en:'Nguyen Van An',sh:'야간',na:'외국인',dp:'외주'},
+  {n:'Ahmad Farhan',en:'Ahmad Farhan',sh:'주간',na:'외국인',dp:'외주'},
+  {n:'Liu Yang',en:'Liu Yang',sh:'주간',na:'외국인',dp:'외주'},
+  {n:'Mohammed Ali',en:'Mohammed Ali',sh:'야간',na:'외국인',dp:'외주'},
+];
+
+// 초기 서명 상태
+['김민준','강민호','한상훈','정지수','홍명숙','이은자','서정재','신화경','강선자','왕웨이'].forEach(n=>{
+  TBM_SIGNED[n]={time:`08:${String(Math.floor(Math.random()*29)+1).padStart(2,'0')}`};
+});
+
+// 날짜 세팅
+(function(){
+  const now=new Date();
+  const DOW_KO=['일','월','화','수','목','금','토'];
+  const DOW_EN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const y=now.getFullYear(),m=now.getMonth()+1,d=now.getDate(),dw=now.getDay();
+  const hdrDate=document.getElementById('hdr-date');
+  if(hdrDate)hdrDate.textContent=`${y}년 ${m}월 ${d}일 ${DOW_KO[dw]}요일 / ${DOW_EN[dw]}, ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1]} ${d}, ${y}`;
+  const sdko=document.getElementById('sign-date-ko');
+  const sden=document.getElementById('sign-date-en');
+  if(sdko)sdko.textContent=`${y}년 ${m}월 ${d}일`;
+  if(sden)sden.textContent=`${['January','February','March','April','May','June','July','August','September','October','November','December'][m-1]} ${d}, ${y}`;
+})();
+
+// 언어 전환
+function tbmSetLang(lang){
+  tbmCurLang=lang;
+  const overlay=document.getElementById('tbm-sign-overlay');
+  if(overlay)overlay.className=lang==='en'?'show lang-en':'show lang-ko';
+  document.getElementById('btn-ko').classList.toggle('act',lang==='ko');
+  document.getElementById('btn-en').classList.toggle('act',lang==='en');
+  tbmRenderEmps();
+}
+
+// 스텝 UI
+function tbmSetStep(n){
+  [1,2,3].forEach(i=>{
+    const sn=document.getElementById('sn'+i);
+    const sl=document.getElementById('sl'+i);
+    if(!sn||!sl)return;
+    sn.className='step-num'+(i<n?' done-st':i===n?' act-st':'');
+    sl.className='step-lbl'+(i===n?' act-st':'');
+    if(i<n) sn.textContent='✓';
+    else sn.textContent=i;
+  });
+}
+
+// 필터
+function tbmSetF(v,el){
+  tbmShiftF=v;
+  document.querySelectorAll('#tbm-sign-overlay .filter-row .chip').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on');
+  tbmRenderEmps();
+}
+
+function tbmClearSrch(){
+  document.getElementById('tbm-srch').value='';
+  document.getElementById('tbm-srch-clear').style.display='none';
+  tbmRenderEmps();
+}
+
+// 직원 목록 렌더
+function tbmRenderEmps(){
+  const srch=(document.getElementById('tbm-srch')||{value:''}).value.trim().toLowerCase();
+  const clearEl=document.getElementById('tbm-srch-clear');
+  if(clearEl)clearEl.style.display=srch?'block':'none';
+
+  const list=TBM_PEOPLE.filter(p=>{
+    if(tbmShiftF==='주간'&&p.sh!=='주간')return false;
+    if(tbmShiftF==='야간'&&p.sh!=='야간')return false;
+    if(tbmShiftF==='외국인'&&p.na!=='외국인')return false;
+    if(tbmShiftF==='생산A'&&p.dp!=='생산A')return false;
+    if(tbmShiftF==='생산B'&&p.dp!=='생산B')return false;
+    if(tbmShiftF==='외주'&&p.dp!=='외주')return false;
+    if(srch&&!p.n.toLowerCase().includes(srch)&&!p.en.toLowerCase().includes(srch))return false;
+    return true;
+  });
+
+  const el=document.getElementById('tbm-emp-list');
+  if(!el)return;
+  if(list.length===0){
+    el.innerHTML=`<div class="empty-msg">${tbmCurLang==='ko'?'검색 결과가 없습니다':'No results found'}</div>`;
+    return;
+  }
+
+  // 미서명 위, 완료 아래
+  const wait=list.filter(p=>!TBM_SIGNED[p.n]);
+  const done=list.filter(p=>TBM_SIGNED[p.n]);
+  const sorted=[...wait,...done];
+
+  el.innerHTML=sorted.map(p=>{
+    const isSigned=!!TBM_SIGNED[p.n];
+    const initials=(p.en||p.n).split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+    const isF=p.na==='외국인';
+    const nameMain=tbmCurLang==='en'?p.en:p.n;
+    const nameSub=tbmCurLang==='en'?p.n:p.en;
+    const shKo=p.sh, shEn=p.sh==='주간'?'Day':'Night';
+    const naKo=p.na, naEn=p.na==='내국인'?'Korean':'Foreign Worker';
+    const subKo=`${shKo} · ${naKo} · ${p.dp}`;
+    const subEn=`${shEn} · ${naEn} · ${p.dp}`;
+    const subTxt=tbmCurLang==='en'?subEn:subKo;
+
+    if(isSigned){
+      return`<div class="emp-item signed-done">
+        <div class="emp-avt avt-done">${initials}</div>
+        <div class="emp-info">
+          <div class="emp-nm" style="color:var(--green);">${nameMain}</div>
+          <div class="emp-nm-en">${nameSub}</div>
+          <div class="emp-sub">${subTxt}</div>
+        </div>
+        <div class="done-badge">${tbmCurLang==='ko'?'✓ 서명완료':'✓ Signed'}<br><small>${TBM_SIGNED[p.n].time}</small></div>
+      </div>`;
+    }
+    return`<div class="emp-item" data-n="${p.n}" data-en="${p.en}" onclick="tbmSelectPerson('${p.n}','${p.en}')">
+      <div class="emp-avt ${isF?'avt-f':'avt-n'}">${initials}</div>
+      <div class="emp-info">
+        <div class="emp-nm">${nameMain}</div>
+        <div class="emp-nm-en">${nameSub}</div>
+        <div class="emp-sub">${subTxt}</div>
+      </div>
+      <div class="emp-sel-icon">›</div>
+    </div>`;
+  }).join('');
+}
+
+// 이름 선택 → step2
+function tbmSelectPerson(nameKo, nameEn){
+  tbmSelectedPerson={n:nameKo,en:nameEn};
+  document.getElementById('sel-nm-ko').textContent=nameKo;
+  document.getElementById('sel-nm-en').textContent=nameEn;
+  tbmAgrees=[false,false,false,false];
+  [0,1,2,3].forEach(i=>{
+    const chk=document.getElementById('chk'+i);
+    if(chk){chk.className='agree-chk';chk.closest('.agree-item').classList.remove('checked');}
+  });
+  tbmUpdateSubmitBtn();
+  document.getElementById('page1').classList.remove('on');
+  document.getElementById('page2').classList.add('on');
+  tbmSetStep(2);
+  document.getElementById('tbm-sign-overlay').scrollTo(0,0);
+}
+
+// 동의 토글
+function tbmToggleAgree(idx,el){
+  tbmAgrees[idx]=!tbmAgrees[idx];
+  const chk=document.getElementById('chk'+idx);
+  if(chk)chk.className='agree-chk'+(tbmAgrees[idx]?' on':'');
+  el.classList.toggle('checked',tbmAgrees[idx]);
+  tbmUpdateSubmitBtn();
+}
+
+function tbmUpdateSubmitBtn(){
+  const allChecked=tbmAgrees.every(a=>a);
+  const btn=document.getElementById('btn-submit');
+  if(!btn)return;
+  btn.disabled=!allChecked;
+  if(allChecked) btn.className='btn-submit ready';
+  else btn.className='btn-submit';
+}
+
+// 서명 제출
+function tbmSubmitSign(){
+  if(!tbmAgrees.every(a=>a))return;
+  const now=new Date();
+  const t=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  TBM_SIGNED[tbmSelectedPerson.n]={time:t};
+  document.getElementById('popup-name').textContent=
+    tbmCurLang==='ko'?tbmSelectedPerson.n:tbmSelectedPerson.en;
+  const y=now.getFullYear(),m=now.getMonth()+1,d=now.getDate();
+  document.getElementById('popup-time').textContent=
+    tbmCurLang==='ko'?`서명 시간: ${t} · ${y}년 ${m}월 ${d}일`:`Signed at ${t} · ${['January','February','March','April','May','June','July','August','September','October','November','December'][m-1]} ${d}, ${y}`;
+  document.getElementById('popup').classList.add('show');
+  tbmSetStep(3);
+}
+
+// 팝업 닫기
+function tbmClosePopup(){
+  document.getElementById('popup').classList.remove('show');
+  tbmSelectedPerson=null;
+  document.getElementById('page2').classList.remove('on');
+  document.getElementById('page1').classList.add('on');
+  document.getElementById('tbm-srch').value='';
+  tbmSetStep(1);
+  tbmRenderEmps();
+  document.getElementById('tbm-sign-overlay').scrollTo(0,0);
+}
+
+// 뒤로가기
+function tbmGoBack(){
+  document.getElementById('page2').classList.remove('on');
+  document.getElementById('page1').classList.add('on');
+  tbmSetStep(1);
+  document.getElementById('tbm-sign-overlay').scrollTo(0,0);
+}

@@ -341,6 +341,13 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .tip-popup-close:hover{color:var(--ink)}
 .tip-wrap .tip-btn{pointer-events:all}
 /* ── 안전교육 일지 ── */
+.sf-chip{padding:3px 8px;border-radius:20px;font-size:9px;border:1px solid var(--bd2);background:var(--card);color:var(--ink3);cursor:pointer;transition:all .15s;user-select:none}
+.sf-chip-on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.sf-fbtn{padding:4px 10px;border-radius:20px;font-size:9px;border:1px solid var(--bd2);background:var(--card);color:var(--ink3);cursor:pointer;transition:all .15s}
+.sf-fbtn-on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.sf-ni{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;border:1px solid var(--bd)}
+.sf-ni-done{background:var(--gbg);border-color:#6EE7B7}
+.sf-ni-wait{background:var(--rbg);border-color:#FCA5A5}
 .sf-drop{border:2.5px dashed var(--bd2);border-radius:20px;background:var(--card);transition:all .2s;cursor:pointer;position:relative;overflow:hidden}
 .sf-drop.dragover{border-color:var(--teal);background:var(--tbg);transform:scale(1.01);box-shadow:var(--shadow-md)}
 .sf-drop-inner{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:56px 24px;text-align:center}
@@ -360,6 +367,97 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .sf-count-badge{display:inline-flex;align-items:center;justify-content:center;background:var(--teal);color:#fff;border-radius:50%;width:20px;height:20px;font-size:10px;font-weight:700;margin-left:4px}
 .sf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:16px}
 .sf-nav-badge{font-size:9px;background:var(--teal);color:#fff;border-radius:8px;padding:1px 6px;margin-left:3px;font-weight:700}
+
+/* ── TBM 직원 서명 오버레이 ── */
+#tbm-sign-overlay{display:none;position:fixed;inset:0;background:#F1F5F9;z-index:99999;overflow-y:auto;}
+#tbm-sign-overlay.show{display:block;}
+#tbm-sign-overlay .hdr{background:linear-gradient(135deg,#0F2952,#1e3a8a,#1D4ED8);padding:18px 20px 16px;text-align:center;position:relative;}
+#tbm-sign-overlay .hdr-logo{font-size:12px;font-weight:800;color:rgba(255,255,255,.5);margin-bottom:5px;letter-spacing:2px;}
+#tbm-sign-overlay .hdr-title{font-size:20px;font-weight:800;color:#fff;margin-bottom:3px;}
+#tbm-sign-overlay .hdr-title-sub{font-size:13px;color:rgba(255,255,255,.65);margin-bottom:12px;}
+#tbm-sign-overlay .hdr-date{display:inline-block;background:rgba(255,255,255,.15);color:#fff;padding:5px 16px;border-radius:20px;font-size:12px;font-weight:600;}
+#tbm-sign-overlay .lang-btn{position:absolute;top:16px;right:16px;display:flex;gap:6px;}
+#tbm-sign-overlay .lb{padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;border:2px solid transparent;font-family:inherit;transition:all .15s;}
+#tbm-sign-overlay .lb-ko{background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.3);}
+#tbm-sign-overlay .lb-en{background:#fff;color:#0F2952;border-color:#fff;}
+#tbm-sign-overlay .lb.act{background:#34D399;color:#fff;border-color:#34D399;}
+#tbm-sign-overlay .step-bar{background:#fff;border-bottom:1px solid #E2E8F0;padding:12px 20px;display:flex;align-items:center;gap:0;justify-content:center;}
+#tbm-sign-overlay .step{display:flex;align-items:center;gap:6px;}
+#tbm-sign-overlay .step-num{width:22px;height:22px;border-radius:50%;background:#CBD5E1;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .3s;}
+#tbm-sign-overlay .step-num.done-st{background:#059669;}
+#tbm-sign-overlay .step-num.act-st{background:#0F2952;}
+#tbm-sign-overlay .step-lbl{font-size:10px;color:#94A3B8;white-space:nowrap;font-weight:500;}
+#tbm-sign-overlay .step-lbl.act-st{color:#0F2952;font-weight:700;}
+#tbm-sign-overlay .step-arr{color:#CBD5E1;font-size:14px;margin:0 8px;}
+#tbm-sign-overlay .tbm-wrap{max-width:480px;margin:0 auto;padding:16px 16px 40px;}
+#tbm-sign-overlay .card{background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:16px 18px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.08);}
+#tbm-sign-overlay .ctit{font-size:11px;font-weight:700;color:#94A3B8;margin-bottom:10px;letter-spacing:.05em;}
+#tbm-sign-overlay .tbm-ko{font-size:14px;font-weight:600;color:#0F172A;line-height:1.75;}
+#tbm-sign-overlay .tbm-en{font-size:12px;color:#334155;line-height:1.7;margin-top:8px;padding-top:8px;border-top:1px dashed #E2E8F0;}
+#tbm-sign-overlay .tbm-en-lbl{font-size:10px;font-weight:700;color:#1D4ED8;margin-bottom:3px;}
+#tbm-sign-overlay .srch-wrap{position:relative;margin-bottom:10px;}
+#tbm-sign-overlay .srch-inp{width:100%;padding:12px 14px 12px 40px;border:1.5px solid #CBD5E1;border-radius:11px;font-size:14px;font-family:inherit;color:#0F172A;outline:none;transition:border .15s;background:#fff;}
+#tbm-sign-overlay .srch-inp:focus{border-color:#1D4ED8;box-shadow:0 0 0 3px rgba(29,78,216,.1);}
+#tbm-sign-overlay .srch-icon{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:16px;}
+#tbm-sign-overlay .srch-clear{position:absolute;right:13px;top:50%;transform:translateY(-50%);font-size:15px;color:#94A3B8;cursor:pointer;display:none;}
+#tbm-sign-overlay .filter-row{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px;}
+#tbm-sign-overlay .chip{padding:4px 11px;border-radius:20px;font-size:10px;border:1px solid #CBD5E1;background:#fff;color:#94A3B8;cursor:pointer;transition:all .15s;}
+#tbm-sign-overlay .chip.on{background:#0F2952;color:#fff;border-color:#0F2952;}
+#tbm-sign-overlay .emp-list{display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto;}
+#tbm-sign-overlay .emp-item{display:flex;align-items:center;gap:12px;padding:12px 14px;background:#fff;border:1.5px solid #E2E8F0;border-radius:12px;cursor:pointer;transition:all .18s;user-select:none;}
+#tbm-sign-overlay .emp-item:hover{border-color:#1D4ED8;background:#EFF6FF;transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,0,0,.12);}
+#tbm-sign-overlay .emp-item.selected{border-color:#0F2952;background:#EFF6FF;box-shadow:0 0 0 3px rgba(29,78,216,.12);}
+#tbm-sign-overlay .emp-item.signed-done{background:#ECFDF5;border-color:#6EE7B7;cursor:default;opacity:.7;}
+#tbm-sign-overlay .emp-item.signed-done:hover{transform:none;box-shadow:none;}
+#tbm-sign-overlay .emp-avt{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;flex-shrink:0;}
+#tbm-sign-overlay .avt-n{background:#EFF6FF;color:#0F2952;}
+#tbm-sign-overlay .avt-f{background:#FEF3C7;color:#92400E;}
+#tbm-sign-overlay .avt-sel{background:#0F2952;color:#fff;}
+#tbm-sign-overlay .avt-done{background:#ECFDF5;color:#059669;}
+#tbm-sign-overlay .emp-info{flex:1;min-width:0;}
+#tbm-sign-overlay .emp-nm{font-size:14px;font-weight:700;color:#0F172A;}
+#tbm-sign-overlay .emp-nm-en{font-size:11px;color:#94A3B8;margin-top:1px;}
+#tbm-sign-overlay .emp-sub{font-size:10px;color:#94A3B8;margin-top:2px;}
+#tbm-sign-overlay .emp-sel-icon{font-size:22px;flex-shrink:0;}
+#tbm-sign-overlay .done-badge{font-size:10px;font-weight:700;color:#059669;background:#ECFDF5;border:1px solid #6EE7B7;padding:2px 8px;border-radius:20px;}
+#tbm-sign-overlay .empty-msg{text-align:center;padding:24px;color:#94A3B8;font-size:12px;}
+#tbm-sign-overlay .selected-name-box{background:linear-gradient(135deg,#EFF6FF,#DBEAFE);border:1.5px solid #93C5FD;border-radius:12px;padding:14px 16px;margin-bottom:14px;text-align:center;}
+#tbm-sign-overlay .sel-nm-lbl{font-size:11px;color:#1D4ED8;font-weight:600;margin-bottom:4px;}
+#tbm-sign-overlay .sel-nm{font-size:20px;font-weight:800;color:#0F2952;}
+#tbm-sign-overlay .sel-nm-en{font-size:14px;color:#94A3B8;margin-top:2px;}
+#tbm-sign-overlay .agree-list{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;}
+#tbm-sign-overlay .agree-item{display:flex;align-items:flex-start;gap:12px;padding:13px 14px;background:#F1F5F9;border:1.5px solid #E2E8F0;border-radius:11px;cursor:pointer;transition:all .15s;}
+#tbm-sign-overlay .agree-item:hover{border-color:#CBD5E1;}
+#tbm-sign-overlay .agree-item.checked{background:#F0FDF4;border-color:#86EFAC;}
+#tbm-sign-overlay .agree-chk{width:22px;height:22px;border:2px solid #CBD5E1;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;transition:all .15s;}
+#tbm-sign-overlay .agree-chk.on{background:#059669;border-color:#059669;}
+#tbm-sign-overlay .agree-chk.on::after{content:'✓';color:#fff;font-size:13px;font-weight:700;}
+#tbm-sign-overlay .agree-txt{flex:1;}
+#tbm-sign-overlay .agree-main{font-size:12px;font-weight:700;color:#0F172A;line-height:1.5;}
+#tbm-sign-overlay .agree-sub{font-size:10px;color:#94A3B8;margin-top:3px;line-height:1.5;}
+#tbm-sign-overlay .agree-en{font-size:10px;color:#94A3B8;margin-top:2px;font-style:italic;}
+#tbm-sign-overlay .required-notice{font-size:10px;color:#E11D48;margin-bottom:12px;font-weight:600;}
+#tbm-sign-overlay .btn-submit{width:100%;padding:16px;background:#0F2952;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .2s;letter-spacing:-.3px;}
+#tbm-sign-overlay .btn-submit:hover:not(:disabled){background:#1D4ED8;transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,0,0,.12);}
+#tbm-sign-overlay .btn-submit:disabled{background:#CBD5E1;cursor:not-allowed;transform:none;}
+#tbm-sign-overlay .btn-submit.ready{background:linear-gradient(135deg,#059669,#047857);}
+#tbm-sign-overlay .btn-back{width:100%;padding:10px;background:transparent;color:#94A3B8;border:1px solid #CBD5E1;border-radius:10px;font-size:13px;cursor:pointer;font-family:inherit;margin-top:8px;}
+#tbm-sign-overlay .btn-back:hover{background:#F1F5F9;}
+#tbm-sign-overlay .popup-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100000;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+#tbm-sign-overlay .popup-bg.show{display:flex;}
+#tbm-sign-overlay .popup-box{background:#fff;border-radius:24px;padding:36px 28px;text-align:center;max-width:340px;width:92%;box-shadow:0 24px 80px rgba(0,0,0,.3);animation:tbmPopIn .3s cubic-bezier(.34,1.56,.64,1);}
+@keyframes tbmPopIn{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
+#tbm-sign-overlay .popup-icon{font-size:64px;margin-bottom:14px;display:block;}
+#tbm-sign-overlay .popup-title{font-size:22px;font-weight:800;color:#059669;margin-bottom:4px;}
+#tbm-sign-overlay .popup-title-en{font-size:15px;color:#94A3B8;margin-bottom:16px;}
+#tbm-sign-overlay .popup-name{font-size:18px;font-weight:800;color:#0F172A;margin-bottom:4px;}
+#tbm-sign-overlay .popup-time{font-size:13px;color:#94A3B8;margin-bottom:6px;}
+#tbm-sign-overlay .popup-legal{font-size:10px;color:#94A3B8;background:#F1F5F9;border-radius:8px;padding:8px 12px;margin:12px 0 20px;line-height:1.6;text-align:left;}
+#tbm-sign-overlay .popup-close{padding:13px 32px;background:#059669;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit;width:100%;}
+#tbm-sign-overlay .lang-en .ko-only{display:none!important;}
+#tbm-sign-overlay .lang-ko .en-only{display:none!important;}
+#tbm-sign-overlay .step-page{display:none;}
+#tbm-sign-overlay .step-page.on{display:block;}
 /* ── 안전교육 달력 모달 ── */
 .sf-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:10px}
 .sf-cal-day{text-align:center;padding:4px 2px;font-size:9px;font-weight:700;color:var(--ink3);letter-spacing:.3px}
@@ -1542,36 +1640,245 @@ document.addEventListener('click',e=>{
 
 <!-- 안전교육 일지 -->
 <div class="pg" id="pg-safety">
+  <!-- 헤더 -->
   <div class="ph">
     <div>
-      <div class="pt">안전교육 서명 일지</div>
-      <div class="pt-s">일자별 서명 사진 등록 · 드래그 또는 클릭으로 업로드</div>
+      <div class="pt">안전교육 일지</div>
+      <div class="pt-s">TBM 전자서명 · 일일현황 · 월별현황 · 월간현황</div>
     </div>
-    <div style="display:flex;gap:6px;align-items:center">
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
       <span id="sf-sv-msg" style="font-size:11px;color:var(--teal);background:var(--tbg);padding:4px 12px;border-radius:9px;display:none;font-weight:700">✓ 저장되었습니다</span>
-      <span id="sf-edit-msg" style="font-size:11px;color:var(--amber);background:var(--abg);padding:4px 12px;border-radius:9px;display:none;font-weight:700">✏️ 수정 중...</span>
-      <button id="sf-btn-edit" class="btn btn-sm" onclick="sfStartEdit()" style="display:none;color:var(--amber);border-color:var(--amber)">✏️ 수정</button>
-      <button id="sf-btn-save" class="btn btn-n btn-sm" onclick="sfSaveDay()">저장</button>
-      <button class="btn btn-sm" onclick="sfExportAll()" style="color:var(--teal);border-color:var(--teal)">📋 전체 목록</button>
+      <button class="btn btn-sm" onclick="sfDoExcel()" style="color:var(--teal);border-color:var(--teal)">📊 엑셀</button>
+      <button class="btn btn-sm" style="color:var(--rose);border-color:var(--rose)">📄 PDF</button>
+      <button class="btn btn-n btn-sm" onclick="sfSaveDay2()">저장</button>
     </div>
+  </div>
+
+  <!-- 워크플로우 배너 -->
+  <div id="sf-wf-banner" style="background:linear-gradient(90deg,#FFFBEB,#FEF3C7);border:1px solid #FCD34D;border-radius:12px;padding:9px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <span style="font-size:15px">💡</span>
+    <span style="font-size:11px;font-weight:700;color:#92400E">TBM 워크플로우</span>
+    <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+      <span style="background:#D97706;color:#fff;width:18px;height:18px;border-radius:50%;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">1</span>
+      <span style="font-size:10px;color:#92400E">교육내용 입력</span>
+      <span style="color:#D97706;font-size:12px">→</span>
+      <span style="background:#D97706;color:#fff;width:18px;height:18px;border-radius:50%;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">2</span>
+      <span style="font-size:10px;color:#92400E">링크 복사·단톡 공유</span>
+      <span style="color:#D97706;font-size:12px">→</span>
+      <span style="background:#D97706;color:#fff;width:18px;height:18px;border-radius:50%;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">3</span>
+      <span style="font-size:10px;color:#92400E">직원 이름선택·동의·서명</span>
+      <span style="color:#D97706;font-size:12px">→</span>
+      <span style="background:#D97706;color:#fff;width:18px;height:18px;border-radius:50%;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">4</span>
+      <span style="font-size:10px;color:#92400E">실시간 현황 확인</span>
+      <span style="color:#D97706;font-size:12px">→</span>
+      <span style="background:#D97706;color:#fff;width:18px;height:18px;border-radius:50%;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">5</span>
+      <span style="font-size:10px;color:#92400E">엑셀·PDF 저장</span>
+    </div>
+    <span onclick="document.getElementById('sf-wf-banner').style.display='none'" style="margin-left:auto;cursor:pointer;color:#D97706;font-size:16px;padding:0 4px">✕</span>
+  </div>
+
+  <!-- 탭 -->
+  <div style="display:flex;border-bottom:2px solid var(--bd);margin-bottom:14px;gap:0">
+    <div id="sf-tab-daily" onclick="sfSwitchTab('daily')" style="padding:8px 18px;font-size:12px;font-weight:700;color:var(--navy);border-bottom:2.5px solid var(--navy);margin-bottom:-2px;cursor:pointer;white-space:nowrap">📋 일일 현황표</div>
+    <div id="sf-tab-monthly" onclick="sfSwitchTab('monthly')" style="padding:8px 18px;font-size:12px;color:var(--ink3);border-bottom:2.5px solid transparent;margin-bottom:-2px;cursor:pointer;white-space:nowrap">📊 월별 현황표</div>
+    <div id="sf-tab-summary" onclick="sfSwitchTab('summary')" style="padding:8px 18px;font-size:12px;color:var(--ink3);border-bottom:2.5px solid transparent;margin-bottom:-2px;cursor:pointer;white-space:nowrap">📅 월간 현황</div>
   </div>
 
   <!-- 날짜 바 -->
-  <div class="dbar" style="margin-bottom:14px">
-    <div class="ds">
-      <div class="dar" onclick="sfNd('year',-1)">‹</div><div class="dl">연도</div><div class="dv" id="sf-dy">2025</div><div class="dar" onclick="sfNd('year',1)">›</div>
-    </div>
-    <div class="ds">
-      <div class="dar" onclick="sfNd('month',-1)">‹</div><div class="dl">월</div><div class="dv" id="sf-dm">3</div><div class="dar" onclick="sfNd('month',1)">›</div>
-    </div>
-    <div class="ds">
-      <div class="dar" onclick="sfNd('day',-1)">‹</div><div class="dl">일</div><div class="dv" id="sf-dd">1</div><div class="dar" onclick="sfNd('day',1)">›</div>
-    </div>
+  <div class="dbar" style="margin-bottom:14px;border-radius:12px">
+    <div class="ds"><div class="dar" onclick="sfNd('year',-1)">‹</div><div class="dl">연도</div><div class="dv" id="sf-dy">2026</div><div class="dar" onclick="sfNd('year',1)">›</div></div>
+    <div class="ds"><div class="dar" onclick="sfNd('month',-1)">‹</div><div class="dl">월</div><div class="dv" id="sf-dm">4</div><div class="dar" onclick="sfNd('month',1)">›</div></div>
+    <div class="ds"><div class="dar" onclick="sfNd('day',-1)">‹</div><div class="dl">일</div><div class="dv" id="sf-dd">11</div><div class="dar" onclick="sfNd('day',1)">›</div></div>
     <div class="ds" style="border-right:none"><div class="ddow" id="sf-dow">토요일</div></div>
   </div>
 
-  <!-- 메인 콘텐츠 -->
-  <div id="sf-body"></div>
+  <!-- ① 일일 현황표 탭 -->
+  <div id="sf-page-daily" style="display:flex;gap:14px">
+    <!-- 메인 -->
+    <div style="flex:1;display:flex;flex-direction:column;gap:12px">
+
+      <!-- TBM 교육내용 -->
+      <div style="background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow-sm)">
+        <div style="font-size:10px;font-weight:700;color:var(--ink3);margin-bottom:9px;letter-spacing:.05em">📋 TBM 교육내용</div>
+        <textarea id="sf-tbm-content" style="width:100%;border:1.5px solid var(--bd2);border-radius:9px;padding:9px 11px;font-size:12px;font-family:inherit;color:var(--ink);background:var(--card);resize:vertical;min-height:68px;outline:none;line-height:1.6;transition:border .15s" placeholder="오늘의 TBM 교육내용을 입력하세요 (예: 고소작업 안전수칙, 개인보호구 착용, 화기작업 허가절차 등)" oninput="sfSaveTbm()"></textarea>
+      </div>
+
+      <!-- 링크 -->
+      <div style="background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow-sm)">
+        <div style="font-size:10px;font-weight:700;color:var(--ink3);margin-bottom:9px;letter-spacing:.05em">🔗 전자서명 링크</div>
+        <div style="background:var(--surf);border-radius:10px;padding:10px 12px;border:1px solid var(--bd)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+            <span style="font-size:10px;font-weight:700">오늘 서명 링크</span>
+            <span style="font-size:9px;color:var(--ink3)">당일 자정 만료 · 직원이 이름 선택 후 동의·체크</span>
+          </div>
+          <div id="sf-link-url" style="font-size:10px;color:var(--ink3);font-family:monospace;background:var(--card);border:1px solid var(--bd);border-radius:6px;padding:6px 9px;margin:5px 0;word-break:break-all;line-height:1.5">noprohr.netlify.app/tbm_sign.html</div>
+          <div style="display:flex;gap:6px">
+            <button onclick="sfCopyLink()" style="flex:1;padding:8px;background:var(--navy);color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">🔗 링크 복사 (단톡방 공유)</button>
+            <button onclick="sfGenLink()" style="padding:7px 10px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;cursor:pointer;background:var(--card);color:var(--ink2);font-family:inherit">🔄 재생성</button>
+            <button onclick="window.open('tbm_sign.html','_blank')" style="padding:7px 10px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;cursor:pointer;background:var(--card);color:var(--ink2);font-family:inherit">👁 미리보기</button>
+          </div>
+          <div id="sf-toast" style="display:none;background:var(--navy);color:#fff;font-size:10px;padding:5px 11px;border-radius:7px;margin-top:5px;text-align:center;font-weight:600">✓ 복사 완료! 단톡방에 붙여넣기 하세요.</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:9px;align-items:flex-end">
+          <div style="flex:1;background:var(--surf);border-radius:8px;padding:9px 11px;border:1px solid var(--bd)">
+            <div style="font-size:9px;color:var(--ink3);margin-bottom:3px">📱 카카오 단톡방 공유 문구</div>
+            <div id="sf-kakao-msg" style="font-size:10px;color:var(--ink);line-height:1.7;white-space:pre-line">[노프로 TBM 서명]
+오늘 TBM 교육 서명 부탁드립니다.
+링크 클릭 → 이름 선택 → 동의 → 서명
+
+noprohr.netlify.app/tbm_sign.html
+
+외국인분들도 영어 버튼 누르면 됩니다.</div>
+          </div>
+          <button onclick="sfCopyLink()" style="padding:8px 11px;background:#FEE500;color:#3C1E1E;border:none;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;align-self:flex-end">카카오<br>복사</button>
+        </div>
+      </div>
+
+      <!-- 사진 업로드 -->
+      <div style="background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow-sm)">
+        <div style="font-size:10px;font-weight:700;color:var(--ink3);margin-bottom:9px;letter-spacing:.05em">📷 현장 교육 사진 — 엑셀 내보내기 시 일자별 시트에 자동 포함</div>
+        <div class="sf-drop" id="sf-drop-zone2" onclick="document.getElementById('sf-file-inp2').click()">
+          <div class="sf-drop-inner">
+            <div style="font-size:38px" id="sf-drop-icon2">📁</div>
+            <div class="sf-drop-t" id="sf-drop-t2">교육 사진 드래그 또는 클릭</div>
+            <div class="sf-drop-s">JPG · PNG · HEIC · 여러 장 동시 가능</div>
+          </div>
+        </div>
+        <input type="file" id="sf-file-inp2" accept="image/*" multiple style="display:none" onchange="sf2HandleFiles(this.files)">
+        <div class="sf-grid" id="sf-photo-grid2"></div>
+      </div>
+
+      <!-- 최근 일지 -->
+      <div id="sf-recent-wrap" style="background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow-sm)">
+        <div style="font-size:10px;font-weight:700;color:var(--ink3);margin-bottom:9px;letter-spacing:.05em">📅 최근 TBM 일지</div>
+        <div id="sf-recent-list"></div>
+      </div>
+    </div>
+
+    <!-- 사이드바 -->
+    <div id="sf-sidebar" style="width:290px;flex-shrink:0;display:flex;flex-direction:column;gap:0;background:var(--card);border:1px solid var(--bd);border-radius:14px;overflow:hidden;box-shadow:var(--shadow-sm)">
+
+      <!-- KPI -->
+      <div style="padding:12px 13px;border-bottom:1px solid var(--bd)">
+        <div style="font-size:10px;font-weight:700;color:var(--ink3);margin-bottom:8px;letter-spacing:.04em">📊 실시간 서명 현황</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:9px">
+          <div id="sf-kpi-all" onclick="sfSetKpi('all',this)" style="background:var(--nbg);border:1.5px solid var(--navy);border-radius:8px;padding:8px 10px;cursor:pointer">
+            <div style="font-size:9px;color:var(--ink3);margin-bottom:2px">전체</div>
+            <div style="font-size:20px;font-weight:700;color:var(--navy)" id="sf-kv-all">28</div>
+          </div>
+          <div id="sf-kpi-done" onclick="sfSetKpi('done',this)" style="background:var(--surf);border:1.5px solid transparent;border-radius:8px;padding:8px 10px;cursor:pointer">
+            <div style="font-size:9px;color:var(--ink3);margin-bottom:2px">✓ 완료</div>
+            <div style="font-size:20px;font-weight:700;color:var(--green)" id="sf-kv-done">19</div>
+          </div>
+          <div id="sf-kpi-wait" onclick="sfSetKpi('wait',this)" style="background:var(--surf);border:1.5px solid transparent;border-radius:8px;padding:8px 10px;cursor:pointer">
+            <div style="font-size:9px;color:var(--ink3);margin-bottom:2px">⚠ 미서명</div>
+            <div style="font-size:20px;font-weight:700;color:var(--rose)" id="sf-kv-wait">9</div>
+          </div>
+          <div id="sf-kpi-fo" onclick="sfSetKpi('foreign',this)" style="background:var(--surf);border:1.5px solid transparent;border-radius:8px;padding:8px 10px;cursor:pointer">
+            <div style="font-size:9px;color:var(--ink3);margin-bottom:2px">외국인</div>
+            <div style="font-size:20px;font-weight:700;color:var(--amber)" id="sf-kv-fo">5</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="font-size:9px;color:var(--ink3);min-width:34px">주간</span><div style="flex:1;height:4px;background:var(--surf);border-radius:99px;overflow:hidden"><div style="width:80%;height:100%;background:var(--navy);border-radius:99px"></div></div><span style="font-size:9px;font-weight:600;color:var(--navy)">12/15</span></div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="font-size:9px;color:var(--ink3);min-width:34px">야간</span><div style="flex:1;height:4px;background:var(--surf);border-radius:99px;overflow:hidden"><div style="width:54%;height:100%;background:#1D4ED8;border-radius:99px"></div></div><span style="font-size:9px;font-weight:600;color:#1D4ED8">7/13</span></div>
+        <div style="display:flex;align-items:center;gap:6px"><span style="font-size:9px;color:var(--ink3);min-width:34px">외국인</span><div style="flex:1;height:4px;background:var(--surf);border-radius:99px;overflow:hidden"><div style="width:40%;height:100%;background:var(--amber);border-radius:99px"></div></div><span style="font-size:9px;font-weight:600;color:var(--amber)">2/5</span></div>
+      </div>
+
+      <!-- 필터 -->
+      <div style="padding:11px 13px;border-bottom:1px solid var(--bd)">
+        <input id="sf-srch" type="text" placeholder="이름 검색..." oninput="sfRenderList()" style="width:100%;padding:7px 10px;border:1px solid var(--bd2);border-radius:8px;font-size:11px;font-family:inherit;outline:none;margin-bottom:7px">
+        <div style="font-size:9px;color:var(--ink3);margin-bottom:3px">서명 여부</div>
+        <div style="display:flex;gap:4px;margin-bottom:6px" id="sf-chips-st">
+          <span class="sf-chip sf-chip-on" onclick="sfFc('st','all',this)">전체</span>
+          <span class="sf-chip" onclick="sfFc('st','done',this)">✓ 완료</span>
+          <span class="sf-chip" onclick="sfFc('st','wait',this)">⚠ 미서명</span>
+        </div>
+        <div style="font-size:9px;color:var(--ink3);margin-bottom:3px">국적</div>
+        <div style="display:flex;gap:4px;margin-bottom:6px" id="sf-chips-na">
+          <span class="sf-chip sf-chip-on" onclick="sfFc('na','all',this)">전체</span>
+          <span class="sf-chip" onclick="sfFc('na','내국인',this)">내국인</span>
+          <span class="sf-chip" onclick="sfFc('na','외국인',this)">외국인</span>
+        </div>
+        <div style="font-size:9px;color:var(--ink3);margin-bottom:3px">주야간</div>
+        <div style="display:flex;gap:4px;margin-bottom:6px" id="sf-chips-sh">
+          <span class="sf-chip sf-chip-on" onclick="sfFc('sh','all',this)">전체</span>
+          <span class="sf-chip" onclick="sfFc('sh','주간',this)">주간</span>
+          <span class="sf-chip" onclick="sfFc('sh','야간',this)">야간</span>
+        </div>
+        <div style="font-size:9px;color:var(--ink3);margin-bottom:3px">소속</div>
+        <div style="display:flex;gap:4px" id="sf-chips-dp">
+          <span class="sf-chip sf-chip-on" onclick="sfFc('dp','all',this)">전체</span>
+          <span class="sf-chip" onclick="sfFc('dp','생산A',this)">생산A</span>
+          <span class="sf-chip" onclick="sfFc('dp','생산B',this)">생산B</span>
+          <span class="sf-chip" onclick="sfFc('dp','외주',this)">외주</span>
+        </div>
+      </div>
+
+      <!-- 인원 리스트 -->
+      <div style="padding:9px 13px;flex:1;overflow-y:auto">
+        <div id="sf-lcnt" style="font-size:9px;color:var(--ink3);margin-bottom:5px">전체 28명</div>
+        <div id="sf-nlist" style="display:flex;flex-direction:column;gap:3px;max-height:250px;overflow-y:auto"></div>
+      </div>
+
+      <!-- 하단 버튼 -->
+      <div style="padding:9px 11px;border-top:1px solid var(--bd);display:flex;gap:5px">
+        <button onclick="sfSendAlert()" style="flex:1;padding:7px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;cursor:pointer;font-family:inherit;background:var(--card);color:var(--ink2)">🔔 미서명 알림</button>
+        <button onclick="sfDoExcel()" style="flex:1;padding:7px;background:var(--navy);color:#fff;border:none;border-radius:7px;font-size:10px;cursor:pointer;font-family:inherit;font-weight:700">📊 엑셀</button>
+        <button style="flex:1;padding:7px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;cursor:pointer;font-family:inherit;background:var(--card);color:var(--ink2)">📄 PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② 월별 현황표 탭 -->
+  <div id="sf-page-monthly" style="display:none">
+    <div style="background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow-sm)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <button class="dar" onclick="sfChgM(-1)">‹</button>
+          <span id="sf-m-lbl" style="font-size:14px;font-weight:700;color:var(--ink);min-width:90px;text-align:center">2026년 4월</span>
+          <button class="dar" onclick="sfChgM(1)">›</button>
+        </div>
+        <div style="font-size:10px;color:var(--ink3)">시트1: 서명현황표 · 시트2: 현장사진+서명자 · 시트3: 요약통계</div>
+        <button onclick="sfDoExcel()" style="padding:7px 14px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">📊 엑셀 내보내기</button>
+      </div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+        <select id="sf-f-sh" onchange="sfRenderM()" style="padding:5px 9px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;background:var(--card);color:var(--ink);font-family:inherit;outline:none"><option value="all">주야간 전체</option><option value="주간">주간</option><option value="야간">야간</option></select>
+        <select id="sf-f-na" onchange="sfRenderM()" style="padding:5px 9px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;background:var(--card);color:var(--ink);font-family:inherit;outline:none"><option value="all">내·외국인 전체</option><option value="내국인">내국인</option><option value="외국인">외국인</option></select>
+        <select id="sf-f-dp" onchange="sfRenderM()" style="padding:5px 9px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;background:var(--card);color:var(--ink);font-family:inherit;outline:none"><option value="all">소속 전체</option><option value="생산A">생산A</option><option value="생산B">생산B</option><option value="외주">외주</option></select>
+        <button class="sf-fbtn sf-fbtn-on" onclick="sfSetMF('all',this)">전체</button>
+        <button class="sf-fbtn" onclick="sfSetMF('done',this)">완료만</button>
+        <button class="sf-fbtn" onclick="sfSetMF('wait',this)">미서명만</button>
+      </div>
+      <div style="overflow-x:auto;border:1px solid var(--bd);border-radius:11px"><table id="sf-mt" style="border-collapse:collapse;font-size:10px;width:100%"></table></div>
+    </div>
+  </div>
+
+  <!-- ③ 월간 현황 탭 -->
+  <div id="sf-page-summary" style="display:none">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+      <div style="background:var(--card);border:1px solid var(--bd);border-radius:11px;padding:10px 12px;box-shadow:var(--shadow-sm)"><div style="font-size:9px;color:var(--ink3);margin-bottom:3px">TBM 실시</div><div style="font-size:18px;font-weight:700;color:var(--navy)" id="sf-sum-cnt">9회</div></div>
+      <div style="background:var(--card);border:1px solid var(--bd);border-radius:11px;padding:10px 12px;box-shadow:var(--shadow-sm)"><div style="font-size:9px;color:var(--ink3);margin-bottom:3px">평균 완료율</div><div style="font-size:18px;font-weight:700;color:var(--green)">87%</div></div>
+      <div style="background:var(--card);border:1px solid var(--bd);border-radius:11px;padding:10px 12px;box-shadow:var(--shadow-sm)"><div style="font-size:9px;color:var(--ink3);margin-bottom:3px">누적 서명</div><div style="font-size:18px;font-weight:700;color:var(--navy)">847건</div></div>
+      <div style="background:var(--card);border:1px solid var(--bd);border-radius:11px;padding:10px 12px;box-shadow:var(--shadow-sm)"><div style="font-size:9px;color:var(--ink3);margin-bottom:3px">미서명</div><div style="font-size:18px;font-weight:700;color:var(--rose)">38건</div></div>
+    </div>
+    <div style="display:flex;gap:14px">
+      <div style="flex:1;background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow-sm)">
+        <div style="font-size:10px;font-weight:700;color:var(--ink3);margin-bottom:9px">📅 TBM 달력</div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:5px">
+          <div style="font-size:9px;color:#EF4444;text-align:center;font-weight:700">일</div>
+          <div style="font-size:9px;color:var(--ink3);text-align:center;font-weight:700">월</div><div style="font-size:9px;color:var(--ink3);text-align:center;font-weight:700">화</div><div style="font-size:9px;color:var(--ink3);text-align:center;font-weight:700">수</div><div style="font-size:9px;color:var(--ink3);text-align:center;font-weight:700">목</div><div style="font-size:9px;color:var(--ink3);text-align:center;font-weight:700">금</div>
+          <div style="font-size:9px;color:#3B82F6;text-align:center;font-weight:700">토</div>
+        </div>
+        <div id="sf-cal" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px"></div>
+        <div style="margin-top:12px"><div style="font-size:10px;font-weight:700;color:var(--ink3);margin-bottom:8px">📋 일별 목록</div><div id="sf-sum-rows"></div></div>
+      </div>
+      <div style="width:220px;background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:13px 14px;box-shadow:var(--shadow-sm)">
+        <div style="font-size:10px;font-weight:700;color:var(--ink3);margin-bottom:9px">개인별 이수율</div>
+        <div id="sf-sum-prog"></div>
+        <button onclick="sfDoExcel()" style="width:100%;margin-top:12px;padding:8px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">📊 월간 엑셀</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- 내 정보 -->
@@ -1873,5 +2180,217 @@ document.addEventListener('click',e=>{
 <script>
 // placeholder - app.js에서 모든 로직 처리
 </script>
+
+<!-- ✅ TBM 직원 서명 오버레이 -->
+<div id="tbm-sign-overlay">
+<!-- 헤더 -->
+<div class="hdr">
+  <div class="hdr-logo">N O P R O</div>
+  <div class="hdr-title ko-only">TBM 교육 서명일지</div>
+  <div class="hdr-title en-only">TBM Safety Training Signature</div>
+  <div class="hdr-title-sub ko-only">아래 내용을 확인하고 서명해 주세요</div>
+  <div class="hdr-title-sub en-only">Please review and sign below</div>
+  <div class="hdr-date" id="hdr-date">2026년 4월 11일 토요일</div>
+  <div class="lang-btn">
+    <button class="lb lb-ko act" id="btn-ko" onclick="tbmSetLang('ko')">한국어</button>
+    <button class="lb lb-en" id="btn-en" onclick="tbmSetLang('en')">English</button>
+  </div>
+</div>
+
+<!-- 스텝 바 -->
+<div class="step-bar">
+  <div class="step">
+    <div class="step-num act-st" id="sn1">1</div>
+    <div class="step-lbl act-st" id="sl1">
+      <span class="ko-only">이름 선택</span>
+      <span class="en-only">Select Name</span>
+    </div>
+  </div>
+  <div class="step-arr">→</div>
+  <div class="step">
+    <div class="step-num" id="sn2">2</div>
+    <div class="step-lbl" id="sl2">
+      <span class="ko-only">내용 확인 · 동의</span>
+      <span class="en-only">Review · Agree</span>
+    </div>
+  </div>
+  <div class="step-arr">→</div>
+  <div class="step">
+    <div class="step-num" id="sn3">3</div>
+    <div class="step-lbl" id="sl3">
+      <span class="ko-only">서명 완료</span>
+      <span class="en-only">Complete</span>
+    </div>
+  </div>
+</div>
+
+<div class="tbm-wrap">
+
+  <!-- STEP 1: 이름 선택 -->
+  <div class="step-page on" id="page1">
+
+    <!-- TBM 내용 -->
+    <div class="card">
+      <div class="ctit ko-only">📋 오늘의 TBM 교육내용</div>
+      <div class="ctit en-only">📋 Today's TBM Safety Training Content</div>
+      <div class="tbm-ko" id="tbm-ko">고소작업 안전수칙 준수, 개인보호구 착용 필수, 화기작업 허가절차 확인, 중량물 2인 이상 작업</div>
+      <div class="tbm-en" id="tbm-en">
+        <div class="tbm-en-lbl">🇺🇸 English</div>
+        Follow safety rules for working at height · Mandatory use of personal protective equipment (PPE) · Verify hot work permit procedures · Heavy object handling requires 2 or more workers
+      </div>
+    </div>
+
+    <!-- 이름 검색 -->
+    <div class="card">
+      <div class="ctit ko-only">👤 본인 이름을 선택하세요</div>
+      <div class="ctit en-only">👤 Select your name</div>
+
+      <div class="srch-wrap">
+        <span class="srch-icon">🔍</span>
+        <input class="srch-inp" type="text" id="tbm-srch"
+          placeholder="이름 검색... / Search name..."
+          oninput="tbmRenderEmps()" autocomplete="off">
+        <span class="srch-clear" id="tbm-srch-clear" onclick="tbmClearSrch()">✕</span>
+      </div>
+
+      <div class="filter-row">
+        <span class="chip on" onclick="tbmSetF('all',this)">
+          <span class="ko-only">전체</span><span class="en-only">All</span>
+        </span>
+        <span class="chip" onclick="tbmSetF('주간',this)">
+          <span class="ko-only">주간</span><span class="en-only">Day</span>
+        </span>
+        <span class="chip" onclick="tbmSetF('야간',this)">
+          <span class="ko-only">야간</span><span class="en-only">Night</span>
+        </span>
+        <span class="chip" onclick="tbmSetF('외국인',this)">
+          <span class="ko-only">외국인</span><span class="en-only">Foreign</span>
+        </span>
+        <span class="chip" onclick="tbmSetF('생산A',this)">Prod.A</span>
+        <span class="chip" onclick="tbmSetF('생산B',this)">Prod.B</span>
+        <span class="chip" onclick="tbmSetF('외주',this)">
+          <span class="ko-only">외주</span><span class="en-only">Outsource</span>
+        </span>
+      </div>
+
+      <div class="emp-list" id="tbm-emp-list"></div>
+    </div>
+  </div>
+
+  <!-- STEP 2: 확인 및 동의 -->
+  <div class="step-page" id="page2">
+
+    <!-- 선택된 이름 표시 -->
+    <div class="selected-name-box">
+      <div class="sel-nm-lbl ko-only">선택된 직원 / Selected Employee</div>
+      <div class="sel-nm-lbl en-only">Selected Employee / 선택된 직원</div>
+      <div class="sel-nm" id="sel-nm-ko"></div>
+      <div class="sel-nm-en" id="sel-nm-en"></div>
+    </div>
+
+    <!-- TBM 내용 재확인 -->
+    <div class="card">
+      <div class="ctit ko-only">📋 교육내용 확인</div>
+      <div class="ctit en-only">📋 Training Content Review</div>
+      <div class="tbm-ko">고소작업 안전수칙 준수, 개인보호구 착용 필수, 화기작업 허가절차 확인, 중량물 2인 이상 작업</div>
+      <div class="tbm-en" style="display:block;">
+        <div class="tbm-en-lbl">🇺🇸 English</div>
+        Follow safety rules for working at height · Mandatory use of personal protective equipment (PPE) · Verify hot work permit procedures · Heavy object handling requires 2 or more workers
+      </div>
+    </div>
+
+    <!-- 동의 체크박스 -->
+    <div class="card">
+      <div class="ctit ko-only">✅ 아래 항목을 모두 확인하고 동의해 주세요</div>
+      <div class="ctit en-only">✅ Please confirm and agree to all items below</div>
+
+      <div class="agree-list">
+
+        <div class="agree-item" onclick="tbmToggleAgree(0,this)">
+          <div class="agree-chk" id="chk0"></div>
+          <div class="agree-txt">
+            <div class="agree-main ko-only">오늘의 TBM 교육내용을 충분히 이해하였습니다</div>
+            <div class="agree-main en-only">I have fully understood today's TBM safety training content</div>
+            <div class="agree-sub ko-only">교육내용: 고소작업 안전수칙, 개인보호구 착용, 화기작업 허가절차, 중량물 취급</div>
+            <div class="agree-sub en-only">Content: Working at height, PPE use, Hot work permit, Heavy object handling</div>
+          </div>
+        </div>
+
+        <div class="agree-item" onclick="tbmToggleAgree(1,this)">
+          <div class="agree-chk" id="chk1"></div>
+          <div class="agree-txt">
+            <div class="agree-main ko-only">위 안전수칙을 작업 중 반드시 준수할 것을 약속합니다</div>
+            <div class="agree-main en-only">I promise to strictly follow the safety rules during work</div>
+            <div class="agree-sub ko-only">미준수 시 안전사고 발생 가능성이 있음을 인지합니다</div>
+            <div class="agree-sub en-only">I understand that non-compliance may cause safety accidents</div>
+          </div>
+        </div>
+
+        <div class="agree-item" onclick="tbmToggleAgree(2,this)">
+          <div class="agree-chk" id="chk2"></div>
+          <div class="agree-txt">
+            <div class="agree-main ko-only">본 서명은 전자문서법에 따른 법적 효력이 있는 전자서명입니다</div>
+            <div class="agree-main en-only">This signature is a legally valid electronic signature under the Electronic Documents Act</div>
+            <div class="agree-sub ko-only">서명일: <span id="sign-date-ko"></span> · 서명자 본인이 직접 서명함을 확인합니다</div>
+            <div class="agree-sub en-only">Date: <span id="sign-date-en"></span> · I confirm that I am personally signing this document</div>
+          </div>
+        </div>
+
+        <div class="agree-item" onclick="tbmToggleAgree(3,this)">
+          <div class="agree-chk" id="chk3"></div>
+          <div class="agree-txt">
+            <div class="agree-main ko-only">개인정보(성명, 서명일시) 수집 및 안전교육 기록 보관에 동의합니다</div>
+            <div class="agree-main en-only">I agree to the collection of personal information (name, signature date/time) for safety training records</div>
+            <div class="agree-sub ko-only">수집 정보는 산업안전보건법에 따른 교육기록 관리 목적으로만 사용됩니다</div>
+            <div class="agree-sub en-only">Collected information is used solely for safety training record management under the Occupational Safety and Health Act</div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="required-notice ko-only">* 모든 항목에 동의해야 서명 제출이 가능합니다</div>
+      <div class="required-notice en-only">* You must agree to all items to submit your signature</div>
+
+      <button class="btn-submit" id="btn-submit" disabled onclick="tbmSubmitSign()">
+        <span class="ko-only">✍️ 서명 제출하기</span>
+        <span class="en-only">✍️ Submit Signature</span>
+      </button>
+      <button class="btn-back" onclick="tbmGoBack()">
+        <span class="ko-only">← 이름 다시 선택</span>
+        <span class="en-only">← Select name again</span>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- 완료 팝업 -->
+<div class="popup-bg" id="popup">
+  <div class="popup-box">
+    <span class="popup-icon">✅</span>
+    <div class="popup-title ko-only">서명 완료!</div>
+    <div class="popup-title en-only">Signature Complete!</div>
+    <div class="popup-title-en ko-only">Signature Complete</div>
+    <div class="popup-title-en en-only">서명 완료되었습니다</div>
+    <div class="popup-name" id="popup-name"></div>
+    <div class="popup-time" id="popup-time"></div>
+    <div class="popup-legal ko-only">
+      📋 본 서명은 전자문서 및 전자거래 기본법 제4조에 따라<br>
+      종이 서명과 동일한 법적 효력을 가집니다.<br><br>
+      서명 일시·성명이 기록되어 안전교육 이수 증빙으로 활용됩니다.
+    </div>
+    <div class="popup-legal en-only">
+      📋 This signature has the same legal effect as a handwritten signature<br>
+      under Article 4 of the Framework Act on Electronic Documents.<br><br>
+      Your name and signature time are recorded as proof of safety training completion.
+    </div>
+    <button class="popup-close" onclick="tbmClosePopup()">
+      <span class="ko-only">확인 (창 닫기)</span>
+      <span class="en-only">OK (Close)</span>
+    </button>
+  </div>
+</div>
+</div>
+
 </body>
 </html>
