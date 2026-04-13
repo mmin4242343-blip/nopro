@@ -4592,7 +4592,17 @@ let SF2_PHOTOS={};
 let sf2StF='all',sf2NaF='all',sf2ShF='all',sf2DpF='all';
 let sfMY=new Date().getFullYear(),sfMMo=new Date().getMonth()+1,sfMStF='all';
 
-function sfSave(){try{localStorage.setItem(SF_KEY,JSON.stringify(SAFETY_REC));}catch(e){alert('저장 공간 부족! 오래된 사진을 삭제해주세요.');}}
+function sfSave(){
+  // localStorage에는 base64(data) 제거 후 메타데이터만 저장
+  const slim={};
+  Object.entries(SAFETY_REC).forEach(([k,v])=>{
+    if(Array.isArray(v)){
+      slim[k]=v.map(({data, ...rest})=>rest);
+    } else { slim[k]=v; }
+  });
+  try{localStorage.setItem(SF_KEY,JSON.stringify(slim));}
+  catch(e){console.warn('안전교육 저장 용량 초과:',e);}
+}
 function sfKey(){return`${sfY}-${pad(sfM)}-${pad(sfD)}`;}
 
 // 탭 전환
@@ -4668,40 +4678,93 @@ function sfSendAlert(){alert('미서명 인원에게 카카오 알림을 발송�
 function sfDoExcel(){alert('엑셀 내보내기 (3개 시트)\n\n📊 시트1: 월별 서명현황표 (✓/— 형식)\n📷 시트2: 일자별 현장사진 일지\n📈 시트3: 요약통계·개인별 완료율\n\n실제 구현: Supabase 연동 후 자동 생성');}
 
 // 사진 업로드
-function sf2HandleFiles(files){
+async function sf2HandleFiles(files){
+  if(!files||files.length===0)return;
   const key=sfKey();
-  if(!SF2_PHOTOS[key])SF2_PHOTOS[key]=[];
-  Array.from(files).forEach(f=>{
-    if(!f.type.startsWith('image/'))return;
-    const rd=new FileReader();
-    rd.onload=ev=>{
-      SF2_PHOTOS[key].push({id:'p'+Date.now()+Math.random(),data:ev.target.result,name:f.name,ts:Date.now()});
-      sf2RenderPhotos();
-      // localStorage에도 저장
-      SAFETY_REC[key]=SF2_PHOTOS[key].map(p=>({id:p.id,data:p.data,name:p.name,ts:p.ts}));
-      sfSave();
-    };rd.readAsDataURL(f);
-  });
+  if(!SAFETY_REC[key])SAFETY_REC[key]=[];
+  const imageFiles=Array.from(files).filter(f=>f.type.startsWith('image/'));
+  if(!imageFiles.length)return;
+  if(typeof showSyncToast==='function') showSyncToast('사진 업로드 중...','info');
+  for(const file of imageFiles){
+    try{
+      const res=await uploadFileToStorage(file,'safety',key);
+      const entry={
+        id:'sf_'+Date.now()+'_'+Math.random().toString(36).slice(2),
+        storagePath:res.path,
+        name:file.name,
+        ts:Date.now()
+      };
+      SAFETY_REC[key].push(entry);
+    }catch(e){
+      console.error('Safety photo upload failed:',e);
+      if(typeof showSyncToast==='function') showSyncToast(file.name+' 업로드 실패','warn');
+    }
+  }
+  sfSave();
+  if(typeof showSyncToast==='function') showSyncToast('업로드 완료','ok');
+  sf2RenderPhotos();
 }
 function sf2RenderPhotos(){
   const key=sfKey();
-  const photos=SF2_PHOTOS[key]||[];
+  const photos=SAFETY_REC[key]||[];
   const g=document.getElementById('sf-photo-grid2');if(!g)return;
   g.innerHTML='';
   photos.forEach((p,i)=>{
+    const dt=new Date(p.ts);
+    const timeStr=`${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
     const c=document.createElement('div');c.className='sf-img-card';
-    const img=document.createElement('img');img.src=p.data;img.alt=`사진${i+1}`;
-    img.onclick=()=>{const lb=document.createElement('div');lb.className='sf-lightbox';const im=document.createElement('img');im.src=p.data;lb.appendChild(im);lb.onclick=()=>lb.remove();document.body.appendChild(lb);};
+    const img=document.createElement('img');
+    if(p.data) img.src=p.data;
+    else if(p.storagePath){img.dataset.spath=p.storagePath;img.src='';img.style.opacity='0.3';img.style.transition='opacity .3s';}
+    img.alt=`사진${i+1}`;img.style.cursor='zoom-in';
+    img.addEventListener('click',()=>sf2Zoom(p.id,key));
     c.appendChild(img);
     const row=document.createElement('div');row.style.cssText='display:flex;gap:6px;padding:7px 9px;background:#f8fafc;border-top:1px solid var(--bd)';
-    const zb=document.createElement('button');zb.style.cssText='flex:1;padding:5px;font-size:10px;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;border:none;background:var(--nbg);color:var(--navy)';zb.textContent='🔍 확대';zb.onclick=()=>{const lb=document.createElement('div');lb.className='sf-lightbox';const im=document.createElement('img');im.src=p.data;lb.appendChild(im);lb.onclick=()=>lb.remove();document.body.appendChild(lb);};
+    const zb=document.createElement('button');zb.style.cssText='flex:1;padding:5px;font-size:10px;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;border:none;background:var(--nbg);color:var(--navy)';zb.textContent='🔍 확대';
+    zb.addEventListener('click',e=>{e.stopPropagation();sf2Zoom(p.id,key);});
     const db=document.createElement('button');db.style.cssText='flex:1;padding:5px;font-size:10px;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;border:none;background:var(--rbg);color:var(--rose)';db.textContent='🗑 삭제';
-    db.onclick=()=>{SF2_PHOTOS[key]=SF2_PHOTOS[key].filter(x=>x.id!==p.id);sf2RenderPhotos();SAFETY_REC[key]=SF2_PHOTOS[key];sfSave();};
-    row.appendChild(zb);row.appendChild(db);c.appendChild(row);g.appendChild(c);
+    let delReady=false;
+    db.addEventListener('click',e=>{
+      e.stopPropagation();
+      if(!delReady){
+        delReady=true;db.textContent='✓ 확인';db.style.background='var(--rose)';db.style.color='#fff';
+        setTimeout(()=>{if(delReady){delReady=false;db.textContent='🗑 삭제';db.style.background='var(--rbg)';db.style.color='var(--rose)';}},2500);
+      } else {
+        if(p.storagePath) deleteFileFromStorage(p.storagePath);
+        SAFETY_REC[key]=SAFETY_REC[key].filter(ph=>ph.id!==p.id);
+        if(SAFETY_REC[key].length===0)delete SAFETY_REC[key];
+        sfSave();sf2RenderPhotos();
+      }
+    });
+    row.appendChild(zb);row.appendChild(db);c.appendChild(row);
+    const badge=document.createElement('div');
+    badge.className='sf-date-badge';
+    badge.textContent=`📷 ${i+1}번 · ${timeStr} 등록`;
+    c.appendChild(badge);
+    g.appendChild(c);
   });
+  // Storage 이미지 URL 로딩
+  loadStorageImages(g);
   const icon=document.getElementById('sf-drop-icon2');
   const txt=document.getElementById('sf-drop-t2');
   if(icon&&txt){if(photos.length>0){icon.textContent='➕';txt.textContent=`${photos.length}장 등록됨 · 추가 가능`;}else{icon.textContent='📁';txt.textContent='교육 사진 드래그 또는 클릭';}}
+}
+// 사진 확대 (Storage URL 지원)
+async function sf2Zoom(id,key){
+  if(!key)key=sfKey();
+  const photos=SAFETY_REC[key]||[];
+  const p=photos.find(x=>x.id===id);
+  if(!p)return;
+  let src=p.data||'';
+  if(p.storagePath&&!src){
+    const urls=await getFileUrls([p.storagePath]);
+    src=urls[p.storagePath]||'';
+  }
+  if(!src)return;
+  const lb=document.createElement('div');lb.className='sf-lightbox';
+  const img=document.createElement('img');img.src=src;img.alt='확대';
+  lb.appendChild(img);lb.addEventListener('click',()=>lb.remove());
+  document.body.appendChild(lb);
 }
 
 // 드래그앤드롭 초기화
@@ -4903,12 +4966,7 @@ function sfRenderSummary(){
 // renderSafety 구 버전 (gp('safety') 호출용 — 호환성 유지)
 function renderSafety(){
   sfUpdBar2();sfLoadTbm();sfRenderList();sfRenderRecent();
-  // 사진 로드
-  const key=sfKey();
-  const saved=SAFETY_REC[key]||[];
-  if(saved.length>0&&(!SF2_PHOTOS[key]||SF2_PHOTOS[key].length===0)){
-    SF2_PHOTOS[key]=saved;sf2RenderPhotos();
-  }
+  sf2RenderPhotos();
   sfInitDrop();
   sfSwitchTab('daily');
 }
