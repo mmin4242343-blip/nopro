@@ -95,24 +95,7 @@ let DATA=null,selectedEmp=null,lang='ko';
 const DOW_K=['일','월','화','수','목','금','토'];
 const DOW_E=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-// 번역 캐시 (같은 텍스트 재번역 방지)
-const translateCache={};
-
-async function translateToEn(text){
-  if(!text)return '';
-  if(translateCache[text])return translateCache[text];
-  try{
-    const res=await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q='+encodeURIComponent(text));
-    const json=await res.json();
-    // 응답: [[["translated","original",...],...],...]
-    const translated=json[0].map(s=>s[0]).join('');
-    translateCache[text]=translated;
-    return translated;
-  }catch(e){
-    console.warn('번역 실패:',e);
-    return text; // 실패 시 원문 반환
-  }
-}
+// 서버에서 받은 번역문 사용 (API 호출 없음)
 
 async function init(){
   const app=document.getElementById('app');
@@ -155,8 +138,9 @@ function render(){
     </div>
     <div class="tbm-box">
       <div class="tbm-lbl">${lang==='ko'?'오늘의 TBM 교육내용':"Today's TBM Content"}</div>
-      <div class="tbm-content" id="tbm-text">${DATA.tbm||''}</div>
+      <div class="tbm-content">${lang==='en'&&DATA.tbmEn?DATA.tbmEn:(DATA.tbm||'')}</div>
       ${lang==='en'&&DATA.tbm?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #E2E8F0;font-size:10px;color:#94A3B8;line-height:1.5">원문(Korean): '+DATA.tbm+'</div>':''}
+      ${lang==='en'&&!DATA.tbmEn&&DATA.tbm?'<div style="margin-top:6px;font-size:10px;color:#D97706;font-weight:600">* Translation not available — please ask your manager to translate.</div>':''}
     </div>
     <div class="status-bar">
       <div class="status-card"><div class="num" style="color:#1E3A5F">${total}</div><div class="lbl">${lang==='ko'?'전체':'Total'}</div></div>
@@ -172,17 +156,6 @@ function render(){
   `;
   app.innerHTML=h;
   renderList();
-  // 영어 모드: TBM 내용 비동기 번역
-  if(lang==='en'&&DATA.tbm){
-    const tbmEl=document.getElementById('tbm-text');
-    if(tbmEl){
-      tbmEl.innerHTML=DATA.tbm+' <span style="color:#0D9488;font-size:10px;font-weight:600">translating...</span>';
-      translateToEn(DATA.tbm).then(translated=>{
-        const el=document.getElementById('tbm-text');
-        if(el) el.textContent=translated;
-      });
-    }
-  }
 }
 
 function renderList(){

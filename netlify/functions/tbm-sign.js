@@ -80,6 +80,7 @@ export const handler = async (event) => {
         .map(e => ({ id: e.id, name: e.name, nameEn: e.nameEn || '', shift: e.shift || 'day', dept: e.dept || '' }));
 
       const tbm = safety[date + '_tbm'] || '';
+      const tbmEn = safety[date + '_tbm_en'] || '';
       const signs = safety[date + '_signs'] || {};
 
       const { data: compRows } = await supabase
@@ -94,6 +95,7 @@ export const handler = async (event) => {
           company: compRows && compRows.length > 0 ? compRows[0].company_name : '',
           date,
           tbm,
+          tbmEn,
           emps: empList,
           signs
         })

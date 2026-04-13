@@ -4775,11 +4775,86 @@ function sfSaveTbm(){
   const val=document.getElementById('sf-tbm-content').value;
   SAFETY_REC[key+'_tbm']=val;
   sfSave();
+  // 한국어가 바뀌면 번역이 구버전임을 표시
+  sfUpdTranslateStatus();
 }
 function sfLoadTbm(){
   const key=sfKey();
   const ta=document.getElementById('sf-tbm-content');
   if(ta)ta.value=SAFETY_REC[key+'_tbm']||'';
+  // 영문 번역 표시
+  sfShowTranslation();
+}
+function sfShowTranslation(){
+  const key=sfKey();
+  const en=SAFETY_REC[key+'_tbm_en']||'';
+  const box=document.getElementById('sf-tbm-en-box');
+  const txt=document.getElementById('sf-tbm-en-text');
+  const time=document.getElementById('sf-tr-time');
+  if(!box||!txt)return;
+  if(en){
+    box.style.display='block';
+    txt.textContent=en;
+    const ts=SAFETY_REC[key+'_tbm_en_at']||0;
+    if(ts&&time) time.textContent=new Date(ts).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+' 번역';
+  } else {
+    box.style.display='none';
+  }
+  sfUpdTranslateStatus();
+}
+function sfUpdTranslateStatus(){
+  const key=sfKey();
+  const ko=SAFETY_REC[key+'_tbm']||'';
+  const en=SAFETY_REC[key+'_tbm_en']||'';
+  const src=SAFETY_REC[key+'_tbm_en_src']||'';
+  const statusEl=document.getElementById('sf-tr-status');
+  const btnEl=document.getElementById('sf-tr-btn');
+  if(!statusEl||!btnEl)return;
+  if(!ko){
+    statusEl.style.display='none';
+    btnEl.textContent='🌐 영어 번역';
+    return;
+  }
+  if(!en){
+    statusEl.textContent='번역 없음';
+    statusEl.style.display='inline';
+    statusEl.style.color='var(--rose)';
+    btnEl.textContent='🌐 영어 번역';
+  } else if(src!==ko){
+    statusEl.textContent='내용 수정됨 — 재번역 필요';
+    statusEl.style.display='inline';
+    statusEl.style.color='#D97706';
+    btnEl.textContent='🔄 재번역';
+  } else {
+    statusEl.textContent='✓ 번역 완료';
+    statusEl.style.display='inline';
+    statusEl.style.color='#059669';
+    btnEl.textContent='🔄 재번역';
+  }
+}
+async function sfTranslateTbm(){
+  const key=sfKey();
+  const ko=SAFETY_REC[key+'_tbm']||'';
+  if(!ko){alert('먼저 TBM 교육내용을 입력해주세요.');return;}
+  const btn=document.getElementById('sf-tr-btn');
+  if(btn){btn.disabled=true;btn.textContent='번역 중...';}
+  try{
+    const res=await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q='+encodeURIComponent(ko));
+    const json=await res.json();
+    const translated=json[0].map(s=>s[0]).join('');
+    SAFETY_REC[key+'_tbm_en']=translated;
+    SAFETY_REC[key+'_tbm_en_src']=ko;  // 번역 원본 기록 (변경 감지용)
+    SAFETY_REC[key+'_tbm_en_at']=Date.now();
+    sfSave();
+    sfShowTranslation();
+    // 서버에도 저장
+    const safetyValue=(()=>{const s={};Object.entries(SAFETY_REC).forEach(([k,v])=>{s[k]=Array.isArray(v)?v.map(({data,...r})=>r):v;});return s;})();
+    apiFetch('/data-save','POST',{key:'safety',value:safetyValue}).catch(()=>{});
+  }catch(e){
+    alert('번역에 실패했습니다. 인터넷 연결을 확인해주세요.');
+  }finally{
+    if(btn){btn.disabled=false;sfUpdTranslateStatus();}
+  }
 }
 
 // 링크
