@@ -1140,7 +1140,7 @@ function renderTable(){
     if(isPohalEmp){
       const isWork=!rec.absent&&!rec.annual;
       const holPay=c?(c.holDayStdPay+c.holDayOtPay):0;
-      // 개별휴게 UI (소정근무제와 동일한 customBkUI 재사용)
+      // 개별휴게 UI (소정근무제와 동일)
       const pohalBkUI = rec.customBk ? `<div style="margin-top:4px;padding:5px 8px;background:var(--gbg);border:1px solid #BBF7D0;border-radius:6px">
         <div style="font-size:9px;font-weight:700;color:var(--green);margin-bottom:3px">개인 휴게시간</div>
         ${(rec.customBkList||[{s:'',e:''}]).map((b,bi)=>`<div style="display:flex;align-items:center;gap:3px;margin-bottom:2px">
@@ -1151,6 +1151,16 @@ function renderTable(){
         </div>`).join('')}
         <button class="bk-add" onclick="addCustomBk(${emp.id})" style="font-size:9px;margin-top:2px;padding:2px 8px">+ 세트 추가</button>
       </div>` : '';
+      // 외출 UI (소정근무제와 동일)
+      const pohalOutUI=(rec.outTimes&&rec.outTimes.length>0)?`<div style="margin-top:4px;padding:5px 7px;background:var(--abg);border-radius:6px;border:1px solid #FCD34D">
+        ${(rec.outTimes||[]).map((o,oi)=>`<div class="out-row">
+          <span style="font-size:9px;font-weight:700;color:var(--amber)">외출${oi+1}</span>
+          <input class="out-time" value="${o.s||''}" placeholder="0900" onblur="setOutTime(${emp.id},${oi},'s',this.value)" onkeydown="if(event.key==='Enter')setOutTime(${emp.id},${oi},'s',this.value)">
+          <span style="font-size:11px;color:var(--ink3)">~</span>
+          <input class="out-time" value="${o.e||''}" placeholder="1000" onblur="setOutTime(${emp.id},${oi},'e',this.value)" onkeydown="if(event.key==='Enter')setOutTime(${emp.id},${oi},'e',this.value)">
+          <button class="out-x" onclick="delOutTime(${emp.id},${oi})">×</button>
+        </div>`).join('')}
+      </div>`:'';
       return`<tr class="${rowCls}">
         ${cbTd}${nameTd}
         <td><input class="time-inp ${rec.absent||rec.annual?'dis':''}" value="${rec.start||''}" placeholder="0900"
@@ -1159,24 +1169,26 @@ function renderTable(){
         <td><input class="time-inp ${c&&c.crossed?'cross':autoH?'hol-t':''} ${rec.absent||rec.annual?'dis':''}" value="${rec.end||''}" placeholder="1800"
           ${rec.absent||rec.annual?'disabled':''} data-eid="${emp.id}" data-field="end"
           onblur="handleTimeInput(${emp.id},'end',this.value)"></td>
-        <td class="td-w">${c&&isWork?`<div>${fmtH(c.work)}</div>${c.bkMins?`<div style="font-size:8px;color:var(--teal)">휴게${c.bkMins}분</div>`:''}<div style="margin-top:1px">${chips.join('')}</div>`:rec.absent?'<span class="chip ch-ab">결근</span>':rec.annual?'<span class="chip ch-al">연차</span>':''}</td>
-        <td class="td-nt">${c&&c.nightM?fmtH(c.nightM):''}</td>
-        <td class="td-ot">${c&&c.ot?fmtH(c.ot):''}</td>
-        <td class="td-hol">${autoH&&holPay>0?`<span style="color:#854F0B;font-weight:700;font-size:11px">${Math.round(holPay/1000)}k</span>`:''}</td>
+        <td class="td-w">${c&&isWork?`<div>${fmtH(c.work)}</div><div style="margin-top:1px">${chips.join('')}</div>`:rec.absent?'<span class="chip ch-ab">결근</span>':rec.annual?'<span class="chip ch-al">연차</span>':''}</td>
+        <td class="td-bk" style="font-size:10px;color:#2D6A4F">${c&&c.bkMins>0?fmtH(c.bkMins)+(c.nightBkMins>0?`<div style="font-size:8px;color:#7C3AED;margin-top:1px">야간${fmtH(c.nightBkMins)}</div>`:''):''}</td>
+        <td class="td-nt">${c&&c.nightM>30?fmtH(c.nightM):''}</td>
+        <td class="td-ot">${c&&c.ot>0?fmtH(c.ot):''}</td>
+        <td class="td-hol">${autoH&&holPay>0?`<span style="color:#854F0B;font-weight:700;font-size:11px">${Math.round(holPay/1000)}k</span>`:autoH&&c?fmtH(c.work):''}</td>
         <td>
           <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
-            <label style="font-size:10px;color:var(--teal);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600">
-              <input type="checkbox" ${rec.customBk?'checked':''}
-                onchange="setR(${emp.id},'customBk',this.checked);renderTable()">개별휴게
-            </label>
             <label style="font-size:10px;color:var(--green);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600">
               <input type="checkbox" ${rec.annual?'checked':''} onchange="setR(${emp.id},'annual',this.checked)">연차
             </label>
-            <label style="font-size:10px;color:var(--rose);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:500">
+            <label style="font-size:10px;color:var(--ink2);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:500">
               <input type="checkbox" ${rec.absent?'checked':''} onchange="setR(${emp.id},'absent',this.checked)">결근
             </label>
+            <label style="font-size:10px;color:var(--green);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600" title="전체 휴게시간 무시하고 개인 휴게시간 적용">
+              <input type="checkbox" ${rec.customBk?'checked':''} onchange="setR(${emp.id},'customBk',this.checked)">개별휴게
+            </label>
+            <button class="out-btn ${(rec.outTimes&&rec.outTimes.length>0)?'active':''}" onclick="addOutTime(${emp.id})">+ 외출</button>
             <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" onchange="setR(${emp.id},'note',this.value)">
           </div>
+          ${pohalOutUI}
           ${pohalBkUI}
         </td>
         <td style="padding:4px 6px;font-size:10px">
