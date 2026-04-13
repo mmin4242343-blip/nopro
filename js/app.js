@@ -718,6 +718,7 @@ function monthSummary(eid,y,m){
 // ══════════════════════════════════════
 const PAGES=['daily','monthly','payroll','leave','company','emps','shift','safety','folder','myinfo','settings'];
 function gp(p){
+  if(p!=='safety'&&typeof sfStopPoll==='function')sfStopPoll();
   PAGES.forEach(x=>{
     const pe=document.getElementById('pg-'+x);if(pe)pe.classList.toggle('on',x===p);
     const ne=document.getElementById('nt-'+x);if(ne)ne.classList.toggle('on',x===p);
@@ -4745,11 +4746,19 @@ function sfUpdBar2(){
   document.getElementById('sf-dd').textContent=sfD;
   const dow=new Date(sfY,sfM-1,sfD).getDay();
   document.getElementById('sf-dow').textContent=DOW[dow]+'요일';
-  const url=`noprohr.netlify.app/tbm_sign.html?date=${sfY}-${pad(sfM)}-${pad(sfD)}`;
+  const key=sfKey();
+  const tok=SAFETY_REC[key+'_token']||'';
+  const sess=JSON.parse(localStorage.getItem('nopro_session')||'null');
+  const cid=sess?.companyId||'';
+  const url=tok&&cid?`noprohr.netlify.app/tbm_sign.html?c=${cid}&t=${tok}&d=${key}`:'링크를 생성해주세요 (🔄 재생성 버튼 클릭)';
   const urlEl=document.getElementById('sf-link-url');
   if(urlEl)urlEl.textContent=url;
   const kakaoEl=document.getElementById('sf-kakao-msg');
-  if(kakaoEl)kakaoEl.textContent=`[노프로 TBM 서명]\n${sfM}월 ${sfD}일 TBM 교육 서명 부탁드립니다.\n링크 클릭 → 이름 선택 → 동의 → 서명\n\n${url}\n\n외국인분들도 영어 버튼 누르면 됩니다.`;
+  if(tok&&cid){
+    kakaoEl&&(kakaoEl.textContent=`[노프로 TBM 서명]\n${sfM}월 ${sfD}일 TBM 교육 서명 부탁드립니다.\n링크 클릭 → 이름 선택 → 동의 → 서명\n\nhttps://${url}\n\n외국인분들도 영어 버튼 누르면 됩니다.`);
+  } else {
+    kakaoEl&&(kakaoEl.textContent='먼저 🔄 재생성 버튼을 눌러 서명 링크를 생성해주세요.');
+  }
 }
 
 // TBM 내용 저장/로드
@@ -4767,25 +4776,159 @@ function sfLoadTbm(){
 
 // 링크
 function sfCopyLink(){
-  const url=document.getElementById('sf-link-url').textContent;
+  let url=(document.getElementById('sf-link-url')||{}).textContent||'';
+  if(!url||url.includes('링크를 생성')){alert('먼저 🔄 재생성 버튼을 눌러 링크를 생성해주세요.');return;}
+  if(!url.startsWith('http'))url='https://'+url;
   if(navigator.clipboard)navigator.clipboard.writeText(url);
   const t=document.getElementById('sf-toast');
   if(t){t.style.display='block';setTimeout(()=>t.style.display='none',2500);}
 }
 function sfGenLink(){
+  const sess=JSON.parse(localStorage.getItem('nopro_session')||'null');
+  if(!sess||!sess.companyId){alert('로그인이 필요합니다.');return;}
   const chars='abcdefghijklmnopqrstuvwxyz0123456789';
-  let tok='';for(let i=0;i<6;i++)tok+=chars[Math.floor(Math.random()*chars.length)];
-  const url=`noprohr.netlify.app/tbm_sign.html?t=${tok}&date=${sfY}-${pad(sfM)}-${pad(sfD)}`;
+  let tok='';for(let i=0;i<8;i++)tok+=chars[Math.floor(Math.random()*chars.length)];
+  const key=sfKey();
+  SAFETY_REC[key+'_token']=tok;
+  sfSave();
+  const cid=sess.companyId;
+  const url=`noprohr.netlify.app/tbm_sign.html?c=${cid}&t=${tok}&d=${key}`;
   const urlEl=document.getElementById('sf-link-url');
   if(urlEl)urlEl.textContent=url;
+  const kakaoEl=document.getElementById('sf-kakao-msg');
+  if(kakaoEl)kakaoEl.textContent=`[노프로 TBM 서명]\n${sfM}월 ${sfD}일 TBM 교육 서명 부탁드립니다.\n링크 클릭 → 이름 선택 → 동의 → 서명\n\nhttps://${url}\n\n외국인분들도 영어 버튼 누르면 됩니다.`;
+  // 토큰을 서버에 즉시 저장
+  sbSaveAll(cid).catch(()=>{});
 }
 function sfSaveDay2(){
   sfSave();
   const msg=document.getElementById('sf-sv-msg');
   if(msg){msg.style.display='inline';setTimeout(()=>msg.style.display='none',2500);}
 }
-function sfSendAlert(){alert('미서명 인원에게 카카오 알림을 발송합니다.\n\n실제 구현 시 Supabase + 카카오 API 연동 필요');}
-function sfDoExcel(){alert('엑셀 내보내기 (3개 시트)\n\n📊 시트1: 월별 서명현황표 (✓/— 형식)\n📷 시트2: 일자별 현장사진 일지\n📈 시트3: 요약통계·개인별 완료율\n\n실제 구현: Supabase 연동 후 자동 생성');}
+function sfSendAlert(){
+  const signs=SAFETY_REC[sfKey()+'_signs']||{};
+  const unsigned=EMPS.filter(e=>!e.leave&&!signs[String(e.id)]);
+  if(unsigned.length===0){alert('모든 직원이 서명을 완료했습니다!');return;}
+  const names=unsigned.map(e=>e.name).join(', ');
+  alert(`미서명 인원 (${unsigned.length}명):\n${names}\n\n카카오 단톡방 링크를 다시 공유해주세요.`);
+}
+
+function sfGetFilteredEmps(){
+  const sh=(document.getElementById('sf-f-sh')||{}).value||'all';
+  const na=(document.getElementById('sf-f-na')||{}).value||'all';
+  const pm=(document.getElementById('sf-f-pm')||{}).value||'all';
+  const dp=(document.getElementById('sf-f-dp')||{}).value||'all';
+  return EMPS.filter(e=>{
+    if(e.leave)return false;
+    if(sh!=='all'&&(e.shift||'day')!==sh)return false;
+    if(na!=='all'&&(e.nation||'local')!==na)return false;
+    if(dp!=='all'&&(e.dept||'')!==dp)return false;
+    if(pm!=='all'&&(e.payMode||'fixed')!==pm)return false;
+    return true;
+  });
+}
+
+function sfMakeRec(e){
+  // 실제 서명 데이터 사용 (SAFETY_REC에서 각 날짜의 _signs 확인)
+  return SF_TBM_DAYS.map(d=>{
+    const dateKey=`${sfMY}-${pad(sfMMo)}-${pad(d)}`;
+    const signs=SAFETY_REC[dateKey+'_signs']||{};
+    return signs[String(e.id)]?1:0;
+  });
+}
+
+function sfDoExcel(){
+  if(typeof XLSX==='undefined'){
+    const s=document.createElement('script');
+    s.src='https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js';
+    s.onload=()=>sfExcelCore();
+    s.onerror=()=>alert('엑셀 라이브러리 로드에 실패했습니다. 인터넷 연결을 확인해주세요.');
+    document.head.appendChild(s);
+  } else { sfExcelCore(); }
+}
+
+function sfExcelCore(){
+  const wb=XLSX.utils.book_new();
+  const emps=sfGetFilteredEmps();
+  const days=SF_TBM_DAYS;
+  const DNW=['일','월','화','수','목','금','토'];
+
+  // ── 시트1: 월별 서명현황표 ──
+  const sh1=[];
+  const hdr=['직원명','영문명','주야간','국적','소속','급여방식'];
+  days.forEach(d=>hdr.push(sfMMo+'/'+d+'('+DNW[new Date(sfMY,sfMMo-1,d).getDay()]+')'));
+  hdr.push('완료수','전체','완료율');
+  sh1.push(hdr);
+  emps.forEach(e=>{
+    const rec=sfMakeRec(e);
+    const total=rec.reduce((a,b)=>a+b,0);
+    const pm2=typeof sfPmLabel==='function'?sfPmLabel(e).t:(e.payMode||'소정근무제');
+    const row=[e.name||'',e.nameEn||e.name||'',
+      e.shift==='night'?'야간':'주간',
+      e.nation==='foreign'?'외국인':'내국인',
+      e.dept||'',pm2];
+    rec.forEach(v=>row.push(v===1?'\u2713':'\u2014'));
+    row.push(total,days.length,Math.round(total/days.length*100)+'%');
+    sh1.push(row);
+  });
+  const ws1=XLSX.utils.aoa_to_sheet(sh1);
+  ws1['!cols']=[{wch:12},{wch:18},{wch:6},{wch:7},{wch:10},{wch:9},
+    ...days.map(()=>({wch:7})),{wch:6},{wch:6},{wch:7}];
+  XLSX.utils.book_append_sheet(wb,ws1,sfMMo+'월 현황표');
+
+  // ── 시트2: 일자별 현황 ──
+  const sh2=[];
+  sh2.push([sfMY+'년 '+sfMMo+'월 일자별 TBM 현황']);
+  sh2.push([]);
+  days.forEach(d=>{
+    const k=sfMY+'-'+(sfMMo<10?'0':'')+sfMMo+'-'+(d<10?'0':'')+d;
+    const tbm=SAFETY_REC[k+'_tbm']||'(교육내용 없음)';
+    const photos=(SAFETY_REC[k]||[]).length;
+    const dw=new Date(sfMY,sfMMo-1,d).getDay();
+    sh2.push(['\u25b6 '+sfMMo+'월 '+d+'일('+DNW[dw]+')','교육내용: '+tbm,'현장사진: '+photos+'장']);
+    sh2.push(['','서명여부','직원명','영문명','주야간','소속']);
+    const signs=SAFETY_REC[k+'_signs']||{};
+    emps.forEach(e=>{
+      const signed=!!signs[String(e.id)];
+      sh2.push(['',signed?'\u2713 완료':'\u2014 미서명',
+        e.name||'',e.nameEn||e.name||'',
+        e.shift==='night'?'야간':'주간',e.dept||'']);
+    });
+    sh2.push([]);
+  });
+  const ws2=XLSX.utils.aoa_to_sheet(sh2);
+  ws2['!cols']=[{wch:3},{wch:10},{wch:14},{wch:20},{wch:7},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,ws2,sfMMo+'월 일자별');
+
+  // ── 시트3: 요약통계 ──
+  const sh3=[];
+  sh3.push([sfMY+'년 '+sfMMo+'월 안전교육 요약통계']);
+  sh3.push([]);
+  sh3.push(['TBM 실시 횟수',days.length+'회']);
+  sh3.push(['필터 적용 인원',emps.length+'명']);
+  const avg=emps.length?Math.round(emps.map(e=>{
+    const r=sfMakeRec(e);
+    return r.reduce((a,b)=>a+b,0)/days.length*100;
+  }).reduce((a,b)=>a+b,0)/emps.length):0;
+  sh3.push(['평균 완료율',avg+'%']);
+  sh3.push([]);
+  sh3.push(['직원명','영문명','완료수','전체','완료율','주야간','국적','소속','급여방식']);
+  emps.forEach(e=>{
+    const rec=sfMakeRec(e);
+    const total=rec.reduce((a,b)=>a+b,0);
+    const pm2=typeof sfPmLabel==='function'?sfPmLabel(e).t:(e.payMode||'소정근무제');
+    sh3.push([e.name||'',e.nameEn||e.name||'',total,days.length,
+      Math.round(total/days.length*100)+'%',
+      e.shift==='night'?'야간':'주간',
+      e.nation==='foreign'?'외국인':'내국인',
+      e.dept||'',pm2]);
+  });
+  const ws3=XLSX.utils.aoa_to_sheet(sh3);
+  ws3['!cols']=[{wch:14},{wch:18},{wch:7},{wch:6},{wch:8},{wch:7},{wch:7},{wch:10},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,ws3,'요약통계');
+
+  XLSX.writeFile(wb,'노프로_안전교육_'+sfMY+'년'+sfMMo+'월.xlsx');
+}
 
 // 사진 업로드
 async function sf2HandleFiles(files){
@@ -4891,8 +5034,8 @@ function sfSetKpi(v,el){
   document.querySelectorAll('[id^="sf-kpi-"]').forEach(k=>{k.style.background='var(--surf)';k.style.borderColor='transparent';});
   el.style.background=v==='all'?'var(--nbg)':v==='done'?'var(--gbg)':v==='wait'?'var(--rbg)':'var(--abg)';
   el.style.borderColor=v==='all'?'var(--navy)':v==='done'?'#6EE7B7':v==='wait'?'#FCA5A5':'#FCD34D';
-  sf2StF='all';sf2NaF='all';sf2ShF='all';sf2DpF='all';
-  if(v==='done')sf2StF='done';else if(v==='wait')sf2StF='wait';else if(v==='foreign')sf2NaF='외국인';
+  sf2StF='all';sf2NaF='all';sf2ShF='all';sf2DpF='all';sf2PmF='all';
+  if(v==='done')sf2StF='done';else if(v==='wait')sf2StF='wait';else if(v==='foreign')sf2NaF='foreign';
   sfResetChips();sfRenderList();
 }
 function sfFc(key,val,el){
@@ -4937,27 +5080,47 @@ function sfPmLabel(e){
   return               {t:'소정근무제',c:'#059669',bg:'#ECFDF5'};
 }
 
-// 인원 리스트 렌더 (EMPS 배열 사용)
+// 인원 리스트 렌더 (EMPS 배열 + 실제 서명 데이터)
 function sfRenderList(){
   const srch=(document.getElementById('sf-srch')||{}).value||'';
   const q=srch.trim().toLowerCase();
-  // 실제 EMPS 필드 기준 필터
+  const signs=SAFETY_REC[sfKey()+'_signs']||{};
   const list=EMPS.filter(e=>{
     if(e.leave)return false;
-    if(sf2NaF!=='all'&&(e.nation||'local')!==sf2NaF)return false;   // local|foreign
-    if(sf2ShF!=='all'&&(e.shift||'day')!==sf2ShF)return false;       // day|night
+    if(sf2NaF!=='all'&&(e.nation||'local')!==sf2NaF)return false;
+    if(sf2ShF!=='all'&&(e.shift||'day')!==sf2ShF)return false;
     if(sf2DpF!=='all'&&(e.dept||'')!==sf2DpF)return false;
     if(sf2PmF!=='all'&&(e.payMode||'fixed')!==sf2PmF)return false;
+    if(sf2StF==='done'&&!signs[String(e.id)])return false;
+    if(sf2StF==='wait'&&signs[String(e.id)])return false;
     if(q&&!(e.name||'').toLowerCase().includes(q))return false;
     return true;
   });
-  const total=EMPS.filter(e=>!e.leave).length;
+  const active=EMPS.filter(e=>!e.leave);
+  const total=active.length;
+  const signedCount=active.filter(e=>signs[String(e.id)]).length;
+  const foreignCount=active.filter(e=>e.nation==='foreign').length;
+  // KPI 업데이트
+  const kvAll=document.getElementById('sf-kv-all');if(kvAll)kvAll.textContent=total;
+  const kvDone=document.getElementById('sf-kv-done');if(kvDone)kvDone.textContent=signedCount;
+  const kvWait=document.getElementById('sf-kv-wait');if(kvWait)kvWait.textContent=total-signedCount;
+  const kvFo=document.getElementById('sf-kv-fo');if(kvFo)kvFo.textContent=foreignCount;
+  // 진행률 바 업데이트
+  const dayEmps=active.filter(e=>(e.shift||'day')==='day');
+  const nightEmps=active.filter(e=>e.shift==='night');
+  const foEmps=active.filter(e=>e.nation==='foreign');
+  const dayDone=dayEmps.filter(e=>signs[String(e.id)]).length;
+  const nightDone=nightEmps.filter(e=>signs[String(e.id)]).length;
+  const foDone=foEmps.filter(e=>signs[String(e.id)]).length;
+  const barDay=document.getElementById('sf-bar-day');if(barDay)barDay.style.width=(dayEmps.length?Math.round(dayDone/dayEmps.length*100):0)+'%';
+  const barNight=document.getElementById('sf-bar-night');if(barNight)barNight.style.width=(nightEmps.length?Math.round(nightDone/nightEmps.length*100):0)+'%';
+  const barFo=document.getElementById('sf-bar-fo');if(barFo)barFo.style.width=(foEmps.length?Math.round(foDone/foEmps.length*100):0)+'%';
+  const lblDay=document.getElementById('sf-lbl-day');if(lblDay)lblDay.textContent=`${dayDone}/${dayEmps.length}`;
+  const lblNight=document.getElementById('sf-lbl-night');if(lblNight)lblNight.textContent=`${nightDone}/${nightEmps.length}`;
+  const lblFo=document.getElementById('sf-lbl-fo');if(lblFo)lblFo.textContent=`${foDone}/${foEmps.length}`;
   const cntEl=document.getElementById('sf-lcnt');
   const listEl=document.getElementById('sf-nlist');
   if(!listEl)return;
-  // KPI 전체 인원 업데이트
-  const kvAll=document.getElementById('sf-kv-all');
-  if(kvAll)kvAll.textContent=total;
   if(cntEl)cntEl.textContent=`${list.length}명 표시 (전체 ${total}명)`;
   if(list.length===0){
     listEl.innerHTML='<div style="text-align:center;color:var(--ink3);padding:16px;font-size:11px;">검색 결과 없음</div>';
@@ -4969,10 +5132,11 @@ function sfRenderList(){
     const naLabel=e.nation==='foreign'?'외국인':'내국인';
     const dp=e.dept||'';
     const pm=sfPmLabel(e);
+    const signed=!!signs[String(e.id)];
     return`<div class="sf-ni" style="margin-bottom:3px">
-      <div style="width:7px;height:7px;border-radius:50%;background:var(--bd2);flex-shrink:0"></div>
+      <div style="width:7px;height:7px;border-radius:50%;background:${signed?'#059669':'#E11D48'};flex-shrink:0"></div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:11px;font-weight:700;color:var(--ink)">${nm}</div>
+        <div style="font-size:11px;font-weight:700;color:var(--ink)">${nm} <span style="font-size:8px;color:${signed?'#059669':'#E11D48'};font-weight:600">${signed?'✓':'—'}</span></div>
         <div style="font-size:8px;color:var(--ink3)">${shLabel} · ${naLabel} · ${dp}</div>
       </div>
       <span style="font-size:8px;padding:1px 5px;border-radius:20px;background:${pm.bg};color:${pm.c};font-weight:700">${pm.t}</span>
@@ -5017,40 +5181,40 @@ function sfSetMF(v,btn){
   btn.classList.add('sf-fbtn-on');sfRenderM();
 }
 function sfRenderM(){
-  const sh=(document.getElementById('sf-f-sh')||{}).value||'all';
-  const na=(document.getElementById('sf-f-na')||{}).value||'all';
-  const pm=(document.getElementById('sf-f-pm')||{}).value||'all';
-  const dp=(document.getElementById('sf-f-dp')||{}).value||'all';
-  // EMPS 실제 필드 기준 (nation:'local'/'foreign', shift:'day'/'night')
-  let emps=EMPS.filter(e=>{
-    if(e.leave)return false;
-    if(sh!=='all'&&(e.shift||'day')!==sh)return false;
-    if(na!=='all'&&(e.nation||'local')!==na)return false;
-    if(dp!=='all'&&(e.dept||'')!==dp)return false;
-    if(pm!=='all'&&(e.payMode||'fixed')!==pm)return false;
-    return true;
-  });
+  let emps=sfGetFilteredEmps();
+  if(sfMStF!=='all'){
+    emps=emps.filter(e=>{
+      const rec=sfMakeRec(e);
+      const total=rec.reduce((a,b)=>a+b,0);
+      return sfMStF==='done'?total===rec.length:total<rec.length;
+    });
+  }
   const DNW=['일','월','화','수','목','금','토'];
   const days=SF_TBM_DAYS;
   const t=document.getElementById('sf-mt');if(!t)return;
-  let h=`<thead><tr><th style="padding:7px 9px;background:var(--navy);color:#fff;font-weight:700;white-space:nowrap;text-align:left;font-size:9px;position:sticky;left:0;min-width:90px">직원</th>`;
+  let h=`<thead><tr><th style="padding:7px 9px;background:var(--navy);color:#fff;font-weight:700;white-space:nowrap;text-align:left;font-size:9px;position:sticky;left:0;z-index:3;min-width:110px">직원 (${emps.length}명)</th>`;
   days.forEach(d=>{
     const dw=new Date(sfMY,sfMMo-1,d).getDay();
     const c=dw===0?'color:#EF4444':dw===6?'color:#93C5FD':'';
     h+=`<th style="padding:7px 6px;background:var(--navy);color:#fff;font-size:9px;text-align:center;white-space:nowrap;min-width:34px;${c}">${d}일<br><span style="font-size:8px;opacity:.7">${DNW[dw]}</span></th>`;
   });
   h+=`<th style="padding:7px 9px;background:#059669;color:#fff;font-size:9px;text-align:center;min-width:50px">완료율</th></tr></thead><tbody>`;
+  if(emps.length===0){
+    h+=`<tr><td colspan="${days.length+2}" style="text-align:center;padding:24px;color:var(--ink3);font-size:11px">표시할 인원이 없습니다</td></tr>`;
+  }
   emps.forEach(e=>{
-    // 랜덤 서명 데이터 (실제는 Supabase)
-    let x=(e.id||e.name||'').split('').reduce((a,c)=>a+c.charCodeAt(0),0)*997+7;
-    const rng=()=>{x=x*1664525+1013904223;return((x>>>0)/0xFFFFFFFF);};
-    const rec=days.map(()=>rng()<((e.nationality||'')!=='외국인'?0.88:0.65)?1:0);
-    if(sfMStF==='done'&&rec[rec.length-1]===0)return;
-    if(sfMStF==='wait'&&rec[rec.length-1]===1)return;
+    const rec=sfMakeRec(e);
     const total=rec.reduce((a,b)=>a+b,0);
     const pct=days.length?Math.round(total/days.length*100):0;
     const pc=pct===100?'#059669':pct>=70?'#1D4ED8':'#E11D48';
-    h+=`<tr><td style="padding:6px 9px;border-bottom:1px solid var(--bd);position:sticky;left:0;background:var(--card);border-right:1px solid var(--bd)"><div style="font-size:10px;font-weight:700">${e.name}</div><div style="font-size:8px;color:var(--ink3)">${e.shift||''} · ${e.nationality||''}</div></td>`;
+    const shLabel=e.shift==='night'?'야간':'주간';
+    const naLabel=e.nation==='foreign'?'외국인':'내국인';
+    const pm2=sfPmLabel(e);
+    h+=`<tr><td style="padding:6px 9px;border-bottom:1px solid var(--bd);position:sticky;left:0;z-index:1;background:var(--card);border-right:1px solid var(--bd)">
+      <div style="font-size:10px;font-weight:700">${e.name||''}</div>
+      <div style="font-size:8px;color:var(--ink3)">${shLabel} · ${naLabel} · ${e.dept||''}</div>
+      <span style="font-size:7px;padding:1px 4px;border-radius:20px;background:${pm2.bg};color:${pm2.c};font-weight:700">${pm2.t}</span>
+    </td>`;
     rec.forEach(v=>{h+=v===1?`<td style="padding:6px 9px;border-bottom:1px solid var(--bd);text-align:center"><span style="background:var(--gbg);color:#065F46;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700">✓</span></td>`:`<td style="padding:6px 9px;border-bottom:1px solid var(--bd);text-align:center;color:var(--ink3);font-size:9px">—</td>`;});
     h+=`<td style="padding:6px 9px;border-bottom:1px solid var(--bd);text-align:center;font-weight:700;color:${pc};font-size:10px">${pct}%<br><span style="font-size:8px;color:var(--ink3)">${total}/${days.length}</span></td></tr>`;
   });
@@ -5087,15 +5251,19 @@ function sfRenderSummary(){
       <button style="font-size:9px;padding:2px 7px;border:1px solid var(--bd2);border-radius:6px;background:var(--surf);cursor:pointer;color:var(--ink)">PDF</button>
     </div>`).join('');
   }
-  // 개인별 이수율
+  // 개인별 이수율 (실제 서명 데이터 기반)
   const prog=document.getElementById('sf-sum-prog');
   if(prog&&EMPS.length>0){
-    const show=EMPS.slice(0,8);
-    const daysCount=SF_TBM_DAYS.filter(d=>d<=sfD).length;
+    const show=EMPS.filter(e=>!e.leave).slice(0,8);
+    const pastDays=SF_TBM_DAYS.filter(d=>d<=sfD);
+    const daysCount=pastDays.length;
     prog.innerHTML=show.map(e=>{
-      let x=(e.name||'').split('').reduce((a,c)=>a+c.charCodeAt(0),0)*997;
-      const rng=()=>{x=x*1664525+1013904223;return((x>>>0)/0xFFFFFFFF);};
-      const done=Math.round(daysCount*(e.nationality==='외국인'?0.65:0.88)+rng()*daysCount*0.1);
+      let done=0;
+      pastDays.forEach(d=>{
+        const dateKey=`${sfY}-${pad(sfM)}-${pad(d)}`;
+        const signs=SAFETY_REC[dateKey+'_signs']||{};
+        if(signs[String(e.id)])done++;
+      });
       const pct=daysCount?Math.min(100,Math.round(done/daysCount*100)):0;
       const pc=pct===100?'var(--green)':pct>=70?'#1D4ED8':'var(--rose)';
       return`<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
@@ -5110,12 +5278,32 @@ function sfRenderSummary(){
   if(cnt)cnt.textContent=SF_TBM_DAYS.filter(d=>d<=sfD).length+'회';
 }
 
-// renderSafety 구 버전 (gp('safety') 호출용 — 호환성 유지)
+// 실시간 서명 폴링
+let sfPollTimer=null;
+function sfStartPoll(){
+  sfStopPoll();
+  sfPollTimer=setInterval(async()=>{
+    try{
+      const map=await apiFetch('/data-load','POST',{key:'safety'});
+      if(map&&map.safety){
+        // 서명 데이터만 병합 (로컬 편집 중인 TBM 내용 덮어쓰기 방지)
+        Object.keys(map.safety).forEach(k=>{
+          if(k.endsWith('_signs'))SAFETY_REC[k]=map.safety[k];
+        });
+        sfRenderList();
+      }
+    }catch(e){}
+  },10000);
+}
+function sfStopPoll(){if(sfPollTimer){clearInterval(sfPollTimer);sfPollTimer=null;}}
+
+// renderSafety (gp('safety') 호출용)
 function renderSafety(){
   sfUpdBar2();sfLoadTbm();sfInitDeptChips();sfRenderList();sfRenderRecent();
   sf2RenderPhotos();
   sfInitDrop();
   sfSwitchTab('daily');
+  sfStartPoll();
 }
 
 function sfGoDate(dateStr){const[y,m,d]=dateStr.split('-').map(Number);sfY=y;sfM=m;sfD=d;renderSafety();}

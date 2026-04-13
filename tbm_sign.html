@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>TBM 전자서명</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif;background:#F1F5F9;color:#0F172A;min-height:100vh}
+.wrap{max-width:480px;margin:0 auto;padding:16px}
+.hdr{background:linear-gradient(135deg,#1E3A5F,#0D9488);border-radius:16px;padding:20px;color:#fff;margin-bottom:14px;text-align:center}
+.hdr h1{font-size:18px;font-weight:800;margin-bottom:4px}
+.hdr .company{font-size:13px;opacity:.85}
+.hdr .date{font-size:12px;opacity:.7;margin-top:6px}
+.tbm-box{background:#fff;border:1px solid #E2E8F0;border-radius:14px;padding:14px 16px;margin-bottom:12px}
+.tbm-lbl{font-size:10px;font-weight:700;color:#64748B;margin-bottom:6px;letter-spacing:.04em}
+.tbm-content{font-size:13px;line-height:1.7;color:#0F172A;white-space:pre-line;min-height:40px}
+.tbm-content:empty::after{content:'(교육내용 미입력)';color:#94A3B8}
+.status-bar{display:flex;gap:8px;margin-bottom:12px}
+.status-card{flex:1;background:#fff;border:1px solid #E2E8F0;border-radius:11px;padding:10px;text-align:center}
+.status-card .num{font-size:22px;font-weight:800}
+.status-card .lbl{font-size:9px;color:#64748B;margin-top:2px}
+.search{width:100%;padding:10px 14px;border:1.5px solid #CBD5E1;border-radius:10px;font-size:13px;font-family:inherit;outline:none;margin-bottom:10px;background:#fff}
+.search:focus{border-color:#0D9488}
+.lang-toggle{display:flex;gap:6px;margin-bottom:10px}
+.lang-btn{flex:1;padding:8px;border:1.5px solid #CBD5E1;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:#fff;text-align:center;font-family:inherit;color:#64748B}
+.lang-btn.on{background:#1E3A5F;color:#fff;border-color:#1E3A5F}
+.emp-list{display:flex;flex-direction:column;gap:4px;margin-bottom:14px;max-height:50vh;overflow-y:auto}
+.emp-item{display:flex;align-items:center;gap:10px;padding:12px 14px;background:#fff;border:1.5px solid #E2E8F0;border-radius:10px;cursor:pointer;transition:all .15s}
+.emp-item:active{transform:scale(.98)}
+.emp-item.signed{border-color:#6EE7B7;background:#F0FDF4;cursor:default}
+.emp-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.emp-dot.done{background:#059669}.emp-dot.wait{background:#CBD5E1}
+.emp-info{flex:1;min-width:0}
+.emp-name{font-size:14px;font-weight:700}
+.emp-sub{font-size:10px;color:#64748B;margin-top:1px}
+.emp-badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px}
+.emp-badge.done{background:#ECFDF5;color:#059669}
+.emp-badge.wait{background:#FEF2F2;color:#E11D48}
+
+/* Confirm modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center;padding:20px}
+.modal-bg.show{display:flex}
+.modal{background:#fff;border-radius:16px;padding:24px;max-width:360px;width:100%;text-align:center}
+.modal h2{font-size:16px;font-weight:800;margin-bottom:6px}
+.modal .name{font-size:22px;font-weight:800;color:#059669;margin:12px 0}
+.modal p{font-size:12px;color:#64748B;line-height:1.6;margin-bottom:16px}
+.modal .btns{display:flex;gap:8px}
+.modal .btn-cancel{flex:1;padding:12px;border:1.5px solid #CBD5E1;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:#fff;font-family:inherit;color:#64748B}
+.modal .btn-sign{flex:1;padding:12px;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:#059669;color:#fff;font-family:inherit}
+.modal .btn-sign:disabled{background:#94A3B8;cursor:not-allowed}
+
+/* Success */
+.success-msg{display:none;text-align:center;padding:40px 20px}
+.success-msg.show{display:block}
+.success-icon{font-size:60px;margin-bottom:12px}
+.success-text{font-size:18px;font-weight:800;color:#059669;margin-bottom:6px}
+.success-sub{font-size:12px;color:#64748B}
+
+/* Loading */
+.loading{text-align:center;padding:60px 20px}
+.loading .spinner{width:36px;height:36px;border:3px solid #E2E8F0;border-top-color:#0D9488;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.error-box{background:#FEF2F2;border:1px solid #FECACA;border-radius:12px;padding:20px;text-align:center;color:#E11D48;font-size:13px;line-height:1.6}
+</style>
+</head>
+<body>
+
+<div class="wrap" id="app">
+  <div class="loading" id="loading-view">
+    <div class="spinner"></div>
+    <div style="font-size:13px;color:#64748B">서명 페이지를 불러오는 중...</div>
+    <div style="font-size:11px;color:#94A3B8;margin-top:4px">Loading signature page...</div>
+  </div>
+</div>
+
+<!-- Confirm modal -->
+<div class="modal-bg" id="confirm-modal">
+  <div class="modal">
+    <h2>TBM 서명 확인</h2>
+    <div class="name" id="modal-name"></div>
+    <p id="modal-msg">위 이름으로 오늘 TBM 교육 서명을 진행합니다.<br>본인이 맞으시면 서명 버튼을 눌러주세요.</p>
+    <div class="btns">
+      <button class="btn-cancel" onclick="closeModal()">취소 Cancel</button>
+      <button class="btn-sign" id="btn-sign" onclick="doSign()">서명 Sign</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const params=new URLSearchParams(location.search);
+const C=params.get('c'),T=params.get('t'),D=params.get('d');
+const API=location.origin+'/api/tbm-sign';
+let DATA=null,selectedEmp=null,lang='ko';
+const DOW_K=['일','월','화','수','목','금','토'];
+const DOW_E=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+async function init(){
+  const app=document.getElementById('app');
+  if(!C||!T||!D){
+    app.innerHTML='<div class="error-box">유효하지 않은 링크입니다.<br>Invalid link. Please request a new one from your manager.</div>';
+    return;
+  }
+  try{
+    const res=await fetch(`${API}?c=${C}&t=${T}&d=${D}`);
+    const json=await res.json();
+    if(!res.ok){
+      app.innerHTML=`<div class="error-box">${json.error||'오류가 발생했습니다'}<br>Link may have expired. Please request a new link.</div>`;
+      return;
+    }
+    DATA=json;
+    render();
+    setInterval(pollSigns,8000);
+  }catch(e){
+    app.innerHTML='<div class="error-box">서버에 연결할 수 없습니다.<br>Cannot connect to server. Please check your internet connection.</div>';
+  }
+}
+
+function render(){
+  const app=document.getElementById('app');
+  const dt=new Date(D+'T00:00:00');
+  const dow=lang==='ko'?DOW_K[dt.getDay()]:DOW_E[dt.getDay()];
+  const [y,m,d]=D.split('-');
+  const dateStr=lang==='ko'?`${+m}월 ${+d}일 (${dow})`:`${dow}, ${m}/${d}/${y}`;
+
+  const signs=DATA.signs||{};
+  const total=DATA.emps.length;
+  const done=DATA.emps.filter(e=>signs[String(e.id)]).length;
+
+  let h=`
+    <div class="hdr">
+      <h1>${lang==='ko'?'TBM 전자서명':'TBM E-Signature'}</h1>
+      <div class="company">${DATA.company||''}</div>
+      <div class="date">${dateStr}</div>
+    </div>
+    <div class="tbm-box">
+      <div class="tbm-lbl">${lang==='ko'?'오늘의 TBM 교육내용':"Today's TBM Content"}</div>
+      <div class="tbm-content">${DATA.tbm||''}</div>
+    </div>
+    <div class="status-bar">
+      <div class="status-card"><div class="num" style="color:#1E3A5F">${total}</div><div class="lbl">${lang==='ko'?'전체':'Total'}</div></div>
+      <div class="status-card"><div class="num" style="color:#059669">${done}</div><div class="lbl">${lang==='ko'?'완료':'Signed'}</div></div>
+      <div class="status-card"><div class="num" style="color:#E11D48">${total-done}</div><div class="lbl">${lang==='ko'?'미서명':'Unsigned'}</div></div>
+    </div>
+    <div class="lang-toggle">
+      <div class="lang-btn ${lang==='ko'?'on':''}" onclick="setLang('ko')">한국어</div>
+      <div class="lang-btn ${lang==='en'?'on':''}" onclick="setLang('en')">English</div>
+    </div>
+    <input class="search" id="emp-search" type="text" placeholder="${lang==='ko'?'이름 검색...':'Search name...'}" oninput="renderList()">
+    <div class="emp-list" id="emp-list"></div>
+  `;
+  app.innerHTML=h;
+  renderList();
+}
+
+function renderList(){
+  const el=document.getElementById('emp-list');if(!el)return;
+  const q=(document.getElementById('emp-search')||{}).value?.toLowerCase()||'';
+  const signs=DATA.signs||{};
+  const filtered=DATA.emps.filter(e=>{
+    if(q&&!(e.name||'').toLowerCase().includes(q)&&!(e.nameEn||'').toLowerCase().includes(q))return false;
+    return true;
+  });
+  // Sort: unsigned first, then signed
+  filtered.sort((a,b)=>{
+    const sa=signs[String(a.id)]?1:0, sb=signs[String(b.id)]?1:0;
+    return sa-sb;
+  });
+  el.innerHTML=filtered.map(e=>{
+    const signed=!!signs[String(e.id)];
+    const name=lang==='en'&&e.nameEn?e.nameEn:e.name;
+    const sub=lang==='en'
+      ?`${e.shift==='night'?'Night':'Day'} ${e.dept?'· '+e.dept:''}`
+      :`${e.shift==='night'?'야간':'주간'} ${e.dept?'· '+e.dept:''}`;
+    const badge=signed
+      ?(lang==='ko'?'서명완료':'Signed')
+      :(lang==='ko'?'미서명':'Unsigned');
+    return`<div class="emp-item ${signed?'signed':''}" ${signed?'':`onclick="selectEmp(${e.id})"`}>
+      <div class="emp-dot ${signed?'done':'wait'}"></div>
+      <div class="emp-info">
+        <div class="emp-name">${name}</div>
+        <div class="emp-sub">${sub}</div>
+      </div>
+      <span class="emp-badge ${signed?'done':'wait'}">${badge}</span>
+    </div>`;
+  }).join('');
+}
+
+function setLang(l){lang=l;render();}
+
+function selectEmp(id){
+  const e=DATA.emps.find(x=>x.id===id);if(!e)return;
+  selectedEmp=e;
+  const name=lang==='en'&&e.nameEn?e.nameEn:e.name;
+  document.getElementById('modal-name').textContent=name;
+  document.getElementById('modal-msg').innerHTML=lang==='ko'
+    ?'위 이름으로 오늘 TBM 교육 서명을 진행합니다.<br>본인이 맞으시면 서명 버튼을 눌러주세요.'
+    :'You will sign today\'s TBM as the name above.<br>Please press Sign if this is correct.';
+  document.getElementById('btn-sign').disabled=false;
+  document.getElementById('btn-sign').textContent=lang==='ko'?'서명 Sign':'Sign';
+  document.getElementById('confirm-modal').classList.add('show');
+}
+
+function closeModal(){
+  document.getElementById('confirm-modal').classList.remove('show');
+  selectedEmp=null;
+}
+
+async function doSign(){
+  if(!selectedEmp)return;
+  const btn=document.getElementById('btn-sign');
+  btn.disabled=true;
+  btn.textContent=lang==='ko'?'처리중...':'Signing...';
+  try{
+    const res=await fetch(API,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({c:C,t:T,d:D,empId:selectedEmp.id})
+    });
+    const json=await res.json();
+    if(json.signs)DATA.signs=json.signs;
+    else if(res.status===409){DATA.signs=json.signs||DATA.signs;}
+    closeModal();
+    render();
+    // Show success
+    showSuccess(selectedEmp);
+  }catch(e){
+    btn.disabled=false;
+    btn.textContent=lang==='ko'?'서명 Sign':'Sign';
+    alert(lang==='ko'?'서명 저장에 실패했습니다. 다시 시도해주세요.':'Failed to save signature. Please try again.');
+  }
+}
+
+function showSuccess(emp){
+  const name=lang==='en'&&emp.nameEn?emp.nameEn:emp.name;
+  const app=document.getElementById('app');
+  const existing=app.innerHTML;
+  const successHtml=`<div class="success-msg show" id="success-toast" style="background:#F0FDF4;border:1px solid #6EE7B7;border-radius:14px;margin-bottom:12px;padding:20px">
+    <div class="success-icon">&#10003;</div>
+    <div class="success-text">${name} ${lang==='ko'?'서명 완료!':'Signature Complete!'}</div>
+    <div class="success-sub">${lang==='ko'?'TBM 교육 서명이 완료되었습니다.':'Your TBM signature has been recorded.'}</div>
+  </div>`;
+  app.insertAdjacentHTML('afterbegin',successHtml);
+  setTimeout(()=>{const t=document.getElementById('success-toast');if(t)t.remove();},4000);
+}
+
+async function pollSigns(){
+  try{
+    const res=await fetch(`${API}?c=${C}&t=${T}&d=${D}`);
+    if(!res.ok)return;
+    const json=await res.json();
+    if(json.signs){
+      const oldCount=Object.keys(DATA.signs||{}).length;
+      DATA.signs=json.signs;
+      DATA.tbm=json.tbm||DATA.tbm;
+      const newCount=Object.keys(DATA.signs).length;
+      if(newCount!==oldCount)render();
+    }
+  }catch(e){}
+}
+
+init();
+</script>
+</body>
+</html>
