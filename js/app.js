@@ -4933,8 +4933,7 @@ function sfGetFilteredEmps(){
 }
 
 function sfMakeRec(e){
-  // 실제 서명 데이터 사용 (SAFETY_REC에서 각 날짜의 _signs 확인)
-  return SF_TBM_DAYS.map(d=>{
+  return sfGetMonthDays(sfMY,sfMMo).map(d=>{
     const dateKey=`${sfMY}-${pad(sfMMo)}-${pad(d)}`;
     const signs=SAFETY_REC[dateKey+'_signs']||{};
     return signs[String(e.id)]?1:0;
@@ -4954,7 +4953,7 @@ function sfDoExcel(){
 function sfExcelCore(){
   const wb=XLSX.utils.book_new();
   const emps=sfGetFilteredEmps();
-  const days=SF_TBM_DAYS;
+  const days=sfGetMonthDays(sfMY,sfMMo);
   const DNW=['일','월','화','수','목','금','토'];
 
   // ── 시트1: 월별 서명현황표 ──
@@ -5272,8 +5271,13 @@ function sfRenderRecent(){
   </div>`).join('');
 }
 
-// 월별 현황표
-const SF_TBM_DAYS=[1,2,3,6,7,8,9,10,13,14,15,16,17,20,21,22];
+// 월별 현황표 — 해당 월 전체 일수 동적 생성
+function sfGetMonthDays(y,m){
+  const total=new Date(y,m,0).getDate();
+  const days=[];
+  for(let d=1;d<=total;d++) days.push(d);
+  return days;
+}
 const SF_TBM_CONT={1:'고소작업 안전수칙',2:'화기작업 허가절차',3:'중량물 취급',6:'전기작업 감전예방',7:'개인보호구 착용',8:'작업장 정리정돈',9:'화학물질 취급',10:'추락 방지',13:'비상구 대피요령',14:'폐수처리 안전점검',15:'고압가스 취급',16:'안전점검 체크리스트',17:'협착사고 예방',20:'소음·진동 안전수칙',21:'방호장치 점검',22:'안전보건 표지판'};
 
 function sfChgM(d){
@@ -5302,7 +5306,7 @@ function sfRenderM(){
     });
   }
   const DNW=['일','월','화','수','목','금','토'];
-  const days=SF_TBM_DAYS;
+  const days=sfGetMonthDays(sfMY,sfMMo);
   const t=document.getElementById('sf-mt');if(!t)return;
   let h=`<thead><tr><th style="padding:7px 9px;background:var(--navy);color:#fff;font-weight:700;white-space:nowrap;text-align:left;font-size:9px;position:sticky;left:0;z-index:3;min-width:110px">직원 (${emps.length}명)</th>`;
   days.forEach(d=>{
@@ -5339,13 +5343,18 @@ function sfRenderSummary(){
   const cal=document.getElementById('sf-cal');if(!cal)return;
   cal.innerHTML='';
   const y=sfY,mo=sfM,days=new Date(y,mo,0).getDate(),fd=new Date(y,mo-1,1).getDay();
-  const ts=new Set(SF_TBM_DAYS);
   const today=new Date();
+  // TBM 기록이 있는 날짜 (교육내용 또는 서명 존재)
+  const tbmSet=new Set();
+  for(let d=1;d<=days;d++){
+    const k=`${y}-${pad(mo)}-${pad(d)}`;
+    if(SAFETY_REC[k+'_tbm']||SAFETY_REC[k+'_signs'])tbmSet.add(d);
+  }
   for(let i=0;i<fd;i++){const e=document.createElement('div');e.style.cssText='visibility:hidden';e.textContent='x';cal.appendChild(e);}
   for(let d=1;d<=days;d++){
     const e=document.createElement('div');
     const isToday=y===today.getFullYear()&&mo===today.getMonth()+1&&d===today.getDate();
-    const has=ts.has(d),fut=d>today.getDate()&&y===today.getFullYear()&&mo===today.getMonth()+1;
+    const has=tbmSet.has(d),fut=d>today.getDate()&&y===today.getFullYear()&&mo===today.getMonth()+1;
     if(isToday)e.style.cssText='padding:4px 2px;border-radius:6px;text-align:center;background:var(--navy);color:#fff;font-weight:700;font-size:10px;min-height:34px;cursor:pointer';
     else if(has&&!fut)e.style.cssText='padding:4px 2px;border-radius:6px;text-align:center;background:#DBEAFE;color:#1D4ED8;font-weight:700;border:1px solid #93C5FD;font-size:10px;min-height:34px;cursor:pointer';
     else if(fut)e.style.cssText='padding:4px 2px;border-radius:6px;text-align:center;color:var(--bd2);font-size:10px;min-height:34px';
@@ -5360,18 +5369,26 @@ function sfRenderSummary(){
   // 일별 목록
   const rows=document.getElementById('sf-sum-rows');
   if(rows){
-    const recent=[...SF_TBM_DAYS].filter(d=>d<=sfD).reverse().slice(0,6);
-    rows.innerHTML=recent.map(d=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)">
+    // TBM 기록이 있는 날짜만 최근 6개 표시
+    const allDays=sfGetMonthDays(sfY,sfM);
+    const recent=allDays.filter(d=>{
+      if(d>sfD)return false;
+      const k=`${sfY}-${pad(sfM)}-${pad(d)}`;
+      return SAFETY_REC[k+'_tbm']||SAFETY_REC[k+'_signs'];
+    }).reverse().slice(0,6);
+    rows.innerHTML=recent.length?recent.map(d=>{
+      const k=`${sfY}-${pad(sfM)}-${pad(d)}`;
+      const tbm=SAFETY_REC[k+'_tbm']||'';
+      return`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)">
       <span style="font-size:10px;font-weight:700;min-width:40px">${sfM}/${d}일</span>
-      <span style="flex:1;font-size:10px;color:var(--ink3)">${SF_TBM_CONT[d]||''}</span>
-      <button style="font-size:9px;padding:2px 7px;border:1px solid var(--bd2);border-radius:6px;background:var(--surf);cursor:pointer;color:var(--ink)">PDF</button>
-    </div>`).join('');
+      <span style="flex:1;font-size:10px;color:var(--ink3)">${tbm||SF_TBM_CONT[d]||''}</span>
+    </div>`;}).join(''):'<div style="font-size:10px;color:var(--ink3);text-align:center;padding:8px">이번 달 기록 없음</div>';
   }
   // 개인별 이수율 (실제 서명 데이터 기반)
   const prog=document.getElementById('sf-sum-prog');
   if(prog&&EMPS.length>0){
     const show=EMPS.filter(e=>!e.leave).slice(0,8);
-    const pastDays=SF_TBM_DAYS.filter(d=>d<=sfD);
+    const pastDays=sfGetMonthDays(sfY,sfM).filter(d=>d<=sfD);
     const daysCount=pastDays.length;
     prog.innerHTML=show.map(e=>{
       let done=0;
@@ -5391,7 +5408,16 @@ function sfRenderSummary(){
   }
   // 요약 건수
   const cnt=document.getElementById('sf-sum-cnt');
-  if(cnt)cnt.textContent=SF_TBM_DAYS.filter(d=>d<=sfD).length+'회';
+  // TBM 실시 횟수 = 기록이 있는 날짜 수
+  if(cnt){
+    const allD=sfGetMonthDays(sfY,sfM);
+    const tbmCount=allD.filter(d=>{
+      if(d>sfD)return false;
+      const k=`${sfY}-${pad(sfM)}-${pad(d)}`;
+      return SAFETY_REC[k+'_tbm']||SAFETY_REC[k+'_signs'];
+    }).length;
+    cnt.textContent=tbmCount+'회';
+  }
 }
 
 // 실시간 서명 폴링
