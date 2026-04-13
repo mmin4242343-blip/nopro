@@ -941,7 +941,12 @@ function setR(eid,f,v){
   if(f==='annual'&&v){REC[k].absent=false;REC[k].halfAnnual=false;}
   if(f==='halfAnnual'&&v){REC[k].absent=false;REC[k].annual=false;}
   if(f==='absent'&&v){REC[k].annual=false;REC[k].halfAnnual=false;}
-  REC[k][f]=v;saveLS();renderTable();
+  REC[k][f]=v;
+  // customBk 체크 시 customBkList 자동 초기화
+  if(f==='customBk'&&v&&!REC[k].customBkList?.length){
+    REC[k].customBkList=[{s:'',e:''}];
+  }
+  saveLS();renderTable();
   // 연차/반차 변경 시 관련 탭도 즉시 갱신
   if(f==='annual'||f==='halfAnnual'||f==='absent'){
     const lvPage=document.getElementById('pg-leave');
@@ -1154,9 +1159,9 @@ function renderTable(){
         <td><input class="time-inp ${c&&c.crossed?'cross':autoH?'hol-t':''} ${rec.absent||rec.annual?'dis':''}" value="${rec.end||''}" placeholder="1800"
           ${rec.absent||rec.annual?'disabled':''} data-eid="${emp.id}" data-field="end"
           onblur="handleTimeInput(${emp.id},'end',this.value)"></td>
-        <td class="td-w">${c&&isWork?`<div>${fmtH(c.work)}</div><div style="margin-top:1px">${chips.join('')}</div>`:rec.absent?'<span class="chip ch-ab">결근</span>':rec.annual?'<span class="chip ch-al">연차</span>':''}</td>
-        <td class="td-nt"></td>
-        <td class="td-ot"></td>
+        <td class="td-w">${c&&isWork?`<div>${fmtH(c.work)}</div>${c.bkMins?`<div style="font-size:8px;color:var(--teal)">휴게${c.bkMins}분</div>`:''}<div style="margin-top:1px">${chips.join('')}</div>`:rec.absent?'<span class="chip ch-ab">결근</span>':rec.annual?'<span class="chip ch-al">연차</span>':''}</td>
+        <td class="td-nt">${c&&c.nightM?fmtH(c.nightM):''}</td>
+        <td class="td-ot">${c&&c.ot?fmtH(c.ot):''}</td>
         <td class="td-hol">${autoH&&holPay>0?`<span style="color:#854F0B;font-weight:700;font-size:11px">${Math.round(holPay/1000)}k</span>`:''}</td>
         <td>
           <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
