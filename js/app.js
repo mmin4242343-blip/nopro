@@ -268,12 +268,13 @@ let REC=load(LS.R,{});
 let BONUS_REC=load(LS.BN,{});
 let ALLOWANCE_REC=load(LS.AL,{});
 
-function getEmpPayMode(emp){const m=emp.payMode||POL.basePayMode;return m==='monthly'?'monthly':(m==='hourly'?'hourly':'fixed');}
+function getEmpPayMode(emp){const m=emp.payMode||POL.basePayMode;return m==='monthly'?'monthly':m==='hourly'?'hourly':m==='pohal'?'pohal':'fixed';}
 function getEmpPayModeLabel(emp){
   const m=getEmpPayMode(emp);
   if(m==='fixed')return{text:'소정근무제',cls:'emb-fixed'};
   if(m==='hourly')return{text:'시급제',cls:'emb-hourly'};
   if(m==='monthly')return{text:'월급제',cls:'emb-monthly'};
+  if(m==='pohal')return{text:'포괄임금',cls:'emb-pohal'};
   return{text:'소정근무제',cls:'emb-fixed'};
 }
 function getEmpShiftLabel(emp){
@@ -7162,7 +7163,7 @@ function getEmpRateAt(emp, y, m, d) {
 function getEmpPayModeAt(emp, y, m, d) {
   const hist = getEmpHistoryAt(emp, y, m, d);
   const mode = hist ? (hist.payMode || emp.payMode) : emp.payMode;
-  return mode === 'monthly' ? 'monthly' : (mode === 'hourly' ? 'hourly' : 'fixed');
+  return mode === 'monthly' ? 'monthly' : mode === 'hourly' ? 'hourly' : mode === 'pohal' ? 'pohal' : 'fixed';
 }
 
 function getEmpMonthlyAt(emp, y, m, d) {
