@@ -5296,15 +5296,21 @@ function sfRenderSummary(){
   if(cnt)cnt.textContent=SF_TBM_DAYS.filter(d=>d<=sfD).length+'회';
 }
 
-// 실시간 서명 폴링
+// 실시간 서명 폴링 (apiFetch 대신 직접 fetch — 401 시 자동 로그아웃 방지)
 let sfPollTimer=null;
 function sfStartPoll(){
   sfStopPoll();
   sfPollTimer=setInterval(async()=>{
     try{
-      const map=await apiFetch('/data-load','POST',{key:'safety'});
+      const res=await fetch('/api/data-load',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        credentials:'include',
+        body:JSON.stringify({key:'safety'})
+      });
+      if(!res.ok)return; // 401 등 에러 시 조용히 무시 (로그아웃 안 함)
+      const map=await res.json();
       if(map&&map.safety){
-        // 서명 데이터만 병합 (로컬 편집 중인 TBM 내용 덮어쓰기 방지)
         Object.keys(map.safety).forEach(k=>{
           if(k.endsWith('_signs'))SAFETY_REC[k]=map.safety[k];
         });
@@ -7083,16 +7089,27 @@ async function admDeleteUser(id){
   // 세션이 있으면 랜딩페이지를 즉시 숨김 (깜빡임 방지)
   document.getElementById('landing-overlay').style.display='none';
   try{
-    const res=await apiFetch('/auth-verify','POST');
-    if(!res.valid) throw new Error('invalid');
-    setNoproSession(res.session);
-    if(res.session.role==='admin'){
+    // auth-verify는 직접 fetch (apiFetch의 자동 로그아웃 방지)
+    const res=await fetch('/api/auth-verify',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      credentials:'include'
+    });
+    if(!res.ok){
+      console.warn('auth-verify 실패:', res.status);
+      throw new Error('verify-failed');
+    }
+    const data=await res.json();
+    if(!data.valid) throw new Error('invalid');
+    setNoproSession(data.session);
+    if(data.session.role==='admin'){
       enterAdmin();
     } else {
-      await sbLoadAll(res.session.companyId);
-      enterApp(res.session.company||'');
+      await sbLoadAll(data.session.companyId);
+      enterApp(data.session.company||'');
     }
   } catch(e){
+    console.warn('initAuth 실패:', e.message);
     localStorage.removeItem('nopro_session');
     showLanding();
   }

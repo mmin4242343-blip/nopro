@@ -221,10 +221,10 @@ async function doSign(){
     const json=await res.json();
     if(json.signs)DATA.signs=json.signs;
     else if(res.status===409){DATA.signs=json.signs||DATA.signs;}
+    const signedEmp=selectedEmp;
     closeModal();
     render();
-    // Show success
-    showSuccess(selectedEmp);
+    showSuccess(signedEmp);
   }catch(e){
     btn.disabled=false;
     btn.textContent=lang==='ko'?'서명 Sign':'Sign';

@@ -3,10 +3,10 @@ import jwt from 'jsonwebtoken';
 const SECRET = () => process.env.JWT_SECRET;
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://noprohr.netlify.app,http://localhost:8888').split(',').map(s => s.trim());
 const COOKIE_NAME = 'nopro_token';
-const COOKIE_MAX_AGE = 7200; // 2시간 (초)
+const COOKIE_MAX_AGE = 86400; // 24시간 (초)
 
 export function signToken(payload) {
-  return jwt.sign(payload, SECRET(), { expiresIn: '2h' });
+  return jwt.sign(payload, SECRET(), { expiresIn: '24h' });
 }
 
 export function verifyToken(event) {

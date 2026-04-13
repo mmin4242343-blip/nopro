@@ -50,5 +50,5 @@ export const handler = async (event) => {
 function shouldRefresh(decoded) {
   if (!decoded.exp) return false;
   const remaining = decoded.exp - Math.floor(Date.now() / 1000);
-  return remaining < 7200; // 2시간 이내
+  return remaining < 21600; // 만료 6시간 전부터 갱신
 }
