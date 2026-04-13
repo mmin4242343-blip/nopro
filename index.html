@@ -1688,8 +1688,8 @@ document.addEventListener('click',e=>{
   <div class="dbar" style="margin-bottom:14px;border-radius:12px">
     <div class="ds"><div class="dar" onclick="sfNd('year',-1)">‹</div><div class="dl">연도</div><div class="dv" id="sf-dy">2026</div><div class="dar" onclick="sfNd('year',1)">›</div></div>
     <div class="ds"><div class="dar" onclick="sfNd('month',-1)">‹</div><div class="dl">월</div><div class="dv" id="sf-dm">4</div><div class="dar" onclick="sfNd('month',1)">›</div></div>
-    <div class="ds"><div class="dar" onclick="sfNd('day',-1)">‹</div><div class="dl">일</div><div class="dv" id="sf-dd">11</div><div class="dar" onclick="sfNd('day',1)">›</div></div>
-    <div class="ds" style="border-right:none"><div class="ddow" id="sf-dow">토요일</div></div>
+    <div class="ds" id="sf-day-sec"><div class="dar" onclick="sfNd('day',-1)">‹</div><div class="dl">일</div><div class="dv" id="sf-dd">11</div><div class="dar" onclick="sfNd('day',1)">›</div></div>
+    <div class="ds" id="sf-dow-sec" style="border-right:none"><div class="ddow" id="sf-dow">토요일</div></div>
   </div>
 
   <!-- ① 일일 현황표 탭 -->

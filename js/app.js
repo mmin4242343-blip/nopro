@@ -4734,6 +4734,11 @@ function sfSwitchTab(id){
   document.getElementById('sf-page-'+id).style.display=(id==='daily'?'flex':'block');
   const on=document.getElementById('sf-tab-'+id);
   if(on){on.style.color='var(--navy)';on.style.borderBottomColor='var(--navy)';on.style.fontWeight='700';}
+  // 일일현황만 일자/요일 표시, 나머지는 숨김
+  const daySec=document.getElementById('sf-day-sec');
+  const dowSec=document.getElementById('sf-dow-sec');
+  if(daySec)daySec.style.display=id==='daily'?'':'none';
+  if(dowSec)dowSec.style.display=id==='daily'?'':'none';
   if(id==='monthly')sfRenderM();
   if(id==='summary')sfRenderSummary();
 }
