@@ -95,36 +95,57 @@ let DATA=null,selectedEmp=null,lang='ko';
 const DOW_K=['일','월','화','수','목','금','토'];
 const DOW_E=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-// ── 한글 → 로마자 변환 (국립국어원 로마자 표기법) ──
-const ROM_INI=['g','kk','n','d','tt','r','m','b','pp','s','ss','','j','jj','ch','k','t','p','h'];
-const ROM_MED=['a','ae','ya','yae','eo','e','yeo','ye','o','wa','wae','oe','yo','u','wo','we','wi','yu','eu','ui','i'];
-const ROM_FIN=['','k','k','k','n','n','n','t','l','l','l','l','l','l','l','l','m','p','p','t','t','ng','t','t','k','t','p','t'];
+// ── 한글 → 여권식 영문 변환 ──
+const SURNAME={
+  '김':'Kim','이':'Lee','박':'Park','최':'Choi','정':'Jung','강':'Kang',
+  '조':'Cho','윤':'Yoon','장':'Jang','임':'Lim','한':'Han','오':'Oh',
+  '서':'Seo','신':'Shin','권':'Kwon','황':'Hwang','안':'Ahn','송':'Song',
+  '류':'Ryu','유':'Yoo','전':'Jeon','홍':'Hong','문':'Moon','양':'Yang',
+  '배':'Bae','노':'Noh','하':'Ha','곽':'Kwak','성':'Sung','차':'Cha',
+  '주':'Joo','우':'Woo','민':'Min','남':'Nam','변':'Byun','백':'Baek',
+  '허':'Huh','심':'Shim','도':'Do','고':'Ko','구':'Koo','원':'Won',
+  '봉':'Bong','표':'Pyo','추':'Choo','탁':'Tak','마':'Ma','석':'Seok',
+  '소':'So','피':'Pi','방':'Bang','공':'Kong','감':'Kam','천':'Chun',
+  '예':'Ye','편':'Pyun','옥':'Ok','제':'Je','선':'Sun','위':'Wi',
+  '진':'Jin','나':'Na','빈':'Bin','길':'Gil','엄':'Um','채':'Chae',
+  '여':'Yeo','태':'Tae','연':'Yeon','모':'Mo','어':'Eo','경':'Kyung',
+  '팽':'Paeng','육':'Yuk','왕':'Wang','복':'Bok','현':'Hyun','지':'Ji',
+  '탄':'Tan','반':'Ban','라':'Ra','뇌':'Noe','사':'Sa','부':'Boo',
+  '범':'Bum','룡':'Ryong','용':'Yong','승':'Seung','단':'Dan','손':'Son',
+  '설':'Seol','동':'Dong','목':'Mok','기':'Ki','수':'Soo','영':'Young',
+};
+// 여권식 자모 매핑
+const P_INI=['G','KK','N','D','TT','R','M','B','PP','S','SS','','J','JJ','Ch','K','T','P','H'];
+const P_MED=['a','ae','ya','yae','eo','e','yeo','ye','o','wa','wae','oe','yo','oo','wo','we','wi','yoo','eu','ui','i'];
+const P_FIN=['','k','k','k','n','n','n','t','l','l','l','l','l','l','l','l','m','p','p','t','t','ng','t','t','k','t','p','t'];
 
-function romanize(str){
-  if(!str)return '';
-  let r='';
-  for(let i=0;i<str.length;i++){
-    const c=str.charCodeAt(i);
-    if(c>=0xAC00&&c<=0xD7A3){
-      const off=c-0xAC00;
-      const fin=off%28;
-      const med=((off-fin)/28)%21;
-      const ini=Math.floor(off/28/21);
-      r+=ROM_INI[ini]+ROM_MED[med]+ROM_FIN[fin];
-    } else {
-      r+=str[i];
-    }
-  }
+function passportSyl(ch){
+  const c=ch.charCodeAt(0);
+  if(c<0xAC00||c>0xD7A3)return ch;
+  const off=c-0xAC00;
+  const fin=off%28;
+  const med=((off-fin)/28)%21;
+  const ini=Math.floor(off/28/21);
+  // ㅅ(9)+ㅣ(20)=shi, ㅆ(10)+ㅣ(20)=shi
+  if((ini===9||ini===10)&&med===20) return (ini===10?'Sh':'Sh')+P_FIN[fin];
+  let r=P_INI[ini]+P_MED[med]+P_FIN[fin];
   return r;
 }
 
 function romanizeName(name){
   if(!name)return '';
-  // 성(1글자) + 이름(나머지) 분리
-  const family=romanize(name.charAt(0));
-  const given=romanize(name.slice(1));
-  const cap=s=>s?s.charAt(0).toUpperCase()+s.slice(1):'';
-  return cap(family)+(given?' '+cap(given):'');
+  // 성씨 (1글자, 사전 우선)
+  const fc=name.charAt(0);
+  const family=SURNAME[fc]||((s)=>{const r=passportSyl(s);return r.charAt(0).toUpperCase()+r.slice(1).toLowerCase();})(fc);
+  // 이름 (나머지 글자)
+  const rest=name.slice(1);
+  if(!rest)return family;
+  let given='';
+  for(let i=0;i<rest.length;i++){
+    const s=passportSyl(rest[i]);
+    given+=i===0?s.charAt(0).toUpperCase()+s.slice(1).toLowerCase():s.toLowerCase();
+  }
+  return family+' '+given;
 }
 
 function getDisplayName(e){
