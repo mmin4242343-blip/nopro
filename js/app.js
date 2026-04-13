@@ -6699,7 +6699,6 @@ function init(){
   sortEMPS(); // 시작 시 주간→야간 정렬
   renderSb();updDbar();renderBks();renderTable();updNotes();
   updDailyMode();
-  sfUpdMode();
   refreshAllAges();
   leaveYear = new Date().getFullYear();
   companyYear = new Date().getFullYear();
