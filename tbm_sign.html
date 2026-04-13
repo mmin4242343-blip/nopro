@@ -95,7 +95,43 @@ let DATA=null,selectedEmp=null,lang='ko';
 const DOW_K=['일','월','화','수','목','금','토'];
 const DOW_E=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-// 서버에서 받은 번역문 사용 (API 호출 없음)
+// ── 한글 → 로마자 변환 (국립국어원 로마자 표기법) ──
+const ROM_INI=['g','kk','n','d','tt','r','m','b','pp','s','ss','','j','jj','ch','k','t','p','h'];
+const ROM_MED=['a','ae','ya','yae','eo','e','yeo','ye','o','wa','wae','oe','yo','u','wo','we','wi','yu','eu','ui','i'];
+const ROM_FIN=['','k','k','k','n','n','n','t','l','l','l','l','l','l','l','l','m','p','p','t','t','ng','t','t','k','t','p','t'];
+
+function romanize(str){
+  if(!str)return '';
+  let r='';
+  for(let i=0;i<str.length;i++){
+    const c=str.charCodeAt(i);
+    if(c>=0xAC00&&c<=0xD7A3){
+      const off=c-0xAC00;
+      const fin=off%28;
+      const med=((off-fin)/28)%21;
+      const ini=Math.floor(off/28/21);
+      r+=ROM_INI[ini]+ROM_MED[med]+ROM_FIN[fin];
+    } else {
+      r+=str[i];
+    }
+  }
+  return r;
+}
+
+function romanizeName(name){
+  if(!name)return '';
+  // 성(1글자) + 이름(나머지) 분리
+  const family=romanize(name.charAt(0));
+  const given=romanize(name.slice(1));
+  const cap=s=>s?s.charAt(0).toUpperCase()+s.slice(1):'';
+  return cap(family)+(given?' '+cap(given):'');
+}
+
+function getDisplayName(e){
+  if(lang==='ko')return e.name||'';
+  // 영문명이 있으면 우선 사용, 없으면 로마자 자동 변환
+  return e.nameEn||romanizeName(e.name);
+}
 
 async function init(){
   const app=document.getElementById('app');
@@ -163,27 +199,31 @@ function renderList(){
   const q=(document.getElementById('emp-search')||{}).value?.toLowerCase()||'';
   const signs=DATA.signs||{};
   const filtered=DATA.emps.filter(e=>{
-    if(q&&!(e.name||'').toLowerCase().includes(q)&&!(e.nameEn||'').toLowerCase().includes(q))return false;
-    return true;
+    if(!q)return true;
+    const dn=getDisplayName(e).toLowerCase();
+    const kn=(e.name||'').toLowerCase();
+    const en=(e.nameEn||'').toLowerCase();
+    return dn.includes(q)||kn.includes(q)||en.includes(q);
   });
-  // Sort: unsigned first, then signed
   filtered.sort((a,b)=>{
     const sa=signs[String(a.id)]?1:0, sb=signs[String(b.id)]?1:0;
     return sa-sb;
   });
   el.innerHTML=filtered.map(e=>{
     const signed=!!signs[String(e.id)];
-    const name=lang==='en'&&e.nameEn?e.nameEn:e.name;
+    const name=getDisplayName(e);
     const sub=lang==='en'
       ?`${e.shift==='night'?'Night':'Day'} ${e.dept?'· '+e.dept:''}`
       :`${e.shift==='night'?'야간':'주간'} ${e.dept?'· '+e.dept:''}`;
     const badge=signed
       ?(lang==='ko'?'서명완료':'Signed')
       :(lang==='ko'?'미서명':'Unsigned');
+    // 영어 모드에서 한글 이름도 작게 표시
+    const subName=lang==='en'&&e.name?`<span style="font-size:10px;color:#94A3B8;margin-left:4px">(${e.name})</span>`:'';
     return`<div class="emp-item ${signed?'signed':''}" ${signed?'':`onclick="selectEmp('${e.id}')"`}>
       <div class="emp-dot ${signed?'done':'wait'}"></div>
       <div class="emp-info">
-        <div class="emp-name">${name}</div>
+        <div class="emp-name">${name}${subName}</div>
         <div class="emp-sub">${sub}</div>
       </div>
       <span class="emp-badge ${signed?'done':'wait'}">${badge}</span>
@@ -196,7 +236,7 @@ function setLang(l){lang=l;render();}
 function selectEmp(id){
   const e=DATA.emps.find(x=>String(x.id)===String(id));if(!e)return;
   selectedEmp=e;
-  const name=lang==='en'&&e.nameEn?e.nameEn:e.name;
+  const name=getDisplayName(e);
   document.getElementById('modal-name').textContent=name;
   document.getElementById('modal-msg').innerHTML=lang==='ko'
     ?'위 이름으로 오늘 TBM 교육 서명을 진행합니다.<br>본인이 맞으시면 서명 버튼을 눌러주세요.'
@@ -237,7 +277,7 @@ async function doSign(){
 }
 
 function showSuccess(emp){
-  const name=lang==='en'&&emp.nameEn?emp.nameEn:emp.name;
+  const name=getDisplayName(emp);
   const app=document.getElementById('app');
   const existing=app.innerHTML;
   const successHtml=`<div class="success-msg show" id="success-toast" style="background:#F0FDF4;border:1px solid #6EE7B7;border-radius:14px;margin-bottom:12px;padding:20px">
