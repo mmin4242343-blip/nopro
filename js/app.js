@@ -991,9 +991,15 @@ function setSearch(tab, val){
   if(tab==='emps')    renderEmps();
 }
 
-function applyCommonFilter(emps, tab){
+function applyCommonFilter(emps, tab, refDate){
   const f = F[tab];
   return emps.filter(emp=>{
+    // 퇴사자 필터: 기준일 이전에 퇴사한 직원 제외
+    if(emp.leave){
+      const ld=new Date(emp.leave);
+      const ref=refDate||new Date();
+      if(ld<ref) return false;
+    }
     if(f.shift!=='all' && (emp.shift||'day')!==f.shift) return false;
     const isFor = emp.nation==='foreign' || emp.foreigner===true;
     if(f.nation==='korean'  && isFor)  return false;
@@ -1080,13 +1086,12 @@ function filterEmpsByPay(emps){
 function renderTable(){
   renderFilterBar('daily-filter-bar','daily');
   const bks=getActiveBk(cY,cM,cD);
+  const dayDate=new Date(cY,cM-1,cD);
   const activeDayEmps = applyCommonFilter(EMPS.filter(emp=>{
-    if(!emp.join) return true;
-    const jd=new Date(emp.join);
-    const dayDate=new Date(cY,cM-1,cD);
-    if(jd>dayDate) return false;
+    if(emp.join){const jd=new Date(emp.join);if(jd>dayDate)return false;}
+    if(emp.leave){const ld=new Date(emp.leave);if(ld<=dayDate)return false;}
     return true;
-  }), 'daily');
+  }), 'daily', dayDate);
   document.getElementById('daily-tbody').innerHTML=activeDayEmps.map(emp=>{
     const k=rk(emp.id,cY,cM,cD);
     const todayStr = `${cY}-${pad(cM)}-${pad(cD)}`;
@@ -1675,7 +1680,11 @@ function renderMonthly(){
         </button>`).join('');
     } else { mvDeptDiv.style.display='none'; }
   }
+  const mvMonthEnd = new Date(vY, vM, 0); // 해당 월 마지막 날
+  const mvMonthStart = new Date(vY, vM-1, 1);
   const mvEmps = EMPS.filter(e=>{
+    // 퇴사자: 해당 월 시작 전에 퇴사했으면 제외
+    if(e.leave){const ld=new Date(e.leave);if(ld<mvMonthStart)return false;}
     if(mvFilter!=='all' && (e.payMode||'fixed')!==mvFilter) return false;
     if(MF.shift!=='all' && (e.shift||'day')!==MF.shift) return false;
     const isFor = e.nation==='foreign'||e.foreigner===true;
@@ -1810,11 +1819,12 @@ function renderPayroll(){
   document.getElementById('pv-title').textContent=`${pY}년 ${pM}월 급여 요약`;
   let gt={base:0,nt:0,ot:0,hol:0,al:0,bonus:0,allow:0,ded:0,total:0};
   // 해당 월에 재직 중인 직원만
+  const payMonthEnd=new Date(pY,pM,0);
   const activePayEmps = applyCommonFilter(EMPS.filter(emp=>{
-    if(emp.join){const jd=new Date(emp.join);if(jd>new Date(pY,pM,0))return false;}
+    if(emp.join){const jd=new Date(emp.join);if(jd>payMonthEnd)return false;}
     if(emp.leave){const ld=new Date(emp.leave);if(ld<new Date(pY,pM-1,1))return false;}
     return true;
-  }), 'payroll');
+  }), 'payroll', payMonthEnd);
   document.getElementById('pay-grid').innerHTML=activePayEmps.map(emp=>{
     const s=monthSummary(emp.id,pY,pM);
     const rate=getEmpRate(emp);
@@ -4606,13 +4616,12 @@ function exportDailyExcel(){
 
   // 직원 필터링 (renderTable과 동일)
   const bks=getActiveBk(cY,cM,cD);
+  const dayDate2=new Date(cY,cM-1,cD);
   const activeDayEmps = applyCommonFilter(EMPS.filter(emp=>{
-    if(!emp.join) return true;
-    const jd=new Date(emp.join);
-    const dayDate=new Date(cY,cM-1,cD);
-    if(jd>dayDate) return false;
+    if(emp.join){const jd=new Date(emp.join);if(jd>dayDate2)return false;}
+    if(emp.leave){const ld=new Date(emp.leave);if(ld<=dayDate2)return false;}
     return true;
-  }), 'daily');
+  }), 'daily', dayDate2);
 
   const payModeLabel={fixed:'소정근무제',hourly:'시급제',monthly:'월급제',pohal:'포괄임금'};
 
@@ -5297,7 +5306,11 @@ function renderLeave() {
   const tbody = document.getElementById('leave-tbody');
   if (!tbody) return;
 
-  const filteredLeaveEmps = applyCommonFilter([...EMPS], 'leave');
+  const filteredLeaveEmps = applyCommonFilter([...EMPS].filter(e=>{
+    // 퇴사자: 해당 연도 시작 전에 퇴사했으면 제외
+    if(e.leave){const ld=new Date(e.leave);if(ld<new Date(leaveYear,0,1))return false;}
+    return true;
+  }), 'leave');
   tbody.innerHTML = filteredLeaveEmps.map(emp => {
     const lv = calcLeaveForYear(emp, leaveYear);
     const payAmt = getLeavePayAmount(emp, leaveYear);
