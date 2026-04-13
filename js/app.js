@@ -422,9 +422,27 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode){
   const otDay=Math.max(0, ot-otNight);
 
   if(mode==='pohal'){
+    // 평일: 수당 미산출 (기존 동일)
+    // 휴일 특근: 휴게시간(bks) 자동 공제된 실근무(work)로 계산
+    let holDayStdPay=0,holDayOtPay=0;
+    if(isHol){
+      const _holMS=POL.holMonthlyStd??true;
+      const _holMO=POL.holMonthlyOt??true;
+      // 통상시급 = 포괄임금 월급 ÷ 209h
+      const pohalRate=Math.round((POL.baseMonthly||2455750)/209);
+      if(_holMS){
+        const stdM=Math.min(work,480);       // 8h 이내
+        holDayStdPay=r10(pohalRate*1.5*(stdM/60));
+      }
+      if(_holMO){
+        const otM=Math.max(0,work-480);      // 8h 초과
+        holDayOtPay=r10(pohalRate*2.0*(otM/60));
+      }
+    }
+    const totalPay=holDayStdPay+holDayOtPay;
     return{gross,deduct,bkMins,nightBkMins,work,nightM,otDay,otNight,ot,crossed,
       basePay:0,nightPay:0,otDayPay:0,otNightPay:0,
-      holDayStdPay:0,holNightStdPay:0,holDayOtPay:0,holNightOtPay:0,totalPay:0};
+      holDayStdPay,holNightStdPay:0,holDayOtPay,holNightOtPay:0,totalPay};
   }
 
   if(mode==='monthly'){
@@ -587,6 +605,11 @@ function monthSummary(eid,y,m){
       tExtraWorkH += extraWork;
       tExtraWorkPay += c.extraWorkPay||0;
       tHolPayNew += c.holPay||0;
+    }
+    // 포괄임금 휴일수당 누적
+    if(empPayMode==='pohal' && autoH){
+      tMonthlyHolStdPay += c.holDayStdPay||0;
+      tMonthlyHolOtPay  += c.holDayOtPay||0;
     }
     if(empPayMode==='monthly' && autoH){
       tMonthlyHolStdPay += c.holDayStdPay||0;
@@ -1111,9 +1134,13 @@ function renderTable(){
 
     if(isPohalEmp){
       const isWork=!rec.absent&&!rec.annual;
+      const holPay=c?(c.holDayStdPay+c.holDayOtPay):0;
+      const holWorkH=c&&autoH?fmtH(c.work):'';
       return`<tr class="${rowCls}">
         ${cbTd}${nameTd}
-        <td colspan="7" style="padding:6px 8px">
+        ${!autoH?`
+        <!-- 평일: 기존 버튼 UI 유지 -->
+        <td colspan="6" style="padding:6px 8px">
           <div class="pohal-row">
             <span class="pohal-label">포괄임금</span>
             <button class="att-btn ${isWork?'on-work':''}" onclick="setPohalAtt(${emp.id},'work')">✓ 출근</button>
@@ -1122,8 +1149,36 @@ function renderTable(){
             <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" onchange="setR(${emp.id},'note',this.value)" style="margin-left:4px">
           </div>
         </td>
-        <td style="padding:6px 8px;font-size:10px;color:var(--ink3)">
-          ${isWork?'<span style="color:var(--green);font-weight:700">월급 지급</span>':rec.annual?'<span style="color:var(--green);font-weight:700">연차수당</span>':'<span style="color:var(--rose);font-weight:700">결근차감</span>'}
+        `:`
+        <!-- 휴일 특근: 출퇴근 입력 + 개별휴게 체크박스 -->
+        <td style="padding:4px 6px">
+          <input class="time-inp" value="${rec.start||''}" placeholder="0900"
+            data-eid="${emp.id}" data-field="start"
+            onblur="handleTimeInput(${emp.id},'start',this.value)">
+        </td>
+        <td style="padding:4px 6px">
+          <input class="time-inp hol-t ${c&&c.crossed?'cross':''}" value="${rec.end||''}" placeholder="1800"
+            data-eid="${emp.id}" data-field="end"
+            onblur="handleTimeInput(${emp.id},'end',this.value)">
+        </td>
+        <td class="td-w" style="font-size:11px">${holWorkH}</td>
+        <td class="td-nt"></td>
+        <td class="td-ot"></td>
+        <td style="padding:4px 6px">
+          <label style="font-size:10px;color:var(--teal);display:flex;align-items:center;gap:3px;cursor:pointer;font-weight:600;white-space:nowrap">
+            <input type="checkbox" ${rec.customBk?'checked':''}
+              onchange="setR(${emp.id},'customBk',this.checked);renderTable()">개별휴게
+          </label>
+          <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고"
+            onchange="setR(${emp.id},'note',this.value)" style="margin-top:3px">
+        </td>
+        `}
+        <td style="padding:6px 8px;font-size:10px">
+          ${autoH&&holPay>0
+            ?`<span style="color:#854F0B;font-weight:700">휴일수당 ${fmt$(holPay)}</span>`
+            :isWork?'<span style="color:var(--green);font-weight:700">월급 지급</span>'
+            :rec.annual?'<span style="color:var(--green);font-weight:700">연차수당</span>'
+            :'<span style="color:var(--rose);font-weight:700">결근차감</span>'}
         </td>
       </tr>`;
     }
@@ -4589,7 +4644,7 @@ let sfY=new Date().getFullYear(),sfM=new Date().getMonth()+1,sfD=new Date().getD
 const SF_KEY='npm5_safety';
 let SAFETY_REC=load(SF_KEY,{});
 let SF2_PHOTOS={};
-let sf2StF='all',sf2NaF='all',sf2ShF='all',sf2DpF='all';
+let sf2StF='all',sf2NaF='all',sf2ShF='all',sf2DpF='all',sf2PmF='all';
 let sfMY=new Date().getFullYear(),sfMMo=new Date().getMonth()+1,sfMStF='all';
 
 function sfSave(){
@@ -4787,52 +4842,85 @@ function sfSetKpi(v,el){
 }
 function sfFc(key,val,el){
   const row=el.closest('[id^="sf-chips-"]');
-  if(row)row.querySelectorAll('.sf-chip').forEach(c=>{c.classList.remove('sf-chip-on');});
+  if(row)row.querySelectorAll('.sf-chip').forEach(c=>c.classList.remove('sf-chip-on'));
   el.classList.add('sf-chip-on');
   if(key==='st')sf2StF=val;
   else if(key==='na')sf2NaF=val;
   else if(key==='sh')sf2ShF=val;
   else if(key==='dp')sf2DpF=val;
+  else if(key==='pm')sf2PmF=val;
   sfRenderList();
 }
 function sfResetChips(){
-  ['sf-chips-st','sf-chips-na','sf-chips-sh','sf-chips-dp'].forEach(id=>{
+  ['sf-chips-st','sf-chips-na','sf-chips-sh','sf-chips-dp','sf-chips-pm'].forEach(id=>{
     const row=document.getElementById(id);
     if(row)row.querySelectorAll('.sf-chip').forEach((c,i)=>{c.classList.remove('sf-chip-on');if(i===0)c.classList.add('sf-chip-on');});
   });
+}
+
+// 소속 칩/셀렉트 동적 생성
+function sfInitDeptChips(){
+  const dpts=[...new Set(EMPS.filter(e=>!e.leave).map(e=>e.dept||'').filter(Boolean))].sort();
+  const chipRow=document.getElementById('sf-chips-dp');
+  if(chipRow){
+    chipRow.innerHTML='<span class="sf-chip sf-chip-on" onclick="sfFc(\'dp\',\'all\',this)">전체</span>'
+      +dpts.map(d=>`<span class="sf-chip" onclick="sfFc('dp','${d}',this)">${d}</span>`).join('');
+  }
+  const sel=document.getElementById('sf-f-dp');
+  if(sel){
+    sel.innerHTML='<option value="all">소속 전체</option>'
+      +dpts.map(d=>`<option value="${d}">${d}</option>`).join('');
+  }
+}
+
+// 급여방식 레이블/색상
+function sfPmLabel(e){
+  const m=e.payMode||'fixed';
+  if(m==='pohal')  return{t:'포괄임금',c:'#7C3AED',bg:'#F5F3FF'};
+  if(m==='monthly')return{t:'월급제',  c:'#854F0B',bg:'#FEF3C7'};
+  if(m==='hourly') return{t:'시급제',  c:'#0891B2',bg:'#CFFAFE'};
+  return               {t:'소정근무제',c:'#059669',bg:'#ECFDF5'};
 }
 
 // 인원 리스트 렌더 (EMPS 배열 사용)
 function sfRenderList(){
   const srch=(document.getElementById('sf-srch')||{}).value||'';
   const q=srch.trim().toLowerCase();
+  // 실제 EMPS 필드 기준 필터
   const list=EMPS.filter(e=>{
-    if(sf2StF==='done')return false; // 실제 서명DB 없으므로 스킵
-    if(sf2StF==='wait')return true;
-    if(sf2NaF!=='all'&&(e.nationality||'')!==sf2NaF)return false;
-    if(sf2ShF!=='all'&&(e.shift||'')!==sf2ShF)return false;
-    if(sf2DpF!=='all'&&(e.dept||e.department||'')!==sf2DpF)return false;
-    if(q&&!e.name.toLowerCase().includes(q)&&!(e.nameEn||'').toLowerCase().includes(q))return false;
+    if(e.leave)return false;
+    if(sf2NaF!=='all'&&(e.nation||'local')!==sf2NaF)return false;   // local|foreign
+    if(sf2ShF!=='all'&&(e.shift||'day')!==sf2ShF)return false;       // day|night
+    if(sf2DpF!=='all'&&(e.dept||'')!==sf2DpF)return false;
+    if(sf2PmF!=='all'&&(e.payMode||'fixed')!==sf2PmF)return false;
+    if(q&&!(e.name||'').toLowerCase().includes(q))return false;
     return true;
   });
+  const total=EMPS.filter(e=>!e.leave).length;
   const cntEl=document.getElementById('sf-lcnt');
   const listEl=document.getElementById('sf-nlist');
   if(!listEl)return;
-  if(cntEl)cntEl.textContent=`${list.length}명 표시`;
-  if(list.length===0){listEl.innerHTML='<div style="text-align:center;color:var(--ink3);padding:16px;font-size:11px;">검색 결과 없음</div>';return;}
+  // KPI 전체 인원 업데이트
+  const kvAll=document.getElementById('sf-kv-all');
+  if(kvAll)kvAll.textContent=total;
+  if(cntEl)cntEl.textContent=`${list.length}명 표시 (전체 ${total}명)`;
+  if(list.length===0){
+    listEl.innerHTML='<div style="text-align:center;color:var(--ink3);padding:16px;font-size:11px;">검색 결과 없음</div>';
+    return;
+  }
   listEl.innerHTML=list.map(e=>{
     const nm=e.name||'';
-    const en=e.nameEn||nm;
-    const sh=e.shift||'';
-    const na=e.nationality||'';
-    const dp=e.dept||e.department||'';
-    return`<div class="sf-ni sf-ni-wait" style="margin-bottom:3px">
-      <div style="width:7px;height:7px;border-radius:50%;background:var(--rose);flex-shrink:0"></div>
+    const shLabel=e.shift==='night'?'야간':'주간';
+    const naLabel=e.nation==='foreign'?'외국인':'내국인';
+    const dp=e.dept||'';
+    const pm=sfPmLabel(e);
+    return`<div class="sf-ni" style="margin-bottom:3px">
+      <div style="width:7px;height:7px;border-radius:50%;background:var(--bd2);flex-shrink:0"></div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:11px;font-weight:700;color:#9F1239">${nm}</div>
-        <div style="font-size:8px;color:var(--ink3)">${en} · ${sh} · ${na} · ${dp}</div>
+        <div style="font-size:11px;font-weight:700;color:var(--ink)">${nm}</div>
+        <div style="font-size:8px;color:var(--ink3)">${shLabel} · ${naLabel} · ${dp}</div>
       </div>
-      <span style="font-size:8px;padding:1px 5px;border-radius:20px;background:var(--rbg);color:var(--rose);font-weight:700">미서명</span>
+      <span style="font-size:8px;padding:1px 5px;border-radius:20px;background:${pm.bg};color:${pm.c};font-weight:700">${pm.t}</span>
     </div>`;
   }).join('');
 }
@@ -4876,11 +4964,15 @@ function sfSetMF(v,btn){
 function sfRenderM(){
   const sh=(document.getElementById('sf-f-sh')||{}).value||'all';
   const na=(document.getElementById('sf-f-na')||{}).value||'all';
+  const pm=(document.getElementById('sf-f-pm')||{}).value||'all';
   const dp=(document.getElementById('sf-f-dp')||{}).value||'all';
+  // EMPS 실제 필드 기준 (nation:'local'/'foreign', shift:'day'/'night')
   let emps=EMPS.filter(e=>{
-    if(sh!=='all'&&(e.shift||'')!==sh)return false;
-    if(na!=='all'&&(e.nationality||'')!==na)return false;
-    if(dp!=='all'&&(e.dept||e.department||'')!==dp)return false;
+    if(e.leave)return false;
+    if(sh!=='all'&&(e.shift||'day')!==sh)return false;
+    if(na!=='all'&&(e.nation||'local')!==na)return false;
+    if(dp!=='all'&&(e.dept||'')!==dp)return false;
+    if(pm!=='all'&&(e.payMode||'fixed')!==pm)return false;
     return true;
   });
   const DNW=['일','월','화','수','목','금','토'];
@@ -4965,7 +5057,7 @@ function sfRenderSummary(){
 
 // renderSafety 구 버전 (gp('safety') 호출용 — 호환성 유지)
 function renderSafety(){
-  sfUpdBar2();sfLoadTbm();sfRenderList();sfRenderRecent();
+  sfUpdBar2();sfLoadTbm();sfInitDeptChips();sfRenderList();sfRenderRecent();
   sf2RenderPhotos();
   sfInitDrop();
   sfSwitchTab('daily');
