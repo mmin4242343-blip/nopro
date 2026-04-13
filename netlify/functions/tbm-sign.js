@@ -17,55 +17,64 @@ export const handler = async (event) => {
   const headers = corsHeaders(event);
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers, body: '' };
 
-  const params = event.queryStringParameters || {};
-  let companyId, token, date;
-
-  if (event.httpMethod === 'GET') {
-    companyId = params.c;
-    token = params.t;
-    date = params.d;
-  } else if (event.httpMethod === 'POST') {
-    const body = JSON.parse(event.body || '{}');
-    companyId = body.c || params.c;
-    token = body.t || params.t;
-    date = body.d || params.d;
-    var empId = body.empId;
-  }
-
-  if (!companyId || !token || !date) {
-    return { statusCode: 400, headers, body: JSON.stringify({ error: '잘못된 요청입니다' }) };
-  }
-
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return { statusCode: 400, headers, body: JSON.stringify({ error: '잘못된 날짜 형식입니다' }) };
-  }
-
   try {
-    // Load safety data
-    const { data: safetyRow } = await supabase
+    const params = event.queryStringParameters || {};
+    let companyId, token, date, empId;
+
+    if (event.httpMethod === 'POST') {
+      const body = JSON.parse(event.body || '{}');
+      companyId = body.c || params.c;
+      token = body.t || params.t;
+      date = body.d || params.d;
+      empId = body.empId;
+    } else {
+      companyId = params.c;
+      token = params.t;
+      date = params.d;
+    }
+
+    if (!companyId || !token || !date) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: '필수 파라미터가 누락되었습니다 (c, t, d)' }) };
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: '잘못된 날짜 형식입니다' }) };
+    }
+
+    // Load safety data (maybeSingle 패턴 — 데이터 없어도 에러 안 남)
+    const { data: rows, error: dbErr } = await supabase
       .from('company_data')
       .select('data_value')
       .eq('company_id', companyId)
-      .eq('data_key', 'safety')
-      .single();
+      .eq('data_key', 'safety');
 
+    if (dbErr) {
+      console.error('DB 조회 실패:', dbErr);
+      return { statusCode: 500, headers, body: JSON.stringify({ error: '서버 오류가 발생했습니다' }) };
+    }
+
+    const safetyRow = rows && rows.length > 0 ? rows[0] : null;
     const safety = safetyRow ? JSON.parse(safetyRow.data_value) : {};
 
     // Verify token
-    if (safety[date + '_token'] !== token) {
-      return { statusCode: 403, headers, body: JSON.stringify({ error: '유효하지 않은 링크입니다. 관리자에게 새 링크를 요청하세요.' }) };
+    const storedToken = safety[date + '_token'];
+    if (storedToken !== token) {
+      console.log(`Token mismatch: stored=${storedToken}, received=${token}, date=${date}, company=${companyId}`);
+      return { statusCode: 403, headers, body: JSON.stringify({
+        error: '유효하지 않은 링크입니다. 관리자에게 새 링크를 요청하세요.',
+        hint: !storedToken ? '이 날짜의 서명 링크가 아직 생성되지 않았습니다.' : '토큰이 일치하지 않습니다.'
+      })};
     }
 
+    // ── GET: 직원 목록 + 서명 현황 로드 ──
     if (event.httpMethod === 'GET') {
-      // Load employee list (names + basic info only, no sensitive data)
-      const { data: empsRow } = await supabase
+      const { data: empsRows } = await supabase
         .from('company_data')
         .select('data_value')
         .eq('company_id', companyId)
-        .eq('data_key', 'emps')
-        .single();
+        .eq('data_key', 'emps');
 
-      const emps = empsRow ? JSON.parse(empsRow.data_value) : [];
+      const emps = empsRows && empsRows.length > 0 ? JSON.parse(empsRows[0].data_value) : [];
       const empList = emps
         .filter(e => !e.leave)
         .map(e => ({ id: e.id, name: e.name, nameEn: e.nameEn || '', shift: e.shift || 'day', dept: e.dept || '' }));
@@ -73,18 +82,16 @@ export const handler = async (event) => {
       const tbm = safety[date + '_tbm'] || '';
       const signs = safety[date + '_signs'] || {};
 
-      // Load company name
-      const { data: compRow } = await supabase
+      const { data: compRows } = await supabase
         .from('companies')
         .select('company_name')
-        .eq('id', companyId)
-        .single();
+        .eq('id', companyId);
 
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
-          company: compRow?.company_name || '',
+          company: compRows && compRows.length > 0 ? compRows[0].company_name : '',
           date,
           tbm,
           emps: empList,
@@ -93,23 +100,21 @@ export const handler = async (event) => {
       };
     }
 
+    // ── POST: 서명 저장 ──
     if (event.httpMethod === 'POST') {
       if (!empId) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: '직원을 선택해주세요' }) };
       }
 
-      // Prevent duplicate signature
       const existingSigns = safety[date + '_signs'] || {};
       if (existingSigns[String(empId)]) {
         return { statusCode: 409, headers, body: JSON.stringify({ error: '이미 서명을 완료하였습니다', signs: existingSigns }) };
       }
 
-      // Add signature
       if (!safety[date + '_signs']) safety[date + '_signs'] = {};
       safety[date + '_signs'][String(empId)] = Date.now();
 
-      // Save back to Supabase
-      const { error } = await supabase
+      const { error: saveErr } = await supabase
         .from('company_data')
         .upsert({
           company_id: companyId,
@@ -118,7 +123,8 @@ export const handler = async (event) => {
           updated_at: new Date().toISOString()
         }, { onConflict: 'company_id,data_key' });
 
-      if (error) {
+      if (saveErr) {
+        console.error('서명 저장 실패:', saveErr);
         return { statusCode: 500, headers, body: JSON.stringify({ error: '서명 저장에 실패했습니다' }) };
       }
 
@@ -133,6 +139,6 @@ export const handler = async (event) => {
 
   } catch (e) {
     console.error('tbm-sign error:', e);
-    return { statusCode: 500, headers, body: JSON.stringify({ error: '서버 오류가 발생했습니다' }) };
+    return { statusCode: 500, headers, body: JSON.stringify({ error: '서버 오류가 발생했습니다: ' + e.message }) };
   }
 };

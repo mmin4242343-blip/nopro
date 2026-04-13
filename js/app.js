@@ -4783,25 +4783,39 @@ function sfCopyLink(){
   const t=document.getElementById('sf-toast');
   if(t){t.style.display='block';setTimeout(()=>t.style.display='none',2500);}
 }
-function sfGenLink(){
+async function sfGenLink(){
   const sess=JSON.parse(localStorage.getItem('nopro_session')||'null');
   if(!sess||!sess.companyId){alert('로그인이 필요합니다.');return;}
+  const urlEl=document.getElementById('sf-link-url');
+  if(urlEl)urlEl.textContent='링크 생성 중...';
   const chars='abcdefghijklmnopqrstuvwxyz0123456789';
   let tok='';for(let i=0;i<8;i++)tok+=chars[Math.floor(Math.random()*chars.length)];
   const key=sfKey();
   SAFETY_REC[key+'_token']=tok;
   sfSave();
+  // safety 데이터만 서버에 즉시 저장 (전체 저장보다 훨씬 빠름)
+  const safetyValue=(()=>{const s={};Object.entries(SAFETY_REC).forEach(([k,v])=>{s[k]=Array.isArray(v)?v.map(({data,...r})=>r):v;});return s;})();
+  try{
+    await apiFetch('/data-save','POST',{key:'safety',value:safetyValue});
+  }catch(e){
+    console.error('토큰 저장 실패:',e);
+    if(urlEl)urlEl.textContent='저장 실패 — 다시 시도해주세요';
+    alert('서버 저장에 실패했습니다. 인터넷 연결을 확인 후 다시 시도해주세요.');
+    return;
+  }
   const cid=sess.companyId;
   const url=`noprohr.netlify.app/tbm_sign.html?c=${cid}&t=${tok}&d=${key}`;
-  const urlEl=document.getElementById('sf-link-url');
   if(urlEl)urlEl.textContent=url;
   const kakaoEl=document.getElementById('sf-kakao-msg');
   if(kakaoEl)kakaoEl.textContent=`[노프로 TBM 서명]\n${sfM}월 ${sfD}일 TBM 교육 서명 부탁드립니다.\n링크 클릭 → 이름 선택 → 동의 → 서명\n\nhttps://${url}\n\n외국인분들도 영어 버튼 누르면 됩니다.`;
-  // 토큰을 서버에 즉시 저장
-  sbSaveAll(cid).catch(()=>{});
+  const t=document.getElementById('sf-toast');
+  if(t){t.textContent='✓ 링크가 생성되었습니다!';t.style.display='block';setTimeout(()=>{t.style.display='none';t.textContent='✓ 복사 완료! 단톡방에 붙여넣기 하세요.';},2500);}
 }
-function sfSaveDay2(){
+async function sfSaveDay2(){
   sfSave();
+  // safety 키만 서버에 저장 (빠름)
+  const safetyValue=(()=>{const s={};Object.entries(SAFETY_REC).forEach(([k,v])=>{s[k]=Array.isArray(v)?v.map(({data,...r})=>r):v;});return s;})();
+  try{await apiFetch('/data-save','POST',{key:'safety',value:safetyValue});}catch(e){console.warn('safety 서버 저장 실패:',e);}
   const msg=document.getElementById('sf-sv-msg');
   if(msg){msg.style.display='inline';setTimeout(()=>msg.style.display='none',2500);}
 }
@@ -4821,7 +4835,9 @@ function sfGetFilteredEmps(){
   return EMPS.filter(e=>{
     if(e.leave)return false;
     if(sh!=='all'&&(e.shift||'day')!==sh)return false;
-    if(na!=='all'&&(e.nation||'local')!==na)return false;
+    const isFor=e.nation==='foreign'||e.foreigner===true;
+    if(na==='korean'&&isFor)return false;
+    if(na==='foreign'&&!isFor)return false;
     if(dp!=='all'&&(e.dept||'')!==dp)return false;
     if(pm!=='all'&&(e.payMode||'fixed')!==pm)return false;
     return true;
@@ -5087,7 +5103,9 @@ function sfRenderList(){
   const signs=SAFETY_REC[sfKey()+'_signs']||{};
   const list=EMPS.filter(e=>{
     if(e.leave)return false;
-    if(sf2NaF!=='all'&&(e.nation||'local')!==sf2NaF)return false;
+    const isFor=e.nation==='foreign'||e.foreigner===true;
+    if(sf2NaF==='korean'&&isFor)return false;
+    if(sf2NaF==='foreign'&&!isFor)return false;
     if(sf2ShF!=='all'&&(e.shift||'day')!==sf2ShF)return false;
     if(sf2DpF!=='all'&&(e.dept||'')!==sf2DpF)return false;
     if(sf2PmF!=='all'&&(e.payMode||'fixed')!==sf2PmF)return false;
@@ -5099,7 +5117,7 @@ function sfRenderList(){
   const active=EMPS.filter(e=>!e.leave);
   const total=active.length;
   const signedCount=active.filter(e=>signs[String(e.id)]).length;
-  const foreignCount=active.filter(e=>e.nation==='foreign').length;
+  const foreignCount=active.filter(e=>e.nation==='foreign'||e.foreigner===true).length;
   // KPI 업데이트
   const kvAll=document.getElementById('sf-kv-all');if(kvAll)kvAll.textContent=total;
   const kvDone=document.getElementById('sf-kv-done');if(kvDone)kvDone.textContent=signedCount;
@@ -5108,7 +5126,7 @@ function sfRenderList(){
   // 진행률 바 업데이트
   const dayEmps=active.filter(e=>(e.shift||'day')==='day');
   const nightEmps=active.filter(e=>e.shift==='night');
-  const foEmps=active.filter(e=>e.nation==='foreign');
+  const foEmps=active.filter(e=>e.nation==='foreign'||e.foreigner===true);
   const dayDone=dayEmps.filter(e=>signs[String(e.id)]).length;
   const nightDone=nightEmps.filter(e=>signs[String(e.id)]).length;
   const foDone=foEmps.filter(e=>signs[String(e.id)]).length;

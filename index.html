@@ -1796,7 +1796,7 @@ noprohr.netlify.app/tbm_sign.html
         <div style="font-size:9px;color:var(--ink3);margin-bottom:3px">국적</div>
         <div style="display:flex;gap:4px;margin-bottom:6px" id="sf-chips-na">
           <span class="sf-chip sf-chip-on" onclick="sfFc('na','all',this)">전체</span>
-          <span class="sf-chip" onclick="sfFc('na','local',this)">내국인</span>
+          <span class="sf-chip" onclick="sfFc('na','korean',this)">내국인</span>
           <span class="sf-chip" onclick="sfFc('na','foreign',this)">외국인</span>
         </div>
         <div style="font-size:9px;color:var(--ink3);margin-bottom:3px">주야간</div>
@@ -1848,7 +1848,7 @@ noprohr.netlify.app/tbm_sign.html
       </div>
       <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
         <select id="sf-f-sh" onchange="sfRenderM()" style="padding:5px 9px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;background:var(--card);color:var(--ink);font-family:inherit;outline:none"><option value="all">주야간 전체</option><option value="day">주간</option><option value="night">야간</option></select>
-        <select id="sf-f-na" onchange="sfRenderM()" style="padding:5px 9px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;background:var(--card);color:var(--ink);font-family:inherit;outline:none"><option value="all">내·외국인 전체</option><option value="local">내국인</option><option value="foreign">외국인</option></select>
+        <select id="sf-f-na" onchange="sfRenderM()" style="padding:5px 9px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;background:var(--card);color:var(--ink);font-family:inherit;outline:none"><option value="all">내·외국인 전체</option><option value="korean">내국인</option><option value="foreign">외국인</option></select>
         <select id="sf-f-pm" onchange="sfRenderM()" style="padding:5px 9px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;background:var(--card);color:var(--ink);font-family:inherit;outline:none"><option value="all">급여방식 전체</option><option value="fixed">소정근무제</option><option value="hourly">시급제</option><option value="monthly">월급제</option><option value="pohal">포괄임금</option></select>
         <select id="sf-f-dp" onchange="sfRenderM()" style="padding:5px 9px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;background:var(--card);color:var(--ink);font-family:inherit;outline:none"><option value="all">소속 전체</option></select>
         <button class="sf-fbtn sf-fbtn-on" onclick="sfSetMF('all',this)">전체</button>

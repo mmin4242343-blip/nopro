@@ -105,7 +105,8 @@ async function init(){
     const res=await fetch(`${API}?c=${C}&t=${T}&d=${D}`);
     const json=await res.json();
     if(!res.ok){
-      app.innerHTML=`<div class="error-box">${json.error||'오류가 발생했습니다'}<br>Link may have expired. Please request a new link.</div>`;
+      const hint=json.hint?`<br><small style="color:#94A3B8">${json.hint}</small>`:'';
+      app.innerHTML=`<div class="error-box">${json.error||'오류가 발생했습니다'}${hint}<br><br><span style="font-size:11px;color:#64748B">Link may have expired. Please request a new link from your manager.</span></div>`;
       return;
     }
     DATA=json;
@@ -175,7 +176,7 @@ function renderList(){
     const badge=signed
       ?(lang==='ko'?'서명완료':'Signed')
       :(lang==='ko'?'미서명':'Unsigned');
-    return`<div class="emp-item ${signed?'signed':''}" ${signed?'':`onclick="selectEmp(${e.id})"`}>
+    return`<div class="emp-item ${signed?'signed':''}" ${signed?'':`onclick="selectEmp('${e.id}')"`}>
       <div class="emp-dot ${signed?'done':'wait'}"></div>
       <div class="emp-info">
         <div class="emp-name">${name}</div>
@@ -189,7 +190,7 @@ function renderList(){
 function setLang(l){lang=l;render();}
 
 function selectEmp(id){
-  const e=DATA.emps.find(x=>x.id===id);if(!e)return;
+  const e=DATA.emps.find(x=>String(x.id)===String(id));if(!e)return;
   selectedEmp=e;
   const name=lang==='en'&&e.nameEn?e.nameEn:e.name;
   document.getElementById('modal-name').textContent=name;
