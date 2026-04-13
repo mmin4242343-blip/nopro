@@ -1135,50 +1135,51 @@ function renderTable(){
     if(isPohalEmp){
       const isWork=!rec.absent&&!rec.annual;
       const holPay=c?(c.holDayStdPay+c.holDayOtPay):0;
-      const holWorkH=c&&autoH?fmtH(c.work):'';
+      // 개별휴게 UI (소정근무제와 동일한 customBkUI 재사용)
+      const pohalBkUI = rec.customBk ? `<div style="margin-top:4px;padding:5px 8px;background:var(--gbg);border:1px solid #BBF7D0;border-radius:6px">
+        <div style="font-size:9px;font-weight:700;color:var(--green);margin-bottom:3px">개인 휴게시간</div>
+        ${(rec.customBkList||[{s:'',e:''}]).map((b,bi)=>`<div style="display:flex;align-items:center;gap:3px;margin-bottom:2px">
+          <input class="out-time" value="${b.s||''}" placeholder="1200" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'s',this.value)" onkeydown="if(event.key==='Enter')setCustomBk(${emp.id},${bi},'s',this.value)">
+          <span style="font-size:10px;color:var(--ink3)">~</span>
+          <input class="out-time" value="${b.e||''}" placeholder="1300" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'e',this.value)" onkeydown="if(event.key==='Enter')setCustomBk(${emp.id},${bi},'e',this.value)">
+          <button class="out-x" onclick="delCustomBk(${emp.id},${bi})" style="color:#065F46">×</button>
+        </div>`).join('')}
+        <button class="bk-add" onclick="addCustomBk(${emp.id})" style="font-size:9px;margin-top:2px;padding:2px 8px">+ 세트 추가</button>
+      </div>` : '';
       return`<tr class="${rowCls}">
         ${cbTd}${nameTd}
-        ${!autoH?`
-        <!-- 평일: 기존 버튼 UI 유지 -->
-        <td colspan="6" style="padding:6px 8px">
-          <div class="pohal-row">
-            <span class="pohal-label">포괄임금</span>
-            <button class="att-btn ${isWork?'on-work':''}" onclick="setPohalAtt(${emp.id},'work')">✓ 출근</button>
-            <button class="att-btn ${rec.annual?'on-annual':''}" onclick="setPohalAtt(${emp.id},'annual')">🌿 연차</button>
-            <button class="att-btn ${rec.absent?'on-absent':''}" onclick="setPohalAtt(${emp.id},'absent')">✗ 결근</button>
-            <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" onchange="setR(${emp.id},'note',this.value)" style="margin-left:4px">
-          </div>
-        </td>
-        `:`
-        <!-- 휴일 특근: 출퇴근 입력 + 개별휴게 체크박스 -->
-        <td style="padding:4px 6px">
-          <input class="time-inp" value="${rec.start||''}" placeholder="0900"
-            data-eid="${emp.id}" data-field="start"
-            onblur="handleTimeInput(${emp.id},'start',this.value)">
-        </td>
-        <td style="padding:4px 6px">
-          <input class="time-inp hol-t ${c&&c.crossed?'cross':''}" value="${rec.end||''}" placeholder="1800"
-            data-eid="${emp.id}" data-field="end"
-            onblur="handleTimeInput(${emp.id},'end',this.value)">
-        </td>
-        <td class="td-w" style="font-size:11px">${holWorkH}</td>
+        <td><input class="time-inp ${rec.absent||rec.annual?'dis':''}" value="${rec.start||''}" placeholder="0900"
+          ${rec.absent||rec.annual?'disabled':''} data-eid="${emp.id}" data-field="start"
+          onblur="handleTimeInput(${emp.id},'start',this.value)"></td>
+        <td><input class="time-inp ${c&&c.crossed?'cross':autoH?'hol-t':''} ${rec.absent||rec.annual?'dis':''}" value="${rec.end||''}" placeholder="1800"
+          ${rec.absent||rec.annual?'disabled':''} data-eid="${emp.id}" data-field="end"
+          onblur="handleTimeInput(${emp.id},'end',this.value)"></td>
+        <td class="td-w">${c&&isWork?`<div>${fmtH(c.work)}</div><div style="margin-top:1px">${chips.join('')}</div>`:rec.absent?'<span class="chip ch-ab">결근</span>':rec.annual?'<span class="chip ch-al">연차</span>':''}</td>
         <td class="td-nt"></td>
         <td class="td-ot"></td>
-        <td style="padding:4px 6px">
-          <label style="font-size:10px;color:var(--teal);display:flex;align-items:center;gap:3px;cursor:pointer;font-weight:600;white-space:nowrap">
-            <input type="checkbox" ${rec.customBk?'checked':''}
-              onchange="setR(${emp.id},'customBk',this.checked);renderTable()">개별휴게
-          </label>
-          <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고"
-            onchange="setR(${emp.id},'note',this.value)" style="margin-top:3px">
+        <td class="td-hol">${autoH&&holPay>0?`<span style="color:#854F0B;font-weight:700;font-size:11px">${Math.round(holPay/1000)}k</span>`:''}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+            <label style="font-size:10px;color:var(--teal);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600">
+              <input type="checkbox" ${rec.customBk?'checked':''}
+                onchange="setR(${emp.id},'customBk',this.checked);renderTable()">개별휴게
+            </label>
+            <label style="font-size:10px;color:var(--green);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600">
+              <input type="checkbox" ${rec.annual?'checked':''} onchange="setR(${emp.id},'annual',this.checked)">연차
+            </label>
+            <label style="font-size:10px;color:var(--rose);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:500">
+              <input type="checkbox" ${rec.absent?'checked':''} onchange="setR(${emp.id},'absent',this.checked)">결근
+            </label>
+            <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" onchange="setR(${emp.id},'note',this.value)">
+          </div>
+          ${pohalBkUI}
         </td>
-        `}
-        <td style="padding:6px 8px;font-size:10px">
+        <td style="padding:4px 6px;font-size:10px">
           ${autoH&&holPay>0
             ?`<span style="color:#854F0B;font-weight:700">휴일수당 ${fmt$(holPay)}</span>`
-            :isWork?'<span style="color:var(--green);font-weight:700">월급 지급</span>'
-            :rec.annual?'<span style="color:var(--green);font-weight:700">연차수당</span>'
-            :'<span style="color:var(--rose);font-weight:700">결근차감</span>'}
+            :isWork?'<span style="color:var(--green);font-weight:600">월급 지급</span>'
+            :rec.annual?'<span style="color:var(--green)">연차</span>'
+            :'<span style="color:var(--rose)">결근차감</span>'}
         </td>
       </tr>`;
     }
