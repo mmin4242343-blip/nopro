@@ -4747,6 +4747,11 @@ function sfNd(f,d){
   sfLoadTbm();
   sfRenderList();
   sfRenderRecent();
+  // 현재 보이는 탭도 갱신
+  const mPage=document.getElementById('sf-page-monthly');
+  if(mPage&&mPage.style.display!=='none')sfRenderM();
+  const sPage=document.getElementById('sf-page-summary');
+  if(sPage&&sPage.style.display!=='none')sfRenderSummary();
 }
 function sfUpdBar2(){
   document.getElementById('sf-dy').textContent=sfY;
@@ -5272,8 +5277,10 @@ const SF_TBM_DAYS=[1,2,3,6,7,8,9,10,13,14,15,16,17,20,21,22];
 const SF_TBM_CONT={1:'고소작업 안전수칙',2:'화기작업 허가절차',3:'중량물 취급',6:'전기작업 감전예방',7:'개인보호구 착용',8:'작업장 정리정돈',9:'화학물질 취급',10:'추락 방지',13:'비상구 대피요령',14:'폐수처리 안전점검',15:'고압가스 취급',16:'안전점검 체크리스트',17:'협착사고 예방',20:'소음·진동 안전수칙',21:'방호장치 점검',22:'안전보건 표지판'};
 
 function sfChgM(d){
-  sfMMo+=d;if(sfMMo>12){sfMMo=1;sfMY++;}if(sfMMo<1){sfMMo=12;sfMY--;}
-  const el=document.getElementById('sf-m-lbl');if(el)el.textContent=`${sfMY}년 ${sfMMo}월`;
+  // 상단 날짜 바의 월을 변경
+  sfM+=d;if(sfM>12){sfM=1;sfY++;}if(sfM<1){sfM=12;sfY--;}
+  sfD=Math.min(sfD,new Date(sfY,sfM,0).getDate());
+  sfUpdBar2();sfLoadTbm();sfRenderList();sfRenderRecent();
   sfRenderM();
 }
 function sfSetMF(v,btn){
@@ -5282,6 +5289,10 @@ function sfSetMF(v,btn){
   btn.classList.add('sf-fbtn-on');sfRenderM();
 }
 function sfRenderM(){
+  // 상단 날짜 바와 동기화
+  sfMY=sfY; sfMMo=sfM;
+  const lbl=document.getElementById('sf-m-lbl');
+  if(lbl)lbl.textContent=`${sfMY}년 ${sfMMo}월`;
   let emps=sfGetFilteredEmps();
   if(sfMStF!=='all'){
     emps=emps.filter(e=>{
@@ -5340,6 +5351,10 @@ function sfRenderSummary(){
     else if(fut)e.style.cssText='padding:4px 2px;border-radius:6px;text-align:center;color:var(--bd2);font-size:10px;min-height:34px';
     else e.style.cssText='padding:4px 2px;border-radius:6px;text-align:center;font-size:10px;min-height:34px;border:1px solid transparent';
     e.innerHTML=`<div>${d}</div>${has&&!fut?`<div style="font-size:8px;color:#1D4ED8">✓TBM</div>`:''}`;
+    if(!fut){
+      e.style.cursor='pointer';
+      e.addEventListener('click',(()=>{const dd=d;return()=>{sfD=dd;sfUpdBar2();sfLoadTbm();sfRenderList();sfRenderRecent();sf2RenderPhotos();sfSwitchTab('daily');}})());
+    }
     cal.appendChild(e);
   }
   // 일별 목록
