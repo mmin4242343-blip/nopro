@@ -48,14 +48,14 @@ export function tokenCookie(token, event) {
   const origin = event?.headers?.origin || '';
   const isLocal = origin.includes('localhost');
   const secure = isLocal ? '' : ' Secure;';
-  return `${COOKIE_NAME}=${token}; HttpOnly;${secure} SameSite=Strict; Path=/api; Max-Age=${COOKIE_MAX_AGE}`;
+  return `${COOKIE_NAME}=${token}; HttpOnly;${secure} SameSite=Strict; Path=/; Max-Age=${COOKIE_MAX_AGE}`;
 }
 
 export function clearTokenCookie(event) {
   const origin = event?.headers?.origin || '';
   const isLocal = origin.includes('localhost');
   const secure = isLocal ? '' : ' Secure;';
-  return `${COOKIE_NAME}=; HttpOnly;${secure} SameSite=Strict; Path=/api; Max-Age=0`;
+  return `${COOKIE_NAME}=; HttpOnly;${secure} SameSite=Strict; Path=/; Max-Age=0`;
 }
 
 export function okWithCookie(body, token, event) {
