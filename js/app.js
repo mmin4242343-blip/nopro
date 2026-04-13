@@ -5307,8 +5307,8 @@ function renderLeave() {
   if (!tbody) return;
 
   const filteredLeaveEmps = applyCommonFilter([...EMPS].filter(e=>{
-    // 퇴사자: 해당 연도 시작 전에 퇴사했으면 제외
-    if(e.leave){const ld=new Date(e.leave);if(ld<new Date(leaveYear,0,1))return false;}
+    // 퇴사자: 퇴사일 지난 직원 제외
+    if(e.leave) return false;
     return true;
   }), 'leave');
   tbody.innerHTML = filteredLeaveEmps.map(emp => {
