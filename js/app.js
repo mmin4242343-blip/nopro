@@ -1,16 +1,24 @@
 // ══ API 설정 ══
 const API_BASE = '/api';
+const TOKEN_KEY = 'nopro_jwt';
 
-// API 호출 헬퍼 (JWT 토큰 자동 첨부)
+function getStoredToken(){ return localStorage.getItem(TOKEN_KEY)||''; }
+function setStoredToken(t){ if(t) localStorage.setItem(TOKEN_KEY, t); }
+function clearStoredToken(){ localStorage.removeItem(TOKEN_KEY); }
+
+// API 호출 헬퍼 (쿠키 + Authorization 헤더 이중 전송)
 async function apiFetch(endpoint, method='POST', body=null){
-  const headers={'Content-Type':'application/json'};
-  const opts={method,headers,credentials:'include'};
+  const hdrs={'Content-Type':'application/json'};
+  const tok=getStoredToken();
+  if(tok) hdrs['Authorization']='Bearer '+tok;
+  const opts={method,headers:hdrs,credentials:'include'};
   if(body) opts.body=JSON.stringify(body);
   const res=await fetch(API_BASE+endpoint,opts);
   const text=await res.text();
   let data;
   try{data=JSON.parse(text);}catch(e){throw new Error('서버 응답 오류 (status:'+res.status+')');}
-  // 인증 엔드포인트는 401을 서버 에러 메시지 그대로 전달
+  // 서버가 갱신 토큰을 보내면 저장
+  if(data && data.token) setStoredToken(data.token);
   const isAuthEndpoint=endpoint.startsWith('/auth-login')||endpoint.startsWith('/auth-signup');
   if(res.status===401 && !isAuthEndpoint){authLogout();throw new Error('세션이 만료되었습니다');}
   if(res.status===429) throw new Error(data.error||'요청이 너무 많습니다. 잠시 후 다시 시도해주세요.');
@@ -5296,19 +5304,22 @@ function sfRenderSummary(){
   if(cnt)cnt.textContent=SF_TBM_DAYS.filter(d=>d<=sfD).length+'회';
 }
 
-// 실시간 서명 폴링 (apiFetch 대신 직접 fetch — 401 시 자동 로그아웃 방지)
+// 실시간 서명 폴링
 let sfPollTimer=null;
 function sfStartPoll(){
   sfStopPoll();
   sfPollTimer=setInterval(async()=>{
     try{
+      const hdrs={'Content-Type':'application/json'};
+      const tok=getStoredToken();
+      if(tok)hdrs['Authorization']='Bearer '+tok;
       const res=await fetch('/api/data-load',{
         method:'POST',
-        headers:{'Content-Type':'application/json'},
+        headers:hdrs,
         credentials:'include',
         body:JSON.stringify({key:'safety'})
       });
-      if(!res.ok)return; // 401 등 에러 시 조용히 무시 (로그아웃 안 함)
+      if(!res.ok)return;
       const map=await res.json();
       if(map&&map.safety){
         Object.keys(map.safety).forEach(k=>{
@@ -6754,6 +6765,7 @@ async function doAuthLogin(){
 
   try{
     const res=await apiFetch('/auth-login','POST',{email,password:pw});
+    if(res.token) setStoredToken(res.token);
     setNoproSession(res.session);
     if(res.session.role==='admin'){
       enterAdmin();
@@ -6789,6 +6801,7 @@ async function doAuthSignup(){
 
   try{
     const res=await apiFetch('/auth-signup','POST',{company,name,phone,email,password:pw,size});
+    if(res.token) setStoredToken(res.token);
     setNoproSession(res.session);
     // 새 회사 기본 데이터 저장
     await sbSaveAll(res.session.companyId);
@@ -6839,6 +6852,7 @@ function admLogout(){
 
 function authLogout(){
   apiFetch('/auth-logout','POST').catch(()=>{});
+  clearStoredToken();
   localStorage.removeItem('nopro_session');
   clearLocalData(); // 로그아웃 시 데이터 초기화
   document.querySelector('.app').style.display='none';
@@ -7086,29 +7100,30 @@ async function admDeleteUser(id){
   document.querySelector('.app').style.display='none';
   const sess=getNoproSession();
   if(!sess){ showLanding(); return; }
-  // 세션이 있으면 랜딩페이지를 즉시 숨김 (깜빡임 방지)
   document.getElementById('landing-overlay').style.display='none';
   try{
+    // 쿠키 + Authorization 헤더 이중 전송
+    const hdrs={'Content-Type':'application/json'};
+    const tok=getStoredToken();
+    if(tok) hdrs['Authorization']='Bearer '+tok;
     const res=await fetch('/api/auth-verify',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:hdrs,
       credentials:'include'
     });
     if(!res.ok){
-      let reason='unknown';
-      try{const j=await res.json();reason=j.reason||j.error||res.status;}catch(e){}
-      console.warn('auth-verify 실패:', res.status, reason);
-      // 500(서버오류)이면 로그아웃하지 않고 로컬 세션으로 진입
       if(res.status>=500){
-        console.warn('서버 오류 — 로컬 세션으로 진입');
+        // 서버 오류면 로컬 세션으로 진입 (로그아웃 안 함)
         if(sess.role==='admin'){ enterAdmin(); }
         else { enterApp(sess.company||''); }
         return;
       }
-      throw new Error('verify-failed:'+reason);
+      throw new Error('verify-failed');
     }
     const data=await res.json();
     if(!data.valid) throw new Error('invalid');
+    // 갱신된 토큰 저장
+    if(data.token) setStoredToken(data.token);
     setNoproSession(data.session);
     if(data.session.role==='admin'){
       enterAdmin();
@@ -7118,6 +7133,7 @@ async function admDeleteUser(id){
     }
   } catch(e){
     console.warn('initAuth 실패:', e.message);
+    clearStoredToken();
     localStorage.removeItem('nopro_session');
     showLanding();
   }
