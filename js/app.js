@@ -881,6 +881,13 @@ function setPohalAtt(eid, type){
   else if(type==='annual'){REC[k].annual=!REC[k].annual;if(REC[k].annual)REC[k].absent=false;}
   else if(type==='absent'){REC[k].absent=!REC[k].absent;if(REC[k].absent)REC[k].annual=false;}
   saveLS();renderTable();
+  // 연차/결근 변경 시 연차관리·근태현황·급여 탭 갱신
+  const lvPage=document.getElementById('pg-leave');
+  if(lvPage&&lvPage.classList.contains('on')) renderLeave();
+  const mvPage=document.getElementById('pg-monthly');
+  if(mvPage&&mvPage.classList.contains('on')) renderMonthly();
+  const pvPage=document.getElementById('pg-payroll');
+  if(pvPage&&pvPage.classList.contains('on')) renderPayroll();
 }
 function addOutTime(eid){
   const k=rk(eid,cY,cM,cD);
@@ -1877,7 +1884,7 @@ function renderPayroll(){
             : (s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0);
           return addPay>0?`<div class="pr"><span class="prl">추가수당</span><span class="prv" style="color:#3C3489">${fmt$(addPay)}원</span></div>`:'';
         })()}
-        ${s.aldays>0?`<div class="pr"><span class="prl">연차수당</span><span class="prv" style="color:var(--green)">${fmt$(s.annualPay)}원<span class="prx">${s.aldays}일</span></span></div>`:''}
+        ${s.annualPay>0?`<div class="pr"><span class="prl">연차수당</span><span class="prv" style="color:var(--green)">${fmt$(s.annualPay)}원<span class="prx">${s.aldays}일</span></span></div>`:''}
         <div class="pr">
           <span class="prl">상여금</span>
           <span style="display:flex;align-items:center;gap:5px">
@@ -5656,11 +5663,13 @@ let leaveOverrides = loadLeaveOverrides();
 function saveLeaveCustomAmount(val){
   leaveSettings.customAmount = parseFloat(val) || 0;
   localStorage.setItem("npm5_leave_settings", JSON.stringify(leaveSettings));
+  saveLS(); // Supabase DB 동기화
   renderLeave();
 }
 function saveLeaveSettings(){
   leaveSettings.payMode = document.getElementById("leave-pay-mode")?.value || "hourly";
   localStorage.setItem("npm5_leave_settings", JSON.stringify(leaveSettings));
+  saveLS(); // Supabase DB 동기화
   var wrap = document.getElementById("leave-custom-wrap");
   if(wrap) wrap.style.display = leaveSettings.payMode === "custom" ? "flex" : "none";
   renderLeave();
@@ -5916,6 +5925,7 @@ function renderLeave() {
 function setLeaveType(empId, type) {
   leaveSettings['type_' + empId] = type;
   localStorage.setItem('npm5_leave_settings', JSON.stringify(leaveSettings));
+  saveLS(); // Supabase DB 동기화
   renderLeave();
 }
 
@@ -5924,6 +5934,7 @@ function overrideLeaveTotal(empId, year, val) {
   if (!leaveOverrides[empId][year]) leaveOverrides[empId][year] = {};
   leaveOverrides[empId][year].total = val;
   localStorage.setItem('npm5_leave_overrides', JSON.stringify(leaveOverrides));
+  saveLS(); // Supabase DB 동기화
   renderLeave();
 }
 
@@ -5937,6 +5948,7 @@ function overrideLeaveUsed(empId, year, val) {
     leaveOverrides[empId][year].used = val;
   }
   localStorage.setItem('npm5_leave_overrides', JSON.stringify(leaveOverrides));
+  saveLS(); // Supabase DB 동기화
   renderLeave();
 }
 
