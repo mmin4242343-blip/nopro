@@ -6,7 +6,11 @@ async function apiFetch(endpoint, method='POST', body=null){
   const hdrs={'Content-Type':'application/json'};
   const opts={method,headers:hdrs,credentials:'include'};
   if(body) opts.body=JSON.stringify(body);
-  const res=await fetch(API_BASE+endpoint,opts);
+  let res;
+  try{ res=await fetch(API_BASE+endpoint,opts); }catch(e){
+    if(typeof showSyncToast==='function') showSyncToast('네트워크 연결 실패','error');
+    throw new Error('네트워크 연결을 확인해주세요');
+  }
   const text=await res.text();
   let data;
   try{data=JSON.parse(text);}catch(e){throw new Error('서버 응답 오류 (status:'+res.status+')');}
@@ -24,43 +28,59 @@ function esc(s){
 }
 
 // ══════════════════════════════════════
-// 공휴일 2024~2026
+// 공휴일 자동 생성 (2024~2040)
 // ══════════════════════════════════════
-const PH={
-'2024-01-01':'신정','2024-02-09':'설날연휴','2024-02-10':'설날','2024-02-11':'설날연휴','2024-02-12':'대체공휴일',
-'2024-03-01':'삼일절','2024-04-10':'총선','2024-05-05':'어린이날','2024-05-06':'대체공휴일','2024-05-15':'부처님오신날',
-'2024-06-06':'현충일','2024-08-15':'광복절','2024-09-16':'추석연휴','2024-09-17':'추석','2024-09-18':'추석연휴',
-'2024-10-03':'개천절','2024-10-09':'한글날','2024-12-25':'크리스마스',
-'2025-01-01':'신정','2025-01-28':'설날연휴','2025-01-29':'설날','2025-01-30':'설날연휴',
-'2025-03-01':'삼일절','2025-05-05':'어린이날','2025-05-06':'대체공휴일','2025-05-13':'부처님오신날',
-'2025-06-06':'현충일','2025-08-15':'광복절','2025-10-03':'개천절',
-'2025-10-05':'추석연휴','2025-10-06':'추석','2025-10-07':'추석연휴','2025-10-08':'대체공휴일',
-'2025-10-09':'한글날','2025-12-25':'크리스마스',
-'2026-01-01':'신정','2026-02-16':'설날연휴','2026-02-17':'설날','2026-02-18':'설날연휴',
-'2026-03-01':'삼일절','2026-05-05':'어린이날','2026-06-06':'현충일',
-'2026-08-15':'광복절','2026-09-24':'추석연휴','2026-09-25':'추석','2026-09-26':'추석연휴',
-'2026-10-03':'개천절','2026-10-09':'한글날','2026-12-25':'크리스마스',
-'2027-01-01':'신정','2027-01-14':'설날연휴','2027-01-15':'설날','2027-01-16':'설날연휴','2027-01-18':'대체공휴일',
-'2027-03-01':'삼일절','2027-05-05':'어린이날','2027-05-13':'부처님오신날',
-'2027-06-06':'현충일','2027-08-15':'광복절',
-'2027-09-14':'추석연휴','2027-09-15':'추석','2027-09-16':'추석연휴',
-'2027-10-03':'개천절','2027-10-09':'한글날','2027-12-25':'크리스마스',
-'2028-01-01':'신정','2028-02-03':'설날연휴','2028-02-04':'설날','2028-02-05':'설날연휴','2028-02-07':'대체공휴일',
-'2028-03-01':'삼일절','2028-05-02':'부처님오신날','2028-05-05':'어린이날',
-'2028-06-06':'현충일','2028-08-15':'광복절',
-'2028-10-02':'추석연휴','2028-10-03':'추석·개천절','2028-10-04':'추석연휴','2028-10-05':'대체공휴일',
-'2028-10-09':'한글날','2028-12-25':'크리스마스',
-'2029-01-01':'신정','2029-01-22':'설날연휴','2029-01-23':'설날','2029-01-24':'설날연휴',
-'2029-03-01':'삼일절','2029-05-05':'어린이날','2029-05-20':'부처님오신날',
-'2029-06-06':'현충일','2029-08-15':'광복절',
-'2029-09-21':'추석연휴','2029-09-22':'추석','2029-09-23':'추석연휴',
-'2029-10-03':'개천절','2029-10-09':'한글날','2029-12-25':'크리스마스',
-'2030-01-01':'신정','2030-02-11':'설날연휴','2030-02-12':'설날','2030-02-13':'설날연휴',
-'2030-03-01':'삼일절','2030-05-05':'어린이날','2030-05-09':'부처님오신날',
-'2030-06-06':'현충일','2030-08-15':'광복절',
-'2030-09-11':'추석연휴','2030-09-12':'추석','2030-09-13':'추석연휴',
-'2030-10-03':'개천절','2030-10-09':'한글날','2030-12-25':'크리스마스'
+// 음력 공휴일 양력 날짜 테이블: [설날 당일, 부처님오신날, 추석 당일] (MM-DD)
+const _LUNAR_HOLIDAYS={
+  2024:['02-10','05-15','09-17'],2025:['01-29','05-13','10-06'],2026:['02-17','05-24','09-25'],
+  2027:['01-15','05-13','09-15'],2028:['02-04','05-02','10-03'],2029:['01-23','05-20','09-22'],
+  2030:['02-12','05-09','09-12'],2031:['01-23','05-28','10-01'],2032:['02-11','05-16','09-19'],
+  2033:['01-31','05-06','09-08'],2034:['02-20','05-25','09-27'],2035:['02-08','05-15','09-16'],
+  2036:['01-28','05-03','10-04'],2037:['02-16','05-22','09-24'],2038:['02-04','05-11','09-13'],
+  2039:['01-24','04-30','10-02'],2040:['02-13','05-18','09-20']
 };
+function _addDay(dateStr,n){const d=new Date(dateStr);d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
+function _dow(dateStr){return new Date(dateStr).getDay();}// 0=일,6=토
+function _genPH(year){
+  const h={};const y=year;
+  const add=(d,name)=>{h[d]=h[d]?h[d]+'·'+name:name;};
+  // 고정 공휴일
+  add(y+'-01-01','신정');add(y+'-03-01','삼일절');add(y+'-05-05','어린이날');
+  add(y+'-06-06','현충일');add(y+'-08-15','광복절');add(y+'-10-03','개천절');
+  add(y+'-10-09','한글날');add(y+'-12-25','크리스마스');
+  // 음력 공휴일
+  const lunar=_LUNAR_HOLIDAYS[year];
+  if(!lunar)return h;
+  const [seol,buddha,chuseok]=lunar;
+  const seolDate=y+'-'+seol, chuDate=y+'-'+chuseok;
+  // 설날 연휴 (전날+당일+다음날)
+  add(_addDay(seolDate,-1),'설날연휴');add(seolDate,'설날');add(_addDay(seolDate,1),'설날연휴');
+  // 부처님오신날
+  add(y+'-'+buddha,'부처님오신날');
+  // 추석 연휴 (전날+당일+다음날)
+  add(_addDay(chuDate,-1),'추석연휴');add(chuDate,'추석');add(_addDay(chuDate,1),'추석연휴');
+  // 대체공휴일: 설날/추석 연휴 3일 중 일요일과 겹치면 연휴 다음 첫 평일
+  [seolDate,chuDate].forEach(base=>{
+    const days=[_addDay(base,-1),base,_addDay(base,1)];
+    const overlap=days.filter(d=>_dow(d)===0).length; // 일요일 겹침 수
+    if(overlap>0){
+      let alt=_addDay(base,2);// 연휴 다음날부터
+      let added=0;
+      while(added<overlap){if(!h[alt]&&_dow(alt)!==0&&_dow(alt)!==6){add(alt,'대체공휴일');added++;}alt=_addDay(alt,1);}
+    }
+  });
+  // 어린이날 대체공휴일: 토/일 겹치면 다음 월요일
+  const kids=y+'-05-05';const kd=_dow(kids);
+  if(kd===0)add(y+'-05-06','대체공휴일');
+  else if(kd===6)add(y+'-05-07','대체공휴일');
+  return h;
+}
+// PH 객체 빌드 (2024~2040)
+const PH=(()=>{const all={};for(let y=2024;y<=2040;y++)Object.assign(all,_genPH(y));
+  // 수동 보정: 2024 총선
+  all['2024-04-10']='총선';
+  return all;
+})();
 const pad=n=>String(n).padStart(2,'0');
 function phKey(y,m,d){return`${y}-${pad(m)}-${pad(d)}`;}
 function getPhName(y,m,d){return PH[phKey(y,m,d)]||null;}
@@ -207,7 +227,7 @@ function saveLS(){
       if(saveLS._timer) clearTimeout(saveLS._timer);
       saveLS._timer = setTimeout(()=>{
         sbSaveAll(_sess.companyId)
-          .catch(e=>console.warn('Supabase 저장 오류:',e));
+          .catch(e=>{console.warn('Supabase 저장 오류:',e);if(typeof showSyncToast==='function')showSyncToast('서버 저장 실패 — 로컬에는 저장됨','warn');});
       }, 500);
     }
   }catch(e){}
@@ -4371,6 +4391,28 @@ function saveSettings(){
   saveLS();renderTable();renderEmps();
   const btn=event.target;btn.textContent='저장됨 ✓';btn.style.background='var(--teal)';
   setTimeout(()=>{btn.textContent='저장';btn.style.background='';},1600);
+}
+
+// ── 데이터 백업 (JSON 다운로드) ──
+function exportBackup(){
+  const sess=JSON.parse(localStorage.getItem('nopro_session')||'null');
+  const data={
+    _meta:{exportedAt:new Date().toISOString(),company:sess?.company||'',email:sess?.email||''},
+    emps:EMPS,pol:POL,bk:DEF_BK,tbk:TBK,rec:REC,
+    bonus:BONUS_REC,allow:ALLOWANCE_REC,
+    tax:JSON.parse(localStorage.getItem('npm5_tax')||'{}'),
+    leave_settings:JSON.parse(localStorage.getItem('npm5_leave_settings')||'{}'),
+    leave_overrides:JSON.parse(localStorage.getItem('npm5_leave_overrides')||'{}'),
+    folders:JSON.parse(localStorage.getItem('npm5_folders')||'[]'),
+    safety:(()=>{const s={};Object.entries(SAFETY_REC).forEach(([k,v])=>{s[k]=Array.isArray(v)?v.map(({data,...r})=>r):v;});return s;})()
+  };
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const date=new Date().toISOString().slice(0,10);
+  a.href=url;a.download=`노프로_백업_${sess?.company||'data'}_${date}.json`;
+  a.click();URL.revokeObjectURL(url);
+  if(typeof showSyncToast==='function') showSyncToast('백업 파일 다운로드 완료','ok');
 }
 
 // ══════════════════════════════════════
