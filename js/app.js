@@ -6092,6 +6092,13 @@ function leaveUploadApply(){
   const matched=_leaveUploadMatches.filter(m=>m.matched&&!m.skip);
   if(!matched.length)return;
   const year=leaveYear;
+  // 자동계산 대상은 override 제거 (항상 입사일 기준 계산 유지)
+  _leaveUploadMatches.filter(m=>m.skip&&m.empId).forEach(m=>{
+    if(leaveOverrides[m.empId]&&leaveOverrides[m.empId][year]){
+      delete leaveOverrides[m.empId][year];
+      if(!Object.keys(leaveOverrides[m.empId]).length) delete leaveOverrides[m.empId];
+    }
+  });
   let count=0;
   matched.forEach(m=>{
     if(!leaveOverrides[m.empId]) leaveOverrides[m.empId]={};
