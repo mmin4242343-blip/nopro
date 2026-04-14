@@ -688,12 +688,12 @@ function monthSummary(eid,y,m){
     allowances[a.id]=effectiveV;
     totalAllowance+=effectiveV;
   });
-  // 일별 calcSession에서 이미 r10 처리됨 → 월합산에서는 재반올림 하지 않음
-  const total=tBase+wkly+tNightPay+tOtDayPay+tOtNightPay+tExtraWorkPay+tHolPayNew+tHolDayPay+tHolNightPay+tHolDayOtPay+tHolNightOtPay+tMonthlyHolStdPay+tMonthlyHolOtPay+annualPay+bonus+totalAllowance-deduction;
   // 총 가산수당 합계
   const tTotalBonus = empPayMode==='fixed'
     ? tExtraWorkPay + tNightPay + tOtDayPay + tOtNightPay + tHolPayNew
     : tNightPay + tOtDayPay + tOtNightPay + (tHolDayPay||0) + (tHolNightPay||0) + (tHolDayOtPay||0) + (tHolNightOtPay||0);
+  // 총급여 = 기본급 + 수당 + 주휴 + 연차 + 총가산수당 + 월급제휴일 + 상여 - 결근차감
+  const total=(tBase+totalAllowance) + wkly + annualPay + tTotalBonus + tMonthlyHolStdPay + tMonthlyHolOtPay + bonus - deduction;
 
   return{wdays,adays,aldays,twkH:twk/60,tNightH:tNightM/60,tOtDayH:tOtDayM/60,tOtNightH:tOtNightM/60,tHolDayH:tHolDayM/60,tHolNightH:tHolNightM/60,tHolDayOtH:tHolDayOtM/60,tHolNightOtH:tHolNightOtM/60,
     tBase,tNightPay,tOtDayPay,tOtNightPay,tHolDayPay,tHolNightPay,tHolDayOtPay,tHolNightOtPay,
