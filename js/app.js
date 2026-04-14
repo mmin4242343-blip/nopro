@@ -2010,8 +2010,8 @@ function renderXlPreview(){
       </td>`;
     }).join('');
 
-    // 총급여 = 기본급 + 수당 + 가산수당 + 상여 - 결근차감
-    const totalPay = basePay + (s.wkly||0) + s.tNightPay + s.tOtDayPay + s.tOtNightPay + (s.tExtraWorkPay||0) + (s.tHolPayNew||0) + s.tHolDayPay + s.tHolNightPay + s.tHolDayOtPay + s.tHolNightOtPay + (s.tMonthlyHolStdPay||0) + (s.tMonthlyHolOtPay||0) - s.deduction + s.bonus;
+    // 총급여 = 급여 + 주휴수당 + 연차수당 + 총가산수당 + 상여금 - 결근차감
+    const totalPay = basePay + (s.wkly||0) + s.annualPay + (s.tTotalBonus||0) + (s.tMonthlyHolStdPay||0) + (s.tMonthlyHolOtPay||0) - s.deduction + s.bonus;
     const incomeTax = tx.incomeTax||0;
     const localTax = tx.localTax||0;
     const pension4 = +(tx.pension)||0;
@@ -4497,7 +4497,7 @@ function exportExcel(){
       let deductTotal=0;
       deductList.forEach(a=>{deductTotal+=(s.allowances[a.id]||0);});
       const basePay = s.tBase + allowTotal;
-      const totalPay = basePay + (s.wkly||0) + s.tNightPay + s.tOtDayPay + s.tOtNightPay + (s.tExtraWorkPay||0) + (s.tHolPayNew||0) + s.tHolDayPay + s.tHolNightPay + s.tHolDayOtPay + s.tHolNightOtPay + (s.tMonthlyHolStdPay||0) + (s.tMonthlyHolOtPay||0) - s.deduction + s.bonus;
+      const totalPay = basePay + (s.wkly||0) + s.annualPay + (s.tTotalBonus||0) + (s.tMonthlyHolStdPay||0) + (s.tMonthlyHolOtPay||0) - s.deduction + s.bonus;
       const itax=parseFloat(tx.incomeTax)||0;
       const ltax=parseFloat(tx.localTax)||0;
       const bonusDed=s.bonus;
