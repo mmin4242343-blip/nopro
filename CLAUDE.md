@@ -35,7 +35,7 @@
 nopro/
 ├── index.html                          # SPA HTML+CSS (~1600줄, JS는 외부 파일로 분리)
 ├── js/
-│   └── app.js                          # 메인 애플리케이션 JS (~5970줄)
+│   └── app.js                          # 메인 애플리케이션 JS (~6000줄+)
 ├── images/                             # 랜딩페이지 스크린샷 이미지
 │   ├── 출퇴근기록입력.png
 │   ├── 근태현황.png
@@ -55,9 +55,14 @@ nopro/
     ├── auth-signup.js                  # 회사 가입
     ├── auth-verify.js                  # JWT 토큰 검증 및 자동 갱신 (쿠키 기반)
     ├── auth-logout.js                  # 로그아웃 (httpOnly 쿠키 클리어)
+    ├── auth-update.js                  # 회사 정보/비밀번호 변경
     ├── data-load.js                    # 회사 데이터 로드 (암호화 필드 복호화)
     ├── data-save.js                    # 회사 데이터 저장 (atomic upsert + 감사 로그)
     ├── audit-log.js                    # 감사 로그 조회 API
+    ├── file-upload.js                  # 파일 업로드 (Supabase Storage, 5MB 제한)
+    ├── file-delete.js                  # 파일 삭제 (본인 회사 파일만)
+    ├── file-url.js                     # 파일 서명 URL 발급 (1시간 유효)
+    ├── tbm-sign.js                     # TBM 안전교육 서명 API (외부 링크용)
     ├── admin-companies.js              # [관리자] 전체 회사 목록 조회
     ├── admin-delete.js                 # [관리자] 회사 삭제
     └── migrate-passwords.js            # [관리자] SHA-256 → bcrypt 패스워드 마이그레이션
@@ -79,9 +84,14 @@ Frontend → /api/* → Netlify Function → Supabase
 | `/auth-signup` | POST | 없음 | 회사 등록 |
 | `/auth-verify` | POST | JWT(cookie) | 세션 검증 + 토큰 갱신 |
 | `/auth-logout` | POST | 없음 | httpOnly 쿠키 클리어 |
-| `/data-load` | POST | JWT(cookie/bearer) | 회사 데이터 로드 |
-| `/data-save` | POST | JWT(cookie/bearer) | 회사 데이터 저장 + 감사 로그 |
-| `/audit-log` | GET | JWT(cookie/bearer) | 감사 로그 조회 |
+| `/auth-update` | POST | JWT(cookie) | 회사 정보/비밀번호 변경 |
+| `/data-load` | POST | JWT(cookie) | 회사 데이터 로드 |
+| `/data-save` | POST | JWT(cookie) | 회사 데이터 저장 + 감사 로그 |
+| `/audit-log` | GET | JWT(cookie) | 감사 로그 조회 |
+| `/file-upload` | POST | JWT(cookie) | 파일 업로드 (Supabase Storage) |
+| `/file-delete` | POST | JWT(cookie) | 파일 삭제 |
+| `/file-url` | POST | JWT(cookie) | 파일 서명 URL 발급 |
+| `/tbm-sign` | GET/POST | 토큰(쿼리) | TBM 안전교육 서명 (외부 링크) |
 | `/admin-companies` | GET | JWT(admin) | 전체 회사 목록 |
 | `/admin-delete` | DELETE | JWT(admin) | 회사 및 데이터 삭제 |
 | `/migrate-passwords` | POST | JWT(admin) | 패스워드 해시 마이그레이션 |
@@ -213,12 +223,13 @@ SAFETY_REC = {}     // 안전교육 기록
 ## 인증 흐름
 
 1. 랜딩 페이지 → 로그인/회원가입
-2. `/auth-login` 또는 `/auth-signup` → JWT 토큰을 **httpOnly 쿠키**로 설정
+2. `/auth-login` 또는 `/auth-signup` → JWT 토큰을 **httpOnly 쿠키**(`nopro_token`)로 설정
 3. 쿠키는 브라우저가 자동으로 API 요청에 포함 (`credentials: 'include'`)
-4. 세션 정보(role, company name 등)만 `localStorage['nopro_session']`에 저장
-5. `/auth-verify`로 토큰 유효성 검증, 만료 2시간 전 자동 갱신 (Set-Cookie)
-6. 로그아웃: `/auth-logout` 호출 → 쿠키 클리어 + localStorage 세션 삭제
-7. 관리자(role='admin') vs 사용자(role='user') 분기
+4. 세션 정보(role, company name 등)만 `localStorage['nopro_session']`에 저장 (화면 표시용)
+5. **프론트엔드는 JWT 토큰에 직접 접근 불가** (httpOnly, JS에서 읽기 불가)
+6. `/auth-verify`로 토큰 유효성 검증, 만료 6시간 전 자동 갱신 (Set-Cookie)
+7. 로그아웃: `/auth-logout` 호출 → 쿠키 클리어 + localStorage 세션 삭제
+8. 관리자(role='admin') vs 사용자(role='user') 분기
 
 ### Rate Limiting
 - **In-memory**: 동일 이메일+IP로 1분 내 5회 초과 시 차단 (burst 보호)
@@ -261,6 +272,19 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
 - 감사 로그(audit_log) 구현
 - data-save.js: select+insert/update → atomic upsert 전환
 
+### 보안 개선 이력 (2026-04-14)
+- localStorage JWT(`nopro_jwt`) 완전 제거 → httpOnly 쿠키만으로 인증
+- 서버 응답 body에서 token 필드 제거 (Set-Cookie만 사용)
+- innerHTML value 속성에 XSS 이스케이프(`esc()`) 적용
+- 서버 에러 메시지에서 시스템 정보 노출 제거
+- xlsx CDN에 SRI(Subresource Integrity) 해시 추가
+- tbm-sign CORS fallback `'*'` → `ALLOWED_ORIGINS[0]` 통일
+- 백엔드 7개 함수에 JSON.parse try-catch 보호 추가
+- audit-log limit/offset 음수·NaN 방어
+- file-upload 버킷 크기 제한 5MB 통일
+- 이미지 로드 실패 시 onerror 핸들러 추가
+- 안전교육 드래그앤드롭 중복 리스너 방지 + 사진 삭제 시 서버 반영
+
 ### 남은 보안 작업 (선택)
 - CSP `script-src 'unsafe-inline'` 제거: 인라인 이벤트 핸들러 336개를 addEventListener로 전환 필요 (대규모 리팩토링)
 - CSP `style-src 'unsafe-inline'` 제거: 인라인 스타일 분리 필요
@@ -283,7 +307,7 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
 ## 주요 함수 (js/app.js)
 
 ### 데이터 관리
-- `apiFetch(endpoint, method, body)` — API 호출 래퍼 (credentials:'include', httpOnly 쿠키 자동 전송)
+- `apiFetch(endpoint, method, body)` — API 호출 래퍼 (credentials:'include', httpOnly 쿠키 자동 전송, Authorization 헤더 없음)
 - `saveLS()` — 전역 변수 → localStorage 저장
 - `sbLoadAll(companyId)` — Supabase에서 전체 데이터 로드
 - `sbSaveAll(companyId)` — Supabase에 전체 데이터 저장
@@ -407,5 +431,6 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
 8. push 시 Netlify 자동 배포가 즉시 이루어지므로 main 브랜치 직접 push 주의
 9. **파일을 삭제하기 전에 반드시 "절대 삭제 금지 파일" 섹션을 확인할 것**
 10. **"이 파일 필요 없는 것 같은데?" 라는 생각이 들면, 그 파일은 십중팔구 필요한 파일이다. 삭제하지 말 것**
-11. httpOnly 쿠키 기반 인증이므로, 프론트엔드에서 `nopro_token`을 직접 다루지 말 것
-12. API 호출 시 `credentials: 'include'` 필수 (쿠키 자동 전송)
+11. httpOnly 쿠키 기반 인증이므로, 프론트엔드에서 JWT를 직접 다루지 말 것 (localStorage에 토큰 저장 금지)
+12. API 호출 시 `credentials: 'include'` 필수 (쿠키 자동 전송), Authorization 헤더 사용하지 않음
+13. Supabase Storage 버킷명: `nopro-files` (파일 업로드/삭제/URL 발급에 사용)
