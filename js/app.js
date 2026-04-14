@@ -1,24 +1,15 @@
 // ══ API 설정 ══
 const API_BASE = '/api';
-const TOKEN_KEY = 'nopro_jwt';
 
-function getStoredToken(){ return localStorage.getItem(TOKEN_KEY)||''; }
-function setStoredToken(t){ if(t) localStorage.setItem(TOKEN_KEY, t); }
-function clearStoredToken(){ localStorage.removeItem(TOKEN_KEY); }
-
-// API 호출 헬퍼 (쿠키 + Authorization 헤더 이중 전송)
+// API 호출 헬퍼 (httpOnly 쿠키 기반 인증)
 async function apiFetch(endpoint, method='POST', body=null){
   const hdrs={'Content-Type':'application/json'};
-  const tok=getStoredToken();
-  if(tok) hdrs['Authorization']='Bearer '+tok;
   const opts={method,headers:hdrs,credentials:'include'};
   if(body) opts.body=JSON.stringify(body);
   const res=await fetch(API_BASE+endpoint,opts);
   const text=await res.text();
   let data;
   try{data=JSON.parse(text);}catch(e){throw new Error('서버 응답 오류 (status:'+res.status+')');}
-  // 서버가 갱신 토큰을 보내면 저장
-  if(data && data.token) setStoredToken(data.token);
   const isAuthEndpoint=endpoint.startsWith('/auth-login')||endpoint.startsWith('/auth-signup');
   if(res.status===401 && !isAuthEndpoint){authLogout();throw new Error('세션이 만료되었습니다');}
   if(res.status===429) throw new Error(data.error||'요청이 너무 많습니다. 잠시 후 다시 시도해주세요.');
@@ -2444,7 +2435,7 @@ function renderEmps(){
       style="transition:all .15s;${e.leave?'opacity:.5;background:var(--rose-dim);':''}cursor:pointer;">
       <td><span style="cursor:grab;color:var(--ink3);font-size:14px;padding:0 4px;">⠿</span></td>
       <td style="text-align:center;font-size:11px;font-weight:700;color:#94A3B8;padding:0 4px">${rowNum}</td>
-      <td><input class="ei2" value="${e.empNo||''}" onchange="updE(${e.id},'empNo',this.value)" style="text-align:center;font-size:10px" placeholder="사번"></td>
+      <td><input class="ei2" value="${esc(e.empNo||'')}" onchange="updE(${e.id},'empNo',this.value)" style="text-align:center;font-size:10px" placeholder="사번"></td>
       <td><input class="ei2" value="${esc(e.name)}" onchange="updE(${e.id},'name',this.value)" placeholder="이름"></td>
       <td><input class="ei2" value="${esc(e.role)}" onchange="updE(${e.id},'role',this.value)"></td>
       <td><input class="ei2" value="${esc(e.grade||'')}" onchange="updE(${e.id},'grade',this.value)" placeholder="직급"></td>
@@ -2455,7 +2446,7 @@ function renderEmps(){
           :`<div style="display:flex;align-items:center;gap:2px"><input class="ei2" type="number" value="${e.rate!==null&&e.rate!==undefined?e.rate:POL.baseRate}" onchange="updE(${e.id},'rate',+this.value)" style="text-align:right"><span style="font-size:9px;color:var(--ink3)">${(e.payMode||'fixed')==='hourly'?'원/h':'원/h'}</span></div>`
         }
       </td>
-      <td><input class="ei2" type="date" value="${e.join||''}" onchange="updE(${e.id},'join',this.value)"></td>
+      <td><input class="ei2" type="date" value="${esc(e.join||'')}" onchange="updE(${e.id},'join',this.value)"></td>
       <td>
         <div style="display:flex;gap:3px">
           <button class="gender-btn male ${(e.gender||'male')==='male'?'on':''}" onclick="updE(${e.id},'gender','male');renderEmps()">남</button>
@@ -2469,13 +2460,13 @@ function renderEmps(){
         </div>
       </td>
       <td><input class="ei2" type="number" value="${e.age||''}" onchange="updE(${e.id},'age',+this.value)" style="text-align:center" placeholder="자동" id="age-${e.id}"></td>
-      <td><input class="ei2" value="${e.phone||''}" oninput="this.value=formatPhone(this.value);updE(${e.id},'phone',this.value)" placeholder="010-0000-0000" maxlength="13"></td>
+      <td><input class="ei2" value="${esc(e.phone||'')}" oninput="this.value=formatPhone(this.value);updE(${e.id},'phone',this.value)" placeholder="010-0000-0000" maxlength="13"></td>
       <td>
         <div style="display:flex;gap:3px;align-items:center">
-          <input class="ei2" value="${e.rrnFront||''}" maxlength="6" placeholder="앞6자리"
+          <input class="ei2" value="${esc(e.rrnFront||'')}" maxlength="6" placeholder="앞6자리"
             oninput="updRrn(${e.id},'rrnFront',this.value)" id="rrn-front-${e.id}" style="text-align:center;letter-spacing:1px">
           <span style="color:var(--ink3);font-size:12px">-</span>
-          <input class="ei2" value="${e.rrnBack||''}" maxlength="7" placeholder="뒷7자리"
+          <input class="ei2" value="${esc(e.rrnBack||'')}" maxlength="7" placeholder="뒷7자리"
             oninput="updRrn(${e.id},'rrnBack',this.value)" style="text-align:center;letter-spacing:2px">
         </div>
       </td>
@@ -2498,7 +2489,7 @@ function renderEmps(){
           ${e.leave
             ?`<div style="display:flex;align-items:center;gap:4px;background:#FEE2E2;border:1px solid #FECACA;border-radius:7px;padding:3px 7px">
                 <span style="font-size:9px;color:var(--rose);font-weight:700">퇴사</span>
-                <span style="font-size:10px;color:#991B1B;font-weight:600">${e.leave}</span>
+                <span style="font-size:10px;color:#991B1B;font-weight:600">${esc(e.leave)}</span>
               </div>
               <button class="btn btn-xs" onclick="cancelLeave(${e.id})" style="font-size:9px;color:var(--ink3);margin-top:2px">퇴사취소</button>`
             :`<button class="btn btn-xs" onclick="setLeave(${e.id})" style="color:var(--rose);border-color:#FECACA">퇴사처리</button>`
@@ -3898,17 +3889,18 @@ async function previewFile(folderId, fileId){
     const urls=await getFileUrls([file.storagePath]);
     url=urls[file.storagePath]||'';
   }
-  if(!url) return;
+  if(!url||/^javascript:/i.test(url)) return;
+  const safeUrl=esc(url);
   const lb=document.createElement('div');
   lb.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(4px)';
   if(file.type&&file.type.startsWith('image/')){
-    lb.innerHTML=`<img src="${url}" style="max-width:90vw;max-height:90vh;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.4)">`;
+    lb.innerHTML=`<img src="${safeUrl}" style="max-width:90vw;max-height:90vh;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.4)">`;
   }else{
     lb.innerHTML=`<div style="background:#fff;border-radius:16px;padding:32px;text-align:center;max-width:400px">
       <div style="font-size:48px;margin-bottom:12px">${getFileIcon(file.type)}</div>
       <div style="font-size:14px;font-weight:700;margin-bottom:8px">${esc(file.name)}</div>
       <div style="font-size:12px;color:#666;margin-bottom:16px">${fmtSize(file.size)}</div>
-      <a href="${url}" download="${esc(file.name)}" target="_blank" onclick="event.stopPropagation()"
+      <a href="${safeUrl}" download="${esc(file.name)}" target="_blank" onclick="event.stopPropagation()"
         style="display:inline-block;padding:10px 24px;background:var(--navy);color:#fff;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px">다운로드</a>
     </div>`;
   }
@@ -5155,6 +5147,9 @@ async function sfExcelCore(){
 // 사진 업로드
 async function sf2HandleFiles(files){
   if(!files||files.length===0)return;
+  // 파일 input 초기화 (같은 파일 재선택 가능하게)
+  const inp=document.getElementById('sf-file-inp2');
+  if(inp)inp.value='';
   const key=sfKey();
   if(!SAFETY_REC[key])SAFETY_REC[key]=[];
   const imageFiles=Array.from(files).filter(f=>f.type.startsWith('image/'));
@@ -5209,6 +5204,9 @@ function sf2RenderPhotos(){
         SAFETY_REC[key]=SAFETY_REC[key].filter(ph=>ph.id!==p.id);
         if(SAFETY_REC[key].length===0)delete SAFETY_REC[key];
         sfSave();sf2RenderPhotos();
+        // 서버에도 삭제 상태 반영
+        const safetyValue=(()=>{const s={};Object.entries(SAFETY_REC).forEach(([k,v])=>{s[k]=Array.isArray(v)?v.map(({data,...r})=>r):v;});return s;})();
+        apiFetch('/data-save','POST',{key:'safety',value:safetyValue}).catch(()=>{});
       }
     });
     row.appendChild(zb);row.appendChild(db);c.appendChild(row);
@@ -5242,10 +5240,12 @@ async function sf2Zoom(id,key){
   document.body.appendChild(lb);
 }
 
-// 드래그앤드롭 초기화
+// 드래그앤드롭 초기화 (중복 리스너 방지)
+let _sfDropInited=false;
 function sfInitDrop(){
   const dz=document.getElementById('sf-drop-zone2');
-  if(!dz)return;
+  if(!dz||_sfDropInited)return;
+  _sfDropInited=true;
   dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dragover');});
   dz.addEventListener('dragleave',()=>dz.classList.remove('dragover'));
   dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('dragover');sf2HandleFiles(e.dataTransfer.files);});
@@ -5545,12 +5545,9 @@ function sfStartPoll(){
   sfStopPoll();
   sfPollTimer=setInterval(async()=>{
     try{
-      const hdrs={'Content-Type':'application/json'};
-      const tok=getStoredToken();
-      if(tok)hdrs['Authorization']='Bearer '+tok;
       const res=await fetch('/api/data-load',{
         method:'POST',
-        headers:hdrs,
+        headers:{'Content-Type':'application/json'},
         credentials:'include',
         body:JSON.stringify({key:'safety'})
       });
@@ -6999,7 +6996,6 @@ async function doAuthLogin(){
 
   try{
     const res=await apiFetch('/auth-login','POST',{email,password:pw});
-    if(res.token) setStoredToken(res.token);
     setNoproSession(res.session);
     if(res.session.role==='admin'){
       enterAdmin();
@@ -7035,7 +7031,6 @@ async function doAuthSignup(){
 
   try{
     const res=await apiFetch('/auth-signup','POST',{company,name,phone,email,password:pw,size});
-    if(res.token) setStoredToken(res.token);
     setNoproSession(res.session);
     // 새 회사 기본 데이터 저장
     await sbSaveAll(res.session.companyId);
@@ -7086,8 +7081,8 @@ function admLogout(){
 
 function authLogout(){
   apiFetch('/auth-logout','POST').catch(()=>{});
-  clearStoredToken();
   localStorage.removeItem('nopro_session');
+  localStorage.removeItem('nopro_jwt'); // 레거시 토큰 정리
   clearLocalData(); // 로그아웃 시 데이터 초기화
   document.querySelector('.app').style.display='none';
   const badge=document.getElementById('company-name-badge');
@@ -7336,13 +7331,10 @@ async function admDeleteUser(id){
   if(!sess){ showLanding(); return; }
   document.getElementById('landing-overlay').style.display='none';
   try{
-    // 쿠키 + Authorization 헤더 이중 전송
-    const hdrs={'Content-Type':'application/json'};
-    const tok=getStoredToken();
-    if(tok) hdrs['Authorization']='Bearer '+tok;
+    // httpOnly 쿠키 기반 세션 검증
     const res=await fetch('/api/auth-verify',{
       method:'POST',
-      headers:hdrs,
+      headers:{'Content-Type':'application/json'},
       credentials:'include'
     });
     if(!res.ok){
@@ -7356,8 +7348,6 @@ async function admDeleteUser(id){
     }
     const data=await res.json();
     if(!data.valid) throw new Error('invalid');
-    // 갱신된 토큰 저장
-    if(data.token) setStoredToken(data.token);
     setNoproSession(data.session);
     if(data.session.role==='admin'){
       enterAdmin();
@@ -7367,8 +7357,8 @@ async function admDeleteUser(id){
     }
   } catch(e){
     console.warn('initAuth 실패:', e.message);
-    clearStoredToken();
     localStorage.removeItem('nopro_session');
+    localStorage.removeItem('nopro_jwt'); // 레거시 토큰 정리
     showLanding();
   }
 })();

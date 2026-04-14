@@ -4,7 +4,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://noprohr.netlify
 
 function corsHeaders(event) {
   const origin = event?.headers?.origin || '';
-  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : '*';
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     'Access-Control-Allow-Origin': allowed,
     'Access-Control-Allow-Headers': 'Content-Type',
@@ -141,6 +141,6 @@ export const handler = async (event) => {
 
   } catch (e) {
     console.error('tbm-sign error:', e);
-    return { statusCode: 500, headers, body: JSON.stringify({ error: '서버 오류가 발생했습니다: ' + e.message }) };
+    return { statusCode: 500, headers, body: JSON.stringify({ error: '서버 오류가 발생했습니다' }) };
   }
 };

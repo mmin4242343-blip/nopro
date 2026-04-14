@@ -56,7 +56,7 @@ export const handler = async (event) => {
 
     if (uploadErr) {
       console.error('Upload error:', uploadErr);
-      return err(500, '파일 업로드 실패: ' + uploadErr.message, event);
+      return err(500, '파일 업로드 실패', event);
     }
 
     return ok({ path, fileName: safeName, size: buffer.length }, event);

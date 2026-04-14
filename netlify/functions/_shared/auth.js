@@ -72,8 +72,6 @@ export function clearTokenCookie(event) {
 }
 
 export function okWithCookie(body, token, event) {
-  // 토큰을 body에도 포함 (localStorage 백업용)
-  const responseBody = { ...body, token };
   return {
     statusCode: 200,
     headers: cors(event),
@@ -83,7 +81,7 @@ export function okWithCookie(body, token, event) {
         clearOldPathCookie(event)
       ]
     },
-    body: JSON.stringify(responseBody)
+    body: JSON.stringify(body)
   };
 }
 
