@@ -6119,6 +6119,8 @@ function leaveUploadApply(){
   });
   localStorage.setItem('npm5_leave_overrides',JSON.stringify(leaveOverrides));
   saveLS();
+  // 서버에 즉시 저장 (leave_overrides)
+  apiFetch('/data-save','POST',{key:'leave_overrides',value:JSON.parse(localStorage.getItem('npm5_leave_overrides')||'{}')}).catch(()=>{});
   renderLeave();
   leaveUploadCancel();
   if(typeof showSyncToast==='function') showSyncToast(count+'명 연차 데이터 반영 완료','ok');
