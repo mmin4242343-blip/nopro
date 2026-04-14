@@ -8555,41 +8555,41 @@ function closeTbmSign(){
 })();
 
 let tbmCurLang='ko';
-let tbmShiftF='all';
+let tbmShiftF='all',tbmNatF='all',tbmDeptF='all';
 let tbmSelectedPerson=null;
 let tbmAgrees=[false,false,false,false];
 let TBM_SIGNED={};
 
 // 직원 목록 (실제 구현 시 EMPS에서 불러옴)
 const TBM_PEOPLE=[
-  {n:'김민준',en:'Kim Minjun',sh:'주간',na:'내국인',dp:'생산A'},
-  {n:'강민호',en:'Kang Minho',sh:'주간',na:'내국인',dp:'생산A'},
-  {n:'한상훈',en:'Han Sanghoon',sh:'야간',na:'내국인',dp:'생산A'},
-  {n:'정지수',en:'Jung Jisu',sh:'주간',na:'내국인',dp:'생산A'},
-  {n:'최경숙',en:'Choi Kyungsook',sh:'주간',na:'내국인',dp:'생산A'},
-  {n:'홍명숙',en:'Hong Myungsook',sh:'주간',na:'내국인',dp:'생산B'},
-  {n:'고준례',en:'Ko Junrye',sh:'야간',na:'내국인',dp:'생산A'},
-  {n:'이경자',en:'Lee Kyungja',sh:'야간',na:'내국인',dp:'생산B'},
-  {n:'이은자',en:'Lee Eunja',sh:'주간',na:'내국인',dp:'생산A'},
-  {n:'서정재',en:'Seo Jungjae',sh:'야간',na:'내국인',dp:'생산B'},
-  {n:'신화경',en:'Shin Hwakyung',sh:'야간',na:'내국인',dp:'생산B'},
-  {n:'강선자',en:'Kang Seonja',sh:'주간',na:'내국인',dp:'생산B'},
-  {n:'정옥심',en:'Jung Oksim',sh:'주간',na:'내국인',dp:'생산B'},
-  {n:'박성숙',en:'Park Sungsook',sh:'주간',na:'내국인',dp:'생산A'},
-  {n:'유지수',en:'Yoo Jisu',sh:'주간',na:'내국인',dp:'생산A'},
-  {n:'조옥순',en:'Jo Oksoon',sh:'야간',na:'내국인',dp:'생산B'},
-  {n:'이철수',en:'Lee Cheolsu',sh:'주간',na:'내국인',dp:'생산A'},
-  {n:'박수진',en:'Park Sujin',sh:'주간',na:'내국인',dp:'생산B'},
-  {n:'최지우',en:'Choi Jiwoo',sh:'야간',na:'내국인',dp:'생산B'},
-  {n:'안인자',en:'An Inja',sh:'야간',na:'내국인',dp:'생산A'},
-  {n:'이인숙',en:'Lee Insook',sh:'야간',na:'내국인',dp:'생산B'},
-  {n:'최교숙',en:'Choi Kyosook',sh:'주간',na:'내국인',dp:'생산A'},
-  {n:'왕웨이',en:'Wang Wei',sh:'주간',na:'외국인',dp:'외주'},
-  {n:'Tran Thi Lan',en:'Tran Thi Lan',sh:'야간',na:'외국인',dp:'외주'},
-  {n:'Nguyen Van An',en:'Nguyen Van An',sh:'야간',na:'외국인',dp:'외주'},
-  {n:'Ahmad Farhan',en:'Ahmad Farhan',sh:'주간',na:'외국인',dp:'외주'},
-  {n:'Liu Yang',en:'Liu Yang',sh:'주간',na:'외국인',dp:'외주'},
-  {n:'Mohammed Ali',en:'Mohammed Ali',sh:'야간',na:'외국인',dp:'외주'},
+  {n:'김민준',en:'Kim Minjun',sh:'주간',na:'내국인',dp:'인천본점'},
+  {n:'강민호',en:'Kang Minho',sh:'주간',na:'내국인',dp:'인천본점'},
+  {n:'한상훈',en:'Han Sanghoon',sh:'야간',na:'내국인',dp:'인천본점'},
+  {n:'정지수',en:'Jung Jisu',sh:'주간',na:'내국인',dp:'인천본점'},
+  {n:'최경숙',en:'Choi Kyungsook',sh:'주간',na:'내국인',dp:'인천본점'},
+  {n:'홍명숙',en:'Hong Myungsook',sh:'주간',na:'내국인',dp:'인천본점'},
+  {n:'고준례',en:'Ko Junrye',sh:'야간',na:'내국인',dp:'인천본점'},
+  {n:'이경자',en:'Lee Kyungja',sh:'야간',na:'내국인',dp:'인천본점'},
+  {n:'이은자',en:'Lee Eunja',sh:'주간',na:'내국인',dp:'인천본점'},
+  {n:'서정재',en:'Seo Jungjae',sh:'야간',na:'내국인',dp:'인천본점'},
+  {n:'신화경',en:'Shin Hwakyung',sh:'야간',na:'내국인',dp:'인천본점'},
+  {n:'강선자',en:'Kang Seonja',sh:'주간',na:'내국인',dp:'인천본점'},
+  {n:'정옥심',en:'Jung Oksim',sh:'주간',na:'내국인',dp:'인천본점'},
+  {n:'박성숙',en:'Park Sungsook',sh:'주간',na:'내국인',dp:'인천본점'},
+  {n:'유지수',en:'Yoo Jisu',sh:'주간',na:'내국인',dp:'인천본점'},
+  {n:'조옥순',en:'Jo Oksoon',sh:'야간',na:'내국인',dp:'인천본점'},
+  {n:'이철수',en:'Lee Cheolsu',sh:'주간',na:'내국인',dp:'인천본점'},
+  {n:'박수진',en:'Park Sujin',sh:'주간',na:'내국인',dp:'인천본점'},
+  {n:'최지우',en:'Choi Jiwoo',sh:'야간',na:'내국인',dp:'인천본점'},
+  {n:'안인자',en:'An Inja',sh:'야간',na:'내국인',dp:'인천본점'},
+  {n:'이인숙',en:'Lee Insook',sh:'야간',na:'내국인',dp:'인천본점'},
+  {n:'최교숙',en:'Choi Kyosook',sh:'주간',na:'내국인',dp:'인천본점'},
+  {n:'왕웨이',en:'Wang Wei',sh:'주간',na:'외국인',dp:'아웃소싱'},
+  {n:'Tran Thi Lan',en:'Tran Thi Lan',sh:'야간',na:'외국인',dp:'아웃소싱'},
+  {n:'Nguyen Van An',en:'Nguyen Van An',sh:'야간',na:'외국인',dp:'아웃소싱'},
+  {n:'Ahmad Farhan',en:'Ahmad Farhan',sh:'주간',na:'외국인',dp:'아웃소싱'},
+  {n:'Liu Yang',en:'Liu Yang',sh:'주간',na:'외국인',dp:'아웃소싱'},
+  {n:'Mohammed Ali',en:'Mohammed Ali',sh:'야간',na:'외국인',dp:'아웃소싱'},
 ];
 
 // 초기 서명 상태
@@ -8635,9 +8635,12 @@ function tbmSetStep(n){
 }
 
 // 필터
-function tbmSetF(v,el){
-  tbmShiftF=v;
-  document.querySelectorAll('#tbm-sign-overlay .filter-row .chip').forEach(c=>c.classList.remove('on'));
+function tbmSetF(group,v,el){
+  if(group==='shift') tbmShiftF=v;
+  else if(group==='nat') tbmNatF=v;
+  else if(group==='dept') tbmDeptF=v;
+  const row=el.closest('.filter-row');
+  if(row) row.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
   el.classList.add('on');
   tbmRenderEmps();
 }
@@ -8655,12 +8658,9 @@ function tbmRenderEmps(){
   if(clearEl)clearEl.style.display=srch?'block':'none';
 
   const list=TBM_PEOPLE.filter(p=>{
-    if(tbmShiftF==='주간'&&p.sh!=='주간')return false;
-    if(tbmShiftF==='야간'&&p.sh!=='야간')return false;
-    if(tbmShiftF==='외국인'&&p.na!=='외국인')return false;
-    if(tbmShiftF==='생산A'&&p.dp!=='생산A')return false;
-    if(tbmShiftF==='생산B'&&p.dp!=='생산B')return false;
-    if(tbmShiftF==='외주'&&p.dp!=='외주')return false;
+    if(tbmShiftF!=='all'&&p.sh!==tbmShiftF)return false;
+    if(tbmNatF!=='all'&&p.na!==tbmNatF)return false;
+    if(tbmDeptF!=='all'&&p.dp!==tbmDeptF)return false;
     if(srch&&!p.n.toLowerCase().includes(srch)&&!p.en.toLowerCase().includes(srch))return false;
     return true;
   });
@@ -8722,6 +8722,21 @@ function tbmSelectPerson(nameKo, nameEn){
     const chk=document.getElementById('chk'+i);
     if(chk){chk.className='agree-chk';chk.closest('.agree-item').classList.remove('checked');}
   });
+  // 교육내용 재확인 동적 채우기
+  const koTxt=document.getElementById('tbm-ko')?.textContent||'';
+  const enEl=document.getElementById('tbm-en');
+  const enTxt=enEl?enEl.textContent.replace(/🇺🇸\s*English/,'').trim():'';
+  const reviewEl=document.getElementById('tbm-review-content');
+  if(reviewEl){
+    reviewEl.innerHTML=`<div class="tbm-ko" style="font-size:14px;font-weight:600;color:#0F172A;line-height:1.75">${esc(koTxt)}</div>`
+      +(enTxt?`<div class="tbm-en" style="display:block;margin-top:8px;padding-top:8px;border-top:1px dashed #E2E8F0"><div class="tbm-en-lbl">🇺🇸 English</div><span style="font-size:12px;color:#334155;line-height:1.7">${esc(enTxt)}</span></div>`:'');
+  }
+  // 체크박스1 서브텍스트에 교육내용 요약
+  const chk0sub=document.getElementById('chk0-sub');
+  if(chk0sub){
+    if(tbmCurLang==='en'&&enTxt) chk0sub.textContent=enTxt;
+    else chk0sub.textContent=koTxt;
+  }
   tbmUpdateSubmitBtn();
   document.getElementById('page1').classList.remove('on');
   document.getElementById('page2').classList.add('on');
@@ -8739,12 +8754,12 @@ function tbmToggleAgree(idx,el){
 }
 
 function tbmUpdateSubmitBtn(){
-  const allChecked=tbmAgrees.every(a=>a);
+  const checked=tbmAgrees.filter(a=>a).length;
+  const allChecked=checked===4;
   const btn=document.getElementById('btn-submit');
-  if(!btn)return;
-  btn.disabled=!allChecked;
-  if(allChecked) btn.className='btn-submit ready';
-  else btn.className='btn-submit';
+  if(btn){btn.disabled=!allChecked;btn.className=allChecked?'btn-submit ready':'btn-submit';}
+  const cnt=document.getElementById('tbm-agree-count');
+  if(cnt){cnt.textContent=checked+'/4';cnt.style.color=allChecked?'#059669':'#1D4ED8';}
 }
 
 // 서명 제출

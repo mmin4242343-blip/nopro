@@ -2311,23 +2311,43 @@ noprohr.netlify.app/tbm_sign.html
         <span class="srch-clear" id="tbm-srch-clear" onclick="tbmClearSrch()">✕</span>
       </div>
 
-      <div class="filter-row">
-        <span class="chip on" onclick="tbmSetF('all',this)">
+      <div style="font-size:10px;font-weight:600;color:#94A3B8;margin-bottom:4px;margin-top:6px" class="ko-only">주야간</div>
+      <div style="font-size:10px;font-weight:600;color:#94A3B8;margin-bottom:4px;margin-top:6px" class="en-only">Shift</div>
+      <div class="filter-row" id="tbm-f-shift">
+        <span class="chip on" onclick="tbmSetF('shift','all',this)">
           <span class="ko-only">전체</span><span class="en-only">All</span>
         </span>
-        <span class="chip" onclick="tbmSetF('주간',this)">
+        <span class="chip" onclick="tbmSetF('shift','주간',this)">
           <span class="ko-only">주간</span><span class="en-only">Day</span>
         </span>
-        <span class="chip" onclick="tbmSetF('야간',this)">
+        <span class="chip" onclick="tbmSetF('shift','야간',this)">
           <span class="ko-only">야간</span><span class="en-only">Night</span>
         </span>
-        <span class="chip" onclick="tbmSetF('외국인',this)">
+      </div>
+      <div style="font-size:10px;font-weight:600;color:#94A3B8;margin-bottom:4px;margin-top:6px" class="ko-only">국적</div>
+      <div style="font-size:10px;font-weight:600;color:#94A3B8;margin-bottom:4px;margin-top:6px" class="en-only">Nationality</div>
+      <div class="filter-row" id="tbm-f-nat">
+        <span class="chip on" onclick="tbmSetF('nat','all',this)">
+          <span class="ko-only">전체</span><span class="en-only">All</span>
+        </span>
+        <span class="chip" onclick="tbmSetF('nat','내국인',this)">
+          <span class="ko-only">내국인</span><span class="en-only">Korean</span>
+        </span>
+        <span class="chip" onclick="tbmSetF('nat','외국인',this)">
           <span class="ko-only">외국인</span><span class="en-only">Foreign</span>
         </span>
-        <span class="chip" onclick="tbmSetF('생산A',this)">Prod.A</span>
-        <span class="chip" onclick="tbmSetF('생산B',this)">Prod.B</span>
-        <span class="chip" onclick="tbmSetF('외주',this)">
-          <span class="ko-only">외주</span><span class="en-only">Outsource</span>
+      </div>
+      <div style="font-size:10px;font-weight:600;color:#94A3B8;margin-bottom:4px;margin-top:6px" class="ko-only">소속</div>
+      <div style="font-size:10px;font-weight:600;color:#94A3B8;margin-bottom:4px;margin-top:6px" class="en-only">Department</div>
+      <div class="filter-row" id="tbm-f-dept">
+        <span class="chip on" onclick="tbmSetF('dept','all',this)">
+          <span class="ko-only">전체</span><span class="en-only">All</span>
+        </span>
+        <span class="chip" onclick="tbmSetF('dept','인천본점',this)">
+          <span class="ko-only">인천본점</span><span class="en-only">Incheon HQ</span>
+        </span>
+        <span class="chip" onclick="tbmSetF('dept','아웃소싱',this)">
+          <span class="ko-only">아웃소싱</span><span class="en-only">Outsource</span>
         </span>
       </div>
 
@@ -2348,19 +2368,18 @@ noprohr.netlify.app/tbm_sign.html
 
     <!-- TBM 내용 재확인 -->
     <div class="card">
-      <div class="ctit ko-only">📋 교육내용 확인</div>
+      <div class="ctit ko-only">📋 교육내용 재확인</div>
       <div class="ctit en-only">📋 Training Content Review</div>
-      <div class="tbm-ko">고소작업 안전수칙 준수, 개인보호구 착용 필수, 화기작업 허가절차 확인, 중량물 2인 이상 작업</div>
-      <div class="tbm-en" style="display:block;">
-        <div class="tbm-en-lbl">🇺🇸 English</div>
-        Follow safety rules for working at height · Mandatory use of personal protective equipment (PPE) · Verify hot work permit procedures · Heavy object handling requires 2 or more workers
-      </div>
+      <div id="tbm-review-content"></div>
     </div>
 
     <!-- 동의 체크박스 -->
     <div class="card">
-      <div class="ctit ko-only">✅ 아래 항목을 모두 확인하고 동의해 주세요</div>
-      <div class="ctit en-only">✅ Please confirm and agree to all items below</div>
+      <div class="ctit">
+        <span class="ko-only">✅ 아래 항목을 모두 확인하고 동의해주세요</span>
+        <span class="en-only">✅ Please confirm and agree to all items below</span>
+        <span id="tbm-agree-count" style="float:right;color:#1D4ED8;font-weight:800">0/4</span>
+      </div>
 
       <div class="agree-list">
 
@@ -2369,8 +2388,7 @@ noprohr.netlify.app/tbm_sign.html
           <div class="agree-txt">
             <div class="agree-main ko-only">오늘의 TBM 교육내용을 충분히 이해하였습니다</div>
             <div class="agree-main en-only">I have fully understood today's TBM safety training content</div>
-            <div class="agree-sub ko-only">교육내용: 고소작업 안전수칙, 개인보호구 착용, 화기작업 허가절차, 중량물 취급</div>
-            <div class="agree-sub en-only">Content: Working at height, PPE use, Hot work permit, Heavy object handling</div>
+            <div class="agree-sub" id="chk0-sub"></div>
           </div>
         </div>
 
@@ -2389,8 +2407,8 @@ noprohr.netlify.app/tbm_sign.html
           <div class="agree-txt">
             <div class="agree-main ko-only">본 서명은 전자문서법에 따른 법적 효력이 있는 전자서명입니다</div>
             <div class="agree-main en-only">This signature is a legally valid electronic signature under the Electronic Documents Act</div>
-            <div class="agree-sub ko-only">서명일: <span id="sign-date-ko"></span> · 서명자 본인이 직접 서명함을 확인합니다</div>
-            <div class="agree-sub en-only">Date: <span id="sign-date-en"></span> · I confirm that I am personally signing this document</div>
+            <div class="agree-sub ko-only">서명일: <span id="sign-date-ko"></span> · 본인이 직접 서명함을 확인합니다<br><span style="color:#6366F1">전자문서 및 전자거래 기본법 제4조 근거</span></div>
+            <div class="agree-sub en-only">Date: <span id="sign-date-en"></span> · I confirm that I am personally signing this document<br><span style="color:#6366F1">Framework Act on Electronic Documents, Article 4</span></div>
           </div>
         </div>
 
@@ -2399,15 +2417,15 @@ noprohr.netlify.app/tbm_sign.html
           <div class="agree-txt">
             <div class="agree-main ko-only">개인정보(성명, 서명일시) 수집 및 안전교육 기록 보관에 동의합니다</div>
             <div class="agree-main en-only">I agree to the collection of personal information (name, signature date/time) for safety training records</div>
-            <div class="agree-sub ko-only">수집 정보는 산업안전보건법에 따른 교육기록 관리 목적으로만 사용됩니다</div>
-            <div class="agree-sub en-only">Collected information is used solely for safety training record management under the Occupational Safety and Health Act</div>
+            <div class="agree-sub ko-only">수집 정보는 산업안전보건법에 따른 교육기록 관리 목적으로만 사용됩니다<br><span style="color:#6366F1">산업안전보건법 제29조 · 개인정보보호법 제15조 근거</span></div>
+            <div class="agree-sub en-only">Collected information is used solely for safety training record management<br><span style="color:#6366F1">OSHA Act Art.29 · Personal Information Protection Act Art.15</span></div>
           </div>
         </div>
 
       </div>
 
-      <div class="required-notice ko-only">* 모든 항목에 동의해야 서명 제출이 가능합니다</div>
-      <div class="required-notice en-only">* You must agree to all items to submit your signature</div>
+      <div class="required-notice ko-only">* 4가지 항목 모두 체크해야 서명 제출이 가능합니다</div>
+      <div class="required-notice en-only">* You must check all 4 items to submit your signature</div>
 
       <button class="btn-submit" id="btn-submit" disabled onclick="tbmSubmitSign()">
         <span class="ko-only">✍️ 서명 제출하기</span>
