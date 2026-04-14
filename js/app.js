@@ -657,7 +657,7 @@ function monthSummary(eid,y,m){
   else if(empPayMode==='hourly'){
     // 시급제: calcSession에서 이미 basePay 계산됨 (아래 루프에서 tNt/tOt와 함께 집계)
   }
-  const annualPay=aldays*rate*8;
+  const annualPay=0;
   let wkly=0;
   if(POL.juhyu&&empPayMode==='hourly'){
     // 주휴수당: 주 15h 이상 개근 시 1일치(8h) 추가
