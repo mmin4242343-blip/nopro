@@ -6067,10 +6067,14 @@ function leaveUploadParseSheet(){
     html+='</table>';
   }
   if(skipped.length){
-    html+=`<div style="margin-bottom:8px;font-weight:600;color:var(--navy)">⏭ 자동계산 유지 ${skipped.length}명 <span style="font-weight:400;font-size:10px;color:var(--ink3)">(입사일 기준 자동계산 — 엑셀 미적용)</span></div>`;
-    html+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">';
-    skipped.forEach(m=>{html+=`<span style="padding:2px 8px;background:var(--nbg);border-radius:6px;font-size:10px;color:var(--navy)">${esc(m.xlName)}</span>`;});
-    html+='</div>';
+    html+=`<div style="margin-bottom:8px;font-weight:600;color:var(--navy)">⏭ 자동계산 유지 ${skipped.length}명 <span style="font-weight:400;font-size:10px;color:var(--ink3)">(입사일 기준 자동계산)</span></div>`;
+    html+='<table style="width:100%;border-collapse:collapse;margin-bottom:10px"><tr style="background:var(--nbg)"><th style="padding:4px 8px;font-size:10px;text-align:left">이름</th><th style="padding:4px 8px;font-size:10px;text-align:center">입사일</th><th style="padding:4px 8px;font-size:10px;text-align:center">총연차</th><th style="padding:4px 8px;font-size:10px;text-align:center">잔여연차</th><th style="padding:4px 8px;font-size:10px;text-align:center">사용</th></tr>';
+    skipped.forEach(m=>{
+      const emp=EMPS.find(e=>e.id===m.empId);
+      const lv=emp?calcLeaveForYear(emp,leaveYear):{total:0,used:0,remain:0};
+      html+=`<tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 8px;font-size:11px">${esc(m.xlName)}</td><td style="padding:4px 8px;font-size:11px;text-align:center">${esc(m.xlJoin)}</td><td style="padding:4px 8px;font-size:11px;text-align:center;font-weight:600">${lv.total}</td><td style="padding:4px 8px;font-size:11px;text-align:center;color:var(--navy);font-weight:700">${lv.remain}</td><td style="padding:4px 8px;font-size:11px;text-align:center">${lv.used}</td></tr>`;
+    });
+    html+='</table>';
   }
   if(unmatched.length){
     html+=`<div style="margin-bottom:4px;font-weight:600;color:var(--rose)">✗ 미매칭 ${unmatched.length}명 <span style="font-weight:400;font-size:10px;color:var(--ink3)">(이름+입사일 불일치 — 건너뜀)</span></div>`;
