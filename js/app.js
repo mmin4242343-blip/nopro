@@ -6039,19 +6039,25 @@ function leaveUploadParseSheet(){
       return eName===xlName && eJoin===xlJoin;
     });
 
+    // 자동계산 유지 대상 (입사일 기준 계산 고정)
+    const LEAVE_AUTO_NAMES=['배수연','김인자'];
+    const skipAuto=emp&&LEAVE_AUTO_NAMES.includes(xlName);
+
     _leaveUploadMatches.push({
       xlName, xlJoin, xlRemain, xlTotal,
       empId:emp?emp.id:null,
       empName:emp?emp.name:null,
-      matched:!!emp
+      matched:!!emp,
+      skip:skipAuto
     });
     if(emp) matchedIds.add(emp.id);
   }
 
   // 미리보기 렌더링
-  const matched=_leaveUploadMatches.filter(m=>m.matched);
+  const matched=_leaveUploadMatches.filter(m=>m.matched&&!m.skip);
+  const skipped=_leaveUploadMatches.filter(m=>m.matched&&m.skip);
   const unmatched=_leaveUploadMatches.filter(m=>!m.matched);
-  let html=`<div style="margin-bottom:8px;font-weight:600;color:var(--green)">✓ 매칭 ${matched.length}명</div>`;
+  let html=`<div style="margin-bottom:8px;font-weight:600;color:var(--green)">✓ 적용 대상 ${matched.length}명</div>`;
   if(matched.length){
     html+='<table style="width:100%;border-collapse:collapse;margin-bottom:10px"><tr style="background:var(--surf)"><th style="padding:4px 8px;font-size:10px;text-align:left">이름</th><th style="padding:4px 8px;font-size:10px;text-align:center">입사일</th><th style="padding:4px 8px;font-size:10px;text-align:center">총연차</th><th style="padding:4px 8px;font-size:10px;text-align:center">잔여연차</th><th style="padding:4px 8px;font-size:10px;text-align:center">사용</th></tr>';
     matched.forEach(m=>{
@@ -6059,6 +6065,12 @@ function leaveUploadParseSheet(){
       html+=`<tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 8px;font-size:11px">${esc(m.xlName)}</td><td style="padding:4px 8px;font-size:11px;text-align:center">${esc(m.xlJoin)}</td><td style="padding:4px 8px;font-size:11px;text-align:center;font-weight:600">${isNaN(m.xlTotal)?'—':m.xlTotal}</td><td style="padding:4px 8px;font-size:11px;text-align:center;color:var(--green);font-weight:700">${isNaN(m.xlRemain)?'—':m.xlRemain}</td><td style="padding:4px 8px;font-size:11px;text-align:center">${used}</td></tr>`;
     });
     html+='</table>';
+  }
+  if(skipped.length){
+    html+=`<div style="margin-bottom:8px;font-weight:600;color:var(--navy)">⏭ 자동계산 유지 ${skipped.length}명 <span style="font-weight:400;font-size:10px;color:var(--ink3)">(입사일 기준 자동계산 — 엑셀 미적용)</span></div>`;
+    html+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">';
+    skipped.forEach(m=>{html+=`<span style="padding:2px 8px;background:var(--nbg);border-radius:6px;font-size:10px;color:var(--navy)">${esc(m.xlName)}</span>`;});
+    html+='</div>';
   }
   if(unmatched.length){
     html+=`<div style="margin-bottom:4px;font-weight:600;color:var(--rose)">✗ 미매칭 ${unmatched.length}명 <span style="font-weight:400;font-size:10px;color:var(--ink3)">(이름+입사일 불일치 — 건너뜀)</span></div>`;
@@ -6073,7 +6085,7 @@ function leaveUploadParseSheet(){
 }
 
 function leaveUploadApply(){
-  const matched=_leaveUploadMatches.filter(m=>m.matched);
+  const matched=_leaveUploadMatches.filter(m=>m.matched&&!m.skip);
   if(!matched.length)return;
   const year=leaveYear;
   let count=0;
