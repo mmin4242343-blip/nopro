@@ -5932,6 +5932,166 @@ function overrideLeaveUsed(empId, year, val) {
   renderLeave();
 }
 
+// ── 연차 엑셀 업로드 ──
+let _leaveUploadWB=null, _leaveUploadMatches=[];
+
+function leaveUploadFile(files){
+  if(!files||!files.length)return;
+  const file=files[0];
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      _leaveUploadWB=XLSX.read(e.target.result,{type:'array'});
+      // 시트 드롭다운 채우기 (월별 시트만)
+      const sel=document.getElementById('leave-upload-sheet');
+      sel.innerHTML='';
+      const monthSheets=_leaveUploadWB.SheetNames.filter(n=>/^\d{1,2}월$/.test(n));
+      if(!monthSheets.length){
+        if(typeof showSyncToast==='function') showSyncToast('월별 시트(1월~12월)를 찾을 수 없습니다','error');
+        return;
+      }
+      monthSheets.forEach(n=>{
+        const opt=document.createElement('option');opt.value=n;opt.textContent=n;sel.appendChild(opt);
+      });
+      // 기본 선택: 현재 월 또는 이전 월
+      const curMonth=(new Date().getMonth()+1)+'월';
+      const prevMonth=(new Date().getMonth()||12)+'월';
+      if(monthSheets.includes(prevMonth))sel.value=prevMonth;
+      else if(monthSheets.includes(curMonth))sel.value=curMonth;
+      document.getElementById('leave-upload-preview').style.display='block';
+      leaveUploadParseSheet();
+    }catch(err){
+      console.error('엑셀 파싱 오류:',err);
+      if(typeof showSyncToast==='function') showSyncToast('엑셀 파일을 읽을 수 없습니다','error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  // input 초기화
+  document.getElementById('leave-upload-inp').value='';
+}
+
+function _excelDateToISO(serial){
+  if(typeof serial==='string'){
+    // YYYY-MM-DD or YYYY.MM.DD or YYYY/MM/DD
+    const m=serial.match(/(\d{4})[\-\.\/](\d{1,2})[\-\.\/](\d{1,2})/);
+    if(m) return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+    return serial;
+  }
+  if(typeof serial!=='number') return '';
+  // 엑셀 시리얼 넘버 → Date
+  const d=new Date((serial-25569)*86400*1000);
+  return d.toISOString().slice(0,10);
+}
+
+function leaveUploadParseSheet(){
+  if(!_leaveUploadWB)return;
+  const sheetName=document.getElementById('leave-upload-sheet').value;
+  const ws=_leaveUploadWB.Sheets[sheetName];
+  if(!ws)return;
+  const data=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+
+  // 헤더 자동 탐색 (행0~행5에서 "이름"/"성명", "입사일", "잔여" 포함 열 찾기)
+  let nameCol=-1,joinCol=-1,remainCol=-1,totalCol=-1,dataStartRow=-1;
+  for(let r=0;r<Math.min(6,data.length);r++){
+    const row=data[r];
+    for(let c=0;c<row.length;c++){
+      const v=String(row[c]||'').replace(/\s/g,'');
+      if(v==='이름'||v==='성명') nameCol=c;
+      if(v==='입사일') joinCol=c;
+      if(v.includes('잔여')) remainCol=c;
+      if(v==='연차갯수'||v==='연월차갯수') totalCol=c;
+    }
+    if(nameCol>=0&&joinCol>=0&&remainCol>=0) {dataStartRow=r+1; break;}
+  }
+  // 날짜 행(1,2,3...) 건너뛰기
+  if(dataStartRow>=0&&dataStartRow<data.length){
+    const firstVal=data[dataStartRow][nameCol];
+    if(typeof firstVal==='number'||firstVal==='') dataStartRow++;
+  }
+
+  if(nameCol<0||joinCol<0||remainCol<0){
+    document.getElementById('leave-upload-result').innerHTML='<div style="color:var(--rose);font-weight:600">헤더를 찾을 수 없습니다 (이름, 입사일, 잔여일수 열 필요)</div>';
+    _leaveUploadMatches=[];
+    return;
+  }
+
+  // 직원 매칭
+  _leaveUploadMatches=[];
+  const matchedIds=new Set();
+  for(let r=dataStartRow;r<data.length;r++){
+    const row=data[r];
+    const xlName=String(row[nameCol]||'').trim();
+    const xlJoin=_excelDateToISO(row[joinCol]);
+    const xlRemain=parseFloat(row[remainCol]);
+    const xlTotal=totalCol>=0?parseFloat(row[totalCol]):NaN;
+    if(!xlName)continue;
+
+    // EMPS에서 이름+입사일 매칭
+    const emp=EMPS.find(e=>{
+      const eName=(e.name||'').trim();
+      const eJoin=(e.join||'').trim();
+      return eName===xlName && eJoin===xlJoin;
+    });
+
+    _leaveUploadMatches.push({
+      xlName, xlJoin, xlRemain, xlTotal,
+      empId:emp?emp.id:null,
+      empName:emp?emp.name:null,
+      matched:!!emp
+    });
+    if(emp) matchedIds.add(emp.id);
+  }
+
+  // 미리보기 렌더링
+  const matched=_leaveUploadMatches.filter(m=>m.matched);
+  const unmatched=_leaveUploadMatches.filter(m=>!m.matched);
+  let html=`<div style="margin-bottom:8px;font-weight:600;color:var(--green)">✓ 매칭 ${matched.length}명</div>`;
+  if(matched.length){
+    html+='<table style="width:100%;border-collapse:collapse;margin-bottom:10px"><tr style="background:var(--surf)"><th style="padding:4px 8px;font-size:10px;text-align:left">이름</th><th style="padding:4px 8px;font-size:10px;text-align:center">입사일</th><th style="padding:4px 8px;font-size:10px;text-align:center">총연차</th><th style="padding:4px 8px;font-size:10px;text-align:center">잔여연차</th><th style="padding:4px 8px;font-size:10px;text-align:center">사용</th></tr>';
+    matched.forEach(m=>{
+      const used=!isNaN(m.xlTotal)&&!isNaN(m.xlRemain)?Math.max(0,m.xlTotal-m.xlRemain):'—';
+      html+=`<tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 8px;font-size:11px">${esc(m.xlName)}</td><td style="padding:4px 8px;font-size:11px;text-align:center">${esc(m.xlJoin)}</td><td style="padding:4px 8px;font-size:11px;text-align:center;font-weight:600">${isNaN(m.xlTotal)?'—':m.xlTotal}</td><td style="padding:4px 8px;font-size:11px;text-align:center;color:var(--green);font-weight:700">${isNaN(m.xlRemain)?'—':m.xlRemain}</td><td style="padding:4px 8px;font-size:11px;text-align:center">${used}</td></tr>`;
+    });
+    html+='</table>';
+  }
+  if(unmatched.length){
+    html+=`<div style="margin-bottom:4px;font-weight:600;color:var(--rose)">✗ 미매칭 ${unmatched.length}명 <span style="font-weight:400;font-size:10px;color:var(--ink3)">(이름+입사일 불일치 — 건너뜀)</span></div>`;
+    html+='<div style="display:flex;flex-wrap:wrap;gap:4px">';
+    unmatched.forEach(m=>{
+      html+=`<span style="padding:2px 8px;background:var(--rbg);border-radius:6px;font-size:10px;color:var(--rose)">${esc(m.xlName)} (${esc(m.xlJoin)})</span>`;
+    });
+    html+='</div>';
+  }
+  document.getElementById('leave-upload-result').innerHTML=html;
+  document.getElementById('leave-upload-apply-btn').disabled=matched.length===0;
+}
+
+function leaveUploadApply(){
+  const matched=_leaveUploadMatches.filter(m=>m.matched);
+  if(!matched.length)return;
+  const year=leaveYear;
+  let count=0;
+  matched.forEach(m=>{
+    if(!leaveOverrides[m.empId]) leaveOverrides[m.empId]={};
+    if(!leaveOverrides[m.empId][year]) leaveOverrides[m.empId][year]={};
+    if(!isNaN(m.xlTotal)) leaveOverrides[m.empId][year].total=m.xlTotal;
+    if(!isNaN(m.xlTotal)&&!isNaN(m.xlRemain)){
+      leaveOverrides[m.empId][year].used=Math.max(0,m.xlTotal-m.xlRemain);
+    }
+    count++;
+  });
+  localStorage.setItem('npm5_leave_overrides',JSON.stringify(leaveOverrides));
+  saveLS();
+  renderLeave();
+  leaveUploadCancel();
+  if(typeof showSyncToast==='function') showSyncToast(count+'명 연차 데이터 반영 완료','ok');
+}
+
+function leaveUploadCancel(){
+  document.getElementById('leave-upload-preview').style.display='none';
+  _leaveUploadWB=null;_leaveUploadMatches=[];
+}
+
 function toggleLeaveDetail(empId) {
   const emp = EMPS.find(e => e.id === empId);
   if (!emp) return;

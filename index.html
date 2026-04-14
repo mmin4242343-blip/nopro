@@ -1309,6 +1309,7 @@ document.addEventListener('click',e=>{
         </select>
       </div>
       <button class="btn btn-sm btn-t" onclick="exportLeaveExcel()">⬇ 엑셀 내보내기</button>
+      <button class="btn btn-sm" onclick="document.getElementById('leave-upload-inp').click()" style="background:var(--gbg);color:var(--green);border:1px solid #BBF7D0;font-weight:700">📤 엑셀 업로드</button>
     </div>
   </div>
   <div id="leave-filter-bar"></div>
@@ -1432,7 +1433,22 @@ document.addEventListener('click',e=>{
         <div class="ds"><div class="dar" onclick="leaveYear--;renderLeave()">‹</div><div class="dl">연도</div><div class="dv" id="lv-year">2026</div><div class="dar" onclick="leaveYear++;renderLeave()">›</div></div>
       </div>
       <button class="btn btn-n btn-sm" onclick="exportLeaveExcel()">⬇ 엑셀</button>
+      <button class="btn btn-sm" onclick="document.getElementById('leave-upload-inp').click()" style="background:var(--gbg);color:var(--green);border:1px solid #BBF7D0;font-weight:700">📤 엑셀 업로드</button>
+      <input type="file" id="leave-upload-inp" accept=".xlsx,.xls" style="display:none" onchange="leaveUploadFile(this.files)">
     </div>
+  </div>
+
+  <!-- 엑셀 업로드 미리보기 -->
+  <div id="leave-upload-preview" style="display:none;background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px 16px;margin-bottom:12px;box-shadow:var(--shadow-sm)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700;color:var(--ink)">📤 엑셀 업로드 미리보기</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <select id="leave-upload-sheet" onchange="leaveUploadParseSheet()" style="padding:4px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-weight:600"></select>
+        <button class="btn btn-n btn-sm" onclick="leaveUploadApply()" id="leave-upload-apply-btn" style="font-size:11px">적용</button>
+        <button class="btn btn-sm" onclick="leaveUploadCancel()" style="font-size:11px;color:var(--ink3)">취소</button>
+      </div>
+    </div>
+    <div id="leave-upload-result" style="font-size:11px;max-height:300px;overflow-y:auto"></div>
   </div>
 
   <!-- 연차 수당 설정 -->
