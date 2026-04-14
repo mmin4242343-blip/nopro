@@ -1949,12 +1949,12 @@ function renderXlPreview(){
     <th style="min-width:80px;background:#1a3a6e;color:#fff">급여</th>
     <th style="min-width:46px">실근무<br>(h)</th>
     <th style="min-width:52px;background:#1565C0;color:#fff">소정근로외<br>실근무(h)<br><span style="font-size:8px;opacity:.8">×1.0</span></th>
-    <th style="min-width:46px;background:#0C447C;color:#B5D4F4">고정야간<br>시간(h)<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
+    <th style="min-width:46px;background:#0C447C;color:#B5D4F4">야간<br>시간(h)<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
     <th style="min-width:46px;background:#534AB7;color:#EEEDFE">초과연장<br>시간(h)<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
     <th style="min-width:46px;background:#854F0B;color:#FAC775">초과휴일<br>시간(h)<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
     <th style="min-width:46px">결근<br>일수</th>
     <th style="min-width:80px;background:#1565C0;color:#fff">소정근로외<br>실근무수당<br><span style="font-size:8px;opacity:.8">×1.0</span></th>
-    <th style="min-width:72px;background:#0C447C;color:#B5D4F4">고정야간<br>수당<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
+    <th style="min-width:72px;background:#0C447C;color:#B5D4F4">야간<br>수당<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
     <th style="min-width:72px;background:#534AB7;color:#EEEDFE">초과연장<br>수당<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
     <th style="min-width:72px;background:#854F0B;color:#FAC775">초과휴일<br>수당<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
     <th style="min-width:72px;background:#854F0B;color:#FAC775">월급제<br>휴일수당<br><span style="font-size:8px;opacity:.8">8h이내×1.5</span></th>
@@ -4452,8 +4452,8 @@ function exportExcel(){
       '기본급','주휴수당','연차수당',
       ...allowList.map(a=>a.name),
       '급여',
-      '실근무(h)','소정근로외(h)','고정야간(h)','초과연장(h)','초과휴일(h)','결근일수',
-      '소정근로외수당','고정야간수당','초과연장수당','초과휴일수당',
+      '실근무(h)','소정근로외(h)','야간(h)','초과연장(h)','초과휴일(h)','결근일수',
+      '소정근로외수당','야간수당','초과연장수당','초과휴일수당',
       '월급제휴일수당','월급제휴일초과','결근차감','총가산수당',
       '상여금','총급여',
       ...deductList.map(a=>a.name),
@@ -4469,7 +4469,7 @@ function exportExcel(){
       if(allowList.find(a=>a.name===h)) return S.mainHdr('00695C','FFFFFF','center');
       if(h.includes('(h)')||h==='결근일수') return S.mainHdr('4527A0','FFFFFF','center');
       if(h==='소정근로외수당') return S.mainHdr('1565C0','FFFFFF','center');
-      if(h==='고정야간수당') return S.mainHdr('0C447C','B5D4F4','center');
+      if(h==='야간수당') return S.mainHdr('0C447C','B5D4F4','center');
       if(h==='초과연장수당') return S.mainHdr('534AB7','EEEDFE','center');
       if(h==='초과휴일수당'||h.includes('월급제')) return S.mainHdr('854F0B','FAC775','center');
       if(h==='총가산수당') return S.mainHdr('065F46','D1FAE5','center');
