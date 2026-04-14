@@ -688,9 +688,8 @@ function monthSummary(eid,y,m){
     allowances[a.id]=effectiveV;
     totalAllowance+=effectiveV;
   });
-  const r10=v=>Math.round(Math.round(v)/10)*10;
-  tBase=r10(tBase);tNightPay=r10(tNightPay);tOtDayPay=r10(tOtDayPay);tOtNightPay=r10(tOtNightPay);tHolDayPay=r10(tHolDayPay);tHolNightPay=r10(tHolNightPay);tHolDayOtPay=r10(tHolDayOtPay);tHolNightOtPay=r10(tHolNightOtPay);deduction=r10(deduction);
-  const total=tBase+wkly+tNightPay+tOtDayPay+tOtNightPay+tHolDayPay+tHolNightPay+tHolDayOtPay+tHolNightOtPay+annualPay+bonus+totalAllowance-deduction;
+  // 일별 calcSession에서 이미 r10 처리됨 → 월합산에서는 재반올림 하지 않음
+  const total=tBase+wkly+tNightPay+tOtDayPay+tOtNightPay+tExtraWorkPay+tHolPayNew+tHolDayPay+tHolNightPay+tHolDayOtPay+tHolNightOtPay+tMonthlyHolStdPay+tMonthlyHolOtPay+annualPay+bonus+totalAllowance-deduction;
   // 총 가산수당 합계
   const tTotalBonus = empPayMode==='fixed'
     ? tExtraWorkPay + tNightPay + tOtDayPay + tOtNightPay + tHolPayNew
@@ -2011,8 +2010,8 @@ function renderXlPreview(){
       </td>`;
     }).join('');
 
-    // 총급여 = 기본급 + 가산수당 + 상여 - 결근차감 (상여는 선지급으로 총급여에 포함 표시)
-    const totalPay = basePay + (s.wkly||0) + s.tNightPay + s.tOtDayPay + s.tOtNightPay + s.tHolDayPay + s.tHolNightPay + s.tHolDayOtPay + s.tHolNightOtPay + (s.tMonthlyHolStdPay||0) + (s.tMonthlyHolOtPay||0) - s.deduction + s.bonus;
+    // 총급여 = 기본급 + 수당 + 가산수당 + 상여 - 결근차감
+    const totalPay = basePay + (s.wkly||0) + s.tNightPay + s.tOtDayPay + s.tOtNightPay + (s.tExtraWorkPay||0) + (s.tHolPayNew||0) + s.tHolDayPay + s.tHolNightPay + s.tHolDayOtPay + s.tHolNightOtPay + (s.tMonthlyHolStdPay||0) + (s.tMonthlyHolOtPay||0) - s.deduction + s.bonus;
     const incomeTax = tx.incomeTax||0;
     const localTax = tx.localTax||0;
     const pension4 = +(tx.pension)||0;
@@ -4447,31 +4446,36 @@ function exportExcel(){
     ws['!rows']=[{hpt:30},{hpt:16}];
     R=2;
 
-    // ── 헤더 정의 ──
-    const fixedHdrs = ['순번','근무지','직급','성명','입사일'];
-    const payHdrs = isMonthly
-      ? ['월급(원)','출근일','결근일','연차일','반차일']
-      : ['시급(원)'];
-    const baseHdrs = ['기본급', ...allowList.map(a=>a.name), '급여합계'];
-    const workhHdrs = isMonthly ? ['휴일근무h'] : ['연장h','휴일h','야간h'];
-    const addPayHdrs = isMonthly ? ['휴일수당(8h이내)','휴일수당(초과)','결근공제'] : ['주휴수당','연장수당','휴일수당','야간수당','결근공제','급여차액'];
-    const bonusHdrs = ['상여금'];
-    const totalHdr = ['총 급여'];
-    const deductHdrs = [...deductList.map(a=>a.name),'국민연금','건강보험','고용보험','소득세','주민세','공제합계'];
-    const netHdr = ['실지급액'];
-    const allHdrs = [...fixedHdrs,...payHdrs,...baseHdrs,...workhHdrs,...addPayHdrs,...bonusHdrs,...totalHdr,...deductHdrs,...netHdr];
+    // ── 헤더 정의 (스프레드시트 동일) ──
+    const allHdrs = [
+      '순번','근무지','직급','성명','급여유형','연차개수','근무일수','소정근로시간','입사일','시급',
+      '기본급','주휴수당','연차수당',
+      ...allowList.map(a=>a.name),
+      '급여',
+      '실근무(h)','소정근로외(h)','고정야간(h)','초과연장(h)','초과휴일(h)','결근일수',
+      '소정근로외수당','고정야간수당','초과연장수당','초과휴일수당',
+      '월급제휴일수당','월급제휴일초과','결근차감','총가산수당',
+      '상여금','총급여',
+      ...deductList.map(a=>a.name),
+      '국민연금','건강보험','고용보험','소득세','주민세','공제합계','실지급액'
+    ];
 
     // 헤더 색상 그룹
     const getHdrStyle = (h) => {
-      if(['순번','근무지','직급','성명','입사일'].includes(h)) return S.mainHdr(C.navy,'FFFFFF','center');
-      if(['시급(원)','월급(원)','출근일','결근일','연차일','반차일'].includes(h)) return S.mainHdr('1565C0','FFFFFF','center');
-      if(h==='기본급'||h==='급여합계') return S.mainHdr(C.teal,'FFFFFF','center');
+      if(['순번','근무지','직급','성명','급여유형','연차개수','근무일수','소정근로시간','입사일','시급'].includes(h)) return S.mainHdr(C.navy,'FFFFFF','center');
+      if(h==='기본급'||h==='급여') return S.mainHdr(C.navy,'FFFFFF','center');
+      if(h==='주휴수당') return S.mainHdr(C.teal,'FFFFFF','center');
+      if(h==='연차수당') return S.mainHdr(C.navy,'FFFFFF','center');
       if(allowList.find(a=>a.name===h)) return S.mainHdr('00695C','FFFFFF','center');
-      if(['연장h','휴일h','야간h'].includes(h)) return S.mainHdr('4527A0','FFFFFF','center');
-      if(h.includes('수당')||h.includes('차액')) return S.mainHdr(C.purple2,'FFFFFF','center');
+      if(h.includes('(h)')||h==='결근일수') return S.mainHdr('4527A0','FFFFFF','center');
+      if(h==='소정근로외수당') return S.mainHdr('1565C0','FFFFFF','center');
+      if(h==='고정야간수당') return S.mainHdr('0C447C','B5D4F4','center');
+      if(h==='초과연장수당') return S.mainHdr('534AB7','EEEDFE','center');
+      if(h==='초과휴일수당'||h.includes('월급제')) return S.mainHdr('854F0B','FAC775','center');
+      if(h==='총가산수당') return S.mainHdr('065F46','D1FAE5','center');
       if(h==='상여금') return S.mainHdr(C.orange2,'FFFFFF','center');
-      if(h==='총 급여') return S.mainHdr('0D47A1','FFFFFF','center');
-      if(h.includes('공제')||h.includes('세')) return S.mainHdr(C.rose,'FFFFFF','center');
+      if(h==='총급여') return S.mainHdr('0D47A1','FFFFFF','center');
+      if(h.includes('공제')||h.includes('세')||h.includes('보험')||h==='결근차감') return S.mainHdr(C.rose,'FFFFFF','center');
       if(h==='실지급액') return S.mainHdr('1B5E20','FFFFFF','center');
       return S.mainHdr(C.gray,'FFFFFF','center');
     };
@@ -4493,7 +4497,7 @@ function exportExcel(){
       let deductTotal=0;
       deductList.forEach(a=>{deductTotal+=(s.allowances[a.id]||0);});
       const basePay = s.tBase + allowTotal;
-      const totalPay = basePay + (s.wkly||0) + s.tNightPay + s.tOtDayPay + s.tOtNightPay + s.tHolDayPay + s.tHolNightPay + s.tHolDayOtPay + s.tHolNightOtPay + (s.tMonthlyHolStdPay||0) + (s.tMonthlyHolOtPay||0) - s.deduction + s.bonus;
+      const totalPay = basePay + (s.wkly||0) + s.tNightPay + s.tOtDayPay + s.tOtNightPay + (s.tExtraWorkPay||0) + (s.tHolPayNew||0) + s.tHolDayPay + s.tHolNightPay + s.tHolDayOtPay + s.tHolNightOtPay + (s.tMonthlyHolStdPay||0) + (s.tMonthlyHolOtPay||0) - s.deduction + s.bonus;
       const itax=parseFloat(tx.incomeTax)||0;
       const ltax=parseFloat(tx.localTax)||0;
       const bonusDed=s.bonus;
@@ -4503,75 +4507,79 @@ function exportExcel(){
 
       const halfCnt=(()=>{let h=0;for(let d=1;d<=dim(pY,pM);d++){const r2=REC[rk(emp.id,pY,pM,d)];if(r2&&r2.halfAnnual)h++;}return h;})();
 
+      const _pm=getEmpPayMode(emp);
+      const sot=emp.sot||POL.sot||209;
+      const leaveCalc=calcLeaveForYear(emp,pY);
+      const annualTotal=leaveCalc?leaveCalc.total:0;
+      const extraWorkH=(s.tExtraWorkH||0);
+      const otH=(s.tOtDayH||0)+(s.tOtNightH||0);
+      const holH=(s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0);
+      const W=(_c,v,st)=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:_c}),v,st);
       let ci=0;
+
       // 기본정보
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),ei+1,S.cell(C.gray,bg,false,'center'));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),emp.dept||'',S.cell(C.gray,bg,false,'center'));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),emp.grade||'',S.cell(C.gray,bg,false,'center'));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),emp.name,S.cell(C.navy,bg,true,'center'));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),emp.join||'',S.cell(C.gray,bg,false,'center'));
+      W(ci++,ei+1,S.cell(C.gray,bg,false,'center'));
+      W(ci++,emp.dept||'',S.cell(C.gray,bg,false,'center'));
+      W(ci++,emp.role||'',S.cell(C.gray,bg,false,'center'));
+      W(ci++,emp.name,S.cell(C.navy,bg,true,'center'));
+      W(ci++,getEmpPayModeLabel(emp).text,S.cell(C.blue,bg,false,'center'));
+      W(ci++,annualTotal,S.num(C.gray,bg));
+      W(ci++,s.wdays||0,S.num(C.navy,bg));
+      W(ci++,(_pm==='hourly'||_pm==='monthly')?'':sot,S.num(C.gray,bg));
+      W(ci++,emp.join||'',S.cell(C.gray,bg,false,'center'));
+      W(ci++,rate,S.num(C.blue,C.blue4||bg,true));
 
-      // 급여방식 정보
-      if(isMonthly){
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),getEmpMonthly(emp),S.num(C.blue,C.blue4,true));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),s.wdays||0,S.num(C.green,C.green4,s.wdays>0));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),s.adays||0,S.num(s.adays>0?C.rose:C.gray,s.adays>0?C.rose4:bg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),+s.aldays.toFixed(1),S.num(C.orange2,bg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),halfCnt,S.num(C.blue,bg));
-      } else {
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),rate,S.num(C.blue,C.blue4,true));
-      }
+      // 기본급 + 주휴 + 연차수당
+      W(ci++,Math.round(s.tBase)||'',s.tBase?S.num(C.navy,bg):S.empty(bg));
+      W(ci++,Math.round(s.wkly)||'',s.wkly?S.num(C.teal,'E0F2F1'):S.empty(bg));
+      W(ci++,Math.round(s.annualPay)||'',s.annualPay?S.num(C.green,bg):S.empty(bg));
 
-      // 기본급 + 수당
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),Math.round(s.tBase),S.num(C.navy,bg));
+      // 수당 항목
       allowList.forEach(a=>{
         const v=s.allowances[a.id]||0;
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),v||'',v?S.num(v<0?C.rose:C.gray,v<0?C.rose4:bg):S.empty(bg));
+        W(ci++,v||'',v?S.num(v<0?C.rose:C.gray,v<0?C.rose4:bg):S.empty(bg));
       });
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),Math.round(basePay),S.num(C.teal,'E0F2F1',true));
 
-      // 근무시간 + 수당
-      if(isMonthly){
-        // 월급제: 휴일근무시간 + 휴일수당(8h이내/초과) + 결근공제
-        const holH=(s.tHolDayH||0)+(s.tHolDayOtH||0);
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),holH>0?+holH.toFixed(2):'',holH>0?S.numDec(C.orange2,C.orange4):S.empty(bg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),Math.round(s.tHolDayPay)||'',s.tHolDayPay?S.num(C.orange2,C.orange4):S.empty(bg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),Math.round(s.tHolDayOtPay)||'',s.tHolDayOtPay?S.num(C.rose,C.rose4):S.empty(bg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),s.deduction>0?-Math.round(s.deduction):'',s.deduction?S.num(C.rose,C.rose4):S.empty(bg));
-      } else {
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),S.numDec(C.purple2,((s.tOtDayH||0)+(s.tOtNightH||0))>0?C.purple4:bg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),+((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0)).toFixed(2),S.numDec(C.orange2,((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0))>0?C.orange4:bg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),+(s.tNightH||0).toFixed(2),S.numDec(C.purple,(s.tNightH||0)>0?C.purple4:bg));
-        // 주휴수당 (시급제)
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),Math.round(s.wkly)||'',s.wkly?S.num(C.teal,C.teal4||'E0F2F1'):S.empty(bg));
-        // 연장/휴일/야간수당 + 결근공제
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),Math.round(s.tOtDayPay+s.tOtNightPay)||'',s.tOtDayPay+s.tOtNightPay?S.num(C.purple2,C.purple4):S.empty(bg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),Math.round((s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0))||'',(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0)?S.num(C.orange2,C.orange4):S.empty(bg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),Math.round(s.tNightPay)||'',s.tNightPay?S.num(C.purple,C.purple4):S.empty(bg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),s.deduction>0?-Math.round(s.deduction):'',s.deduction?S.num(C.rose,C.rose4):S.empty(bg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),'',S.empty(bg));
-      }
+      // 급여 (기본급+수당합계)
+      W(ci++,Math.round(basePay),S.num(C.teal,'E0F2F1',true));
+
+      // 시간 컬럼
+      W(ci++,s.twkH>0?+s.twkH.toFixed(2):'',s.twkH>0?S.numDec(C.navy,bg):S.empty(bg));
+      W(ci++,extraWorkH>0?+extraWorkH.toFixed(2):'',extraWorkH>0?S.numDec('1565C0',bg):S.empty(bg));
+      W(ci++,s.tNightH>0?+s.tNightH.toFixed(2):'',s.tNightH>0?S.numDec('0C447C',bg):S.empty(bg));
+      W(ci++,otH>0?+otH.toFixed(2):'',otH>0?S.numDec(C.purple2,bg):S.empty(bg));
+      W(ci++,holH>0?+holH.toFixed(2):'',holH>0?S.numDec(C.orange2,bg):S.empty(bg));
+      W(ci++,s.adays||'',s.adays?S.num(C.rose,bg):S.empty(bg));
+
+      // 수당 금액
+      W(ci++,Math.round(s.tExtraWorkPay)||'',(s.tExtraWorkPay||0)?S.num('1565C0',bg):S.empty(bg));
+      W(ci++,Math.round(s.tNightPay)||'',s.tNightPay?S.num('0C447C',bg):S.empty(bg));
+      W(ci++,Math.round((s.tOtDayPay||0)+(s.tOtNightPay||0))||'',(s.tOtDayPay+s.tOtNightPay)?S.num(C.purple2,C.purple4):S.empty(bg));
+      W(ci++,Math.round(s.tHolPayNew||0)||'',(s.tHolPayNew||0)?S.num(C.orange2,C.orange4):S.empty(bg));
+      W(ci++,Math.round(s.tMonthlyHolStdPay||0)||'',(s.tMonthlyHolStdPay||0)?S.num(C.orange2,C.orange4):S.empty(bg));
+      W(ci++,Math.round(s.tMonthlyHolOtPay||0)||'',(s.tMonthlyHolOtPay||0)?S.num(C.rose,C.rose4):S.empty(bg));
+      W(ci++,s.deduction>0?-Math.round(s.deduction):'',s.deduction?S.num(C.rose,C.rose4):S.empty(bg));
+      W(ci++,Math.round(s.tTotalBonus||0)||'',(s.tTotalBonus||0)?S.num('065F46','ECFDF5',true):S.empty(bg));
 
       // 상여금 + 총급여
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),s.bonus||'',s.bonus?S.num(C.orange2,C.orange4):S.empty(bg));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),Math.round(totalPay),S.num('FFFFFF','1565C0',true));
+      W(ci++,s.bonus||'',s.bonus?S.num(C.orange2,C.orange4):S.empty(bg));
+      W(ci++,Math.round(totalPay),S.num('FFFFFF','1565C0',true));
 
       // 공제
       deductList.forEach(a=>{
         const v=s.allowances[a.id]||0;
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),v||'',v?S.num(C.rose,C.rose4):S.empty(bg));
+        W(ci++,v||'',v?S.num(C.rose,C.rose4):S.empty(bg));
       });
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),bonusDed||'',bonusDed?S.num(C.rose,C.rose4):S.empty(bg));
       const pension4x=+(tx.pension)||0; const health4x=+(tx.health)||0; const employ4x=+(tx.employment)||0;
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),pension4x||'',pension4x?S.num('7C3AED','F5F3FF'):S.empty(bg));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),health4x||'',health4x?S.num('7C3AED','F5F3FF'):S.empty(bg));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),employ4x||'',employ4x?S.num('7C3AED','F5F3FF'):S.empty(bg));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),itax||'',itax?S.num(C.rose,C.rose4):S.empty(bg));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),ltax||'',ltax?S.num(C.rose,C.rose4):S.empty(bg));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),dedTot||'',dedTot?S.num(C.rose2,C.rose4,true):S.empty(bg));
+      W(ci++,pension4x||'',pension4x?S.num('7C3AED','F5F3FF'):S.empty(bg));
+      W(ci++,health4x||'',health4x?S.num('7C3AED','F5F3FF'):S.empty(bg));
+      W(ci++,employ4x||'',employ4x?S.num('7C3AED','F5F3FF'):S.empty(bg));
+      W(ci++,itax||'',itax?S.num(C.rose,C.rose4):S.empty(bg));
+      W(ci++,ltax||'',ltax?S.num(C.rose,C.rose4):S.empty(bg));
+      W(ci++,dedTot||'',dedTot?S.num(C.rose2,C.rose4,true):S.empty(bg));
 
       // 실지급액
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),Math.round(netPay),{
+      W(ci++,Math.round(netPay),{
         font:{bold:true,sz:11,color:{rgb:'FFFFFF'},name:'맑은 고딕'},
         fill:{fgColor:{rgb:'1B5E20'}},
         alignment:{horizontal:'right',vertical:'center'},
