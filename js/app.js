@@ -5934,6 +5934,9 @@ function overrideLeaveUsed(empId, year, val) {
 
 // ── 연차 엑셀 업로드 ──
 let _leaveUploadWB=null, _leaveUploadMatches=[];
+// 두 pg-leave에 중복 UI가 있으므로 양쪽 모두 업데이트
+function _luEl(id){return [document.getElementById(id),document.getElementById(id+'1')].filter(Boolean);}
+function _luSet(id,fn){_luEl(id).forEach(fn);}
 
 function leaveUploadFile(files){
   if(!files||!files.length)return;
@@ -5943,22 +5946,22 @@ function leaveUploadFile(files){
     try{
       _leaveUploadWB=XLSX.read(e.target.result,{type:'array'});
       // 시트 드롭다운 채우기 (월별 시트만)
-      const sel=document.getElementById('leave-upload-sheet');
-      sel.innerHTML='';
       const monthSheets=_leaveUploadWB.SheetNames.filter(n=>/^\d{1,2}월$/.test(n));
       if(!monthSheets.length){
         if(typeof showSyncToast==='function') showSyncToast('월별 시트(1월~12월)를 찾을 수 없습니다','error');
         return;
       }
-      monthSheets.forEach(n=>{
-        const opt=document.createElement('option');opt.value=n;opt.textContent=n;sel.appendChild(opt);
+      _luSet('leave-upload-sheet',sel=>{
+        sel.innerHTML='';
+        monthSheets.forEach(n=>{
+          const opt=document.createElement('option');opt.value=n;opt.textContent=n;sel.appendChild(opt);
+        });
+        const curMonth=(new Date().getMonth()+1)+'월';
+        const prevMonth=(new Date().getMonth()||12)+'월';
+        if(monthSheets.includes(prevMonth))sel.value=prevMonth;
+        else if(monthSheets.includes(curMonth))sel.value=curMonth;
       });
-      // 기본 선택: 현재 월 또는 이전 월
-      const curMonth=(new Date().getMonth()+1)+'월';
-      const prevMonth=(new Date().getMonth()||12)+'월';
-      if(monthSheets.includes(prevMonth))sel.value=prevMonth;
-      else if(monthSheets.includes(curMonth))sel.value=curMonth;
-      document.getElementById('leave-upload-preview').style.display='block';
+      _luSet('leave-upload-preview',el=>{el.style.display='block';});
       leaveUploadParseSheet();
     }catch(err){
       console.error('엑셀 파싱 오류:',err);
@@ -5967,7 +5970,7 @@ function leaveUploadFile(files){
   };
   reader.readAsArrayBuffer(file);
   // input 초기화
-  document.getElementById('leave-upload-inp').value='';
+  _luSet('leave-upload-inp',el=>{el.value='';});
 }
 
 function _excelDateToISO(serial){
@@ -5985,7 +5988,10 @@ function _excelDateToISO(serial){
 
 function leaveUploadParseSheet(){
   if(!_leaveUploadWB)return;
-  const sheetName=document.getElementById('leave-upload-sheet').value;
+  const sels=_luEl('leave-upload-sheet');
+  const sheetName=sels.length?sels[0].value:'';
+  // 양쪽 셀렉트 동기화
+  sels.forEach(s=>{if(s.value!==sheetName)s.value=sheetName;});
   const ws=_leaveUploadWB.Sheets[sheetName];
   if(!ws)return;
   const data=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
@@ -6010,7 +6016,7 @@ function leaveUploadParseSheet(){
   }
 
   if(nameCol<0||joinCol<0||remainCol<0){
-    document.getElementById('leave-upload-result').innerHTML='<div style="color:var(--rose);font-weight:600">헤더를 찾을 수 없습니다 (이름, 입사일, 잔여일수 열 필요)</div>';
+    _luSet('leave-upload-result',el=>{el.innerHTML='<div style="color:var(--rose);font-weight:600">헤더를 찾을 수 없습니다 (이름, 입사일, 잔여일수 열 필요)</div>';});
     _leaveUploadMatches=[];
     return;
   }
@@ -6062,8 +6068,8 @@ function leaveUploadParseSheet(){
     });
     html+='</div>';
   }
-  document.getElementById('leave-upload-result').innerHTML=html;
-  document.getElementById('leave-upload-apply-btn').disabled=matched.length===0;
+  _luSet('leave-upload-result',el=>{el.innerHTML=html;});
+  _luSet('leave-upload-apply-btn',el=>{el.disabled=matched.length===0;});
 }
 
 function leaveUploadApply(){
@@ -6088,7 +6094,7 @@ function leaveUploadApply(){
 }
 
 function leaveUploadCancel(){
-  document.getElementById('leave-upload-preview').style.display='none';
+  _luSet('leave-upload-preview',el=>{el.style.display='none';});
   _leaveUploadWB=null;_leaveUploadMatches=[];
 }
 

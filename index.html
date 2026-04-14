@@ -1309,11 +1309,25 @@ document.addEventListener('click',e=>{
         </select>
       </div>
       <button class="btn btn-sm btn-t" onclick="exportLeaveExcel()">⬇ 엑셀 내보내기</button>
-      <button class="btn btn-sm" onclick="document.getElementById('leave-upload-inp').click()" style="background:var(--gbg);color:var(--green);border:1px solid #BBF7D0;font-weight:700">📤 엑셀 업로드</button>
+      <button class="btn btn-sm" onclick="document.getElementById('leave-upload-inp1').click()" style="background:var(--gbg);color:var(--green);border:1px solid #BBF7D0;font-weight:700">📤 엑셀 업로드</button>
+      <input type="file" id="leave-upload-inp1" accept=".xlsx,.xls" style="display:none" onchange="leaveUploadFile(this.files)">
     </div>
   </div>
   <div id="leave-filter-bar"></div>
   </div><!-- /sticky-hd -->
+
+  <!-- 엑셀 업로드 미리보기 -->
+  <div id="leave-upload-preview1" style="display:none;background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px 16px;margin-bottom:12px;box-shadow:var(--shadow-sm)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div style="font-size:12px;font-weight:700;color:var(--ink)">📤 엑셀 업로드 미리보기</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <select id="leave-upload-sheet1" onchange="leaveUploadParseSheet()" style="padding:4px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-weight:600"></select>
+        <button class="btn btn-n btn-sm" onclick="leaveUploadApply()" id="leave-upload-apply-btn1" style="font-size:11px">적용</button>
+        <button class="btn btn-sm" onclick="leaveUploadCancel()" style="font-size:11px;color:var(--ink3)">취소</button>
+      </div>
+    </div>
+    <div id="leave-upload-result1" style="font-size:11px;max-height:300px;overflow-y:auto"></div>
+  </div>
 
   <!-- 연차수당 금액 설명 -->
   <div id="leave-pay-desc" class="info" style="margin-bottom:12px">연차수당 = 시급 × 8h (기본값)</div>
