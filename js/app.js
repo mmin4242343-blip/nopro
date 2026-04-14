@@ -3717,7 +3717,12 @@ function loadStorageImages(container) {
   getFileUrls(paths).then(urls => {
     imgs.forEach(img => {
       const url = urls[img.dataset.spath];
-      if (url) { img.src = url; img.style.opacity = '1'; }
+      if (url) {
+        img.onerror = () => { img.style.opacity = '0.2'; img.alt = '파일 없음'; img.onerror = null; };
+        img.src = url; img.style.opacity = '1';
+      } else {
+        img.style.opacity = '0.2'; img.alt = '파일 없음';
+      }
     });
   });
 }

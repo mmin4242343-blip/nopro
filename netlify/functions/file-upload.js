@@ -10,7 +10,7 @@ async function ensureBucket() {
   try {
     await supabase.storage.createBucket(BUCKET, {
       public: false,
-      fileSizeLimit: 10485760
+      fileSizeLimit: 5242880
     });
   } catch (e) {
     // bucket already exists - fine

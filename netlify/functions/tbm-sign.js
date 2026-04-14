@@ -22,7 +22,8 @@ export const handler = async (event) => {
     let companyId, token, date, empId;
 
     if (event.httpMethod === 'POST') {
-      const body = JSON.parse(event.body || '{}');
+      let body = {};
+      try { body = JSON.parse(event.body || '{}'); } catch { return { statusCode: 400, headers, body: JSON.stringify({ error: '잘못된 요청 형식입니다' }) }; }
       companyId = body.c || params.c;
       token = body.t || params.t;
       date = body.d || params.d;
@@ -54,7 +55,8 @@ export const handler = async (event) => {
     }
 
     const safetyRow = rows && rows.length > 0 ? rows[0] : null;
-    const safety = safetyRow ? JSON.parse(safetyRow.data_value) : {};
+    let safety = {};
+    try { if (safetyRow) safety = JSON.parse(safetyRow.data_value); } catch { /* 깨진 데이터 — 빈 객체로 진행 */ }
 
     // Verify token
     const storedToken = safety[date + '_token'];

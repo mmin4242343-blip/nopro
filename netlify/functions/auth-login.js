@@ -8,7 +8,9 @@ export const handler = async (event) => {
   if (event.httpMethod !== 'POST') return err(405, 'Method not allowed', event);
 
   try {
-    const { email, password } = JSON.parse(event.body);
+    let parsed;
+    try { parsed = JSON.parse(event.body); } catch { return err(400, '잘못된 요청 형식입니다', event); }
+    const { email, password } = parsed;
     if (!email || !password) return err(400, '이메일과 비밀번호를 입력해주세요', event);
 
     // Rate limiting 체크

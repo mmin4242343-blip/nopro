@@ -10,7 +10,9 @@ export const handler = async (event) => {
     const decoded = verifyToken(event);
     if (decoded.role !== 'user') return err(403, '사용자 권한이 필요합니다', event);
 
-    const { currentPassword, company, name, phone, email, password } = JSON.parse(event.body);
+    let parsed;
+    try { parsed = JSON.parse(event.body); } catch { return err(400, '잘못된 요청 형식입니다', event); }
+    const { currentPassword, company, name, phone, email, password } = parsed;
     if (!currentPassword) return err(400, '현재 비밀번호를 입력해주세요', event);
 
     // 현재 회사 정보 조회

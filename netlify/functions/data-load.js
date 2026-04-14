@@ -11,7 +11,8 @@ export const handler = async (event) => {
     if (decoded.role === 'admin') return err(403, '관리자는 이 엔드포인트 사용 불가', event);
     const companyId = decoded.companyId;
 
-    const body = event.body ? JSON.parse(event.body) : {};
+    let body = {};
+    try { if (event.body) body = JSON.parse(event.body); } catch { return err(400, '잘못된 요청 형식입니다', event); }
     const key = body.key;
 
     let query = supabase

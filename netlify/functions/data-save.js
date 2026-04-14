@@ -15,7 +15,8 @@ export const handler = async (event) => {
     const companyId = decoded.companyId;
     const changedBy = decoded.email || 'unknown';
 
-    const body = JSON.parse(event.body);
+    let body;
+    try { body = JSON.parse(event.body); } catch { return err(400, '잘못된 요청 형식입니다', event); }
 
     // 단일 저장 또는 bulk 저장
     const ALLOWED_KEYS = ['emps','pol','bk','tbk','rec','bonus','allow','tax','leave_settings','leave_overrides','folders','safety'];

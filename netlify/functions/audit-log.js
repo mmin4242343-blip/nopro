@@ -12,8 +12,8 @@ export const handler = async (event) => {
 
     const params = event.queryStringParameters || {};
     const dataKey = params.key || null;
-    const limit = Math.min(parseInt(params.limit) || 50, 200);
-    const offset = parseInt(params.offset) || 0;
+    const limit = Math.max(1, Math.min(parseInt(params.limit) || 50, 200));
+    const offset = Math.max(0, parseInt(params.offset) || 0);
 
     let query = supabase
       .from('audit_log')
