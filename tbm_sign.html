@@ -12,8 +12,8 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif;backg
 .hdr h1{font-size:18px;font-weight:800;margin-bottom:4px}
 .hdr .company{font-size:13px;opacity:.85}
 .hdr .date{font-size:12px;opacity:.7;margin-top:6px}
-.tbm-box{background:#fff;border:1px solid #E2E8F0;border-radius:14px;padding:14px 16px;margin-bottom:12px}
-.tbm-lbl{font-size:10px;font-weight:700;color:#64748B;margin-bottom:6px;letter-spacing:.04em}
+.card{background:#fff;border:1px solid #E2E8F0;border-radius:14px;padding:14px 16px;margin-bottom:12px}
+.card-lbl{font-size:10px;font-weight:700;color:#64748B;margin-bottom:8px;letter-spacing:.04em}
 .tbm-content{font-size:13px;line-height:1.7;color:#0F172A;white-space:pre-line;min-height:40px}
 .tbm-content:empty::after{content:'(교육내용 미입력)';color:#94A3B8}
 .status-bar{display:flex;gap:8px;margin-bottom:12px}
@@ -25,6 +25,11 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif;backg
 .lang-toggle{display:flex;gap:6px;margin-bottom:10px}
 .lang-btn{flex:1;padding:8px;border:1.5px solid #CBD5E1;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:#fff;text-align:center;font-family:inherit;color:#64748B}
 .lang-btn.on{background:#1E3A5F;color:#fff;border-color:#1E3A5F}
+.filter-group{margin-bottom:8px}
+.filter-lbl{font-size:10px;font-weight:600;color:#94A3B8;margin-bottom:4px}
+.filter-row{display:flex;gap:5px;flex-wrap:wrap}
+.chip{padding:5px 12px;border:1.5px solid #CBD5E1;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;background:#fff;color:#64748B;transition:all .15s}
+.chip.on{background:#1E3A5F;color:#fff;border-color:#1E3A5F}
 .emp-list{display:flex;flex-direction:column;gap:4px;margin-bottom:14px;max-height:50vh;overflow-y:auto}
 .emp-item{display:flex;align-items:center;gap:10px;padding:12px 14px;background:#fff;border:1.5px solid #E2E8F0;border-radius:10px;cursor:pointer;transition:all .15s}
 .emp-item:active{transform:scale(.98)}
@@ -37,26 +42,29 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif;backg
 .emp-badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px}
 .emp-badge.done{background:#ECFDF5;color:#059669}
 .emp-badge.wait{background:#FEF2F2;color:#E11D48}
-
-/* Confirm modal */
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center;padding:20px}
-.modal-bg.show{display:flex}
-.modal{background:#fff;border-radius:16px;padding:24px;max-width:360px;width:100%;text-align:center}
-.modal h2{font-size:16px;font-weight:800;margin-bottom:6px}
-.modal .name{font-size:22px;font-weight:800;color:#059669;margin:12px 0}
-.modal p{font-size:12px;color:#64748B;line-height:1.6;margin-bottom:16px}
-.modal .btns{display:flex;gap:8px}
-.modal .btn-cancel{flex:1;padding:12px;border:1.5px solid #CBD5E1;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:#fff;font-family:inherit;color:#64748B}
-.modal .btn-sign{flex:1;padding:12px;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:#059669;color:#fff;font-family:inherit}
-.modal .btn-sign:disabled{background:#94A3B8;cursor:not-allowed}
-
+/* Step 2 */
+.step2{display:none}
+.step2.show{display:block}
+.selected-box{background:#EFF6FF;border:1.5px solid #93C5FD;border-radius:12px;padding:14px;text-align:center;margin-bottom:12px}
+.selected-box .name{font-size:20px;font-weight:800;color:#1E3A5F}
+.selected-box .sub{font-size:11px;color:#64748B;margin-top:4px}
+.agree-item{display:flex;gap:10px;padding:12px;border:1.5px solid #E2E8F0;border-radius:10px;cursor:pointer;margin-bottom:6px;transition:all .15s;align-items:flex-start}
+.agree-item.checked{border-color:#059669;background:#F0FDF4}
+.agree-chk{width:22px;height:22px;border:2px solid #CBD5E1;border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all .15s;margin-top:1px}
+.agree-chk.on{background:#059669;border-color:#059669;color:#fff}
+.agree-main{font-size:13px;font-weight:700;color:#0F172A;line-height:1.5}
+.agree-sub{font-size:10px;color:#64748B;margin-top:3px;line-height:1.5}
+.agree-legal{color:#6366F1;font-size:10px;margin-top:2px}
+.btn-submit{width:100%;padding:14px;border:none;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit;background:#94A3B8;color:#fff;margin-top:10px;transition:all .2s}
+.btn-submit.ready{background:#059669}
+.btn-submit:disabled{cursor:not-allowed;opacity:.7}
+.btn-back{width:100%;padding:10px;border:1.5px solid #CBD5E1;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;background:#fff;color:#64748B;margin-top:8px}
 /* Success */
-.success-msg{display:none;text-align:center;padding:40px 20px}
-.success-msg.show{display:block}
-.success-icon{font-size:60px;margin-bottom:12px}
-.success-text{font-size:18px;font-weight:800;color:#059669;margin-bottom:6px}
-.success-sub{font-size:12px;color:#64748B}
-
+.success-toast{background:#F0FDF4;border:1px solid #6EE7B7;border-radius:14px;padding:20px;text-align:center;margin-bottom:12px}
+.success-toast .icon{font-size:48px;margin-bottom:8px}
+.success-toast .title{font-size:18px;font-weight:800;color:#059669;margin-bottom:4px}
+.success-toast .sub{font-size:12px;color:#64748B;line-height:1.6}
+.success-toast .legal{font-size:10px;color:#94A3B8;margin-top:10px;line-height:1.5}
 /* Loading */
 .loading{text-align:center;padding:60px 20px}
 .loading .spinner{width:36px;height:36px;border:3px solid #E2E8F0;border-top-color:#0D9488;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 12px}
@@ -74,26 +82,16 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif;backg
   </div>
 </div>
 
-<!-- Confirm modal -->
-<div class="modal-bg" id="confirm-modal">
-  <div class="modal">
-    <h2>TBM 서명 확인</h2>
-    <div class="name" id="modal-name"></div>
-    <p id="modal-msg">위 이름으로 오늘 TBM 교육 서명을 진행합니다.<br>본인이 맞으시면 서명 버튼을 눌러주세요.</p>
-    <div class="btns">
-      <button class="btn-cancel" onclick="closeModal()">취소 Cancel</button>
-      <button class="btn-sign" id="btn-sign" onclick="doSign()">서명 Sign</button>
-    </div>
-  </div>
-</div>
-
 <script>
 const params=new URLSearchParams(location.search);
 const C=params.get('c'),T=params.get('t'),D=params.get('d');
 const API=location.origin+'/api/tbm-sign';
 let DATA=null,selectedEmp=null,lang='ko';
+let agrees=[false,false,false,false];
+let shiftF='all',natF='all',deptF='all';
 const DOW_K=['일','월','화','수','목','금','토'];
 const DOW_E=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTHS_E=['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 // ── 한글 → 여권식 영문 변환 ──
 const SURNAME={
@@ -114,104 +112,108 @@ const SURNAME={
   '범':'Bum','룡':'Ryong','용':'Yong','승':'Seung','단':'Dan','손':'Son',
   '설':'Seol','동':'Dong','목':'Mok','기':'Ki','수':'Soo','영':'Young',
 };
-// 여권식 자모 매핑
 const P_INI=['G','KK','N','D','TT','R','M','B','PP','S','SS','','J','JJ','Ch','K','T','P','H'];
 const P_MED=['a','ae','ya','yae','eo','e','yeo','ye','o','wa','wae','oe','yo','oo','wo','we','wi','yoo','eu','ui','i'];
 const P_FIN=['','k','k','k','n','n','n','t','l','l','l','l','l','l','l','l','m','p','p','t','t','ng','t','t','k','t','p','t'];
-
 function passportSyl(ch){
-  const c=ch.charCodeAt(0);
-  if(c<0xAC00||c>0xD7A3)return ch;
-  const off=c-0xAC00;
-  const fin=off%28;
-  const med=((off-fin)/28)%21;
-  const ini=Math.floor(off/28/21);
-  // ㅅ(9)+ㅣ(20)=shi, ㅆ(10)+ㅣ(20)=shi
-  if((ini===9||ini===10)&&med===20) return (ini===10?'Sh':'Sh')+P_FIN[fin];
-  let r=P_INI[ini]+P_MED[med]+P_FIN[fin];
-  return r;
+  const c=ch.charCodeAt(0);if(c<0xAC00||c>0xD7A3)return ch;
+  const off=c-0xAC00,fin=off%28,med=((off-fin)/28)%21,ini=Math.floor(off/28/21);
+  if((ini===9||ini===10)&&med===20)return 'Sh'+P_FIN[fin];
+  return P_INI[ini]+P_MED[med]+P_FIN[fin];
 }
-
 function romanizeName(name){
   if(!name)return '';
-  // 성씨 (1글자, 사전 우선)
   const fc=name.charAt(0);
   const family=SURNAME[fc]||((s)=>{const r=passportSyl(s);return r.charAt(0).toUpperCase()+r.slice(1).toLowerCase();})(fc);
-  // 이름 (나머지 글자)
-  const rest=name.slice(1);
-  if(!rest)return family;
+  const rest=name.slice(1);if(!rest)return family;
   let given='';
-  for(let i=0;i<rest.length;i++){
-    const s=passportSyl(rest[i]);
-    given+=i===0?s.charAt(0).toUpperCase()+s.slice(1).toLowerCase():s.toLowerCase();
-  }
+  for(let i=0;i<rest.length;i++){const s=passportSyl(rest[i]);given+=i===0?s.charAt(0).toUpperCase()+s.slice(1).toLowerCase():s.toLowerCase();}
   return family+' '+given;
 }
-
-function getDisplayName(e){
-  if(lang==='ko')return e.name||'';
-  // 영문명이 있으면 우선 사용, 없으면 로마자 자동 변환
-  return e.nameEn||romanizeName(e.name);
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function getDisplayName(e){return lang==='en'?(e.nameEn||romanizeName(e.name)):(e.name||'');}
+function getDateStr(){
+  const dt=new Date(D+'T00:00:00');const[y,m,d]=D.split('-');
+  if(lang==='ko')return `${y}년 ${+m}월 ${+d}일 ${DOW_K[dt.getDay()]}요일`;
+  return `${DOW_E[dt.getDay()]}, ${MONTHS_E[+m-1]} ${+d}, ${y}`;
+}
+function getSignDateStr(){
+  const[y,m,d]=D.split('-');
+  if(lang==='ko')return `${y}년 ${+m}월 ${+d}일`;
+  return `${MONTHS_E[+m-1]} ${+d}, ${y}`;
 }
 
 async function init(){
   const app=document.getElementById('app');
-  if(!C||!T||!D){
-    app.innerHTML='<div class="error-box">유효하지 않은 링크입니다.<br>Invalid link. Please request a new one from your manager.</div>';
-    return;
-  }
+  if(!C||!T||!D){app.innerHTML='<div class="error-box">유효하지 않은 링크입니다.<br>Invalid link.</div>';return;}
   try{
     const res=await fetch(`${API}?c=${C}&t=${T}&d=${D}`);
     const json=await res.json();
     if(!res.ok){
       const hint=json.hint?`<br><small style="color:#94A3B8">${json.hint}</small>`:'';
-      app.innerHTML=`<div class="error-box">${json.error||'오류가 발생했습니다'}${hint}<br><br><span style="font-size:11px;color:#64748B">Link may have expired. Please request a new link from your manager.</span></div>`;
+      app.innerHTML=`<div class="error-box">${json.error||'오류'}${hint}<br><br><span style="font-size:11px;color:#64748B">Please request a new link from your manager.</span></div>`;
       return;
     }
-    DATA=json;
-    render();
-    setInterval(pollSigns,8000);
-  }catch(e){
-    app.innerHTML='<div class="error-box">서버에 연결할 수 없습니다.<br>Cannot connect to server. Please check your internet connection.</div>';
-  }
+    DATA=json;renderStep1();setInterval(pollSigns,8000);
+  }catch(e){app.innerHTML='<div class="error-box">서버에 연결할 수 없습니다.<br>Cannot connect to server.</div>';}
 }
 
-function render(){
+// ══ STEP 1: 이름 선택 ══
+function renderStep1(){
+  selectedEmp=null;agrees=[false,false,false,false];
   const app=document.getElementById('app');
-  const dt=new Date(D+'T00:00:00');
-  const dow=lang==='ko'?DOW_K[dt.getDay()]:DOW_E[dt.getDay()];
-  const [y,m,d]=D.split('-');
-  const dateStr=lang==='ko'?`${+m}월 ${+d}일 (${dow})`:`${dow}, ${m}/${d}/${y}`;
-
   const signs=DATA.signs||{};
-  const total=DATA.emps.length;
-  const done=DATA.emps.filter(e=>signs[String(e.id)]).length;
-
-  let h=`
+  const total=DATA.emps.length,done=DATA.emps.filter(e=>signs[String(e.id)]).length;
+  const isKo=lang==='ko';
+  app.innerHTML=`
     <div class="hdr">
-      <h1>${lang==='ko'?'TBM 전자서명':'TBM E-Signature'}</h1>
+      <h1>${isKo?'TBM 전자서명':'TBM E-Signature'}</h1>
       <div class="company">${DATA.company||''}</div>
-      <div class="date">${dateStr}</div>
+      <div class="date">${getDateStr()}</div>
     </div>
-    <div class="tbm-box">
-      <div class="tbm-lbl">${lang==='ko'?'오늘의 TBM 교육내용':"Today's TBM Content"}</div>
-      <div class="tbm-content">${lang==='en'&&DATA.tbmEn?DATA.tbmEn:(DATA.tbm||'')}</div>
-      ${lang==='en'&&DATA.tbm?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #E2E8F0;font-size:10px;color:#94A3B8;line-height:1.5">원문(Korean): '+DATA.tbm+'</div>':''}
-      ${lang==='en'&&!DATA.tbmEn&&DATA.tbm?'<div style="margin-top:6px;font-size:10px;color:#D97706;font-weight:600">* Translation not available — please ask your manager to translate.</div>':''}
+    <div class="card">
+      <div class="card-lbl">${isKo?'📋 오늘의 TBM 교육내용':"📋 Today's TBM Content"}</div>
+      <div class="tbm-content">${lang==='en'&&DATA.tbmEn?esc(DATA.tbmEn):esc(DATA.tbm||'')}</div>
+      ${lang==='en'&&DATA.tbm?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #E2E8F0;font-size:10px;color:#94A3B8;line-height:1.5">원문: '+esc(DATA.tbm)+'</div>':''}
     </div>
     <div class="status-bar">
-      <div class="status-card"><div class="num" style="color:#1E3A5F">${total}</div><div class="lbl">${lang==='ko'?'전체':'Total'}</div></div>
-      <div class="status-card"><div class="num" style="color:#059669">${done}</div><div class="lbl">${lang==='ko'?'완료':'Signed'}</div></div>
-      <div class="status-card"><div class="num" style="color:#E11D48">${total-done}</div><div class="lbl">${lang==='ko'?'미서명':'Unsigned'}</div></div>
+      <div class="status-card"><div class="num" style="color:#1E3A5F">${total}</div><div class="lbl">${isKo?'전체':'Total'}</div></div>
+      <div class="status-card"><div class="num" style="color:#059669">${done}</div><div class="lbl">${isKo?'완료':'Signed'}</div></div>
+      <div class="status-card"><div class="num" style="color:#E11D48">${total-done}</div><div class="lbl">${isKo?'미서명':'Unsigned'}</div></div>
     </div>
     <div class="lang-toggle">
       <div class="lang-btn ${lang==='ko'?'on':''}" onclick="setLang('ko')">한국어</div>
       <div class="lang-btn ${lang==='en'?'on':''}" onclick="setLang('en')">English</div>
     </div>
-    <input class="search" id="emp-search" type="text" placeholder="${lang==='ko'?'이름 검색...':'Search name...'}" oninput="renderList()">
-    <div class="emp-list" id="emp-list"></div>
-  `;
-  app.innerHTML=h;
+    <div class="card">
+      <div class="card-lbl">${isKo?'👤 본인 이름을 선택하세요':'👤 Select your name'}</div>
+      <div class="filter-group">
+        <div class="filter-lbl">${isKo?'주야간':'Shift'}</div>
+        <div class="filter-row" id="f-shift">
+          <span class="chip ${shiftF==='all'?'on':''}" onclick="setFilter('shift','all',this)">${isKo?'전체':'All'}</span>
+          <span class="chip ${shiftF==='주간'?'on':''}" onclick="setFilter('shift','주간',this)">${isKo?'주간':'Day'}</span>
+          <span class="chip ${shiftF==='야간'?'on':''}" onclick="setFilter('shift','야간',this)">${isKo?'야간':'Night'}</span>
+        </div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-lbl">${isKo?'국적':'Nationality'}</div>
+        <div class="filter-row" id="f-nat">
+          <span class="chip ${natF==='all'?'on':''}" onclick="setFilter('nat','all',this)">${isKo?'전체':'All'}</span>
+          <span class="chip ${natF==='내국인'?'on':''}" onclick="setFilter('nat','내국인',this)">${isKo?'내국인':'Korean'}</span>
+          <span class="chip ${natF==='외국인'?'on':''}" onclick="setFilter('nat','외국인',this)">${isKo?'외국인':'Foreign'}</span>
+        </div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-lbl">${isKo?'소속':'Department'}</div>
+        <div class="filter-row" id="f-dept">
+          <span class="chip ${deptF==='all'?'on':''}" onclick="setFilter('dept','all',this)">${isKo?'전체':'All'}</span>
+          <span class="chip ${deptF==='인천본점'?'on':''}" onclick="setFilter('dept','인천본점',this)">${isKo?'인천본점':'Incheon HQ'}</span>
+          <span class="chip ${deptF==='아웃소싱'?'on':''}" onclick="setFilter('dept','아웃소싱',this)">${isKo?'아웃소싱':'Outsource'}</span>
+        </div>
+      </div>
+      <input class="search" id="emp-search" type="text" placeholder="${isKo?'이름 검색...':'Search name...'}" oninput="renderList()">
+      <div id="emp-list"></div>
+    </div>`;
   renderList();
 }
 
@@ -220,107 +222,166 @@ function renderList(){
   const q=(document.getElementById('emp-search')||{}).value?.toLowerCase()||'';
   const signs=DATA.signs||{};
   const filtered=DATA.emps.filter(e=>{
-    if(!q)return true;
-    const dn=getDisplayName(e).toLowerCase();
-    const kn=(e.name||'').toLowerCase();
-    const en=(e.nameEn||'').toLowerCase();
-    return dn.includes(q)||kn.includes(q)||en.includes(q);
+    if(shiftF!=='all'){const s=e.shift==='night'?'야간':'주간';if(s!==shiftF)return false;}
+    if(natF!=='all'){const n=(e.nationality||'내국인');if(n!==natF)return false;}
+    if(deptF!=='all'){const d=(e.dept||'');if(d!==deptF)return false;}
+    if(q){const dn=getDisplayName(e).toLowerCase();const kn=(e.name||'').toLowerCase();if(!dn.includes(q)&&!kn.includes(q))return false;}
+    return true;
   });
-  filtered.sort((a,b)=>{
-    const sa=signs[String(a.id)]?1:0, sb=signs[String(b.id)]?1:0;
-    return sa-sb;
-  });
+  filtered.sort((a,b)=>(signs[String(a.id)]?1:0)-(signs[String(b.id)]?1:0));
+  const isKo=lang==='ko';
   el.innerHTML=filtered.map(e=>{
     const signed=!!signs[String(e.id)];
     const name=getDisplayName(e);
-    const sub=lang==='en'
-      ?`${e.shift==='night'?'Night':'Day'} ${e.dept?'· '+e.dept:''}`
-      :`${e.shift==='night'?'야간':'주간'} ${e.dept?'· '+e.dept:''}`;
-    const badge=signed
-      ?(lang==='ko'?'서명완료':'Signed')
-      :(lang==='ko'?'미서명':'Unsigned');
-    // 영어 모드에서 한글 이름도 작게 표시
-    const subName=lang==='en'&&e.name?`<span style="font-size:10px;color:#94A3B8;margin-left:4px">(${e.name})</span>`:'';
-    return`<div class="emp-item ${signed?'signed':''}" ${signed?'':`onclick="selectEmp('${e.id}')"`}>
+    const sub=isKo?`${e.shift==='night'?'야간':'주간'} · ${e.nationality||'내국인'} · ${e.dept||''}`:`${e.shift==='night'?'Night':'Day'} · ${e.nationality==='외국인'?'Foreign':'Korean'} · ${e.dept||''}`;
+    const badge=signed?(isKo?'서명완료':'Signed'):(isKo?'미서명':'Unsigned');
+    const subName=lang==='en'&&e.name?` <span style="font-size:10px;color:#94A3B8">(${e.name})</span>`:'';
+    return`<div class="emp-item ${signed?'signed':''}" ${signed?'':`onclick="goStep2('${e.id}')"`}>
       <div class="emp-dot ${signed?'done':'wait'}"></div>
-      <div class="emp-info">
-        <div class="emp-name">${name}${subName}</div>
-        <div class="emp-sub">${sub}</div>
-      </div>
+      <div class="emp-info"><div class="emp-name">${esc(name)}${subName}</div><div class="emp-sub">${sub}</div></div>
       <span class="emp-badge ${signed?'done':'wait'}">${badge}</span>
     </div>`;
-  }).join('');
+  }).join('')||`<div style="text-align:center;padding:20px;color:#94A3B8;font-size:12px">${isKo?'검색 결과가 없습니다':'No results'}</div>`;
 }
 
-function setLang(l){lang=l;render();}
+function setFilter(group,val,el){
+  if(group==='shift')shiftF=val;else if(group==='nat')natF=val;else if(group==='dept')deptF=val;
+  const row=el.parentElement;row.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));el.classList.add('on');
+  renderList();
+}
+function setLang(l){lang=l;if(selectedEmp)renderStep2();else renderStep1();}
 
-function selectEmp(id){
+// ══ STEP 2: 내용 확인 · 동의 · 서명 ══
+function goStep2(id){
   const e=DATA.emps.find(x=>String(x.id)===String(id));if(!e)return;
-  selectedEmp=e;
+  selectedEmp=e;agrees=[false,false,false,false];
+  renderStep2();
+  window.scrollTo(0,0);
+}
+
+function renderStep2(){
+  const app=document.getElementById('app');
+  const e=selectedEmp;
   const name=getDisplayName(e);
-  document.getElementById('modal-name').textContent=name;
-  document.getElementById('modal-msg').innerHTML=lang==='ko'
-    ?'위 이름으로 오늘 TBM 교육 서명을 진행합니다.<br>본인이 맞으시면 서명 버튼을 눌러주세요.'
-    :'You will sign today\'s TBM as the name above.<br>Please press Sign if this is correct.';
-  document.getElementById('btn-sign').disabled=false;
-  document.getElementById('btn-sign').textContent=lang==='ko'?'서명 Sign':'Sign';
-  document.getElementById('confirm-modal').classList.add('show');
+  const isKo=lang==='ko';
+  const tbmText=lang==='en'&&DATA.tbmEn?DATA.tbmEn:(DATA.tbm||'');
+  const checked=agrees.filter(a=>a).length;
+
+  app.innerHTML=`
+    <div class="hdr">
+      <h1>${isKo?'TBM 전자서명':'TBM E-Signature'}</h1>
+      <div class="company">${DATA.company||''}</div>
+      <div class="date">${getDateStr()}</div>
+    </div>
+    <div class="selected-box">
+      <div style="font-size:10px;color:#64748B;margin-bottom:4px">${isKo?'서명 대상자':'Signee'}</div>
+      <div class="name">${esc(name)}</div>
+      ${lang==='en'&&e.name?`<div class="sub">(${esc(e.name)})</div>`:''}
+    </div>
+    <div class="card">
+      <div class="card-lbl">${isKo?'📋 교육내용 재확인':'📋 Training Content Review'}</div>
+      <div class="tbm-content">${esc(tbmText)}</div>
+      ${lang==='en'&&DATA.tbm&&DATA.tbmEn?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #E2E8F0;font-size:10px;color:#94A3B8">원문: '+esc(DATA.tbm)+'</div>':''}
+      ${lang==='ko'&&DATA.tbmEn?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #E2E8F0;font-size:10px;color:#94A3B8">English: '+esc(DATA.tbmEn)+'</div>':''}
+    </div>
+    <div class="card">
+      <div class="card-lbl">${isKo?'✅ 아래 항목을 모두 확인하고 동의해주세요':'✅ Please confirm and agree to all items below'} <span style="float:right;color:${checked===4?'#059669':'#1D4ED8'};font-weight:800">${checked}/4</span></div>
+
+      <div class="agree-item ${agrees[0]?'checked':''}" onclick="toggleAgree(0)">
+        <div class="agree-chk ${agrees[0]?'on':''}">${agrees[0]?'✓':''}</div>
+        <div>
+          <div class="agree-main">${isKo?'오늘의 TBM 교육내용을 충분히 이해하였습니다':'I have fully understood today\'s TBM safety training content'}</div>
+          <div class="agree-sub">${esc(tbmText).substring(0,80)}${tbmText.length>80?'...':''}</div>
+        </div>
+      </div>
+
+      <div class="agree-item ${agrees[1]?'checked':''}" onclick="toggleAgree(1)">
+        <div class="agree-chk ${agrees[1]?'on':''}">${agrees[1]?'✓':''}</div>
+        <div>
+          <div class="agree-main">${isKo?'위 안전수칙을 작업 중 반드시 준수할 것을 약속합니다':'I promise to strictly follow the safety rules during work'}</div>
+          <div class="agree-sub">${isKo?'미준수 시 안전사고 발생 가능성이 있음을 인지합니다':'I understand that non-compliance may cause safety accidents'}</div>
+        </div>
+      </div>
+
+      <div class="agree-item ${agrees[2]?'checked':''}" onclick="toggleAgree(2)">
+        <div class="agree-chk ${agrees[2]?'on':''}">${agrees[2]?'✓':''}</div>
+        <div>
+          <div class="agree-main">${isKo?'본 서명은 전자문서법에 따른 법적 효력이 있는 전자서명입니다':'This signature is a legally valid electronic signature under the Electronic Documents Act'}</div>
+          <div class="agree-sub">${isKo?'서명일: '+getSignDateStr()+' · 본인이 직접 서명함을 확인합니다':'Date: '+getSignDateStr()+' · I confirm that I am personally signing this document'}</div>
+          <div class="agree-legal">${isKo?'전자문서 및 전자거래 기본법 제4조 근거':'Framework Act on Electronic Documents, Article 4'}</div>
+        </div>
+      </div>
+
+      <div class="agree-item ${agrees[3]?'checked':''}" onclick="toggleAgree(3)">
+        <div class="agree-chk ${agrees[3]?'on':''}">${agrees[3]?'✓':''}</div>
+        <div>
+          <div class="agree-main">${isKo?'개인정보(성명, 서명일시) 수집 및 안전교육 기록 보관에 동의합니다':'I agree to the collection of personal information (name, signature date/time) for safety training records'}</div>
+          <div class="agree-sub">${isKo?'수집 정보는 산업안전보건법에 따른 교육기록 관리 목적으로만 사용됩니다':'Collected information is used solely for safety training record management'}</div>
+          <div class="agree-legal">${isKo?'산업안전보건법 제29조 · 개인정보보호법 제15조 근거':'OSHA Act Art.29 · Personal Information Protection Act Art.15'}</div>
+        </div>
+      </div>
+
+      <div style="font-size:10px;color:#E11D48;font-weight:600;margin-top:6px;text-align:center">${isKo?'* 4가지 항목 모두 체크해야 서명 제출이 가능합니다':'* You must check all 4 items to submit your signature'}</div>
+
+      <button class="btn-submit ${checked===4?'ready':''}" id="btn-submit" ${checked===4?'':'disabled'} onclick="doSign()">
+        ${isKo?'✍️ 서명 제출하기':'✍️ Submit Signature'}
+      </button>
+      <button class="btn-back" onclick="renderStep1();window.scrollTo(0,0)">
+        ${isKo?'← 이름 다시 선택':'← Select name again'}
+      </button>
+    </div>`;
 }
 
-function closeModal(){
-  document.getElementById('confirm-modal').classList.remove('show');
-  selectedEmp=null;
+function toggleAgree(idx){
+  agrees[idx]=!agrees[idx];
+  renderStep2();
 }
 
+// ══ 서명 제출 ══
 async function doSign(){
-  if(!selectedEmp)return;
-  const btn=document.getElementById('btn-sign');
-  btn.disabled=true;
-  btn.textContent=lang==='ko'?'처리중...':'Signing...';
+  if(!agrees.every(a=>a)||!selectedEmp)return;
+  const btn=document.getElementById('btn-submit');
+  btn.disabled=true;btn.textContent=lang==='ko'?'처리중...':'Signing...';
   try{
-    const res=await fetch(API,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({c:C,t:T,d:D,empId:selectedEmp.id})
-    });
+    const res=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({c:C,t:T,d:D,empId:selectedEmp.id})});
     const json=await res.json();
     if(json.signs)DATA.signs=json.signs;
-    else if(res.status===409){DATA.signs=json.signs||DATA.signs;}
-    const signedEmp=selectedEmp;
-    closeModal();
-    render();
-    showSuccess(signedEmp);
+    showSuccess();
   }catch(e){
-    btn.disabled=false;
-    btn.textContent=lang==='ko'?'서명 Sign':'Sign';
-    alert(lang==='ko'?'서명 저장에 실패했습니다. 다시 시도해주세요.':'Failed to save signature. Please try again.');
+    btn.disabled=false;btn.textContent=lang==='ko'?'✍️ 서명 제출하기':'✍️ Submit Signature';
+    alert(lang==='ko'?'서명 저장에 실패했습니다. 다시 시도해주세요.':'Failed to save. Please try again.');
   }
 }
 
-function showSuccess(emp){
-  const name=getDisplayName(emp);
+function showSuccess(){
+  const name=getDisplayName(selectedEmp);
+  const isKo=lang==='ko';
   const app=document.getElementById('app');
-  const existing=app.innerHTML;
-  const successHtml=`<div class="success-msg show" id="success-toast" style="background:#F0FDF4;border:1px solid #6EE7B7;border-radius:14px;margin-bottom:12px;padding:20px">
-    <div class="success-icon">&#10003;</div>
-    <div class="success-text">${name} ${lang==='ko'?'서명 완료!':'Signature Complete!'}</div>
-    <div class="success-sub">${lang==='ko'?'TBM 교육 서명이 완료되었습니다.':'Your TBM signature has been recorded.'}</div>
-  </div>`;
-  app.insertAdjacentHTML('afterbegin',successHtml);
-  setTimeout(()=>{const t=document.getElementById('success-toast');if(t)t.remove();},4000);
+  app.innerHTML=`
+    <div class="hdr">
+      <h1>${isKo?'TBM 전자서명':'TBM E-Signature'}</h1>
+      <div class="company">${DATA.company||''}</div>
+      <div class="date">${getDateStr()}</div>
+    </div>
+    <div class="success-toast">
+      <div class="icon">✅</div>
+      <div class="title">${isKo?'서명 완료!':'Signature Complete!'}</div>
+      <div class="sub">${esc(name)}${isKo?' 님의 TBM 교육 서명이 완료되었습니다.':'\'s TBM signature has been recorded.'}</div>
+      <div class="legal">${isKo
+        ?'📋 본 서명은 전자문서 및 전자거래 기본법 제4조에 따라 종이 서명과 동일한 법적 효력을 가집니다.<br>서명 일시·성명이 기록되어 안전교육 이수 증빙으로 활용됩니다.'
+        :'📋 This signature has the same legal effect as a handwritten signature under Article 4 of the Framework Act on Electronic Documents.'}</div>
+    </div>
+    <button class="btn-back" onclick="selectedEmp=null;renderStep1();window.scrollTo(0,0)">${isKo?'← 직원 목록으로 돌아가기':'← Back to employee list'}</button>`;
 }
 
 async function pollSigns(){
   try{
-    const res=await fetch(`${API}?c=${C}&t=${T}&d=${D}`);
-    if(!res.ok)return;
+    const res=await fetch(`${API}?c=${C}&t=${T}&d=${D}`);if(!res.ok)return;
     const json=await res.json();
     if(json.signs){
       const oldCount=Object.keys(DATA.signs||{}).length;
-      DATA.signs=json.signs;
-      DATA.tbm=json.tbm||DATA.tbm;
-      const newCount=Object.keys(DATA.signs).length;
-      if(newCount!==oldCount)render();
+      DATA.signs=json.signs;DATA.tbm=json.tbm||DATA.tbm;
+      if(Object.keys(DATA.signs).length!==oldCount&&!selectedEmp)renderStep1();
     }
   }catch(e){}
 }
