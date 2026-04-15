@@ -732,10 +732,21 @@ function monthSummary(eid,y,m){
 
 
 // ══════════════════════════════════════
+// ══ 모바일 사이드바 토글 ══
+function toggleMobSb(){
+  document.querySelector('.sb').classList.toggle('mob-open');
+  document.querySelector('.mob-sb-dim').classList.toggle('on');
+}
+function closeMobSb(){
+  document.querySelector('.sb').classList.remove('mob-open');
+  document.querySelector('.mob-sb-dim').classList.remove('on');
+}
+
 // 페이지
 // ══════════════════════════════════════
 const PAGES=['daily','monthly','payroll','leave','company','emps','shift','safety','folder','myinfo','settings'];
 function gp(p){
+  closeMobSb();
   if(p!=='safety'&&typeof sfStopPoll==='function')sfStopPoll();
   PAGES.forEach(x=>{
     const pe=document.getElementById('pg-'+x);if(pe)pe.classList.toggle('on',x===p);
