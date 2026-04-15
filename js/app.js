@@ -3130,7 +3130,7 @@ function confirmBulkAdd(){
     EMPS.push({
       id:maxId, name:row.name.trim(),
       role:row.role||'', grade:row.grade||'', dept:row.dept||'',
-      empNo:row.empNo||String(500+maxId),
+      empNo:row.empNo||'',
       rate:(!isMonthly&&row.rate)?+row.rate:null,
       monthly:(isMonthly&&row.rate)?+row.rate:null,
       join:joinDate, leave:'',
