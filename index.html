@@ -583,6 +583,9 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
   /* 연차 테이블 */
   #leave-table{min-width:700px!important}
   #leave-table th,#leave-table td{padding:6px 4px!important;font-size:10px!important}
+  /* 연차: 이름 열 고정 */
+  #leave-table thead th:first-child{position:sticky!important;left:0!important;z-index:11!important;background:var(--navy)!important}
+  #leave-table tbody td:first-child{position:sticky!important;left:0!important;z-index:3!important;background:#fff!important}
 
   /* 설정 */
   .set-g{grid-template-columns:1fr;gap:8px}
@@ -596,11 +599,20 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
   /* 직원관리: 드래그·No 숨기고, 사번+이름 고정 */
   .emt thead th:nth-child(1),.emt tbody td:nth-child(1){display:none!important}
   .emt thead th:nth-child(2),.emt tbody td:nth-child(2){display:none!important}
-  .emt thead th:nth-child(3){position:sticky!important;left:0!important;z-index:3!important;background:var(--navy)!important;min-width:70px!important}
-  .emt tbody td:nth-child(3){position:sticky!important;left:0!important;z-index:2!important;background:#fff!important}
-  .emt thead th:nth-child(4){position:sticky!important;left:70px!important;z-index:3!important;background:var(--navy)!important;min-width:56px!important;border-right:2px solid rgba(255,255,255,.2)!important}
-  .emt tbody td:nth-child(4){position:sticky!important;left:70px!important;z-index:2!important;background:#fff!important;border-right:2px solid var(--bd)!important}
+  .emt thead th:nth-child(3){position:sticky!important;left:0!important;z-index:3!important;background:var(--navy)!important;min-width:80px!important;width:80px!important}
+  .emt tbody td:nth-child(3){position:sticky!important;left:0!important;z-index:2!important;background:#fff!important;min-width:80px!important}
+  .emt thead th:nth-child(4){position:sticky!important;left:80px!important;z-index:3!important;background:var(--navy)!important;min-width:60px!important;border-right:2px solid rgba(255,255,255,.2)!important}
+  .emt tbody td:nth-child(4){position:sticky!important;left:80px!important;z-index:2!important;background:#fff!important;border-right:2px solid var(--bd)!important}
   .emt tbody tr:hover td:nth-child(3),.emt tbody tr:hover td:nth-child(4){background:#F8FAFF!important}
+  /* 직원관리: 각 열 최소 너비 확보 */
+  .emt th,.emt td{min-width:60px!important;white-space:nowrap!important}
+  .emt thead th:nth-child(5){min-width:60px!important}
+  .emt thead th:nth-child(6){min-width:56px!important}
+  .emt thead th:nth-child(7){min-width:60px!important}
+  .emt thead th:nth-child(8){min-width:80px!important}
+  .emt thead th:nth-child(13){min-width:110px!important}
+  .emt thead th:nth-child(14){min-width:130px!important}
+  .ei2{min-width:50px!important}
 
   /* 근무형태 */
   .shift-list-header,.shift-emp-row{grid-template-columns:28px 44px 1fr 56px 70px 50px 1fr 60px!important;font-size:10px!important;padding:6px 8px!important}
@@ -614,7 +626,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
   .sf-icon{font-size:32px}
 
   /* 내 정보 (인라인 2열 → 1열) */
-  #myinfo-content>div:first-child{grid-template-columns:1fr!important;gap:12px!important;padding:12px!important}
+  .mi-wrap{grid-template-columns:1fr!important;gap:12px!important;padding:12px!important}
 
   /* 모달 */
   .law-modal{width:96%;padding:16px 14px;border-radius:14px}
