@@ -1971,7 +1971,12 @@ noprohr.netlify.app/tbm_sign.html
             <div class="sf-drop-s">JPG · PNG · HEIC · 여러 장 동시 가능</div>
           </div>
         </div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button onclick="document.getElementById('sf-file-inp2').click()" style="flex:1;padding:10px;font-size:12px;font-weight:700;border:1.5px solid var(--navy2);border-radius:9px;background:var(--nbg);color:var(--navy2);cursor:pointer;font-family:inherit">📎 사진 선택</button>
+          <button onclick="document.getElementById('sf-file-camera').click()" style="flex:1;padding:10px;font-size:12px;font-weight:700;border:1.5px solid var(--teal);border-radius:9px;background:var(--tbg);color:var(--teal);cursor:pointer;font-family:inherit">📷 카메라 촬영</button>
+        </div>
         <input type="file" id="sf-file-inp2" accept="image/*" multiple style="display:none" onchange="sf2HandleFiles(this.files)">
+        <input type="file" id="sf-file-camera" accept="image/*" capture="environment" style="display:none" onchange="sf2HandleFiles(this.files)">
         <div class="sf-grid" id="sf-photo-grid2"></div>
       </div>
 

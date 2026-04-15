@@ -5422,32 +5422,46 @@ async function sfExcelCore(){
 
 // 사진 업로드
 async function sf2HandleFiles(files){
-  if(!files||files.length===0)return;
-  // 파일 input 초기화 (같은 파일 재선택 가능하게)
-  const inp=document.getElementById('sf-file-inp2');
-  if(inp)inp.value='';
+  if(!files||files.length===0){console.log('[사진] 파일 없음');return;}
+  console.log('[사진] 파일 선택됨:', files.length+'개');
+  // 파일 input 초기화
+  const inp=document.getElementById('sf-file-inp2');if(inp)inp.value='';
+  const cam=document.getElementById('sf-file-camera');if(cam)cam.value='';
   const key=sfKey();
+  console.log('[사진] 저장 키:', key);
   if(!SAFETY_REC[key])SAFETY_REC[key]=[];
   const imageFiles=Array.from(files).filter(f=>f.type.startsWith('image/'));
-  if(!imageFiles.length)return;
-  if(typeof showSyncToast==='function') showSyncToast('사진 업로드 중...','info');
+  if(!imageFiles.length){console.log('[사진] 이미지 파일 없음 (타입:', Array.from(files).map(f=>f.type));return;}
+  if(typeof showSyncToast==='function') showSyncToast('사진 업로드 중... ('+imageFiles.length+'장)','info');
+  let success=0;
   for(const file of imageFiles){
     try{
+      console.log('[사진] 업로드 시작:', file.name, Math.round(file.size/1024)+'KB');
       const res=await uploadFileToStorage(file,'safety',key);
-      const entry={
+      console.log('[사진] 업로드 성공:', res.path);
+      SAFETY_REC[key].push({
         id:'sf_'+Date.now()+'_'+Math.random().toString(36).slice(2),
         storagePath:res.path,
         name:file.name,
         ts:Date.now()
-      };
-      SAFETY_REC[key].push(entry);
+      });
+      success++;
     }catch(e){
-      console.error('Safety photo upload failed:',e);
-      if(typeof showSyncToast==='function') showSyncToast(file.name+' 업로드 실패','warn');
+      console.error('[사진] 업로드 실패:', file.name, e);
+      if(typeof showSyncToast==='function') showSyncToast(file.name+' 업로드 실패: '+e.message,'warn');
     }
   }
   sfSave();
-  if(typeof showSyncToast==='function') showSyncToast('업로드 완료','ok');
+  if(success>0){
+    if(typeof showSyncToast==='function') showSyncToast(success+'장 업로드 완료','ok');
+    // 서버에 즉시 저장
+    try{
+      const safetyValue=(()=>{const s={};Object.entries(SAFETY_REC).forEach(([k,v])=>{s[k]=Array.isArray(v)?v.map(({data,...r})=>r):v;});return s;})();
+      await apiFetch('/data-save','POST',{key:'safety',value:safetyValue});
+    }catch(e){console.warn('safety 서버 저장 실패:',e);}
+  } else {
+    if(typeof showSyncToast==='function') showSyncToast('업로드 실패 - Console(F12) 확인','warn');
+  }
   sf2RenderPhotos();
 }
 function sf2RenderPhotos(){
