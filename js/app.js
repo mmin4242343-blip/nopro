@@ -5430,8 +5430,9 @@ async function sf2HandleFiles(files){
   const key=sfKey();
   console.log('[사진] 저장 키:', key);
   if(!SAFETY_REC[key])SAFETY_REC[key]=[];
-  const imageFiles=Array.from(files).filter(f=>f.type.startsWith('image/'));
-  if(!imageFiles.length){console.log('[사진] 이미지 파일 없음 (타입:', Array.from(files).map(f=>f.type));return;}
+  const imgExts=/\.(jpg|jpeg|png|gif|webp|heic|heif|bmp|tiff?)$/i;
+  const imageFiles=Array.from(files).filter(f=>f.type.startsWith('image/')||imgExts.test(f.name));
+  if(!imageFiles.length){console.log('[사진] 이미지 파일 없음 (타입:', Array.from(files).map(f=>f.type+' '+f.name));return;}
   if(typeof showSyncToast==='function') showSyncToast('사진 업로드 중... ('+imageFiles.length+'장)','info');
   let success=0;
   for(const file of imageFiles){
