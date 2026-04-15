@@ -2472,7 +2472,10 @@ function renderEmps(){
       style="transition:all .15s;${e.leave?'opacity:.5;background:var(--rose-dim);':''}cursor:pointer;">
       <td><span style="cursor:grab;color:var(--ink3);font-size:14px;padding:0 4px;">⠿</span></td>
       <td style="text-align:center;font-size:11px;font-weight:700;color:#94A3B8;padding:0 4px">${rowNum}</td>
-      <td><input class="ei2" value="${esc(e.empNo||'')}" onchange="updE(${e.id},'empNo',this.value)" style="text-align:center;font-size:10px" placeholder="사번"></td>
+      <td><div style="display:flex;gap:2px;align-items:center">
+        <input class="ei2" value="${esc(e.empNo||'')}" onchange="updE(${e.id},'empNo',this.value)" style="text-align:center;font-size:10px;flex:1" placeholder="사번">
+        ${!e.empNo&&(POL.siteCode||'').length===5?`<button onclick="showGenEmpNo(${e.id})" style="padding:2px 4px;font-size:8px;border:1px solid var(--navy2);border-radius:4px;background:var(--nbg);color:var(--navy2);cursor:pointer;white-space:nowrap;font-weight:700" title="사번 자동 생성">생성</button>`:''}
+      </div></td>
       <td><input class="ei2" value="${esc(e.name)}" onchange="updE(${e.id},'name',this.value)" placeholder="이름"></td>
       <td><input class="ei2" value="${esc(e.role)}" onchange="updE(${e.id},'role',this.value)"></td>
       <td><input class="ei2" value="${esc(e.grade||'')}" onchange="updE(${e.id},'grade',this.value)" placeholder="직급"></td>
@@ -3409,14 +3412,7 @@ function genEmpNo(deptCode){
 }
 
 function addEmp(){
-  const site=(POL.siteCode||'').trim();
-  console.log('[addEmp] siteCode=', JSON.stringify(site), 'length=', site.length);
-  if(site.length===5){
-    showEmpNoModal();
-  } else {
-    if(site.length>0&&site.length!==5) alert('사이트코드가 5자리가 아닙니다 (현재 '+site.length+'자리). 급여 설정에서 확인하세요.');
-    doAddEmp('');
-  }
+  doAddEmp('');
 }
 function doAddEmp(empNo){
   const nid=EMPS.length>0?Math.max(...EMPS.map(e=>e.id))+1:1;
@@ -3426,38 +3422,89 @@ function doAddEmp(empNo){
   EMPS.push({id:nid,name:'',role:'',dept:'',empNo:empNo,rate:null,monthly:null,join:'',leave:'',age:'',phone:'',rrnFront:'',rrnBack:'',sot:209,payMode:null,shift:'day',gender:'male',nation:'local',color:colors[ci],tc:tcs[ci]});
   saveLS();renderEmps();renderSb();
 }
-function showEmpNoModal(){
+// 직원 정보 기반 구분코드 자동 판별
+function detectDeptCode(emp){
+  const role=(emp.role||'').trim();
+  const dept=(emp.dept||'').trim();
+  // 둘째 자리: 고용형태+직무 (A=직접/사무, B=직접/현장, C=아웃소싱/사무, D=아웃소싱/현장)
+  const isOutsource=/아웃소싱|파견|도급|외주|위탁/.test(dept);
+  const isOffice=/사무|관리|경영|매니저|총무|회계|인사/.test(role);
+  const isField=/현장|생산|선별|기사|운전|작업|노무/.test(role);
+  let second='';
+  if(isOutsource){
+    second=isOffice?'C':(isField?'D':'D'); // 아웃소싱: 사무C, 현장D
+  } else {
+    second=isOffice?'A':(isField?'B':'B'); // 직접고용: 사무A, 현장B
+  }
+  return {second, isOutsource, isOffice, isField, roleTxt:role, deptTxt:dept};
+}
+
+function showGenEmpNo(empId){
+  const emp=EMPS.find(e=>e.id===empId);
+  if(!emp)return;
+  const site=(POL.siteCode||'').trim();
+  if(site.length!==5){alert('급여 설정에서 사이트코드(5자리)를 먼저 설정하세요.');return;}
+
+  const det=detectDeptCode(emp);
   let old=document.getElementById('empno-modal');if(old)old.remove();
   const modal=document.createElement('div');
   modal.id='empno-modal';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)';
-  const site=POL.siteCode||'';
-  modal.innerHTML=`<div style="background:#fff;border-radius:18px;padding:24px;min-width:320px;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,.18)">
-    <div style="font-size:15px;font-weight:800;color:var(--ink);margin-bottom:4px">사번 자동 부여</div>
-    <div style="font-size:11px;color:var(--ink3);margin-bottom:16px">사이트코드: <strong>${site}</strong> · 구분코드를 선택하세요</div>
+
+  // 직원 정보 요약 + 시설유형만 선택
+  const facilityTypes=[
+    {code:'A',label:'재활용폐기장',desc:'재활용 폐기물 처리 시설'},
+    {code:'B',label:'대형폐기장',desc:'대형 폐기물 처리 시설'},
+  ];
+
+  modal.innerHTML=`<div style="background:#fff;border-radius:18px;padding:24px;min-width:320px;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.18)">
+    <div style="font-size:15px;font-weight:800;color:var(--ink);margin-bottom:14px">사번 생성 — ${esc(emp.name||'이름없음')}</div>
+
+    <div style="background:var(--surf);border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:10px;font-weight:700;color:var(--ink3);margin-bottom:8px;letter-spacing:.5px">자동 감지된 정보</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <span style="padding:4px 10px;border-radius:16px;font-size:11px;font-weight:700;background:${det.isOutsource?'#FEF3C7':'var(--nbg)'};color:${det.isOutsource?'#92400E':'var(--navy2)'};border:1px solid ${det.isOutsource?'#FCD34D':'var(--nbg2)'}">
+          ${det.isOutsource?'아웃소싱':'직접고용'}${det.deptTxt?' ('+esc(det.deptTxt)+')':''}
+        </span>
+        <span style="padding:4px 10px;border-radius:16px;font-size:11px;font-weight:700;background:${det.isOffice?'#EDE9FE':'var(--gbg)'};color:${det.isOffice?'#5B21B6':'#065F46'};border:1px solid ${det.isOffice?'#DDD6FE':'#A7F3D0'}">
+          ${det.isOffice?'사무직':'현장직'}${det.roleTxt?' ('+esc(det.roleTxt)+')':''}
+        </span>
+        <span style="padding:4px 10px;border-radius:16px;font-size:11px;font-weight:600;background:var(--surf);color:var(--ink3);border:1px solid var(--bd)">
+          코드: x${det.second}
+        </span>
+      </div>
+      ${!det.roleTxt||!det.deptTxt?'<div style="font-size:10px;color:var(--amber);margin-top:6px;font-weight:600">⚠ 직종/소속이 비어있으면 기본값(직접고용·현장직)으로 판별됩니다</div>':''}
+    </div>
+
+    <div style="font-size:11px;font-weight:700;color:var(--ink);margin-bottom:8px">시설유형 선택</div>
     <div style="display:flex;flex-direction:column;gap:6px">
-      ${EMPNO_CODES.map(c=>{
-        const no=genEmpNo(c.code);
-        return `<button onclick="document.getElementById('empno-modal').remove();doAddEmp('${no}')"
-          style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border:1.5px solid var(--bd);border-radius:10px;background:#fff;cursor:pointer;font-family:inherit;transition:all .14s"
+      ${facilityTypes.map(f=>{
+        const fullCode=f.code+det.second;
+        const no=genEmpNo(fullCode);
+        return `<button onclick="confirmGenEmpNo(${empId},'${no}');document.getElementById('empno-modal').remove()"
+          style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border:1.5px solid var(--bd);border-radius:10px;background:#fff;cursor:pointer;font-family:inherit;transition:all .14s"
           onmouseover="this.style.borderColor='var(--navy2)';this.style.background='var(--nbg)'"
           onmouseout="this.style.borderColor='var(--bd)';this.style.background='#fff'">
-          <div style="text-align:left">
-            <div style="font-size:12px;font-weight:700;color:var(--ink)">${c.code} — ${c.label}</div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--ink)">${f.label}</div>
+            <div style="font-size:10px;color:var(--ink3)">${f.desc} · 코드: ${fullCode}</div>
           </div>
-          <div style="font-size:13px;font-weight:800;color:var(--navy2);font-variant-numeric:tabular-nums">${no}</div>
+          <div style="font-size:14px;font-weight:800;color:var(--navy2);font-variant-numeric:tabular-nums;letter-spacing:.5px">${no}</div>
         </button>`;
       }).join('')}
     </div>
-    <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
-      <button onclick="document.getElementById('empno-modal').remove();doAddEmp('')"
-        style="padding:7px 14px;font-size:11px;border:1px solid var(--bd2);border-radius:8px;background:#fff;cursor:pointer;font-family:inherit;color:var(--ink3)">사번 없이 추가</button>
-      <button onclick="document.getElementById('empno-modal').remove()"
-        style="padding:7px 14px;font-size:11px;border:1px solid var(--bd2);border-radius:8px;background:#fff;cursor:pointer;font-family:inherit;color:var(--ink3)">취소</button>
-    </div>
+    <button onclick="document.getElementById('empno-modal').remove()"
+      style="margin-top:12px;width:100%;padding:8px;font-size:11px;border:1px solid var(--bd2);border-radius:8px;background:#fff;cursor:pointer;font-family:inherit;color:var(--ink3)">취소</button>
   </div>`;
   document.body.appendChild(modal);
   modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
+}
+
+function confirmGenEmpNo(empId, empNo){
+  const emp=EMPS.find(e=>e.id===empId);
+  if(!emp)return;
+  emp.empNo=empNo;
+  saveLS();renderEmps();renderSb();
 }
 function setLeave(id){
   const existing=document.getElementById('leave-modal');
