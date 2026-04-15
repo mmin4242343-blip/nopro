@@ -551,6 +551,19 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
   .note-inp{width:120px!important;min-width:0!important;max-width:200px!important;font-size:9px}
   .td-w,.td-nt,.td-ot,.td-hol{min-width:38px;font-size:9px}
 
+  /* 출퇴근 테이블: 체크박스 숨기고 이름 열 고정 */
+  .et thead th:first-child,.et tbody td:first-child{display:none!important}
+  .et col:first-child{width:0!important}
+  .et thead th:nth-child(2){position:sticky!important;left:0!important;z-index:5!important;min-width:80px}
+  .td-nm{position:sticky!important;left:0!important;z-index:3!important;background:#fff!important}
+  .et tbody tr:hover .td-nm{background:#F8FAFF!important}
+  .et tbody tr.ab-row .td-nm{background:#FFF5F5!important}
+  .et tbody tr.hol-row .td-nm{background:#FFFBF0!important}
+  .et tbody tr.al-row .td-nm{background:#F0FDF7!important}
+
+  /* 근태현황 전체현황표: 직원 열 고정 */
+  .ov-t td.ec{position:sticky;left:0;z-index:2;background:#FAFAFA;min-width:70px}
+
   /* 급여 카드 */
   .pg2{grid-template-columns:1fr;gap:8px}
 
@@ -580,6 +593,14 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
   .emt{table-layout:auto}
   .emt th,.emt td{font-size:10px;padding:5px 3px}
   .ei2{padding:3px 4px;font-size:10px}
+  /* 직원관리: 드래그·No 숨기고, 사번+이름 고정 */
+  .emt thead th:nth-child(1),.emt tbody td:nth-child(1){display:none!important}
+  .emt thead th:nth-child(2),.emt tbody td:nth-child(2){display:none!important}
+  .emt thead th:nth-child(3){position:sticky!important;left:0!important;z-index:3!important;background:var(--navy)!important;min-width:70px!important}
+  .emt tbody td:nth-child(3){position:sticky!important;left:0!important;z-index:2!important;background:#fff!important}
+  .emt thead th:nth-child(4){position:sticky!important;left:70px!important;z-index:3!important;background:var(--navy)!important;min-width:56px!important;border-right:2px solid rgba(255,255,255,.2)!important}
+  .emt tbody td:nth-child(4){position:sticky!important;left:70px!important;z-index:2!important;background:#fff!important;border-right:2px solid var(--bd)!important}
+  .emt tbody tr:hover td:nth-child(3),.emt tbody tr:hover td:nth-child(4){background:#F8FAFF!important}
 
   /* 근무형태 */
   .shift-list-header,.shift-emp-row{grid-template-columns:28px 44px 1fr 56px 70px 50px 1fr 60px!important;font-size:10px!important;padding:6px 8px!important}
