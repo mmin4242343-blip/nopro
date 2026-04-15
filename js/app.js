@@ -1041,7 +1041,7 @@ function applyCommonFilter(emps, tab, refDate){
     const isFor = emp.nation==='foreign' || emp.foreigner===true;
     if(f.nation==='korean'  && isFor)  return false;
     if(f.nation==='foreign' && !isFor) return false;
-    if(f.pay!=='all' && (emp.payMode||'fixed')!==f.pay) return false;
+    if(f.pay!=='all' && emp.payMode && emp.payMode!==f.pay) return false;
     if(f.dept && f.dept!=='all' && (emp.dept||'').trim()!==(f.dept||'').trim()) return false;
     if(f.search && !(emp.name||'').toLowerCase().includes(f.search)) return false;
     return true;
@@ -1522,7 +1522,7 @@ function activeDayEmpsForCopy(){
     if(!emp.join) return true;
     const jd=new Date(emp.join);
     if(jd>new Date(cY,cM-1,cD)) return false;
-    if(payFilter!=='all' && (emp.payMode||'fixed')!==payFilter) return false;
+    if(payFilter!=='all' && emp.payMode && emp.payMode!==payFilter) return false;
     return true;
   });
 }
