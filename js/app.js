@@ -5300,73 +5300,64 @@ async function sfExcelCore(){
       tbmRow.getCell(1).font={size:9,color:{argb:'FF1D4ED8'}};
       ws2.mergeCells(r2,1,r2,7);r2++;
     }
-    // 사진 + 서명자 명단
+    // 서명자 명단
     const empList=emps.slice();
-    const maxRows=Math.max(photos.length||1,empList.length);
-    const photoStartRow=r2;
-    for(let i=0;i<maxRows;i++){
+    for(let i=0;i<empList.length;i++){
       const emp=empList[i];
-      const signed=emp?!!signs[String(emp.id)]:false;
-      const rowData=['','',
-        i===0&&photos.length===0?'(사진 없음)':'',
-        emp?(signed?'✓ 완료':'— 미서명'):'',
-        emp?(emp.name||''):'',
-        emp?(emp.shift==='night'?'야간':'주간'):'',
-        emp?(emp.dept||''):''];
-      const dataRow=ws2.addRow(rowData);
-      if(emp){
-        const sc=dataRow.getCell(4);
-        if(signed){sc.fill={type:'pattern',pattern:'solid',fgColor:GREEN_BG};sc.font={size:9,bold:true,color:GREEN_FT};}
-        else{sc.fill={type:'pattern',pattern:'solid',fgColor:RED_BG};sc.font={size:9,color:RED_FT};}
-      }
+      const signed=!!signs[String(emp.id)];
+      const dataRow=ws2.addRow(['','','',
+        signed?'✓ 완료':'— 미서명',
+        emp.name||'',
+        emp.shift==='night'?'야간':'주간',
+        emp.dept||'']);
+      const sc=dataRow.getCell(4);
+      if(signed){sc.fill={type:'pattern',pattern:'solid',fgColor:GREEN_BG};sc.font={size:9,bold:true,color:GREEN_FT};}
+      else{sc.fill={type:'pattern',pattern:'solid',fgColor:RED_BG};sc.font={size:9,color:RED_FT};}
       r2++;
     }
-    // 사진 삽입
+    // 사진 헤더
+    if(photos.length>0){
+      const phdr=ws2.addRow(['📷 현장 사진 ('+photos.length+'장)']);
+      phdr.getCell(1).font={bold:true,size:10,color:{argb:'FF0D9488'}};
+      ws2.mergeCells(r2,1,r2,7);r2++;
+    } else {
+      ws2.addRow(['(사진 없음)']);
+      ws2.getRow(r2).getCell(1).font={size:9,color:{argb:'FF94A3B8'},italic:true};
+      r2++;
+    }
+    // 사진 삽입 (직원 목록 아래 별도 행)
     for(let pi=0;pi<photos.length;pi++){
       const p=photos[pi];
       let inserted=false;
-      const imgRow=photoStartRow+pi;
+      // 사진용 빈 행 2개 추가
+      ws2.addRow([]);r2++;
+      ws2.addRow([]);r2++;
+      const imgRow=r2-1; // 사진이 들어갈 행
       try{
         let buf=null, ext='jpeg';
-        // 1순위: 메모리에 base64 데이터가 있으면 사용
         if(p.data&&typeof p.data==='string'&&p.data.startsWith('data:image')){
           buf=sf_b64toAB(p.data.split(',')[1]);
           ext=sf_imgExt(p.data);
-          console.log('[엑셀 사진] '+k+' #'+(pi+1)+': base64 사용 ('+Math.round(buf.byteLength/1024)+'KB)');
         }
-        // 2순위: Storage에서 다운로드
         if(!buf&&p.storagePath){
           try{
             const urls=await getFileUrls([p.storagePath]);
             const imgUrl=urls[p.storagePath];
-            if(imgUrl){
-              const resp=await fetch(imgUrl);
-              if(resp.ok){
-                buf=await resp.arrayBuffer();
-                ext=(p.name||'').toLowerCase().includes('.png')?'png':'jpeg';
-                console.log('[엑셀 사진] '+k+' #'+(pi+1)+': Storage 다운로드 성공 ('+Math.round(buf.byteLength/1024)+'KB)');
-              }
-            }
-          }catch(e2){console.warn('[엑셀 사진] Storage fetch 실패:',e2.message);}
+            if(imgUrl){const resp=await fetch(imgUrl);if(resp.ok){buf=await resp.arrayBuffer();ext=(p.name||'').toLowerCase().includes('.png')?'png':'jpeg';}}
+          }catch(e2){console.warn('[엑셀 사진] fetch 실패:',e2.message);}
         }
-        // 이미지 삽입
         if(buf&&buf.byteLength>0){
           const imgId=wb.addImage({buffer:buf,extension:ext});
-          ws2.addImage(imgId,{
-            tl:{col:0,row:imgRow-1},
-            br:{col:3,row:imgRow+1},
-          });
-          // 사진이 들어갈 행 높이 확보 (2행 사용)
-          ws2.getRow(imgRow).height=100;
-          if(ws2.getRow(imgRow+1)) ws2.getRow(imgRow+1).height=100;
+          ws2.addImage(imgId,{tl:{col:0,row:imgRow-2},br:{col:3,row:imgRow}});
+          ws2.getRow(imgRow-1).height=120;
+          ws2.getRow(imgRow).height=120;
           inserted=true;
-          console.log('[엑셀 사진] '+k+' #'+(pi+1)+': 삽입 성공 (row:'+imgRow+')');
+          console.log('[엑셀 사진] '+k+' #'+(pi+1)+': 삽입 성공');
         }
       }catch(e){console.warn('[엑셀 사진] 삽입 실패:',e);}
       if(!inserted){
-        const row=ws2.getRow(imgRow);
-        row.getCell(1).value='[사진'+(pi+1)+'] '+(p.name||'')+(p.storagePath?' (로드 실패)':' (데이터 없음)');
-        row.getCell(1).font={size:8,color:{argb:'FF6B7280'},italic:true};
+        ws2.getRow(imgRow).getCell(1).value='[사진'+(pi+1)+'] '+(p.name||'')+' (로드 실패)';
+        ws2.getRow(imgRow).getCell(1).font={size:8,color:{argb:'FF6B7280'},italic:true};
       }
     }
     // 구분선
