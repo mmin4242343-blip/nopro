@@ -2719,6 +2719,9 @@ function openBulkAdd(){
           <div style="font-size:10.5px;color:var(--ink3);margin-top:2px">
             Tab/→: 이동 · Enter: 아래 · Shift+클릭/드래그: 범위선택 · Ctrl+C: 복사 · Ctrl+V: 붙여넣기(엑셀 복붙 가능!) · Delete: 지우기
           </div>
+          <div style="font-size:10.5px;color:var(--navy2);margin-top:3px;font-weight:600">
+            💡 사번은 공란으로 두시면 직원 정보(직종·소속) 기반으로 자동 생성할 수 있습니다.
+          </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
           <span id="bulk-count" style="font-size:11px;color:var(--ink3);background:#F1F5F9;padding:4px 10px;border-radius:6px">0명 입력됨</span>
