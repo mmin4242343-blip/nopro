@@ -2079,47 +2079,52 @@ function renderXlPreview(){
       <td style="padding:2px 4px;background:#FEF3C7">
         <input type="number" value="${s.bonus||''}" placeholder="0"
           style="width:100%;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#92400E;font-weight:700;outline:none;padding:2px 4px;"
-          onchange="setMonthBonus(${emp.id},pY,pM,+this.value||0);renderXlPreview()"
+          data-eid="${emp.id}" data-field="bonus"
+          onblur="xlSaveBonus(this)"
           onfocus="this.style.background='#FEF3C7';this.style.outline='2px solid #F59E0B'"
-          onblur="this.style.background='transparent';this.style.outline='none'"
-          onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();xlInputNav(this,event.shiftKey);}">
+          onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
       </td>
       <td class="num" style="font-weight:700;background:#EFF6FF">${fmt$(totalPay)}</td>
       ${deductCells}
       <td style="padding:2px 4px;background:#F5F3FF">
         <input type="number" value="${+(tx.pension)||''}" placeholder="0"
           style="width:68px;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#7C3AED;font-weight:600;outline:none;padding:2px 4px;"
-          onchange="setTaxRec(${emp.id},pY,pM,'pension',+this.value||'');renderXlPreview()"
-          onfocus="this.style.outline='2px solid #7C3AED'" onblur="this.style.outline='none'"
-          onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();xlInputNav(this,event.shiftKey);}">
+          data-eid="${emp.id}" data-tax="pension"
+          onblur="xlSaveTax(this)"
+          onfocus="this.style.outline='2px solid #7C3AED'"
+          onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
       </td>
       <td style="padding:2px 4px;background:#F5F3FF">
         <input type="number" value="${+(tx.health)||''}" placeholder="0"
           style="width:68px;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#7C3AED;font-weight:600;outline:none;padding:2px 4px;"
-          onchange="setTaxRec(${emp.id},pY,pM,'health',+this.value||'');renderXlPreview()"
-          onfocus="this.style.outline='2px solid #7C3AED'" onblur="this.style.outline='none'"
-          onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();xlInputNav(this,event.shiftKey);}">
+          data-eid="${emp.id}" data-tax="health"
+          onblur="xlSaveTax(this)"
+          onfocus="this.style.outline='2px solid #7C3AED'"
+          onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
       </td>
       <td style="padding:2px 4px;background:#F5F3FF">
         <input type="number" value="${+(tx.employment)||''}" placeholder="0"
           style="width:68px;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#7C3AED;font-weight:600;outline:none;padding:2px 4px;"
-          onchange="setTaxRec(${emp.id},pY,pM,'employment',+this.value||'');renderXlPreview()"
-          onfocus="this.style.outline='2px solid #7C3AED'" onblur="this.style.outline='none'"
-          onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();xlInputNav(this,event.shiftKey);}">
+          data-eid="${emp.id}" data-tax="employment"
+          onblur="xlSaveTax(this)"
+          onfocus="this.style.outline='2px solid #7C3AED'"
+          onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
       </td>
       <td style="padding:2px 4px">
         <input type="number" value="${incomeTax||''}" placeholder="0"
           style="width:68px;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#A32D2D;font-weight:600;outline:none;padding:2px 4px;"
-          onchange="setTaxRec(${emp.id},pY,pM,'incomeTax',+this.value||'');renderXlPreview()"
-          onfocus="this.style.outline='2px solid #A32D2D'" onblur="this.style.outline='none'"
-          onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();xlInputNav(this,event.shiftKey);}">
+          data-eid="${emp.id}" data-tax="incomeTax"
+          onblur="xlSaveTax(this)"
+          onfocus="this.style.outline='2px solid #A32D2D'"
+          onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
       </td>
       <td style="padding:2px 4px">
         <input type="number" value="${localTax||''}" placeholder="0"
           style="width:68px;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#A32D2D;font-weight:600;outline:none;padding:2px 4px;"
-          onchange="setTaxRec(${emp.id},pY,pM,'localTax',+this.value||'');renderXlPreview()"
-          onfocus="this.style.outline='2px solid #A32D2D'" onblur="this.style.outline='none'"
-          onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();xlInputNav(this,event.shiftKey);}">
+          data-eid="${emp.id}" data-tax="localTax"
+          onblur="xlSaveTax(this)"
+          onfocus="this.style.outline='2px solid #A32D2D'"
+          onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
       </td>
       <td class="num" style="${totalDeduct>0?'color:#A32D2D;font-weight:700':''}">${totalDeduct>0?'-'+fmt$(totalDeduct):''}</td>
       <td class="num" style="font-weight:700;color:#085041">${fmt$(netPay)}</td>
@@ -7269,15 +7274,26 @@ function renderCompany() {
 // 💡 툴팁 팝업
 // ══════════════════════════════════════
 // 상세명세 input 셀 Tab/Enter 네비게이션
-// 상세명세 수당/공제 저장: blur 시 저장 + 디바운스로 테이블 갱신
+// 상세명세 입력 저장: blur 시 즉시 저장 + 디바운스로 테이블 갱신
 let _xlRefreshTimer=null;
-function xlSaveAllow(inp){
-  const eid=+inp.dataset.eid, aid=inp.dataset.aid;
-  const val=+inp.value||0;
-  setMonthAllowance(eid,pY,pM,aid,val);
-  // 디바운스: 연속 입력 시 마지막 것만 전체 갱신
+function _xlDebouncedRefresh(){
   if(_xlRefreshTimer) clearTimeout(_xlRefreshTimer);
   _xlRefreshTimer=setTimeout(()=>renderXlPreview(),800);
+}
+function xlSaveAllow(inp){
+  const eid=+inp.dataset.eid, aid=inp.dataset.aid;
+  setMonthAllowance(eid,pY,pM,aid,+inp.value||0);
+  _xlDebouncedRefresh();
+}
+function xlSaveBonus(inp){
+  const eid=+inp.dataset.eid;
+  setMonthBonus(eid,pY,pM,+inp.value||0);
+  _xlDebouncedRefresh();
+}
+function xlSaveTax(inp){
+  const eid=+inp.dataset.eid, field=inp.dataset.tax;
+  setTaxRec(eid,pY,pM,field,+inp.value||'');
+  _xlDebouncedRefresh();
 }
 
 function xlInputNav(inp, shiftKey){
