@@ -2007,24 +2007,23 @@ function renderXlPreview(){
     const allowCells = allowList.map(a=>{
       const rawV = getMonthAllowance(emp.id,pY,pM,a.id);
       return `<td style="padding:2px 4px">
-        <input type="number" value="${rawV||''}" placeholder="0"
+        <input type="number" value="${rawV!==0?rawV:''}" placeholder="0"
           style="width:100%;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#1565C0;font-weight:600;outline:none;padding:2px 4px;"
-          onchange="setMonthAllowance(${emp.id},pY,pM,'${a.id}',+this.value||0);renderXlPreview()"
+          data-eid="${emp.id}" data-aid="${a.id}"
+          onblur="xlSaveAllow(this)"
           onfocus="this.style.background='#EFF6FF';this.style.outline='2px solid #1565C0'"
-          onblur="this.style.background='transparent';this.style.outline='none'"
-          onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();xlInputNav(this,event.shiftKey);}">
+          onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
       </td>`;
     }).join('');
     const deductCells = deductAllow.map(a=>{
-      // 상여금 선지급 공제는 상여금과 연동 (수동 수정도 가능)
       const rawV = a.id==='deduct' ? (getMonthAllowance(emp.id,pY,pM,a.id)||0) : getMonthAllowance(emp.id,pY,pM,a.id);
       return `<td style="padding:2px 4px;background:#FFF1F2">
-        <input type="number" value="${rawV||''}" placeholder="0"
+        <input type="number" value="${rawV!==0?rawV:''}" placeholder="0"
           style="width:100%;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:var(--rose);font-weight:700;outline:none;padding:2px 4px;"
-          onchange="setMonthAllowance(${emp.id},pY,pM,'${a.id}',+this.value||0);renderXlPreview()"
+          data-eid="${emp.id}" data-aid="${a.id}"
+          onblur="xlSaveAllow(this)"
           onfocus="this.style.background='#FFF1F2';this.style.outline='2px solid var(--rose)'"
-          onblur="this.style.background='transparent';this.style.outline='none'"
-          onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();xlInputNav(this,event.shiftKey);}">
+          onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
       </td>`;
     }).join('');
 
@@ -7270,6 +7269,17 @@ function renderCompany() {
 // 💡 툴팁 팝업
 // ══════════════════════════════════════
 // 상세명세 input 셀 Tab/Enter 네비게이션
+// 상세명세 수당/공제 저장: blur 시 저장 + 디바운스로 테이블 갱신
+let _xlRefreshTimer=null;
+function xlSaveAllow(inp){
+  const eid=+inp.dataset.eid, aid=inp.dataset.aid;
+  const val=+inp.value||0;
+  setMonthAllowance(eid,pY,pM,aid,val);
+  // 디바운스: 연속 입력 시 마지막 것만 전체 갱신
+  if(_xlRefreshTimer) clearTimeout(_xlRefreshTimer);
+  _xlRefreshTimer=setTimeout(()=>renderXlPreview(),800);
+}
+
 function xlInputNav(inp, shiftKey){
   const allInputs = Array.from(document.querySelectorAll('#xl-table input[type="number"]'));
   const idx = allInputs.indexOf(inp);
