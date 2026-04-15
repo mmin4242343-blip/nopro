@@ -5354,11 +5354,13 @@ async function sfExcelCore(){
           const imgId=wb.addImage({buffer:buf,extension:ext});
           ws2.addImage(imgId,{
             tl:{col:0,row:imgRow-1},
-            ext:{width:250,height:180}
+            br:{col:3,row:imgRow+1},
           });
-          ws2.getRow(imgRow).height=140;
+          // 사진이 들어갈 행 높이 확보 (2행 사용)
+          ws2.getRow(imgRow).height=100;
+          if(ws2.getRow(imgRow+1)) ws2.getRow(imgRow+1).height=100;
           inserted=true;
-          console.log('[엑셀 사진] '+k+' #'+(pi+1)+': 삽입 성공');
+          console.log('[엑셀 사진] '+k+' #'+(pi+1)+': 삽입 성공 (row:'+imgRow+')');
         }
       }catch(e){console.warn('[엑셀 사진] 삽입 실패:',e);}
       if(!inserted){
