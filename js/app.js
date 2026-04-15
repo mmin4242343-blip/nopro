@@ -5781,7 +5781,9 @@ function calcLeaveForYear(emp, year) {
   }
 
   const remain = Math.max(0, total - used);
-  return { total, accrued: total, used, remain, monthly };
+  // 소수점 2자리까지만 (엑셀 import 시 부동소수점 방지)
+  const r2 = v => Math.round(v * 100) / 100;
+  return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(remain), monthly };
 }
 
 function countUsedLeave(empId, year) {
