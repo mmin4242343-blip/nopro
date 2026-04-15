@@ -2481,9 +2481,18 @@ function renderEmps(){
       <td><input class="ei2" value="${esc(e.grade||'')}" onchange="updE(${e.id},'grade',this.value)" placeholder="직급"></td>
       <td><input class="ei2" value="${esc(e.dept||'')}" onchange="updE(${e.id},'dept',this.value)" placeholder="인천본점"></td>
       <td>
+        <div style="display:flex;gap:3px;align-items:center">
+          <input class="ei2" value="${esc(e.rrnFront||'')}" maxlength="6" placeholder="앞6자리"
+            oninput="updRrn(${e.id},'rrnFront',this.value)" id="rrn-front-${e.id}" style="text-align:center;letter-spacing:1px">
+          <span style="color:var(--ink3);font-size:12px">-</span>
+          <input class="ei2" value="${esc(e.rrnBack||'')}" maxlength="7" placeholder="뒷7자리"
+            oninput="updRrn(${e.id},'rrnBack',this.value)" style="text-align:center;letter-spacing:2px">
+        </div>
+      </td>
+      <td>
         ${(e.payMode||POL.basePayMode)==='monthly'
-          ?`<div style="display:flex;align-items:center;gap:2px"><input class="ei2" type="number" value="${e.monthly!==null&&e.monthly!==undefined?e.monthly:POL.baseMonthly}" onchange="updE(${e.id},'monthly',+this.value)" style="text-align:right"><span style="font-size:9px;color:var(--ink3)">원/월</span></div>`
-          :`<div style="display:flex;align-items:center;gap:2px"><input class="ei2" type="number" value="${e.rate!==null&&e.rate!==undefined?e.rate:POL.baseRate}" onchange="updE(${e.id},'rate',+this.value)" style="text-align:right"><span style="font-size:9px;color:var(--ink3)">${(e.payMode||'fixed')==='hourly'?'원/h':'원/h'}</span></div>`
+          ?`<div style="display:flex;align-items:center;gap:2px"><input class="ei2" type="number" value="${e.monthly!==null&&e.monthly!==undefined?e.monthly:''}" onchange="updE(${e.id},'monthly',+this.value)" style="text-align:right" placeholder="${POL.baseMonthly}"><span style="font-size:9px;color:var(--ink3)">원/월</span></div>`
+          :`<div style="display:flex;align-items:center;gap:2px"><input class="ei2" type="number" value="${e.rate!==null&&e.rate!==undefined?e.rate:''}" onchange="updE(${e.id},'rate',+this.value)" style="text-align:right" placeholder="${POL.baseRate}"><span style="font-size:9px;color:var(--ink3)">원/h</span></div>`
         }
       </td>
       <td><input class="ei2" type="date" value="${esc(e.join||'')}" onchange="updE(${e.id},'join',this.value)"></td>
@@ -2501,15 +2510,6 @@ function renderEmps(){
       </td>
       <td><input class="ei2" type="number" value="${e.age||''}" onchange="updE(${e.id},'age',+this.value)" style="text-align:center" placeholder="자동" id="age-${e.id}"></td>
       <td><input class="ei2" value="${esc(e.phone||'')}" oninput="this.value=formatPhone(this.value);updE(${e.id},'phone',this.value)" placeholder="010-0000-0000" maxlength="13"></td>
-      <td>
-        <div style="display:flex;gap:3px;align-items:center">
-          <input class="ei2" value="${esc(e.rrnFront||'')}" maxlength="6" placeholder="앞6자리"
-            oninput="updRrn(${e.id},'rrnFront',this.value)" id="rrn-front-${e.id}" style="text-align:center;letter-spacing:1px">
-          <span style="color:var(--ink3);font-size:12px">-</span>
-          <input class="ei2" value="${esc(e.rrnBack||'')}" maxlength="7" placeholder="뒷7자리"
-            oninput="updRrn(${e.id},'rrnBack',this.value)" style="text-align:center;letter-spacing:2px">
-        </div>
-      </td>
       <td>
         <div class="rb-g" style="justify-content:center">
           <div class="rb ${!e.payMode||e.payMode==='fixed'?'on':''}" onclick="updE(${e.id},'payMode','fixed');renderEmps()" style="font-size:9px;padding:3px 6px">소정근무제</div>
