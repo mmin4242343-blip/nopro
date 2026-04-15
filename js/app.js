@@ -7876,21 +7876,29 @@ function clearLocalData(){
 
 // ── 전체 저장 (서버 프록시) ──
 async function sbSaveAll(companyId) {
-  const items = [
+  // 소형 키: 한 번에 저장
+  const smallItems = [
     {key:'emps', value:EMPS},
     {key:'pol', value:POL},
     {key:'bk', value:DEF_BK},
-    {key:'tbk', value:TBK},
-    {key:'rec', value:REC},
     {key:'bonus', value:BONUS_REC},
     {key:'allow', value:ALLOWANCE_REC},
     {key:'tax', value:JSON.parse(localStorage.getItem('npm5_tax')||'{}')},
     {key:'leave_settings', value:JSON.parse(localStorage.getItem('npm5_leave_settings')||'{}')},
     {key:'leave_overrides', value:JSON.parse(localStorage.getItem('npm5_leave_overrides')||'{}')},
+  ];
+  // 대형 키: 각각 별도 저장 (타임아웃 방지 + old_value 감사로그 저장)
+  const largeItems = [
+    {key:'rec', value:REC},
+    {key:'tbk', value:TBK},
     {key:'folders', value:FOLDERS.map(f=>({...f,files:(f.files||[]).map(({dataUrl,...r})=>r)}))},
     {key:'safety', value:(()=>{const s={};Object.entries(SAFETY_REC).forEach(([k,v])=>{s[k]=Array.isArray(v)?v.map(({data,...r})=>r):v;});return s;})()},
   ];
-  await apiFetch('/data-save','POST',{items});
+  // 소형 키 먼저 저장, 대형 키는 병렬로 개별 저장
+  await apiFetch('/data-save','POST',{items:smallItems});
+  await Promise.all(largeItems.map(item=>
+    apiFetch('/data-save','POST',{items:[item]}).catch(e=>console.warn('대형 키 저장 오류('+item.key+'):',e))
+  ));
 }
 
 // ── 전체 불러오기 (서버 프록시) ──
