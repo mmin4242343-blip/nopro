@@ -8151,6 +8151,12 @@ function renderMyInfo(){
   .mi-input:focus{border-color:var(--navy2);}
   .mi-save-btn{padding:5px 14px;background:var(--navy);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;}
   .mi-cancel-btn{padding:5px 12px;background:transparent;color:var(--ink3);border:1px solid var(--bd2);border-radius:7px;font-size:12px;cursor:pointer;font-family:inherit;}
+  @media(max-width:768px){
+    .mi-row{padding:10px 14px;gap:8px;flex-wrap:wrap;}
+    .mi-label{min-width:70px;font-size:12px;}
+    .mi-value{font-size:12px;}
+    .mi-section-hd{padding:10px 14px;font-size:11px;}
+  }
   </style>
 
   <div style="padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
