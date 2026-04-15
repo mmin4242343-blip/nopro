@@ -2,8 +2,8 @@ import { supabase } from './_shared/supabase.js';
 import { verifyToken, ok, err, options } from './_shared/auth.js';
 import { encryptEmps } from './_shared/crypto.js';
 
-// 모든 키의 old_value를 감사 로그에 저장 (전체 복구 가능)
-const SKIP_OLD_VALUE_KEYS = [];
+// 대용량 키는 old_value 조회 생략 (타임아웃 방지), new_value는 저장 (복구용)
+const SKIP_OLD_VALUE_KEYS = ['rec', 'tbk'];
 
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return options(event);
@@ -69,7 +69,7 @@ export const handler = async (event) => {
           action: oldValue ? 'update' : 'create',
           changed_by: changedBy,
           old_value: oldValue,
-          new_value: SKIP_OLD_VALUE_KEYS.includes(item.key) ? null : dataStr,
+          new_value: dataStr,
           changed_at: new Date().toISOString()
         });
       } catch {
