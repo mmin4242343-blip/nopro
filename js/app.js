@@ -4997,6 +4997,7 @@ function sfNd(f,d){
   sfLoadTbm();
   sfRenderList();
   sfRenderRecent();
+  sf2RenderPhotos();
   // 현재 보이는 탭도 갱신
   const mPage=document.getElementById('sf-page-monthly');
   if(mPage&&mPage.style.display!=='none')sfRenderM();
