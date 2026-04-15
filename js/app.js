@@ -5287,6 +5287,7 @@ async function sfExcelCore(){
     const k=sfMY+'-'+pad(sfMMo)+'-'+pad(d);
     const tbm=SAFETY_REC[k+'_tbm']||'';
     const photos=SAFETY_REC[k]||[];
+    if(photos.length>0) console.log('[안전교육 엑셀] '+k+': 사진 '+photos.length+'장', photos.map(p=>({storagePath:p.storagePath,data:!!(p.data)})));
     const signs=SAFETY_REC[k+'_signs']||{};
     const dw=new Date(sfMY,sfMMo-1,d).getDay();
     // 날짜 헤더
