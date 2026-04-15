@@ -1757,9 +1757,8 @@ function renderCal(){
     <div style="display:flex;align-items:center;gap:8px">
       <input type="number" value="${curBonus}" placeholder="0"
         style="width:120px;padding:6px 9px;font-size:13px;font-weight:700;border:1.5px solid var(--bd2);border-radius:8px;text-align:right;font-family:inherit;color:var(--purple)"
-        onchange="setMonthBonus(${vEid},${vY},${vM},+this.value);renderMonthly()"
         onfocus="this.style.borderColor='var(--navy2)'"
-        onblur="this.style.borderColor='var(--bd2)'">
+        onblur="this.style.borderColor='var(--bd2)';setMonthBonus(${vEid},${vY},${vM},+this.value);clearTimeout(this._t);this._t=setTimeout(()=>renderMonthly(),500)">
       <span style="font-size:12px;color:var(--ink3);font-weight:500">원</span>
       ${curBonus>0?`<span style="font-size:11px;color:var(--purple);background:var(--pbg);padding:3px 9px;border-radius:8px;font-weight:600">${fmt$(curBonus)}원</span>`:''}
     </div>
@@ -1901,7 +1900,7 @@ function renderPayroll(){
           <span style="display:flex;align-items:center;gap:5px">
             <input type="number" value="${s.bonus}" placeholder="0"
               style="width:90px;padding:3px 6px;font-size:12px;border:1px solid var(--bd2);border-radius:5px;text-align:right;font-family:inherit;font-weight:600;color:var(--purple)"
-              onchange="setMonthBonus(${emp.id},pY,pM,+this.value);renderPayroll()">
+              onblur="setMonthBonus(${emp.id},pY,pM,+this.value);clearTimeout(window._cardRefT);window._cardRefT=setTimeout(()=>renderPayroll(),500)">
             <span style="font-size:10px;color:var(--ink3)">원</span>
           </span>
         </div>
@@ -1918,7 +1917,7 @@ function renderPayroll(){
           <span style="display:flex;align-items:center;gap:5px">
             <input type="number" value="${rawV}" placeholder="0" min="0"
               style="width:90px;padding:3px 6px;font-size:12px;border:1px solid ${isDeduct?'#FECDD3':'var(--bd2)'};border-radius:5px;text-align:right;font-family:inherit;font-weight:600;color:${isDeduct?'var(--rose)':'var(--amber)'}"
-              onchange="setMonthAllowance(${emp.id},pY,pM,'${a.id}',+this.value);renderPayroll()">
+              onblur="setMonthAllowance(${emp.id},pY,pM,'${a.id}',+this.value);clearTimeout(window._cardRefT);window._cardRefT=setTimeout(()=>renderPayroll(),500)">
             <span style="font-size:10px;color:${isDeduct?'var(--rose)':'var(--ink3)'}">${isDeduct?'원 (공제)':'원'}</span>
           </span>
         </div>`;}).join('')}
