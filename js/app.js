@@ -5324,46 +5324,47 @@ async function sfExcelCore(){
     // 사진 삽입
     for(let pi=0;pi<photos.length;pi++){
       const p=photos[pi];
-      const imgData=p.data||'';
-      if(imgData&&imgData.startsWith('data:image')){
-        try{
-          const b64=imgData.split(',')[1];
-          const ext=sf_imgExt(imgData);
-          const imgId=wb.addImage({buffer:sf_b64toAB(b64),extension:ext});
-          ws2.addImage(imgId,{
-            tl:{col:0,row:photoStartRow+pi-1},
-            br:{col:2,row:photoStartRow+pi},
-            editAs:'oneCell'
-          });
-          ws2.getRow(photoStartRow+pi).height=80;
-        }catch(e){console.warn('사진 삽입 실패:',e);}
-      } else if(p.storagePath){
-        // Storage 사진 — 서명 URL로 다운로드 후 삽입
-        try{
-          const urls=await getFileUrls([p.storagePath]);
-          const imgUrl=urls[p.storagePath];
-          if(imgUrl){
-            const resp=await fetch(imgUrl);
-            const arrBuf=await resp.arrayBuffer();
-            const ext=p.name&&p.name.includes('.png')?'png':'jpeg';
-            const imgId=wb.addImage({buffer:arrBuf,extension:ext});
-            ws2.addImage(imgId,{
-              tl:{col:0,row:photoStartRow+pi-1},
-              br:{col:2,row:photoStartRow+pi},
-              editAs:'oneCell'
-            });
-            ws2.getRow(photoStartRow+pi).height=80;
-          } else {
-            const row=ws2.getRow(photoStartRow+pi);
-            row.getCell(1).value='[사진'+(pi+1)+'] '+p.name;
-            row.getCell(1).font={size:8,color:{argb:'FF6B7280'},italic:true};
-          }
-        }catch(e){
-          console.warn('Storage 사진 삽입 실패:',e);
-          const row=ws2.getRow(photoStartRow+pi);
-          row.getCell(1).value='[사진'+(pi+1)+'] '+p.name+' (로드 실패)';
-          row.getCell(1).font={size:8,color:{argb:'FF6B7280'},italic:true};
+      let inserted=false;
+      const imgRow=photoStartRow+pi;
+      try{
+        let buf=null, ext='jpeg';
+        // 1순위: 메모리에 base64 데이터가 있으면 사용
+        if(p.data&&typeof p.data==='string'&&p.data.startsWith('data:image')){
+          buf=sf_b64toAB(p.data.split(',')[1]);
+          ext=sf_imgExt(p.data);
+          console.log('[엑셀 사진] '+k+' #'+(pi+1)+': base64 사용 ('+Math.round(buf.byteLength/1024)+'KB)');
         }
+        // 2순위: Storage에서 다운로드
+        if(!buf&&p.storagePath){
+          try{
+            const urls=await getFileUrls([p.storagePath]);
+            const imgUrl=urls[p.storagePath];
+            if(imgUrl){
+              const resp=await fetch(imgUrl);
+              if(resp.ok){
+                buf=await resp.arrayBuffer();
+                ext=(p.name||'').toLowerCase().includes('.png')?'png':'jpeg';
+                console.log('[엑셀 사진] '+k+' #'+(pi+1)+': Storage 다운로드 성공 ('+Math.round(buf.byteLength/1024)+'KB)');
+              }
+            }
+          }catch(e2){console.warn('[엑셀 사진] Storage fetch 실패:',e2.message);}
+        }
+        // 이미지 삽입
+        if(buf&&buf.byteLength>0){
+          const imgId=wb.addImage({buffer:buf,extension:ext});
+          ws2.addImage(imgId,{
+            tl:{col:0,row:imgRow-1},
+            ext:{width:250,height:180}
+          });
+          ws2.getRow(imgRow).height=140;
+          inserted=true;
+          console.log('[엑셀 사진] '+k+' #'+(pi+1)+': 삽입 성공');
+        }
+      }catch(e){console.warn('[엑셀 사진] 삽입 실패:',e);}
+      if(!inserted){
+        const row=ws2.getRow(imgRow);
+        row.getCell(1).value='[사진'+(pi+1)+'] '+(p.name||'')+(p.storagePath?' (로드 실패)':' (데이터 없음)');
+        row.getCell(1).font={size:8,color:{argb:'FF6B7280'},italic:true};
       }
     }
     // 구분선
@@ -5431,8 +5432,9 @@ async function sf2HandleFiles(files){
   console.log('[사진] 저장 키:', key);
   if(!SAFETY_REC[key])SAFETY_REC[key]=[];
   const imgExts=/\.(jpg|jpeg|png|gif|webp|heic|heif|bmp|tiff?)$/i;
-  const imageFiles=Array.from(files).filter(f=>f.type.startsWith('image/')||imgExts.test(f.name));
-  if(!imageFiles.length){console.log('[사진] 이미지 파일 없음 (타입:', Array.from(files).map(f=>f.type+' '+f.name));return;}
+  // 타입 또는 확장자로 이미지 판별, 둘 다 없으면 그냥 허용 (카메라 촬영 등)
+  const imageFiles=Array.from(files).filter(f=>f.type.startsWith('image/')||imgExts.test(f.name)||(!f.type&&f.size>0));
+  if(!imageFiles.length){console.log('[사진] 이미지 파일 없음:', Array.from(files).map(f=>({type:f.type,name:f.name,size:f.size})));return;}
   if(typeof showSyncToast==='function') showSyncToast('사진 업로드 중... ('+imageFiles.length+'장)','info');
   let success=0;
   for(const file of imageFiles){
