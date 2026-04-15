@@ -5337,10 +5337,32 @@ async function sfExcelCore(){
           ws2.getRow(photoStartRow+pi).height=80;
         }catch(e){console.warn('사진 삽입 실패:',e);}
       } else if(p.storagePath){
-        // Storage 사진 — URL로 대체 텍스트
-        const row=ws2.getRow(photoStartRow+pi);
-        row.getCell(1).value='[사진'+(pi+1)+'] '+p.name;
-        row.getCell(1).font={size:8,color:{argb:'FF6B7280'},italic:true};
+        // Storage 사진 — 서명 URL로 다운로드 후 삽입
+        try{
+          const urls=await getFileUrls([p.storagePath]);
+          const imgUrl=urls[p.storagePath];
+          if(imgUrl){
+            const resp=await fetch(imgUrl);
+            const arrBuf=await resp.arrayBuffer();
+            const ext=p.name&&p.name.includes('.png')?'png':'jpeg';
+            const imgId=wb.addImage({buffer:arrBuf,extension:ext});
+            ws2.addImage(imgId,{
+              tl:{col:0,row:photoStartRow+pi-1},
+              br:{col:2,row:photoStartRow+pi},
+              editAs:'oneCell'
+            });
+            ws2.getRow(photoStartRow+pi).height=80;
+          } else {
+            const row=ws2.getRow(photoStartRow+pi);
+            row.getCell(1).value='[사진'+(pi+1)+'] '+p.name;
+            row.getCell(1).font={size:8,color:{argb:'FF6B7280'},italic:true};
+          }
+        }catch(e){
+          console.warn('Storage 사진 삽입 실패:',e);
+          const row=ws2.getRow(photoStartRow+pi);
+          row.getCell(1).value='[사진'+(pi+1)+'] '+p.name+' (로드 실패)';
+          row.getCell(1).font={size:8,color:{argb:'FF6B7280'},italic:true};
+        }
       }
     }
     // 구분선
