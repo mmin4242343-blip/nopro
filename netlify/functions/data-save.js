@@ -2,8 +2,8 @@ import { supabase } from './_shared/supabase.js';
 import { verifyToken, ok, err, options } from './_shared/auth.js';
 import { encryptEmps } from './_shared/crypto.js';
 
-// 대용량 키는 감사 로그에서 old_value를 생략 (저장 공간 절약)
-const SKIP_OLD_VALUE_KEYS = ['rec', 'tbk', 'folders', 'safety'];
+// 모든 키의 old_value를 감사 로그에 저장 (전체 복구 가능)
+const SKIP_OLD_VALUE_KEYS = [];
 
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return options(event);
