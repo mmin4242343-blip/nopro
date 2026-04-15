@@ -2665,6 +2665,8 @@ const BULK_COLS = [
   { key:'role',    label:'직종',     type:'text',   w:80  },
   { key:'grade',   label:'직급',     type:'text',   w:72  },
   { key:'dept',    label:'소속',     type:'text',   w:80  },
+  { key:'rrnFront',label:'주민번호(앞)',type:'text', w:80  },
+  { key:'rrnBack', label:'주민번호(뒤)',type:'text', w:80  },
   { key:'payMode', label:'급여방식', type:'select', w:88,
     opts:[{v:'fixed',l:'소정근무제'},{v:'hourly',l:'시급'},{v:'monthly',l:'월급제'},{v:'pohal',l:'포괄임금'}] },
   { key:'rate',    label:'시급/월급',type:'number', w:96  },
@@ -3123,15 +3125,18 @@ function confirmBulkAdd(){
     maxId++;
     const ci=(EMPS.length+i)%colors.length;
     const joinDate = row.join ? parseDate(row.join) : '';
+    const pm=row.payMode||null;
+    const isMonthly=pm==='monthly';
     EMPS.push({
       id:maxId, name:row.name.trim(),
       role:row.role||'', grade:row.grade||'', dept:row.dept||'',
       empNo:row.empNo||String(500+maxId),
-      rate:row.rate?+row.rate:null, monthly:null,
+      rate:(!isMonthly&&row.rate)?+row.rate:null,
+      monthly:(isMonthly&&row.rate)?+row.rate:null,
       join:joinDate, leave:'',
       age:row.age?+row.age:'', phone:row.phone||'',
-      rrnFront:'', rrnBack:'', sot:209,
-      payMode:row.payMode||null,
+      rrnFront:row.rrnFront||'', rrnBack:row.rrnBack||'', sot:209,
+      payMode:pm,
       shift:row.shift||'day',
       gender:row.gender||'male',
       nation:row.nation||'local',
