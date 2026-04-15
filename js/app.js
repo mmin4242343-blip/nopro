@@ -990,7 +990,7 @@ function _updateDailyRowCells(eid){
   const autoH=isAutoHol(cY,cM,cD,emp);
   const bks=getActiveBk(cY,cM,cD);
   try{
-    const c=calcSession(rec.start,rec.end,getEmpRate(emp),autoH,bks,rec.outTimes||[],getEmpPayMode(emp));
+    const c=calcSession(rec.start,rec.end,getEmpRate(emp),autoH,bks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,cY,cM));
     if(!c) return;
     // row 찾기
     const rows=document.querySelectorAll('#daily-tbody tr');
@@ -1188,12 +1188,12 @@ function renderTable(){
     } else if(rec.halfAnnual){
       // 반차: 4h 기본 지급, 출퇴근 있으면 실근무 추가 계산
       if(rec.start&&rec.end){
-        c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp));
+        c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,cY,cM));
       } else {
         c={work:240,nightM:0,ot:0,crossed:false,basePay:rate*4,nightPay:0,otPay:0,holPay:0,totalPay:rate*4};
       }
     } else if(!rec.absent&&rec.start&&rec.end){
-      c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp));
+      c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,cY,cM));
     }
     const chips=[];
     if(c&&!rec.annual&&!rec.halfAnnual){
@@ -1498,7 +1498,7 @@ function updateRowCalc(eid){
   if(!emp) return;
   const autoH = isAutoHol(cY, cM, cD);
   const bks = getActiveBk(cY, cM, cD);
-  const c = calcSession(rec.start, rec.end, getEmpRate(emp), autoH, bks, rec.outTimes||[], getEmpPayMode(emp));
+  const c = calcSession(rec.start, rec.end, getEmpRate(emp), autoH, bks, rec.outTimes||[], getEmpPayMode(emp), getOrdinaryRate(emp,cY,cM));
   if(!c) return;
   // 해당 행의 수치 셀 업데이트
   const rows = document.querySelectorAll('#daily-tbody tr');
@@ -1812,7 +1812,7 @@ function renderCal(){
     const rate=getEmpRate(emp);
     const isAl=rec&&rec.annual;
     const isHalf=rec&&rec.halfAnnual;
-    const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,getActiveBk(vY,vM,d),rec.outTimes||[],calEmpMode):null;
+    const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,getActiveBk(vY,vM,d),rec.outTimes||[],calEmpMode,getOrdinaryRate(emp,vY,vM)):null;
     const isSel=vY===cY&&vM===cM&&d===cD;
     let cls='cdc '+(rec&&rec.absent?'abd':isAl?'ald':isHalf?'ald':phName?'phd':c?'hd':'')+(isSel?' sel':'');
     let inner=`<div class="cdn ${dow===0?'su':dow===6?'sa':phName?'ph':''}">${d}</div>`;
@@ -1856,7 +1856,7 @@ function renderOv(){
       const rec=REC[rk(emp.id,vY,vM,d)];
       const autoH=isAutoHol(vY,vM,d);
       const isAl=rec&&rec.annual;
-      const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,getActiveBk(vY,vM,d),rec.outTimes||[],getEmpPayMode(emp)):null;
+      const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,getActiveBk(vY,vM,d),rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM)):null;
       const ph=getPhName(vY,vM,d);
       if(rec&&rec.absent)tr+=`<td class="ab2">결근</td>`;
       else if(isAl)tr+=`<td class="al2">연차</td>`;
@@ -4892,12 +4892,12 @@ function exportDailyExcel(){
       c={work:480,nightM:0,ot:0,basePay:rate*8,nightPay:0,otPay:0,holPay:0,totalPay:rate*8};
     } else if(rec.halfAnnual){
       if(rec.start&&rec.end){
-        c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],empPayMode);
+        c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],empPayMode,getOrdinaryRate(emp,pY,pM));
       } else {
         c={work:240,nightM:0,ot:0,basePay:rate*4,nightPay:0,otPay:0,holPay:0,totalPay:rate*4};
       }
     } else if(!rec.absent&&rec.start&&rec.end){
-      c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],empPayMode);
+      c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],empPayMode,getOrdinaryRate(emp,pY,pM));
     }
 
     let status='';
@@ -6633,7 +6633,7 @@ function exportMonthlyExcel(){
           else if(rec.annual){val='연차';cellBg='C8E6C9';fg=C.green;}
           else if(rec.halfAnnual){val='반차';cellBg='B3E5FC';fg='01579B';}
           else if(rec.start&&rec.end){
-            const c2=calcSession(rec.start,rec.end,getEmpRate(emp),autoH,getActiveBk(vY,vM,d),rec.outTimes||[],getEmpPayMode(emp));
+            const c2=calcSession(rec.start,rec.end,getEmpRate(emp),autoH,getActiveBk(vY,vM,d),rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM));
             if(c2){val=+(c2.work/60).toFixed(1);fg=C.navy;}
           }
         }
@@ -6742,7 +6742,7 @@ function exportMonthlyExcel(){
 
       if(rec){
         const bks=getActiveBk(vY,vM,d);
-        const c2=rec.start&&rec.end?calcSession(rec.start,rec.end,getEmpRate(emp),autoH,bks,rec.outTimes||[],getEmpPayMode(emp)):null;
+        const c2=rec.start&&rec.end?calcSession(rec.start,rec.end,getEmpRate(emp),autoH,bks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM)):null;
         const note=rec.absent?'결근':rec.annual?'연차':rec.halfAnnual?'반차':'';
         const noteBg=rec.absent?C.rose3:rec.annual?C.green3:rec.halfAnnual?C.blue3:rowBg;
         const noteFg=rec.absent?C.rose:rec.annual?C.green:rec.halfAnnual?C.blue:C.gray;
