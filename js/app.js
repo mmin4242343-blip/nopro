@@ -3409,12 +3409,12 @@ function genEmpNo(deptCode){
 }
 
 function addEmp(){
-  const site=POL.siteCode||'';
+  const site=(POL.siteCode||'').trim();
+  console.log('[addEmp] siteCode=', JSON.stringify(site), 'length=', site.length);
   if(site.length===5){
-    // 사이트코드 설정됨 → 구분코드 선택 모달
     showEmpNoModal();
   } else {
-    // 사이트코드 미설정 → 기존 방식
+    if(site.length>0&&site.length!==5) alert('사이트코드가 5자리가 아닙니다 (현재 '+site.length+'자리). 급여 설정에서 확인하세요.');
     doAddEmp('');
   }
 }
@@ -4476,7 +4476,10 @@ function saveSettings(){
   POL.nightStart=+document.getElementById('sel-ns').value;
   // 사이트코드
   const scInp=document.getElementById('inp-site-code');
-  if(scInp) POL.siteCode=(scInp.value||'').trim();
+  if(scInp){
+    POL.siteCode=(scInp.value||'').trim();
+    console.log('[saveSettings] siteCode 저장:', POL.siteCode);
+  }
   // alYear, alMonth는 연차관리 탭에서 별도 관리
   saveLS();renderTable();renderEmps();
   const btn=event.target;btn.textContent='저장됨 ✓';btn.style.background='var(--teal)';
