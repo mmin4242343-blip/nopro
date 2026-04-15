@@ -5437,18 +5437,27 @@ async function sf2HandleFiles(files){
   for(const file of imageFiles){
     try{
       console.log('[사진] 업로드 시작:', file.name, Math.round(file.size/1024)+'KB');
-      const res=await uploadFileToStorage(file,'safety',key);
-      console.log('[사진] 업로드 성공:', res.path);
-      SAFETY_REC[key].push({
+      // base64 먼저 생성 (로컬 표시용 + 엑셀 삽입용)
+      const b64=await fileToBase64(file);
+      const entry={
         id:'sf_'+Date.now()+'_'+Math.random().toString(36).slice(2),
-        storagePath:res.path,
         name:file.name,
+        data:b64,
         ts:Date.now()
-      });
+      };
+      // 서버 업로드 시도
+      try{
+        const res=await uploadFileToStorage(file,'safety',key);
+        console.log('[사진] 서버 업로드 성공:', res.path);
+        entry.storagePath=res.path;
+      }catch(e2){
+        console.warn('[사진] 서버 업로드 실패 (로컬 저장됨):', e2.message);
+      }
+      SAFETY_REC[key].push(entry);
       success++;
     }catch(e){
-      console.error('[사진] 업로드 실패:', file.name, e);
-      if(typeof showSyncToast==='function') showSyncToast(file.name+' 업로드 실패: '+e.message,'warn');
+      console.error('[사진] 처리 실패:', file.name, e);
+      if(typeof showSyncToast==='function') showSyncToast(file.name+' 실패: '+e.message,'warn');
     }
   }
   sfSave();
