@@ -3381,13 +3381,83 @@ function importEmpNoExcel(input){
   reader.readAsArrayBuffer(file);
 }
 
+// ══ 사번 자동 생성 ══
+const EMPNO_CODES=[
+  {code:'AA',label:'재활용폐기장 · 직접고용/사무직'},
+  {code:'AB',label:'재활용폐기장 · 직접고용/현장직'},
+  {code:'AC',label:'재활용폐기장 · 아웃소싱/사무직'},
+  {code:'AD',label:'재활용폐기장 · 아웃소싱/현장직'},
+  {code:'BA',label:'대형폐기장 · 직접고용/사무직'},
+  {code:'BB',label:'대형폐기장 · 직접고용/현장직'},
+  {code:'BC',label:'대형폐기장 · 아웃소싱/사무직'},
+  {code:'BD',label:'대형폐기장 · 아웃소싱/현장직'},
+];
+function genEmpNo(deptCode){
+  const site=POL.siteCode||'';
+  if(!site||site.length!==5)return '';
+  const prefix=site+deptCode;
+  // 기존 직원(퇴사자 포함)에서 같은 prefix의 최대 일련번호 찾기
+  let maxSeq=0;
+  EMPS.forEach(e=>{
+    const no=String(e.empNo||'');
+    if(no.length===10&&no.startsWith(prefix)){
+      const seq=parseInt(no.slice(7),10);
+      if(!isNaN(seq)&&seq>maxSeq) maxSeq=seq;
+    }
+  });
+  return prefix+String(maxSeq+1).padStart(3,'0');
+}
+
 function addEmp(){
+  const site=POL.siteCode||'';
+  if(site.length===5){
+    // 사이트코드 설정됨 → 구분코드 선택 모달
+    showEmpNoModal();
+  } else {
+    // 사이트코드 미설정 → 기존 방식
+    doAddEmp('');
+  }
+}
+function doAddEmp(empNo){
   const nid=EMPS.length>0?Math.max(...EMPS.map(e=>e.id))+1:1;
   const colors=['#DBEAFE','#FEF3C7','#D1FAE5','#EDE9FE','#FCE7F3','#FFF7ED'];
   const tcs=['#1E3A5F','#78350F','#064E3B','#4C1D95','#831843','#7C2D12'];
   const ci=EMPS.length%colors.length;
-  EMPS.push({id:nid,name:'',role:'',dept:'',empNo:'',rate:null,monthly:null,join:'',leave:'',age:'',phone:'',rrnFront:'',rrnBack:'',sot:209,payMode:null,shift:'day',gender:'male',nation:'local',color:colors[ci],tc:tcs[ci]});
+  EMPS.push({id:nid,name:'',role:'',dept:'',empNo:empNo,rate:null,monthly:null,join:'',leave:'',age:'',phone:'',rrnFront:'',rrnBack:'',sot:209,payMode:null,shift:'day',gender:'male',nation:'local',color:colors[ci],tc:tcs[ci]});
   saveLS();renderEmps();renderSb();
+}
+function showEmpNoModal(){
+  let old=document.getElementById('empno-modal');if(old)old.remove();
+  const modal=document.createElement('div');
+  modal.id='empno-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)';
+  const site=POL.siteCode||'';
+  modal.innerHTML=`<div style="background:#fff;border-radius:18px;padding:24px;min-width:320px;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,.18)">
+    <div style="font-size:15px;font-weight:800;color:var(--ink);margin-bottom:4px">사번 자동 부여</div>
+    <div style="font-size:11px;color:var(--ink3);margin-bottom:16px">사이트코드: <strong>${site}</strong> · 구분코드를 선택하세요</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${EMPNO_CODES.map(c=>{
+        const no=genEmpNo(c.code);
+        return `<button onclick="document.getElementById('empno-modal').remove();doAddEmp('${no}')"
+          style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border:1.5px solid var(--bd);border-radius:10px;background:#fff;cursor:pointer;font-family:inherit;transition:all .14s"
+          onmouseover="this.style.borderColor='var(--navy2)';this.style.background='var(--nbg)'"
+          onmouseout="this.style.borderColor='var(--bd)';this.style.background='#fff'">
+          <div style="text-align:left">
+            <div style="font-size:12px;font-weight:700;color:var(--ink)">${c.code} — ${c.label}</div>
+          </div>
+          <div style="font-size:13px;font-weight:800;color:var(--navy2);font-variant-numeric:tabular-nums">${no}</div>
+        </button>`;
+      }).join('')}
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="document.getElementById('empno-modal').remove();doAddEmp('')"
+        style="padding:7px 14px;font-size:11px;border:1px solid var(--bd2);border-radius:8px;background:#fff;cursor:pointer;font-family:inherit;color:var(--ink3)">사번 없이 추가</button>
+      <button onclick="document.getElementById('empno-modal').remove()"
+        style="padding:7px 14px;font-size:11px;border:1px solid var(--bd2);border-radius:8px;background:#fff;cursor:pointer;font-family:inherit;color:var(--ink3)">취소</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
 }
 function setLeave(id){
   const existing=document.getElementById('leave-modal');
@@ -4404,6 +4474,9 @@ function saveSettings(){
     saveLS();renderPayroll();
   }
   POL.nightStart=+document.getElementById('sel-ns').value;
+  // 사이트코드
+  const scInp=document.getElementById('inp-site-code');
+  if(scInp) POL.siteCode=(scInp.value||'').trim();
   // alYear, alMonth는 연차관리 탭에서 별도 관리
   saveLS();renderTable();renderEmps();
   const btn=event.target;btn.textContent='저장됨 ✓';btn.style.background='var(--teal)';
@@ -7189,6 +7262,7 @@ function init(){
   safe('tog-juhyu',el=>el.checked=POL.juhyu);
   safe('inp-sot',       el=>el.value=POL.sot);
   safe('inp-base-rate', el=>el.value=POL.baseRate);
+  safe('inp-site-code', el=>el.value=POL.siteCode||'');
   safe('sel-ns',        el=>el.value=POL.nightStart);
   setSize(POL.size||'u5');
   setDupMode(POL.dupMode||'single');
