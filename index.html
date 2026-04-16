@@ -2136,19 +2136,6 @@ noprohr.netlify.app/tbm_sign.html
   <div class="set-g">
 
     <div class="set-c">
-      <div class="set-h">사번 자동 부여</div>
-      <div class="set-b">
-        <div class="sr">
-          <div><div class="sl">사이트코드 (앞 5자리)</div>
-            <div class="ss">선별장유형(1) + 광역(2) + 세부(2)<br>예: 12013 = 자체/인천/남동구</div>
-          </div>
-          <input class="ni" type="text" id="inp-site-code" maxlength="5" placeholder="12013" style="width:80px;text-align:center;letter-spacing:1px;font-size:13px">
-        </div>
-        <div class="info" style="margin-top:8px">직원 추가 시 구분코드 선택 → 사번 자동 생성<br>예: <strong>12013</strong> + <strong>AB</strong> + <strong>001</strong> = 12013AB001</div>
-      </div>
-    </div>
-
-    <div class="set-c">
       <div class="set-h">기본급 계산 방식</div>
       <div class="set-b">
         <div class="sr">
@@ -2386,6 +2373,51 @@ noprohr.netlify.app/tbm_sign.html
       </div>
     </div>
 
+    <!-- 데이터 백업 -->
+    <div class="set-c">
+      <div class="set-h">💾 데이터 백업</div>
+      <div class="set-b">
+        <div style="font-size:12px;color:var(--ink2);margin-bottom:12px;line-height:1.7">
+          현재 저장된 모든 데이터를 JSON 파일로 다운로드합니다.<br>
+          <span style="font-size:11px;color:var(--ink3)">직원 정보, 출퇴근 기록, 급여 설정, 연차, 안전교육 등 전체 포함</span>
+        </div>
+        <button class="btn btn-n btn-sm" onclick="exportBackup()" style="width:100%">📥 전체 데이터 백업 다운로드</button>
+        <div style="margin-top:8px;font-size:10px;color:var(--ink3);text-align:center">주기적으로 백업해두면 데이터 유실 시 복구에 활용할 수 있습니다</div>
+      </div>
+    </div>
+
+    <!-- 사번 자동 부여 -->
+    <div class="set-c">
+      <div class="set-h">🔢 사번 자동 부여</div>
+      <div class="set-b">
+        <div class="sr">
+          <div><div class="sl">사번 자동 부여 기능</div>
+            <div class="ss">OFF 시 직원관리에서 사번 자동생성 버튼이 숨겨집니다</div>
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+            <span id="empno-toggle-label" style="font-size:11px;font-weight:600;color:var(--ink3)">OFF</span>
+            <input type="checkbox" id="inp-empno-enabled" onchange="toggleEmpNoSetting(this.checked)" style="accent-color:var(--navy);width:18px;height:18px;cursor:pointer">
+          </label>
+        </div>
+        <div id="empno-settings-body" style="display:none">
+          <div class="sr" style="margin-top:8px">
+            <div><div class="sl">사이트코드 (앞 5자리)</div>
+              <div class="ss">선별장유형(1) + 광역(2) + 세부(2)<br>예: 12013 = 자체/인천/남동구</div>
+            </div>
+            <input class="ni" type="text" id="inp-site-code" maxlength="5" placeholder="12013" style="width:80px;text-align:center;letter-spacing:1px;font-size:13px">
+          </div>
+          <div style="margin-top:12px;border-top:1px solid var(--bd);padding-top:12px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <div class="sl">구분코드 목록 (커스텀)</div>
+              <button class="btn btn-n btn-sm" onclick="addEmpNoCode()" style="font-size:10px;padding:3px 10px">+ 추가</button>
+            </div>
+            <div id="empno-codes-list"></div>
+          </div>
+          <div class="info" style="margin-top:8px">직원 추가 시 구분코드 선택 → 사번 자동 생성<br>예: <strong>12013</strong> + <strong>AB</strong> + <strong>001</strong> = 12013AB001</div>
+        </div>
+      </div>
+    </div>
+
     <!-- 문의하기 -->
     <div class="set-c" style="border-color:#0F2952">
       <div class="set-h" style="background:var(--navy)">📞 문의하기</div>
@@ -2415,19 +2447,6 @@ noprohr.netlify.app/tbm_sign.html
           </a>
         </div>
         <div style="margin-top:10px;font-size:10px;color:var(--ink3);text-align:center">평일 09:00 – 18:00 운영 · 빠른 답변 드리겠습니다</div>
-      </div>
-    </div>
-
-    <!-- 데이터 백업 -->
-    <div class="set-c">
-      <div class="set-h">💾 데이터 백업</div>
-      <div class="set-b">
-        <div style="font-size:12px;color:var(--ink2);margin-bottom:12px;line-height:1.7">
-          현재 저장된 모든 데이터를 JSON 파일로 다운로드합니다.<br>
-          <span style="font-size:11px;color:var(--ink3)">직원 정보, 출퇴근 기록, 급여 설정, 연차, 안전교육 등 전체 포함</span>
-        </div>
-        <button class="btn btn-n btn-sm" onclick="exportBackup()" style="width:100%">📥 전체 데이터 백업 다운로드</button>
-        <div style="margin-top:8px;font-size:10px;color:var(--ink3);text-align:center">주기적으로 백업해두면 데이터 유실 시 복구에 활용할 수 있습니다</div>
       </div>
     </div>
 

@@ -2528,7 +2528,7 @@ function renderEmps(){
       <td style="text-align:center;font-size:11px;font-weight:700;color:#94A3B8;padding:0 4px">${rowNum}</td>
       <td><div style="display:flex;gap:2px;align-items:center">
         <input class="ei2" value="${esc(e.empNo||'')}" onchange="updE(${e.id},'empNo',this.value)" style="text-align:center;font-size:10px;flex:1" placeholder="사번">
-        ${!e.empNo&&(POL.siteCode||'').length===5?`<button onclick="showGenEmpNo(${e.id})" style="padding:2px 4px;font-size:8px;border:1px solid var(--navy2);border-radius:4px;background:var(--nbg);color:var(--navy2);cursor:pointer;white-space:nowrap;font-weight:700" title="사번 자동 생성">생성</button>`:''}
+        ${!e.empNo&&POL.empNoEnabled&&(POL.siteCode||'').length===5?`<button onclick="showGenEmpNo(${e.id})" style="padding:2px 4px;font-size:8px;border:1px solid var(--navy2);border-radius:4px;background:var(--nbg);color:var(--navy2);cursor:pointer;white-space:nowrap;font-weight:700" title="사번 자동 생성">생성</button>`:''}
       </div></td>
       <td><input class="ei2" value="${esc(e.name)}" onchange="updE(${e.id},'name',this.value)" placeholder="이름"></td>
       <td><input class="ei2" value="${esc(e.role)}" onchange="updE(${e.id},'role',this.value)"></td>
@@ -3447,7 +3447,7 @@ function importEmpNoExcel(input){
 }
 
 // ══ 사번 자동 생성 ══
-const EMPNO_CODES=[
+const EMPNO_CODES_DEFAULT=[
   {code:'AA',label:'재활용폐기장 · 직접고용/사무직'},
   {code:'AB',label:'재활용폐기장 · 직접고용/현장직'},
   {code:'AC',label:'재활용폐기장 · 아웃소싱/사무직'},
@@ -3457,6 +3457,50 @@ const EMPNO_CODES=[
   {code:'BC',label:'대형폐기장 · 아웃소싱/사무직'},
   {code:'BD',label:'대형폐기장 · 아웃소싱/현장직'},
 ];
+function getEmpNoCodes(){return POL.empNoCodes||EMPNO_CODES_DEFAULT;}
+
+// 사번 자동 부여 ON/OFF 토글
+function toggleEmpNoSetting(on){
+  POL.empNoEnabled=on;
+  const body=document.getElementById('empno-settings-body');
+  const label=document.getElementById('empno-toggle-label');
+  if(body)body.style.display=on?'block':'none';
+  if(label){label.textContent=on?'ON':'OFF';label.style.color=on?'var(--navy)':'var(--ink3)';}
+  saveLS();
+}
+function initEmpNoSetting(){
+  const on=!!POL.empNoEnabled;
+  const cb=document.getElementById('inp-empno-enabled');if(cb)cb.checked=on;
+  toggleEmpNoSetting(on);
+  renderEmpNoCodes();
+}
+// 구분코드 커스텀 목록 렌더
+function renderEmpNoCodes(){
+  const list=document.getElementById('empno-codes-list');if(!list)return;
+  const codes=getEmpNoCodes();
+  list.innerHTML=codes.map((c,i)=>`<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+    <input class="ni" value="${esc(c.code)}" style="width:50px;text-align:center;font-size:12px;font-weight:700;letter-spacing:1px" maxlength="4"
+      onchange="updEmpNoCode(${i},'code',this.value)">
+    <input class="ni" value="${esc(c.label)}" style="flex:1;font-size:11px"
+      onchange="updEmpNoCode(${i},'label',this.value)">
+    <button onclick="delEmpNoCode(${i})" style="background:none;border:none;color:var(--rose);cursor:pointer;font-size:14px;padding:2px 6px" title="삭제">×</button>
+  </div>`).join('');
+}
+function updEmpNoCode(i,key,val){
+  if(!POL.empNoCodes)POL.empNoCodes=[...EMPNO_CODES_DEFAULT];
+  POL.empNoCodes[i][key]=val.trim();
+  saveLS();
+}
+function addEmpNoCode(){
+  if(!POL.empNoCodes)POL.empNoCodes=[...EMPNO_CODES_DEFAULT.map(c=>({...c}))];
+  POL.empNoCodes.push({code:'',label:''});
+  saveLS();renderEmpNoCodes();
+}
+function delEmpNoCode(i){
+  if(!POL.empNoCodes)return;
+  POL.empNoCodes.splice(i,1);
+  saveLS();renderEmpNoCodes();
+}
 function genEmpNo(deptCode){
   const site=POL.siteCode||'';
   if(!site||site.length!==5)return '';
@@ -3513,11 +3557,8 @@ function showGenEmpNo(empId){
   modal.id='empno-modal';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)';
 
-  // 직원 정보 요약 + 시설유형만 선택
-  const facilityTypes=[
-    {code:'A',label:'재활용폐기장',desc:'재활용 폐기물 처리 시설'},
-    {code:'B',label:'대형폐기장',desc:'대형 폐기물 처리 시설'},
-  ];
+  // 커스텀 구분코드 목록 사용
+  const codes=getEmpNoCodes();
 
   modal.innerHTML=`<div style="background:#fff;border-radius:18px;padding:24px;min-width:320px;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.18)">
     <div style="font-size:15px;font-weight:800;color:var(--ink);margin-bottom:14px">사번 생성 — ${esc(emp.name||'이름없음')}</div>
@@ -3531,25 +3572,21 @@ function showGenEmpNo(empId){
         <span style="padding:4px 10px;border-radius:16px;font-size:11px;font-weight:700;background:${det.isOffice?'#EDE9FE':'var(--gbg)'};color:${det.isOffice?'#5B21B6':'#065F46'};border:1px solid ${det.isOffice?'#DDD6FE':'#A7F3D0'}">
           ${det.isOffice?'사무직':'현장직'}${det.roleTxt?' ('+esc(det.roleTxt)+')':''}
         </span>
-        <span style="padding:4px 10px;border-radius:16px;font-size:11px;font-weight:600;background:var(--surf);color:var(--ink3);border:1px solid var(--bd)">
-          코드: x${det.second}
-        </span>
       </div>
       ${!det.roleTxt||!det.deptTxt?'<div style="font-size:10px;color:var(--amber);margin-top:6px;font-weight:600">⚠ 직종/소속이 비어있으면 기본값(직접고용·현장직)으로 판별됩니다</div>':''}
     </div>
 
-    <div style="font-size:11px;font-weight:700;color:var(--ink);margin-bottom:8px">시설유형 선택</div>
-    <div style="display:flex;flex-direction:column;gap:6px">
-      ${facilityTypes.map(f=>{
-        const fullCode=f.code+det.second;
-        const no=genEmpNo(fullCode);
+    <div style="font-size:11px;font-weight:700;color:var(--ink);margin-bottom:8px">구분코드 선택</div>
+    <div style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto">
+      ${codes.filter(c=>c.code).map(c=>{
+        const no=genEmpNo(c.code);
         return `<button onclick="confirmGenEmpNo(${empId},'${no}');document.getElementById('empno-modal').remove()"
           style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border:1.5px solid var(--bd);border-radius:10px;background:#fff;cursor:pointer;font-family:inherit;transition:all .14s"
           onmouseover="this.style.borderColor='var(--navy2)';this.style.background='var(--nbg)'"
           onmouseout="this.style.borderColor='var(--bd)';this.style.background='#fff'">
           <div>
-            <div style="font-size:13px;font-weight:700;color:var(--ink)">${f.label}</div>
-            <div style="font-size:10px;color:var(--ink3)">${f.desc} · 코드: ${fullCode}</div>
+            <div style="font-size:13px;font-weight:700;color:var(--ink)">${esc(c.label||c.code)}</div>
+            <div style="font-size:10px;color:var(--ink3)">코드: ${esc(c.code)}</div>
           </div>
           <div style="font-size:14px;font-weight:800;color:var(--navy2);font-variant-numeric:tabular-nums;letter-spacing:.5px">${no}</div>
         </button>`;
@@ -7468,6 +7505,7 @@ function init(){
   safe('inp-sot',       el=>el.value=POL.sot);
   safe('inp-base-rate', el=>el.value=POL.baseRate);
   safe('inp-site-code', el=>el.value=POL.siteCode||'');
+  initEmpNoSetting();
   safe('sel-ns',        el=>el.value=POL.nightStart);
   setSize(POL.size||'u5');
   setDupMode(POL.dupMode||'single');
