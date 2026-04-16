@@ -910,7 +910,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
     <p class="l-desc">회원가입부터 첫 급여 정산까지 5분이면 충분합니다.</p>
     <div class="lhow-steps">
       <div class="lhow-step"><div class="lhow-num">1</div><div class="lhow-ttl">회원가입</div><div class="lhow-desc">이메일과 회사 정보로 30초 만에 가입 완료.</div></div>
-      <div class="lhow-step"><div class="lhow-num">2</div><div class="lhow-ttl">직원 등록</div><div class="lhow-desc">시급제·소정근무제·포괄임금제 모두 지원. 엑셀 일괄 등록도 가능.</div></div>
+      <div class="lhow-step"><div class="lhow-num">2</div><div class="lhow-ttl">직원 등록</div><div class="lhow-desc">시급제·통상임금제·포괄임금제 모두 지원. 엑셀 일괄 등록도 가능.</div></div>
       <div class="lhow-step"><div class="lhow-num">3</div><div class="lhow-ttl">급여 정산</div><div class="lhow-desc">출퇴근 시간 입력하면 수당이 자동 계산됩니다.</div></div>
     </div>
   </div>
@@ -1271,7 +1271,7 @@ document.addEventListener('click',e=>{
   <div class="nt" id="nt-safety" onclick="gp('safety')">안전교육 일지</div>
   <div class="nt" id="nt-folder" onclick="gp('folder')">📁 폴더 관리</div>
   <div class="nt" id="nt-myinfo" onclick="gp('myinfo')">내 정보</div>
-  <div class="nt" id="nt-settings" onclick="gp('settings')">급여 설정 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:12px;padding:0 2px;opacity:.7" onclick="showTip('급여 설정','급여 계산에 필요한 기본 설정을 합니다.\n\n• 급여 방식 선택 (소정근무제·시간급·월정액제·고정급제)\n• 야간/연장/휴일 가산수당 ON/OFF\n• 주말·공휴일 기준 설정\n• 휴게시간 기본값 설정')">💡</button></span></div>
+  <div class="nt" id="nt-settings" onclick="gp('settings')">급여 설정 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:12px;padding:0 2px;opacity:.7" onclick="showTip('급여 설정','급여 계산에 필요한 기본 설정을 합니다.\n\n• 급여 방식 선택 (통상임금제·시간급·월정액제·고정급제)\n• 야간/연장/휴일 가산수당 ON/OFF\n• 주말·공휴일 기준 설정\n• 휴게시간 기본값 설정')">💡</button></span></div>
   <div class="nsp"></div>
   
 <button onclick="authLogout()" style="margin-right:8px;padding:6px 14px;border-radius:8px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);color:#F87171;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.background='rgba(239,68,68,.18)'" onmouseout="this.style.background='rgba(239,68,68,.08)'">로그아웃</button><button class="nxa" onclick="exportFile()">HTML 저장</button>
@@ -1404,7 +1404,7 @@ document.addEventListener('click',e=>{
       </div>
       <div style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:3px">
         <button class="mvf-btn btn btn-xs on" data-f="all" onclick="setMvFilter('all')">전체</button>
-        <button class="mvf-btn btn btn-xs" data-f="fixed" onclick="setMvFilter('fixed')">소정근무제</button>
+        <button class="mvf-btn btn btn-xs" data-f="fixed" onclick="setMvFilter('fixed')">통상임금제</button>
         <button class="mvf-btn btn btn-xs" data-f="hourly" onclick="setMvFilter('hourly')">시급</button>
 
       </div>
@@ -1557,7 +1557,7 @@ document.addEventListener('click',e=>{
     </div>
     <div style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:3px">
         <button class="cpf-btn btn btn-xs on" data-f="all" onclick="setCompanyFilter('all')">전체</button>
-        <button class="cpf-btn btn btn-xs" data-f="fixed" onclick="setCompanyFilter('fixed')">소정근무제</button>
+        <button class="cpf-btn btn btn-xs" data-f="fixed" onclick="setCompanyFilter('fixed')">통상임금제</button>
         <button class="cpf-btn btn btn-xs" data-f="hourly" onclick="setCompanyFilter('hourly')">시급</button>
 
       </div>
@@ -2040,7 +2040,7 @@ noprohr.netlify.app/tbm_sign.html
         <div style="font-size:9px;color:var(--ink3);margin-bottom:3px">급여방식</div>
         <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px" id="sf-chips-pm">
           <span class="sf-chip sf-chip-on" onclick="sfFc('pm','all',this)">전체</span>
-          <span class="sf-chip" onclick="sfFc('pm','fixed',this)">소정근무제</span>
+          <span class="sf-chip" onclick="sfFc('pm','fixed',this)">통상임금제</span>
           <span class="sf-chip" onclick="sfFc('pm','hourly',this)">시급제</span>
           <span class="sf-chip" onclick="sfFc('pm','monthly',this)">월급제</span>
           <span class="sf-chip" onclick="sfFc('pm','pohal',this)">포괄임금</span>
@@ -2077,7 +2077,7 @@ noprohr.netlify.app/tbm_sign.html
       <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
         <select id="sf-f-sh" onchange="sfRenderM()" style="padding:5px 9px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;background:var(--card);color:var(--ink);font-family:inherit;outline:none"><option value="all">주야간 전체</option><option value="day">주간</option><option value="night">야간</option></select>
         <select id="sf-f-na" onchange="sfRenderM()" style="padding:5px 9px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;background:var(--card);color:var(--ink);font-family:inherit;outline:none"><option value="all">내·외국인 전체</option><option value="korean">내국인</option><option value="foreign">외국인</option></select>
-        <select id="sf-f-pm" onchange="sfRenderM()" style="padding:5px 9px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;background:var(--card);color:var(--ink);font-family:inherit;outline:none"><option value="all">급여방식 전체</option><option value="fixed">소정근무제</option><option value="hourly">시급제</option><option value="monthly">월급제</option><option value="pohal">포괄임금</option></select>
+        <select id="sf-f-pm" onchange="sfRenderM()" style="padding:5px 9px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;background:var(--card);color:var(--ink);font-family:inherit;outline:none"><option value="all">급여방식 전체</option><option value="fixed">통상임금제</option><option value="hourly">시급제</option><option value="monthly">월급제</option><option value="pohal">포괄임금</option></select>
         <select id="sf-f-dp" onchange="sfRenderM()" style="padding:5px 9px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;background:var(--card);color:var(--ink);font-family:inherit;outline:none"><option value="all">소속 전체</option></select>
         <button class="sf-fbtn sf-fbtn-on" onclick="sfSetMF('all',this)">전체</button>
         <button class="sf-fbtn" onclick="sfSetMF('done',this)">완료만</button>
@@ -2140,16 +2140,16 @@ noprohr.netlify.app/tbm_sign.html
       <div class="set-b">
         <div class="sr">
           <div><div class="sl">기본급 방식</div>
-            <div class="ss"><strong>소정근무제</strong>: 시급×기준시간(209h) 고정<br><strong>시급제</strong>: 실근무시간 합산<br><strong>월급제</strong>: 월급 고정+휴일수당<br><strong>포괄임금제</strong>: 월급 고정 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:13px;padding:0 2px" onclick="showTip('포괄임금제','월급이 고정된 사무직·관리직에 적용합니다.\n야간/연장/휴일 가산수당 별도 산출 없음\n\n✅ 일일 근태에서 출퇴근 시간 입력 불필요\n[출근] [연차] [결근] 버튼만 선택\n\n⚠️ 5인 이상 사업장에서 실제 연장근로가\n많은 경우 법적 분쟁 가능성 있음')">💡</button></span></div>
+            <div class="ss"><strong>통상임금제</strong>: 시급×기준시간(209h) 고정<br><strong>시급제</strong>: 실근무시간 합산<br><strong>월급제</strong>: 월급 고정+휴일수당<br><strong>포괄임금제</strong>: 월급 고정 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:13px;padding:0 2px" onclick="showTip('포괄임금제','월급이 고정된 사무직·관리직에 적용합니다.\n야간/연장/휴일 가산수당 별도 산출 없음\n\n✅ 일일 근태에서 출퇴근 시간 입력 불필요\n[출근] [연차] [결근] 버튼만 선택\n\n⚠️ 5인 이상 사업장에서 실제 연장근로가\n많은 경우 법적 분쟁 가능성 있음')">💡</button></span></div>
           </div>
           <div class="rb-g" style="flex-direction:column;align-items:flex-end;gap:3px">
-            <div class="rb on" id="rb-base-fixed" onclick="setBasePay('fixed')">소정근무제</div>
+            <div class="rb on" id="rb-base-fixed" onclick="setBasePay('fixed')">통상임금제</div>
             <div class="rb" id="rb-base-hourly" onclick="setBasePay('hourly')">시급제</div>
             <div class="rb" id="rb-base-monthly" onclick="setBasePay('monthly')">월급제</div>
           </div>
         </div>
         <div class="sr" id="sr-sot">
-          <div><div style="display:flex;align-items:center;gap:4px"><div class="sl">소정근로시간 (월)</div><span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:13px;padding:0 2px" onclick="showTip('소정근로시간 209h','209h = 주 40시간 근무 + 주휴수당 포함 시간\n주 5일 × 8h = 40h, 여기에 주휴 8h 포함\n= 48h × 4.345주 ≈ 209h\n\n✅ 소정근무제일 때만 사용\n시급제·포괄임금제는 불필요')">💡</button></span></div><div class="ss">209h = 주40h + 주휴8h × 4.345주</div></div>
+          <div><div style="display:flex;align-items:center;gap:4px"><div class="sl">소정근로시간 (월)</div><span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:13px;padding:0 2px" onclick="showTip('소정근로시간 209h','209h = 주 40시간 근무 + 주휴수당 포함 시간\n주 5일 × 8h = 40h, 여기에 주휴 8h 포함\n= 48h × 4.345주 ≈ 209h\n\n✅ 통상임금제일 때만 사용\n시급제·포괄임금제는 불필요')">💡</button></span></div><div class="ss">209h = 주40h + 주휴8h × 4.345주</div></div>
           <div style="display:flex;align-items:center;gap:4px">
             <input class="ni" type="number" id="inp-sot" value="209" min="1" max="400">
             <span style="font-size:11px;color:var(--ink3)">h</span>
@@ -2178,10 +2178,10 @@ noprohr.netlify.app/tbm_sign.html
           </div>
         </div>
         <div class="sr" id="sr-juhyu">
-          <div><div style="display:flex;align-items:center;gap:4px"><div class="sl">주휴수당</div><span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:13px;padding:0 2px" onclick="showTip('주휴수당','주 15시간 이상, 해당 주 개근 시 지급\n하루치 임금(8h)을 추가로 지급하는 수당\n\n✅ 소정근무제: 이미 209h에 포함\n별도 설정 불필요 (자동 OFF)\n\n시급제 알바: 주별로 계산 후 지급')">💡</button></span></div><div class="ss" id="juhyu-ss">주 15h 이상, 해당 주 개근 시</div></div>
+          <div><div style="display:flex;align-items:center;gap:4px"><div class="sl">주휴수당</div><span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:13px;padding:0 2px" onclick="showTip('주휴수당','주 15시간 이상, 해당 주 개근 시 지급\n하루치 임금(8h)을 추가로 지급하는 수당\n\n✅ 통상임금제: 이미 209h에 포함\n별도 설정 불필요 (자동 OFF)\n\n시급제 알바: 주별로 계산 후 지급')">💡</button></span></div><div class="ss" id="juhyu-ss">주 15h 이상, 해당 주 개근 시</div></div>
           <label class="tgl" id="tgl-juhyu"><input type="checkbox" id="tog-juhyu" onchange="onJuhyu()"><div class="ttr"></div><div class="tth"></div></label>
         </div>
-        <div class="info" id="base-pay-info">현재: <strong>소정근무제</strong> — 기본급=시급×209h / 야간 ×0.5 추가</div>
+        <div class="info" id="base-pay-info">현재: <strong>통상임금제</strong> — 기본급=시급×209h / 야간 ×0.5 추가</div>
       </div>
     </div>
 
@@ -2190,7 +2190,7 @@ noprohr.netlify.app/tbm_sign.html
       <div class="set-b" style="padding-bottom:0">
         <!-- 탭 버튼 -->
         <div style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap">
-          <button id="prem-tab-fixed" class="btn btn-sm btn-n" onclick="setPremTab('fixed')" style="font-size:10px;padding:4px 12px">📋 소정근무제</button>
+          <button id="prem-tab-fixed" class="btn btn-sm btn-n" onclick="setPremTab('fixed')" style="font-size:10px;padding:4px 12px">📋 통상임금제</button>
           <button id="prem-tab-hourly" class="btn btn-sm" onclick="setPremTab('hourly')" style="font-size:10px;padding:4px 12px">⏱ 시급제</button>
           <button id="prem-tab-monthly" class="btn btn-sm" onclick="setPremTab('monthly')" style="font-size:10px;padding:4px 12px">💼 월급제</button>
         </div>

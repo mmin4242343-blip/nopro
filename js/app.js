@@ -297,11 +297,11 @@ let ALLOWANCE_REC=load(LS.AL,{});
 function getEmpPayMode(emp){const m=emp.payMode||POL.basePayMode;return m==='monthly'?'monthly':m==='hourly'?'hourly':m==='pohal'?'pohal':'fixed';}
 function getEmpPayModeLabel(emp){
   const m=getEmpPayMode(emp);
-  if(m==='fixed')return{text:'소정근무제',cls:'emb-fixed'};
+  if(m==='fixed')return{text:'통상임금제',cls:'emb-fixed'};
   if(m==='hourly')return{text:'시급제',cls:'emb-hourly'};
   if(m==='monthly')return{text:'월급제',cls:'emb-monthly'};
   if(m==='pohal')return{text:'포괄임금',cls:'emb-pohal'};
-  return{text:'소정근무제',cls:'emb-fixed'};
+  return{text:'통상임금제',cls:'emb-fixed'};
 }
 function getEmpShiftLabel(emp){
   return emp.shift==='night'?{text:'야간',color:'#4C1D95',bg:'#EDE9FE'}:{text:'주간',color:'#92400E',bg:'#FEF3C7'};
@@ -532,7 +532,7 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate){
   const isU5 = POL.size === 'u5'; // 5인 미만: 가산수당 법적 의무 없음
 
   if(mode==='fixed'){
-    // ── 소정근무제 새 계산 로직 ──
+    // ── 통상임금제 새 계산 로직 ──
     // 소정근로외 실근무: 평일=8h초과분, 휴일=전체 근무시간 (×1.0)
     // 고정야간: 22~06시 전체 구간 (×0.5)
     // 초과연장: 8h초과 중 야간구간 겹치는 부분 (×0.5 추가)
@@ -550,7 +550,7 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate){
 
     // 수당 계산
     // 기본급 부분(소정 내)은 기본급에 포함
-    let basePay = 0; // 소정근무제는 기본급 월합산으로 처리
+    let basePay = 0; // 통상임금제는 기본급 월합산으로 처리
     // 소정근로외 실근무수당 (×1.0) - 평일 8h초과 or 휴일 전체
     const _extF = POL.extFixed??true;
     let extraWorkPay = _extF ? r10(pRate*1.0*m2h(extraWork)) : 0;
@@ -1116,7 +1116,7 @@ function makeFilterBar(tab){
     </div>
     <div class="filter-group">
       <button class="fb${f.pay==='all'?' on':''}" onclick="setFilter('${tab}','pay','all',this)">전체</button>
-      <button class="fb${f.pay==='fixed'?' on':''}" onclick="setFilter('${tab}','pay','fixed',this)">소정근무제</button>
+      <button class="fb${f.pay==='fixed'?' on':''}" onclick="setFilter('${tab}','pay','fixed',this)">통상임금제</button>
       <button class="fb${f.pay==='hourly'?' on':''}" onclick="setFilter('${tab}','pay','hourly',this)">시급제</button>
       <button class="fb${f.pay==='monthly'?' on':''}" onclick="setFilter('${tab}','pay','monthly',this)">포괄임금제</button>
     </div>
@@ -1235,7 +1235,7 @@ function renderTable(){
     if(isPohalEmp){
       const isWork=!rec.absent&&!rec.annual;
       const holPay=c?(c.holDayStdPay+c.holDayOtPay):0;
-      // 개별휴게 UI (소정근무제와 동일)
+      // 개별휴게 UI (통상임금제와 동일)
       const pohalBkUI = rec.customBk ? `<div style="margin-top:4px;padding:5px 8px;background:var(--gbg);border:1px solid #BBF7D0;border-radius:6px">
         <div style="font-size:9px;font-weight:700;color:var(--green);margin-bottom:3px">개인 휴게시간</div>
         ${(rec.customBkList||[{s:'',e:''}]).map((b,bi)=>`<div style="display:flex;align-items:center;gap:3px;margin-bottom:2px">
@@ -1246,7 +1246,7 @@ function renderTable(){
         </div>`).join('')}
         <button class="bk-add" onclick="addCustomBk(${emp.id})" style="font-size:9px;margin-top:2px;padding:2px 8px">+ 세트 추가</button>
       </div>` : '';
-      // 외출 UI (소정근무제와 동일)
+      // 외출 UI (통상임금제와 동일)
       const pohalOutUI=(rec.outTimes&&rec.outTimes.length>0)?`<div style="margin-top:4px;padding:5px 7px;background:var(--abg);border-radius:6px;border:1px solid #FCD34D">
         ${(rec.outTimes||[]).map((o,oi)=>`<div class="out-row">
           <span style="font-size:9px;font-weight:700;color:var(--amber)">외출${oi+1}</span>
@@ -2576,7 +2576,7 @@ function renderEmps(){
       <td><input class="ei2" value="${esc(e.phone||'')}" oninput="this.value=formatPhone(this.value);updE(${e.id},'phone',this.value)" placeholder="010-0000-0000" maxlength="13"></td>
       <td>
         <div class="rb-g" style="justify-content:center">
-          <div class="rb ${!e.payMode||e.payMode==='fixed'?'on':''}" onclick="updE(${e.id},'payMode','fixed');renderEmps()" style="font-size:9px;padding:3px 6px">소정근무제</div>
+          <div class="rb ${!e.payMode||e.payMode==='fixed'?'on':''}" onclick="updE(${e.id},'payMode','fixed');renderEmps()" style="font-size:9px;padding:3px 6px">통상임금제</div>
           <div class="rb ${e.payMode==='hourly'?'on':''}" onclick="updE(${e.id},'payMode','hourly');renderEmps()" style="font-size:9px;padding:3px 6px">시급제</div>
           <div class="rb ${e.payMode==='monthly'?'on':''}" onclick="updE(${e.id},'payMode','monthly');renderEmps()" style="font-size:9px;padding:3px 6px">월급제</div>
         </div>
@@ -2732,7 +2732,7 @@ const BULK_COLS = [
   { key:'rrnFront',label:'주민번호(앞)',type:'text', w:80  },
   { key:'rrnBack', label:'주민번호(뒤)',type:'text', w:80  },
   { key:'payMode', label:'급여방식', type:'select', w:88,
-    opts:[{v:'fixed',l:'소정근무제'},{v:'hourly',l:'시급'},{v:'monthly',l:'월급제'},{v:'pohal',l:'포괄임금'}] },
+    opts:[{v:'fixed',l:'통상임금제'},{v:'hourly',l:'시급'},{v:'monthly',l:'월급제'},{v:'pohal',l:'포괄임금'}] },
   { key:'rate',    label:'시급/월급',type:'number', w:96  },
   { key:'join',    label:'입사일',   type:'date',   w:116 },
   { key:'gender',  label:'성별',     type:'select', w:72,
@@ -3779,13 +3779,13 @@ function setBasePay(m){
   const monthlyRow=document.getElementById('sr-base-monthly');
   const infoEl=document.getElementById('base-pay-info');
   if(m==='fixed'){
-    if(badge){badge.className='mode-badge mode-fixed';badge.textContent='소정근무제';}
+    if(badge){badge.className='mode-badge mode-fixed';badge.textContent='통상임금제';}
     if(sotRow)sotRow.style.display='flex';
     if(juhyuTgl)juhyuTgl.classList.add('dis');
-    if(juhyuSs){juhyuSs.textContent='소정근무제: 주휴 이미 209h에 포함';juhyuSs.style.color='var(--amber)';}
+    if(juhyuSs){juhyuSs.textContent='통상임금제: 주휴 이미 209h에 포함';juhyuSs.style.color='var(--amber)';}
     if(prem)prem.style.display='block';if(pohalInfo)pohalInfo.style.display='none';
     if(monthlyRow)monthlyRow.style.display='none';
-    if(infoEl){infoEl.textContent='소정근무제: 기본급=시급×209h / 야간·연장·휴일 가산 별도';infoEl.className='info green';}
+    if(infoEl){infoEl.textContent='통상임금제: 기본급=시급×209h / 야간·연장·휴일 가산 별도';infoEl.className='info green';}
     const rr=document.getElementById('sr-base-rate');if(rr)rr.style.display='flex';
   } else if(m==='hourly'){
     if(badge){badge.className='mode-badge mode-daily';badge.textContent='시급제';}
@@ -4792,7 +4792,7 @@ function exportExcel(){
     const ws = {}; let R=0;
 
     // ── 타이틀 블록 ──
-    const payMode = isMonthly?'월급제':sheetName==='소정근무제'?'소정근무제':'시급제';
+    const payMode = isMonthly?'월급제':sheetName==='통상임금제'?'통상임금제':'시급제';
     xlsWrite(ws,XLSX.utils.encode_cell({r:0,c:0}),`${month} 급여 명세서`,{
       font:{bold:true,sz:18,color:{rgb:C.navy},name:'맑은 고딕'},
       fill:{fgColor:{rgb:'EFF6FF'}},
@@ -4996,7 +4996,7 @@ function exportExcel(){
     return true;
   }), 'payroll');
 
-  writePaySheet(getEmps('fixed'), '소정근무제', false);
+  writePaySheet(getEmps('fixed'), '통상임금제', false);
   writePaySheet(getEmps('hourly'), '시급제', false);
   writePaySheet(getEmps('monthly'), '월급제', true);
 
@@ -5043,7 +5043,7 @@ function exportDailyExcel(){
     return true;
   }), 'daily', dayDate2);
 
-  const payModeLabel={fixed:'소정근무제',hourly:'시급제',monthly:'월급제',pohal:'포괄임금'};
+  const payModeLabel={fixed:'통상임금제',hourly:'시급제',monthly:'월급제',pohal:'포괄임금'};
 
   activeDayEmps.forEach((emp,ei)=>{
     const k=rk(emp.id,cY,cM,cD);
@@ -5764,7 +5764,7 @@ function sfPmLabel(e){
   if(m==='pohal')  return{t:'포괄임금',c:'#7C3AED',bg:'#F5F3FF'};
   if(m==='monthly')return{t:'월급제',  c:'#854F0B',bg:'#FEF3C7'};
   if(m==='hourly') return{t:'시급제',  c:'#0891B2',bg:'#CFFAFE'};
-  return               {t:'소정근무제',c:'#059669',bg:'#ECFDF5'};
+  return               {t:'통상임금제',c:'#059669',bg:'#ECFDF5'};
 }
 
 // 인원 리스트 렌더 (EMPS 배열 + 실제 서명 데이터)
@@ -7060,7 +7060,7 @@ function exportEmpsExcel(){
     const isLeft=!!e.leave;
     const bg = isLeft ? 'FFF5F5' : xlsRowBg(ei);
     const payMode=(e.payMode||'fixed');
-    const payLabel=payMode==='fixed'?'소정근무제':payMode==='hourly'?'시급제':'월급제';
+    const payLabel=payMode==='fixed'?'통상임금제':payMode==='hourly'?'시급제':'월급제';
     const payVal=payMode==='monthly'?(e.monthly||POL.baseMonthly):(e.rate||POL.baseRate);
     const payBg=payMode==='fixed'?C.blue4:payMode==='hourly'?C.green4:C.orange4;
     const payFg=payMode==='fixed'?C.blue:payMode==='hourly'?C.green:C.orange2;
@@ -7575,7 +7575,7 @@ function xlInputNav(inp, shiftKey){
 }
 
 function showBonusTip(){
-  var msg = '【소정근무제 가산수당 계산 방식】\n\n기본급(시급×209h)에는 평일 8h가 이미 포함되어 있어\n추가 근무에 대해서만 아래 컬럼별로 가산됩니다.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📌 컬럼 1 — 소정근로외 실근무 (×1.0)\n   · 소정근로시간(하루 8h) 밖의 실제 근무시간\n   · 평일: 8h 초과분\n   · 휴일(공휴일·주말): 근무 전체시간\n   → 시급 전액(×1.0) 추가 지급\n\n📌 컬럼 2 — 고정야간시간 (×0.5)\n   · 22:00~06:00 구간의 실근무시간 전체\n   · 기본 1.0은 기본급에 포함 → 0.5만 추가\n   → ON/OFF 설정 가능 (급여설정 → 야간 가산)\n\n📌 컬럼 3 — 초과연장시간 (×0.5)\n   · 8h 초과분 중 야간(22~06시) 구간이 겹치는 시간\n   · 연장(+0.5) + 야간(+0.5) 중 야간연장에 해당\n   → ON/OFF 설정 가능 (급여설정 → 연장 가산)\n\n📌 컬럼 4 — 초과휴일시간 (×0.5)\n   · 휴일 전체 근무시간에 휴일가산 0.5 추가\n   → ON/OFF 설정 가능 (급여설정 → 휴일 가산)\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n【케이스별 예시 (시급 11,750원 기준)】\n\n▶ 평일 09:00~18:00 (휴게1h → 실8h)\n   소정근로외:   0h × 1.0 =       0원\n   고정야간:     0h × 0.5 =       0원\n   총 가산수당:              0원\n   총급여: 2,455,750원\n\n▶ 평일 09:00~20:00 (휴게1h → 실10h, 연장2h)\n   소정근로외:   2h × 1.0 =  23,500원\n   고정야간:     0h × 0.5 =       0원\n   초과연장:     0h × 0.5 =       0원\n   총 가산수당:         23,500원 → 주간연장가산 11,750원 별도\n   총급여: 2,491,000원\n\n▶ 평일 14:00~24:00 (휴게없음 → 실10h, 야간2h, 연장2h)\n   소정근로외:   2h × 1.0 =  23,500원\n   고정야간:     2h × 0.5 =  11,750원\n   초과연장:     2h × 0.5 =  11,750원\n   총 가산수당:         47,000원\n   총급여: 2,502,750원\n\n▶ 평일 21:00~06:00 (휴게없음 → 실9h, 야간8h, 연장1h)\n   소정근로외:   1h × 1.0 =  11,750원\n   고정야간:     8h × 0.5 =  47,000원\n   초과연장:     1h × 0.5 =   5,875원\n   총 가산수당:         64,625원\n   총급여: 2,520,375원\n\n▶ 공휴일 21:00~06:00 (휴게없음 → 실9h)\n   소정근로외:   9h × 1.0 = 105,750원 (휴일=전체)\n   고정야간:     8h × 0.5 =  47,000원\n   초과연장:     1h × 0.5 =   5,875원\n   초과휴일:     9h × 0.5 =  52,875원\n   총 가산수당:        211,500원\n   총급여: 2,667,250원';
+  var msg = '【통상임금제 가산수당 계산 방식】\n\n기본급(시급×209h)에는 평일 8h가 이미 포함되어 있어\n추가 근무에 대해서만 아래 컬럼별로 가산됩니다.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📌 컬럼 1 — 소정근로외 실근무 (×1.0)\n   · 소정근로시간(하루 8h) 밖의 실제 근무시간\n   · 평일: 8h 초과분\n   · 휴일(공휴일·주말): 근무 전체시간\n   → 시급 전액(×1.0) 추가 지급\n\n📌 컬럼 2 — 고정야간시간 (×0.5)\n   · 22:00~06:00 구간의 실근무시간 전체\n   · 기본 1.0은 기본급에 포함 → 0.5만 추가\n   → ON/OFF 설정 가능 (급여설정 → 야간 가산)\n\n📌 컬럼 3 — 초과연장시간 (×0.5)\n   · 8h 초과분 중 야간(22~06시) 구간이 겹치는 시간\n   · 연장(+0.5) + 야간(+0.5) 중 야간연장에 해당\n   → ON/OFF 설정 가능 (급여설정 → 연장 가산)\n\n📌 컬럼 4 — 초과휴일시간 (×0.5)\n   · 휴일 전체 근무시간에 휴일가산 0.5 추가\n   → ON/OFF 설정 가능 (급여설정 → 휴일 가산)\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n【케이스별 예시 (시급 11,750원 기준)】\n\n▶ 평일 09:00~18:00 (휴게1h → 실8h)\n   소정근로외:   0h × 1.0 =       0원\n   고정야간:     0h × 0.5 =       0원\n   총 가산수당:              0원\n   총급여: 2,455,750원\n\n▶ 평일 09:00~20:00 (휴게1h → 실10h, 연장2h)\n   소정근로외:   2h × 1.0 =  23,500원\n   고정야간:     0h × 0.5 =       0원\n   초과연장:     0h × 0.5 =       0원\n   총 가산수당:         23,500원 → 주간연장가산 11,750원 별도\n   총급여: 2,491,000원\n\n▶ 평일 14:00~24:00 (휴게없음 → 실10h, 야간2h, 연장2h)\n   소정근로외:   2h × 1.0 =  23,500원\n   고정야간:     2h × 0.5 =  11,750원\n   초과연장:     2h × 0.5 =  11,750원\n   총 가산수당:         47,000원\n   총급여: 2,502,750원\n\n▶ 평일 21:00~06:00 (휴게없음 → 실9h, 야간8h, 연장1h)\n   소정근로외:   1h × 1.0 =  11,750원\n   고정야간:     8h × 0.5 =  47,000원\n   초과연장:     1h × 0.5 =   5,875원\n   총 가산수당:         64,625원\n   총급여: 2,520,375원\n\n▶ 공휴일 21:00~06:00 (휴게없음 → 실9h)\n   소정근로외:   9h × 1.0 = 105,750원 (휴일=전체)\n   고정야간:     8h × 0.5 =  47,000원\n   초과연장:     1h × 0.5 =   5,875원\n   초과휴일:     9h × 0.5 =  52,875원\n   총 가산수당:        211,500원\n   총급여: 2,667,250원';
   showTip('💡 가산수당 계산 로직', msg);
 }
 
@@ -8192,7 +8192,7 @@ function renderShiftList(){
       ?`<span style="background:#26215c;color:#afa9ec;font-size:11px;padding:2px 8px;border-radius:100px;">야간</span>`
       :`<span style="background:#e8eef9;color:#1a2f6e;font-size:11px;padding:2px 8px;border-radius:100px;">주간</span>`;
     const pC={fixed:'background:#e1f5ee;color:#0f6e56',hourly:'background:#faeeda;color:#854f0b',monthly:'background:#eeedfe;color:#534ab7'};
-    const pL={fixed:'소정근무제',hourly:'시급제',monthly:'포괄임금제'};
+    const pL={fixed:'통상임금제',hourly:'시급제',monthly:'포괄임금제'};
     const pBadge=hasShift
       ?`<span style="${pC[mode]||''};font-size:11px;padding:2px 8px;border-radius:100px;">${pL[mode]||mode}</span>`
       :`<span style="background:#f1efe8;color:#5f5e5a;font-size:11px;padding:2px 8px;border-radius:100px;">미등록</span>`;
@@ -8303,7 +8303,7 @@ function openShiftDetail(id){
   const emp=EMPS.find(e=>e.id===id);if(!emp)return;
   document.getElementById('sd-name').textContent=(emp.name||'')+'  근무형태 상세';
   document.getElementById('sd-shift-name').textContent=emp.shiftName||'—';
-  document.getElementById('sd-pay').textContent={fixed:'소정근무제',hourly:'시급제',monthly:'포괄임금제'}[emp.payMode]||'—';
+  document.getElementById('sd-pay').textContent={fixed:'통상임금제',hourly:'시급제',monthly:'포괄임금제'}[emp.payMode]||'—';
   document.getElementById('sd-days').textContent=(emp.workDays||[]).join(' ')||'—';
   document.getElementById('sd-time').textContent=(emp.workStart||'—')+' ~ '+(emp.workEnd||'—');
   document.getElementById('sd-bks').textContent=(emp.workBks||[]).map(b=>b.start+'~'+b.end).join(', ')||'—';
