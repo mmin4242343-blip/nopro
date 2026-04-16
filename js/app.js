@@ -2106,7 +2106,7 @@ function renderXlPreview(){
       <td class="num">${s.wdays}</td>
       <td class="num">${(getEmpPayMode(emp)==='hourly'||getEmpPayMode(emp)==='monthly')?'':sot}</td>
       <td class="num" style="font-size:11px">${joinStr}</td>
-      <td class="num">${s.twkH>0?fmt$(Math.round(s.tBase/s.twkH)):fmt$(rate)}</td>
+      <td class="num">${fmt$(Math.round(s.tBase/(emp.sot||POL.sot||209)))}</td>
       <td class="num" style="font-weight:500">${s.tBase>0?fmt$(s.tBase):'-'}</td>
       <td class="num" style="${getEmpPayMode(emp)==='hourly'&&s.wkly>0?'color:#0D9488;font-weight:700':''}">${getEmpPayMode(emp)==='hourly'?(s.wkly>0?fmt$(s.wkly):''):''}</td>
       <td class="num xl-editable">${s.annualPay>0?fmt$(s.annualPay):''}</td>
@@ -4880,7 +4880,7 @@ function exportExcel(){
       W(ci++,s.wdays||0,S.num(C.navy,bg));
       W(ci++,(_pm==='hourly'||_pm==='monthly')?'':sot,S.num(C.gray,bg));
       W(ci++,emp.join||'',S.cell(C.gray,bg,false,'center'));
-      W(ci++,s.twkH>0?Math.round(s.tBase/s.twkH):rate,S.num(C.blue,C.blue4||bg,true));
+      W(ci++,Math.round(s.tBase/(emp.sot||POL.sot||209)),S.num(C.blue,C.blue4||bg,true));
 
       // 기본급 + 주휴 + 연차수당
       W(ci++,Math.round(s.tBase)||'',s.tBase?S.num(C.navy,bg):S.empty(bg));
