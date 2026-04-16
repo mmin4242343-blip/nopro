@@ -8043,7 +8043,7 @@ function renderShiftList(){
     const chk=shiftSelected.has(emp.id);
     html+=`<div class="shift-emp-row${chk?' checked':''}" id="shift-row-${emp.id}" onclick="shiftToggleRow(${emp.id})">
       <input type="checkbox" ${chk?'checked':''} style="accent-color:var(--navy);" onclick="event.stopPropagation();shiftCheckRow(${emp.id},this)">
-      <span style="color:var(--ink3);">${String(emp.id).padStart(3,'0')}</span>
+      <span style="color:var(--ink3);">${esc(emp.empNo||'')}</span>
       <div style="display:flex;align-items:center;gap:6px;">
         <div style="width:26px;height:26px;border-radius:50%;background:var(--nbg);color:var(--navy2);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;">${(emp.name||'?')[0]}</div>
         <span style="font-weight:500;">${emp.name||''}</span>
