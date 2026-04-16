@@ -2021,7 +2021,7 @@ function renderXlPreview(){
     <th style="min-width:46px;background:#534AB7;color:#EEEDFE">초과연장<br>시간(h)<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
     <th style="min-width:46px;background:#854F0B;color:#FAC775">초과휴일<br>시간(h)<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
     <th style="min-width:46px">결근<br>일수</th>
-    <th style="min-width:50px">공제<br>시간</th>
+    <th style="min-width:56px">공제시간<br><span style="font-size:9px;opacity:.7">(h) ×1.0</span></th>
     <th style="min-width:80px;background:#1565C0;color:#fff">소정근로외<br>실근무수당<br><span style="font-size:8px;opacity:.8">×1.0</span></th>
     <th style="min-width:72px;background:#0C447C;color:#B5D4F4">야간<br>수당<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
     <th style="min-width:72px;background:#534AB7;color:#EEEDFE">초과연장<br>수당<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
