@@ -7,6 +7,11 @@ export const handler = async (event) => {
   if (event.httpMethod !== 'POST') return err(405, 'Method not allowed', event);
 
   try {
+    // 요청 본문 크기 제한 (1MB)
+    if (event.body && event.body.length > 1024 * 1024) {
+      return err(413, '요청 데이터가 너무 큽니다', event);
+    }
+
     const decoded = verifyToken(event);
     if (decoded.role !== 'user') return err(403, '사용자 권한이 필요합니다', event);
 
@@ -50,6 +55,7 @@ export const handler = async (event) => {
     }
     if (password) {
       if (password.length < 8) return err(400, '비밀번호는 8자 이상이어야 합니다', event);
+      if (password.length > 72) return err(400, '비밀번호는 72자 이내여야 합니다', event);
       updates.password_hash = await bcrypt.hash(password, 12);
     }
 

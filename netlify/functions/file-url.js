@@ -9,7 +9,9 @@ export const handler = async (event) => {
 
   try {
     const decoded = verifyToken(event);
+    if (decoded.role === 'admin') return err(403, '관리자는 파일 URL 생성 불가', event);
     const companyId = decoded.companyId;
+    if (!companyId) return err(403, '권한이 없습니다', event);
 
     const body = JSON.parse(event.body);
     const paths = body.paths || (body.path ? [body.path] : []);

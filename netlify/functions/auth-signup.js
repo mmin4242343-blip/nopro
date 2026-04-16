@@ -7,6 +7,11 @@ export const handler = async (event) => {
   if (event.httpMethod !== 'POST') return err(405, 'Method not allowed', event);
 
   try {
+    // 요청 본문 크기 제한 (1MB)
+    if (event.body && event.body.length > 1024 * 1024) {
+      return err(413, '요청 데이터가 너무 큽니다', event);
+    }
+
     let parsed;
     try { parsed = JSON.parse(event.body); } catch { return err(400, '잘못된 요청 형식입니다', event); }
     const { company, name, phone, email, password, size, addr } = parsed;
@@ -14,8 +19,21 @@ export const handler = async (event) => {
     if (!company || !name || !phone || !email || !password) {
       return err(400, '필수 항목을 모두 입력해주세요', event);
     }
+    // 입력값 길이 제한 (DoS 방지)
+    if (company.length > 100) return err(400, '회사명은 100자 이내여야 합니다', event);
+    if (name.length > 50) return err(400, '담당자명은 50자 이내여야 합니다', event);
+    if (phone.length > 20) return err(400, '전화번호 형식이 올바르지 않습니다', event);
+    if (email.length > 254) return err(400, '이메일 형식이 올바르지 않습니다', event);
+    if (addr && String(addr).length > 200) return err(400, '주소는 200자 이내여야 합니다', event);
+    // 이메일 형식 검증
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) return err(400, '유효한 이메일 형식이 아닙니다', event);
+    // 비밀번호 길이 검증
     if (password.length < 8) {
       return err(400, '비밀번호는 8자 이상이어야 합니다', event);
+    }
+    if (password.length > 72) {
+      return err(400, '비밀번호는 72자 이내여야 합니다', event);
     }
 
     // 이메일 중복 체크

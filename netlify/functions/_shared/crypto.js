@@ -1,7 +1,13 @@
 import crypto from 'crypto';
 
 const ALGO = 'aes-256-gcm';
-const getKey = () => Buffer.from(process.env.ENCRYPTION_KEY, 'hex');
+const getKey = () => {
+  const hex = process.env.ENCRYPTION_KEY;
+  if (!hex) throw new Error('ENCRYPTION_KEY 환경변수가 설정되지 않았습니다');
+  const key = Buffer.from(hex, 'hex');
+  if (key.length !== 32) throw new Error('ENCRYPTION_KEY는 32바이트(64자 hex)여야 합니다');
+  return key;
+};
 
 export function encrypt(plaintext) {
   if (!plaintext) return plaintext;

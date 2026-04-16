@@ -26,6 +26,11 @@ function esc(s){
   if(s==null) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
+// CSS injection 방지: style 속성에 들어가는 색상값 검증
+function safeColor(c,fallback){
+  if(!c) return fallback||'#DBEAFE';
+  return /^(#[0-9a-fA-F]{3,8}|[a-zA-Z]+|rgba?\([0-9,.\s%]+\)|hsla?\([0-9,.\s%deg]+\))$/.test(c)?c:fallback||'#DBEAFE';
+}
 
 // ══════════════════════════════════════
 // 공휴일 자동 생성 (2024~2040)
@@ -841,7 +846,7 @@ function renderSb(filter=''){
       onclick="vEid=${e.id};renderSb(document.getElementById('sb-search-inp')?.value||'')"
       style="transition:opacity .15s;">
       <span style="cursor:grab;color:var(--ink3);font-size:11px;margin-right:1px">⠿</span>
-      <div class="av" style="width:28px;height:28px;font-size:12px;background:${e.color||'#DBEAFE'};color:${e.tc||'#1E3A5F'}">${e.name?esc(e.name)[0]:'?'}</div>
+      <div class="av" style="width:28px;height:28px;font-size:12px;background:${safeColor(e.color,'#DBEAFE')};color:${safeColor(e.tc,'#1E3A5F')}">${e.name?esc(e.name)[0]:'?'}</div>
       <div><div class="en">${esc(e.name)}<span class="emp-mode-badge ${getEmpPayModeLabel(e).cls}">${getEmpPayModeLabel(e).text}</span>${e.nation==='foreign'?'<span style="font-size:9px;color:#92400E;background:var(--abg);padding:1px 5px;border-radius:5px;font-weight:700;margin-left:2px">외국인</span>':''} ${e.leave?'<span style="font-size:9px;color:var(--rose);font-weight:700;margin-left:3px">퇴사</span>':''}</div><div class="er">${esc(e.role)} · ${getEmpShiftLabel(e).text}</div></div>
     </div>`).join('');
 }
@@ -1205,13 +1210,13 @@ function renderTable(){
     if(rec.halfAnnual)chips.push('<span class="chip" style="background:#E0E7FF;color:#3730A3;font-weight:700">반차</span>');
     const rowCls=rec.absent?'ab-row':rec.annual?'al-row':rec.halfAnnual?'al-row':autoH?'hol-row':'';
     const phName=getPhName(cY,cM,cD);
-    const holTag=autoH?`<span style="font-size:9px;color:#9A3412;background:#FED7AA;padding:1px 5px;border-radius:5px;font-weight:700;margin-left:3px">${phName||'휴일'}</span>`:'';
+    const holTag=autoH?`<span style="font-size:9px;color:#9A3412;background:#FED7AA;padding:1px 5px;border-radius:5px;font-weight:700;margin-left:3px">${esc(phName)||'휴일'}</span>`:'';
     const cbTd=`<td style="width:32px;text-align:center;">
   <input type="checkbox" class="daily-row-cb" data-eid="${emp.id}" style="accent-color:var(--navy);">
 </td>`;
     const nameTd=`<td class="td-nm">
       <div style="display:flex;align-items:center;gap:5px">
-        <div class="av" style="width:26px;height:26px;font-size:11px;background:${emp.color||'#DBEAFE'};color:${emp.tc||'#1E3A5F'}">${esc(emp.name)[0]}</div>
+        <div class="av" style="width:26px;height:26px;font-size:11px;background:${safeColor(emp.color,'#DBEAFE')};color:${safeColor(emp.tc,'#1E3A5F')}">${esc(emp.name)[0]}</div>
         <div>
           <div style="font-size:12px;font-weight:700;color:var(--ink)">${esc(emp.name)}${holTag}<span class="emp-mode-badge ${getEmpPayModeLabel(emp).cls}">${getEmpPayModeLabel(emp).text}</span><span style="font-size:9px;padding:1px 5px;border-radius:5px;background:${getEmpShiftLabel(emp).bg};color:${getEmpShiftLabel(emp).color};font-weight:700;margin-left:2px">${getEmpShiftLabel(emp).text}</span></div>
           <div style="font-size:9px;color:var(--ink3)">${esc(emp.role)} · 연차${al.remain}개</div>
@@ -1851,7 +1856,7 @@ function renderOv(){
   });
   const rows=mvEmps.map(emp=>{
     const rate=getEmpRate(emp);
-    let tr=`<td class="ec"><div style="display:flex;align-items:center;gap:4px"><div class="av" style="width:19px;height:19px;font-size:9px;background:${emp.color||'#DBEAFE'};color:${emp.tc||'#1E3A5F'}">${esc(emp.name)[0]}</div>${esc(emp.name)}</div></td>`;
+    let tr=`<td class="ec"><div style="display:flex;align-items:center;gap:4px"><div class="av" style="width:19px;height:19px;font-size:9px;background:${safeColor(emp.color,'#DBEAFE')};color:${safeColor(emp.tc,'#1E3A5F')}">${esc(emp.name)[0]}</div>${esc(emp.name)}</div></td>`;
     for(let d=1;d<=days;d++){
       const rec=REC[rk(emp.id,vY,vM,d)];
       const autoH=isAutoHol(vY,vM,d);
@@ -1906,7 +1911,7 @@ function renderPayroll(){
     gt.base+=s.tBase;gt.nt+=s.tNightPay;gt.ot+=s.tOtDayPay+s.tOtNightPay;gt.hol+=(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0);gt.al+=s.annualPay;gt.bonus+=s.bonus;gt.allow+=s.totalAllowance;gt.ded+=s.deduction;gt.total+=s.total;
     return`<div class="pc">
       <div class="pch">
-        <div class="av" style="width:32px;height:32px;font-size:12px;background:${emp.color||'#DBEAFE'};color:${emp.tc||'#1E3A5F'}">${esc(emp.name)[0]}</div>
+        <div class="av" style="width:32px;height:32px;font-size:12px;background:${safeColor(emp.color,'#DBEAFE')};color:${safeColor(emp.tc,'#1E3A5F')}">${esc(emp.name)[0]}</div>
         <div>
           <div style="font-size:13px;font-weight:700;color:var(--ink)">${esc(emp.name)}</div>
           <div style="font-size:10px;color:var(--ink3)">${esc(emp.role)} · ${s.wdays}일<span class="emp-mode-badge ${getEmpPayModeLabel(emp).cls}" style="margin-left:4px">${getEmpPayModeLabel(emp).text}</span><span style="font-size:9px;padding:1px 5px;border-radius:5px;background:${getEmpShiftLabel(emp).bg};color:${getEmpShiftLabel(emp).color};font-weight:700;margin-left:2px">${getEmpShiftLabel(emp).text}</span>${(()=>{const or=getOrdinaryRate(emp,pY,pM);const br=getEmpRate(emp);return or>br?`<span style="font-size:9px;padding:1px 5px;border-radius:5px;background:#EFF6FF;color:var(--navy2);font-weight:700;margin-left:2px">통상시급 ${or.toLocaleString()}원</span>`:''})()}</div>
@@ -4304,7 +4309,15 @@ let SYNC_URL = localStorage.getItem('npm5_sync_url') || '';
 let syncStatus = 'idle'; // idle | syncing | ok | error
 
 function setSyncUrl(url){
-  SYNC_URL = url.trim();
+  const trimmed = url.trim();
+  // SSRF 방어: https만 허용, localhost/내부IP 차단
+  if(trimmed && !/^https:\/\//i.test(trimmed)){
+    showSyncToast('⚠️ HTTPS URL만 허용됩니다', 'warn'); return;
+  }
+  if(trimmed && /^https?:\/\/(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/i.test(trimmed)){
+    showSyncToast('⚠️ 내부 네트워크 URL은 사용할 수 없습니다', 'warn'); return;
+  }
+  SYNC_URL = trimmed;
   localStorage.setItem('npm5_sync_url', SYNC_URL);
 }
 
@@ -5815,7 +5828,7 @@ function sfRenderSummary(){
       const pct=daysCount?Math.min(100,Math.round(done/daysCount*100)):0;
       const pc=pct===100?'var(--green)':pct>=70?'#1D4ED8':'var(--rose)';
       return`<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
-        <span style="font-size:9px;color:var(--ink3);min-width:68px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.name}</span>
+        <span style="font-size:9px;color:var(--ink3);min-width:68px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.name)}</span>
         <div style="flex:1;height:4px;background:var(--surf);border-radius:99px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${pc};border-radius:99px"></div></div>
         <span style="font-size:9px;font-weight:600;min-width:26px;text-align:right;color:${pc}">${pct}%</span>
       </div>`;
@@ -6084,7 +6097,7 @@ function renderLeave() {
     return `<tr style="border-bottom:1px solid var(--bd);${emp.leave ? 'opacity:.55;background:var(--rose-dim)' : ''}">
       <td style="padding:10px 14px;font-size:12px;font-weight:700">
         <div style="display:flex;align-items:center;gap:6px">
-          <div class="av" style="width:26px;height:26px;font-size:11px;background:${emp.color||'#DBEAFE'};color:${emp.tc||'#1E3A5F'}">${esc(emp.name)[0]}</div>
+          <div class="av" style="width:26px;height:26px;font-size:11px;background:${safeColor(emp.color,'#DBEAFE')};color:${safeColor(emp.tc,'#1E3A5F')}">${esc(emp.name)[0]}</div>
           ${esc(emp.name)}${emp.leave ? '<span style="font-size:9px;color:var(--rose);margin-left:3px">퇴사</span>' : ''}
         </div>
       </td>

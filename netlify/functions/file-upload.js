@@ -3,6 +3,11 @@ import { verifyToken, ok, err, options } from './_shared/auth.js';
 
 const BUCKET = 'nopro-files';
 const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+const ALLOWED_EXTENSIONS = new Set([
+  'jpg','jpeg','png','gif','webp','bmp','svg',
+  'pdf','doc','docx','xls','xlsx','ppt','pptx',
+  'txt','csv','hwp','hwpx','zip'
+]);
 
 let bucketReady = false;
 async function ensureBucket() {
@@ -32,6 +37,18 @@ export const handler = async (event) => {
 
     if (!fileName || !fileData || !category) {
       return err(400, '필수 파라미터 누락', event);
+    }
+
+    // 파일 확장자 화이트리스트 검증
+    const ext = (fileName.split('.').pop() || '').toLowerCase();
+    if (!ALLOWED_EXTENSIONS.has(ext)) {
+      return err(400, `허용되지 않는 파일 형식입니다 (.${ext})`, event);
+    }
+
+    // category 검증
+    const ALLOWED_CATEGORIES = ['safety', 'folder'];
+    if (!ALLOWED_CATEGORIES.includes(category)) {
+      return err(400, '유효하지 않은 카테고리입니다', event);
     }
 
     const base64Data = fileData.replace(/^data:[^;]+;base64,/, '');

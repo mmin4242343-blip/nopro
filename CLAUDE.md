@@ -102,7 +102,9 @@ Frontend → /api/* → Netlify Function → Supabase
 2. **localStorage** (브라우저): `npm5_emps`, `npm5_rec`, `npm5_pol` 등 → 오프라인 지원, 즉시 저장
 3. **Supabase** (`company_data` 테이블): JSON 문자열로 저장 → 디바이스 간 동기화
 
-저장 흐름: 사용자 조작 → 전역 변수 업데이트 → `saveLS()` → localStorage → (수동) `sbSaveAll()` → Supabase
+저장 흐름: 사용자 조작 → 전역 변수 업데이트 → `saveLS()` → localStorage → (자동, 500ms 디바운스) `sbSaveAll()` → Supabase
+- 별도 저장 버튼 없음. `saveLS()` 호출 시 500ms 디바운스 후 자동으로 Supabase 서버 저장
+- 출퇴근 시간 입력 등 일부 동작은 디바운스 없이 즉시 `sbSaveAll()` 호출
 
 ### 감사 로그 (audit_log)
 

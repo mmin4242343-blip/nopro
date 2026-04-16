@@ -11,6 +11,11 @@ export const handler = async (event) => {
   if (event.httpMethod !== 'POST') return err(405, 'Method not allowed', event);
 
   try {
+    // 요청 본문 크기 제한 (10MB)
+    if (event.body && event.body.length > 10 * 1024 * 1024) {
+      return err(413, '요청 데이터가 너무 큽니다', event);
+    }
+
     const decoded = verifyToken(event);
     if (decoded.role === 'admin') return err(403, '관리자는 데이터 저장 불가', event);
     const companyId = decoded.companyId;
