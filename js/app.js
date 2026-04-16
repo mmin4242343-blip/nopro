@@ -6160,13 +6160,12 @@ function calcLeaveForYear(emp, year) {
     monthly[0].date = new Date(year, 0, 1);
   }
 
-  // 사용 연차
-  let used = countUsedLeave(emp.id, year); // 기본: REC에서 자동계산
-  // 직접수정 override (수동 입력한 경우에만 덮어쓰기)
+  // 사용 연차: 출퇴근 기록에서 자동 집계
+  let used = countUsedLeave(emp.id, year);
+  // 직접수정 override — 사용연차만 수정 가능 (총연차는 회계연도 계산값 고정)
   if (leaveOverrides[emp.id] && leaveOverrides[emp.id][year] !== undefined) {
     const ov = leaveOverrides[emp.id][year];
     if (ov.used !== undefined && ov.used !== null) used = ov.used;
-    if (ov.total !== undefined && ov.total !== null) total = ov.total;
   }
 
   const remain = Math.max(0, total - used);
@@ -6233,8 +6232,8 @@ function renderLeave() {
       return `<span style="display:inline-block;width:20px;height:20px;line-height:20px;text-align:center;font-size:8px;border-radius:4px;background:var(--gbg);color:#065F46;font-weight:700;margin:1px" title="${mv.count}개 적립">${mv.month}</span>`;
     }).join('');
 
-    // override 여부
-    const hasOverride = leaveOverrides[emp.id] && leaveOverrides[emp.id][leaveYear] !== undefined;
+    // override 여부 (사용연차 수동 입력 시에만 표시)
+    const hasUsedOverride = leaveOverrides[emp.id] && leaveOverrides[emp.id][leaveYear] !== undefined && leaveOverrides[emp.id][leaveYear].used !== undefined && leaveOverrides[emp.id][leaveYear].used !== null;
 
     return `<tr style="border-bottom:1px solid var(--bd);${emp.leave ? 'opacity:.55;background:var(--rose-dim)' : ''}">
       <td style="padding:10px 14px;font-size:12px;font-weight:700">
@@ -6247,11 +6246,11 @@ function renderLeave() {
       <td style="padding:10px 8px;text-align:center">
         <span style="font-size:15px;font-weight:700;color:var(--navy)">${lv.total}</span>
         <span style="font-size:9px;color:var(--ink3)">개</span>
-        ${hasOverride ? '<span style="font-size:8px;background:var(--abg);color:#92400E;padding:1px 4px;border-radius:4px;font-weight:700;display:block;margin-top:2px">수정됨</span>' : ''}
       </td>
       <td style="padding:10px 8px;text-align:center;background:var(--gbg)">
         <span style="font-size:15px;font-weight:700;color:var(--green)">${lv.used}</span>
         <span style="font-size:9px;color:var(--ink3)">일</span>
+        ${hasUsedOverride ? '<span style="font-size:8px;background:var(--abg);color:#92400E;padding:1px 4px;border-radius:4px;font-weight:700;display:block;margin-top:2px">수정됨</span>' : ''}
       </td>
       <td style="padding:10px 8px;text-align:center;background:var(--teal-dim)">
         <span style="font-size:15px;font-weight:700;color:var(--navy2)">${lv.remain}</span>
@@ -6286,11 +6285,6 @@ function renderLeave() {
       </td>
       <td style="padding:10px 8px;text-align:center">
         <div style="display:flex;gap:3px;flex-direction:column;align-items:center">
-          <input type="number" value="${lv.total}" min="0" max="30"
-            style="width:44px;padding:3px;font-size:11px;border:1px solid var(--bd2);border-radius:5px;text-align:center;font-weight:700"
-            onchange="overrideLeaveTotal(${emp.id},${leaveYear},+this.value)"
-            title="총 연차 직접 수정">
-          <span style="font-size:8px;color:var(--ink3)">총연차</span>
           <div style="display:flex;align-items:center;gap:2px">
             <input type="number"
               value="${leaveOverrides[emp.id]&&leaveOverrides[emp.id][leaveYear]&&leaveOverrides[emp.id][leaveYear].used!==undefined?leaveOverrides[emp.id][leaveYear].used:''}"
