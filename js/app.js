@@ -5437,7 +5437,9 @@ async function sfExcelCore(){
 // 사진 업로드
 async function sf2HandleFiles(files){
   if(!files||files.length===0){console.log('[사진] 파일 없음');return;}
-  console.log('[사진] 파일 선택됨:', files.length+'개');
+  // FileList를 배열로 복사 (input.value='' 시 원본 FileList가 비워지는 것 방지)
+  const fileArr=Array.from(files);
+  console.log('[사진] 파일 선택됨:', fileArr.length+'개');
   // 파일 input 초기화
   const inp=document.getElementById('sf-file-inp2');if(inp)inp.value='';
   const cam=document.getElementById('sf-file-camera');if(cam)cam.value='';
@@ -5446,8 +5448,8 @@ async function sf2HandleFiles(files){
   if(!SAFETY_REC[key])SAFETY_REC[key]=[];
   const imgExts=/\.(jpg|jpeg|png|gif|webp|heic|heif|bmp|tiff?)$/i;
   // 타입 또는 확장자로 이미지 판별, 둘 다 없으면 그냥 허용 (카메라 촬영 등)
-  const imageFiles=Array.from(files).filter(f=>f.type.startsWith('image/')||imgExts.test(f.name)||(!f.type&&f.size>0));
-  if(!imageFiles.length){console.log('[사진] 이미지 파일 없음:', Array.from(files).map(f=>({type:f.type,name:f.name,size:f.size})));return;}
+  const imageFiles=fileArr.filter(f=>f.type.startsWith('image/')||imgExts.test(f.name)||(!f.type&&f.size>0));
+  if(!imageFiles.length){console.log('[사진] 이미지 파일 없음:', fileArr.map(f=>({type:f.type,name:f.name,size:f.size})));return;}
   if(typeof showSyncToast==='function') showSyncToast('사진 업로드 중... ('+imageFiles.length+'장)','info');
   let success=0;
   for(const file of imageFiles){
