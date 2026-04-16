@@ -3555,6 +3555,7 @@ function showGenEmpNo(empId){
   let old=document.getElementById('empno-modal');if(old)old.remove();
   const modal=document.createElement('div');
   modal.id='empno-modal';
+  modal.dataset.empId=String(empId);
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)';
 
   const codes=getEmpNoCodes();
@@ -3587,16 +3588,16 @@ function showGenEmpNo(empId){
               onmouseover="this.style.borderColor='var(--navy2)';this.style.background='var(--nbg)'"
               onmouseout="this.style.borderColor='var(--bd)';this.style.background='#fff'">
               <div>
-                <div style="font-size:13px;font-weight:700;color:var(--ink)">${esc(fname)}</div>
+                <div class="empno-fname" style="font-size:13px;font-weight:700;color:var(--ink)">${esc(fname)}</div>
                 <div style="font-size:10px;color:var(--ink3)">${esc(fname)} · ${secondLabels[det.second]||det.second} · 코드: ${esc(fullCode)}</div>
               </div>
               <div style="font-size:14px;font-weight:800;color:var(--navy2);font-variant-numeric:tabular-nums;letter-spacing:.5px">${no}</div>
             </button>
-            <button onclick="document.getElementById('empno-modal').remove();gp('pg-settings');setTimeout(()=>{const el=document.getElementById('inp-empno-enabled');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});},300)"
+            <button onclick="event.stopPropagation();empNoEditFacility('${first}')"
               style="padding:0 10px;border:1.5px solid var(--bd);border-radius:10px;background:#fff;cursor:pointer;font-size:14px;transition:all .14s"
               onmouseover="this.style.borderColor='var(--navy2)';this.style.background='var(--nbg)'"
               onmouseout="this.style.borderColor='var(--bd)';this.style.background='#fff'"
-              title="구분코드 편집 (급여설정으로 이동)">✏️</button>
+              title="이름 편집">✏️</button>
           </div>`;
         }).join('')}
       </div>`;
@@ -3605,7 +3606,7 @@ function showGenEmpNo(empId){
       <div style="font-size:11px;font-weight:700;color:var(--ink);margin-bottom:4px">구분코드 선택 <span style="font-weight:500;color:var(--ink3)">(직종/소속 미입력 → 전체 표시)</span></div>
       <div style="font-size:10px;color:var(--amber);margin-bottom:8px;font-weight:600">💡 직원관리에서 직종·소속을 입력하면 자동 감지됩니다</div>
       <div style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto">
-        ${codes.filter(c=>c.code).map(c=>{
+        ${codes.filter(c=>c.code).map((c,ci)=>{
           const no=genEmpNo(c.code);
           return `<div style="display:flex;gap:4px;align-items:stretch">
             <button onclick="confirmGenEmpNo(${empId},'${no}');document.getElementById('empno-modal').remove()"
@@ -3613,16 +3614,16 @@ function showGenEmpNo(empId){
               onmouseover="this.style.borderColor='var(--navy2)';this.style.background='var(--nbg)'"
               onmouseout="this.style.borderColor='var(--bd)';this.style.background='#fff'">
               <div>
-                <div style="font-size:12px;font-weight:700;color:var(--ink)">${esc(c.label||c.code)}</div>
+                <div class="empno-clabel" style="font-size:12px;font-weight:700;color:var(--ink)">${esc(c.label||c.code)}</div>
                 <div style="font-size:10px;color:var(--ink3)">코드: ${esc(c.code)}</div>
               </div>
               <div style="font-size:13px;font-weight:800;color:var(--navy2);font-variant-numeric:tabular-nums;letter-spacing:.5px">${no}</div>
             </button>
-            <button onclick="document.getElementById('empno-modal').remove();gp('pg-settings');setTimeout(()=>{const el=document.getElementById('inp-empno-enabled');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});},300)"
+            <button onclick="event.stopPropagation();empNoEditCode(${ci})"
               style="padding:0 10px;border:1.5px solid var(--bd);border-radius:10px;background:#fff;cursor:pointer;font-size:14px;transition:all .14s"
               onmouseover="this.style.borderColor='var(--navy2)';this.style.background='var(--nbg)'"
               onmouseout="this.style.borderColor='var(--bd)';this.style.background='#fff'"
-              title="구분코드 편집 (급여설정으로 이동)">✏️</button>
+              title="이름 편집">✏️</button>
           </div>`;
         }).join('')}
       </div>`;
@@ -3654,6 +3655,49 @@ function showGenEmpNo(empId){
   </div>`;
   document.body.appendChild(modal);
   modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
+}
+
+// 시설유형 이름 인라인 편집 (감지 모드)
+function empNoEditFacility(firstChar){
+  if(!POL.empNoCodes)POL.empNoCodes=[...EMPNO_CODES_DEFAULT.map(c=>({...c}))];
+  // 해당 시설유형의 첫 번째 코드를 찾아서 label의 시설명 부분을 편집
+  const idx=POL.empNoCodes.findIndex(c=>c.code&&c.code[0]===firstChar);
+  if(idx===-1)return;
+  const oldLabel=POL.empNoCodes[idx].label.split('·')[0].trim();
+  const newName=prompt('시설유형 이름 편집',oldLabel);
+  if(newName===null||!newName.trim())return;
+  // 같은 첫째 자리를 가진 모든 코드의 시설명 일괄 변경
+  POL.empNoCodes.forEach(c=>{
+    if(c.code&&c.code[0]===firstChar){
+      const parts=c.label.split('·');
+      parts[0]=newName.trim()+' ';
+      c.label=parts.join('·');
+    }
+  });
+  saveLS();
+  // 모달 닫고 다시 열어서 반영
+  const modal=document.getElementById('empno-modal');
+  if(modal){
+    const eid=modal.dataset.empId;
+    modal.remove();
+    if(eid)showGenEmpNo(parseInt(eid));
+  }
+}
+// 개별 코드 라벨 인라인 편집 (전체 표시 모드)
+function empNoEditCode(ci){
+  if(!POL.empNoCodes)POL.empNoCodes=[...EMPNO_CODES_DEFAULT.map(c=>({...c}))];
+  const c=POL.empNoCodes[ci];
+  if(!c)return;
+  const newLabel=prompt('구분코드 이름 편집',c.label);
+  if(newLabel===null||!newLabel.trim())return;
+  c.label=newLabel.trim();
+  saveLS();
+  const modal=document.getElementById('empno-modal');
+  if(modal){
+    const eid=modal.dataset.empId;
+    modal.remove();
+    if(eid)showGenEmpNo(parseInt(eid));
+  }
 }
 
 function confirmGenEmpNo(empId, empNo){
