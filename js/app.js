@@ -5437,12 +5437,8 @@ async function sfExcelCore(){
 // 사진 업로드
 async function sf2HandleFiles(files){
   if(!files||files.length===0){console.log('[사진] 파일 없음');return;}
-  // FileList를 배열로 복사 (input.value='' 시 원본 FileList가 비워지는 것 방지)
   const fileArr=Array.from(files);
-  console.log('[사진] 파일 선택됨:', fileArr.length+'개');
-  // 파일 input 초기화
-  const inp=document.getElementById('sf-file-inp2');if(inp)inp.value='';
-  const cam=document.getElementById('sf-file-camera');if(cam)cam.value='';
+  console.log('[사진] 파일 선택됨:', fileArr.length+'개', fileArr.map(f=>f.name));
   const key=sfKey();
   console.log('[사진] 저장 키:', key);
   if(!SAFETY_REC[key])SAFETY_REC[key]=[];
@@ -5490,6 +5486,9 @@ async function sf2HandleFiles(files){
     if(typeof showSyncToast==='function') showSyncToast('업로드 실패 - Console(F12) 확인','warn');
   }
   sf2RenderPhotos();
+  // 파일 input 초기화 (동일 파일 재선택 허용 — 처리 완료 후 초기화)
+  const inp=document.getElementById('sf-file-inp2');if(inp)inp.value='';
+  const cam=document.getElementById('sf-file-camera');if(cam)cam.value='';
 }
 function sf2RenderPhotos(){
   const key=sfKey();
