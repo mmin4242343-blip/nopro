@@ -747,9 +747,9 @@ function monthSummary(eid,y,m){
   // 총급여 = 기본급 + 수당 + 주휴 + 연차 + 총가산수당 + 월급제휴일 + 상여 - 결근차감
   const total=(tBase+totalAllowance) + wkly + annualPay + tTotalBonus + tMonthlyHolStdPay + tMonthlyHolOtPay + bonus - deduction;
 
-  return{wdays,adays,aldays,twkH:twk/60,tNightH:tNightM/60,tOtDayH:tOtDayM/60,tOtNightH:tOtNightM/60,tHolDayH:tHolDayM/60,tHolNightH:tHolNightM/60,tHolDayOtH:tHolDayOtM/60,tHolNightOtH:tHolNightOtM/60,
+  return{wdays,adays,aldays,twkH:m2h(twk),tNightH:m2h(tNightM),tOtDayH:m2h(tOtDayM),tOtNightH:m2h(tOtNightM),tHolDayH:m2h(tHolDayM),tHolNightH:m2h(tHolNightM),tHolDayOtH:m2h(tHolDayOtM),tHolNightOtH:m2h(tHolNightOtM),
     tBase,tNightPay,tOtDayPay,tOtNightPay,tHolDayPay,tHolNightPay,tHolDayOtPay,tHolNightOtPay,
-    tExtraWorkH:tExtraWorkH/60,tExtraWorkPay,tHolPayNew,tTotalBonus,
+    tExtraWorkH:m2h(tExtraWorkH),tExtraWorkPay,tHolPayNew,tTotalBonus,
     tMonthlyHolStdPay,tMonthlyHolOtPay,
     annualPay,wkly,bonus,allowances,totalAllowance,deduction,dedShortH:dedShortMins/60,total};
 }
@@ -1521,9 +1521,9 @@ function updateRowCalc(eid){
     const workCell = tr.querySelector('.work-cell');
     const nightCell = tr.querySelector('.night-cell');
     const otCell = tr.querySelector('.ot-cell');
-    if(workCell) workCell.textContent = (c.work/60).toFixed(2);
-    if(nightCell) nightCell.textContent = c.nightM>0 ? (c.nightM/60).toFixed(2) : '';
-    if(otCell) otCell.textContent = c.ot>0 ? (c.ot/60).toFixed(2) : '';
+    if(workCell) workCell.textContent = m2h(c.work).toFixed(2);
+    if(nightCell) nightCell.textContent = c.nightM>0 ? m2h(c.nightM).toFixed(2) : '';
+    if(otCell) otCell.textContent = c.ot>0 ? m2h(c.ot).toFixed(2) : '';
   });
 }
 
@@ -1839,8 +1839,8 @@ function renderCal(){
     } else if(c){
       inner+=`<div class="cti">${rec.start}~${rec.end}</div><div class="cwk">${fmtH(c.work)}</div><div>`;
       if(c.crossed)inner+=`<span class="tch" style="background:var(--gbg);color:#065F46">익일</span>`;
-      if(c.nightM>30)inner+=`<span class="tch" style="background:var(--abg);color:#92400E">야${(c.nightM/60).toFixed(2)}h</span>`;
-      if(c.ot>0)inner+=`<span class="tch" style="background:#EDE9FE;color:#4C1D95">연${(c.ot/60).toFixed(2)}h</span>`;
+      if(c.nightM>30)inner+=`<span class="tch" style="background:var(--abg);color:#92400E">야${m2h(c.nightM).toFixed(2)}h</span>`;
+      if(c.ot>0)inner+=`<span class="tch" style="background:#EDE9FE;color:#4C1D95">연${m2h(c.ot).toFixed(2)}h</span>`;
       if(autoH)inner+=`<span class="tch" style="background:#FED7AA;color:#9A3412">휴</span>`;
       inner+=`</div>`;
     }
@@ -6826,7 +6826,7 @@ function exportMonthlyExcel(){
           else if(rec.halfAnnual){val='반차';cellBg='B3E5FC';fg='01579B';}
           else if(rec.start&&rec.end){
             const c2=calcSession(rec.start,rec.end,getEmpRate(emp),autoH,getActiveBk(vY,vM,d),rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM));
-            if(c2){val=+(c2.work/60).toFixed(1);fg=C.navy;}
+            if(c2){val=+m2h(c2.work).toFixed(1);fg=C.navy;}
           }
         }
         const isNum=typeof val==='number';
@@ -6941,10 +6941,10 @@ function exportMonthlyExcel(){
 
         xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),rec.start||'',S.cell(C.navy,rec.start?C.teal4:rowBg,!!rec.start,'center'));
         xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),rec.end||'',S.cell(C.navy,rec.end?C.teal4:rowBg,!!rec.end,'center'));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),c2?+(c2.work/60).toFixed(2):0,S.numDec(c2?.work>=480?C.green:C.navy,c2?.work>=480?C.green4:rowBg,c2?.work>=480));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),c2&&c2.nightM>0?+(c2.nightM/60).toFixed(2):0,S.numDec(C.purple2,c2?.nightM>0?C.purple4:rowBg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),c2&&c2.ot>0?+(c2.ot/60).toFixed(2):0,S.numDec(C.blue,c2?.ot>0?C.blue4:rowBg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),autoH&&c2?+(c2.work/60).toFixed(2):0,S.numDec(C.orange2,autoH&&c2?C.orange4:rowBg));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),c2?+m2h(c2.work).toFixed(2):0,S.numDec(c2?.work>=480?C.green:C.navy,c2?.work>=480?C.green4:rowBg,c2?.work>=480));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),c2&&c2.nightM>0?+m2h(c2.nightM).toFixed(2):0,S.numDec(C.purple2,c2?.nightM>0?C.purple4:rowBg));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),c2&&c2.ot>0?+m2h(c2.ot).toFixed(2):0,S.numDec(C.blue,c2?.ot>0?C.blue4:rowBg));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),autoH&&c2?+m2h(c2.work).toFixed(2):0,S.numDec(C.orange2,autoH&&c2?C.orange4:rowBg));
         xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),note,S.accent(noteFg,noteBg,!!note));
         xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
       } else {
