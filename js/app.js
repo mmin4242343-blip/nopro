@@ -613,7 +613,7 @@ function monthSummary(eid,y,m){
   if(emp.leave){const ld=new Date(emp.leave);if(ld<new Date(y,m-1,1))return{wdays:0,adays:0,aldays:0,twkH:0,tNightH:0,tOtDayH:0,tOtNightH:0,tHolDayH:0,tHolNightH:0,tHolDayOtH:0,tHolNightOtH:0,tBase:0,tNightPay:0,tOtDayPay:0,tOtNightPay:0,tHolDayPay:0,tHolNightPay:0,tHolDayOtPay:0,tHolNightOtPay:0,annualPay:0,wkly:0,bonus:0,allowances:{},totalAllowance:0,deduction:0,total:0};}
   const days=dim(y,m);
   const sot=emp.sot||POL.sot||209;
-  let wdays=0,adays=0,aldays=0,twk=0,tNightM=0,tOtDayM=0,tOtNightM=0,tHolDayM=0,tHolNightM=0,tHolDayOtM=0,tHolNightOtM=0,tBase=0,tNightPay=0,tOtDayPay=0,tOtNightPay=0,tHolDayPay=0,tHolNightPay=0,tHolDayOtPay=0,tHolNightOtPay=0,deduction=0;
+  let wdays=0,adays=0,aldays=0,twk=0,tNightM=0,tOtDayM=0,tOtNightM=0,tHolDayM=0,tHolNightM=0,tHolDayOtM=0,tHolNightOtM=0,tBase=0,tNightPay=0,tOtDayPay=0,tOtNightPay=0,tHolDayPay=0,tHolNightPay=0,tHolDayOtPay=0,tHolNightOtPay=0,deduction=0,dedShortMins=0;
   // 새 컬럼 집계
   let tExtraWorkH=0,tExtraWorkPay=0,tHolPayNew=0;
   // 월급제 휴일수당 별도 집계
@@ -693,7 +693,7 @@ function monthSummary(eid,y,m){
     wdays++;
     // 월급제는 시간기준 공제 없음 (주말/휴일 근무 시에도 공제 안 함)
     if(empPayMode!=='monthly' && POL.dedMode==='hour'&&c.work<dailyStd*60&&!autoH){
-      const sh=dailyStd*60-c.work;if(sh>10)deduction+=rate*(sh/60);
+      const sh=dailyStd*60-c.work;if(sh>10){deduction+=rate*(sh/60);dedShortMins+=sh;}
     }
   }
   if(empPayMode==='fixed')tBase=rate*sot;
@@ -743,7 +743,7 @@ function monthSummary(eid,y,m){
     tBase,tNightPay,tOtDayPay,tOtNightPay,tHolDayPay,tHolNightPay,tHolDayOtPay,tHolNightOtPay,
     tExtraWorkH:tExtraWorkH/60,tExtraWorkPay,tHolPayNew,tTotalBonus,
     tMonthlyHolStdPay,tMonthlyHolOtPay,
-    annualPay,wkly,bonus,allowances,totalAllowance,deduction,total};
+    annualPay,wkly,bonus,allowances,totalAllowance,deduction,dedShortH:dedShortMins/60,total};
 }
 
 
@@ -2021,6 +2021,7 @@ function renderXlPreview(){
     <th style="min-width:46px;background:#534AB7;color:#EEEDFE">초과연장<br>시간(h)<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
     <th style="min-width:46px;background:#854F0B;color:#FAC775">초과휴일<br>시간(h)<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
     <th style="min-width:46px">결근<br>일수</th>
+    <th style="min-width:50px">공제<br>시간</th>
     <th style="min-width:80px;background:#1565C0;color:#fff">소정근로외<br>실근무수당<br><span style="font-size:8px;opacity:.8">×1.0</span></th>
     <th style="min-width:72px;background:#0C447C;color:#B5D4F4">야간<br>수당<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
     <th style="min-width:72px;background:#534AB7;color:#EEEDFE">초과연장<br>수당<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
@@ -2118,6 +2119,7 @@ function renderXlPreview(){
       <td class="num" style="${((s.tOtDayH||0)+(s.tOtNightH||0))>0?'color:#534AB7;font-weight:500':''}">${((s.tOtDayH||0)+(s.tOtNightH||0))>0?((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2):''}</td>
       <td class="num" style="${((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0))>0?'color:#854F0B;font-weight:500':''}">${((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0))>0?((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0)).toFixed(2):''}</td>
       <td class="num">${s.adays>0?s.adays:''}</td>
+      <td class="num" style="${s.dedShortH>0?'color:#A32D2D;font-weight:500':''}">${s.dedShortH>0?s.dedShortH.toFixed(2):''}</td>
       <td class="num" style="${(s.tExtraWorkPay||0)>0?'color:#1565C0;font-weight:700':''}">${(s.tExtraWorkPay||0)>0?fmt$(s.tExtraWorkPay):''}</td>
       <td class="num" style="${s.tNightPay>0?'color:#0C447C;font-weight:700':''}">${s.tNightPay>0?fmt$(s.tNightPay):''}</td>
       <td class="num" style="${((s.tOtDayPay||0)+(s.tOtNightPay||0))>0?'color:#534AB7;font-weight:700':''}">${((s.tOtDayPay||0)+(s.tOtNightPay||0))>0?fmt$((s.tOtDayPay||0)+(s.tOtNightPay||0)):''}</td>
@@ -4805,7 +4807,7 @@ function exportExcel(){
       '기본급','주휴수당','연차수당',
       ...allowList.map(a=>a.name),
       '급여',
-      '실근무(h)','소정근로외(h)','야간(h)','초과연장(h)','초과휴일(h)','결근일수',
+      '실근무(h)','소정근로외(h)','야간(h)','초과연장(h)','초과휴일(h)','결근일수','공제시간(h)',
       '소정근로외수당','야간수당','초과연장수당','초과휴일수당',
       '월급제휴일수당','월급제휴일초과','결근차감','총가산수당',
       '상여금','총급여',
@@ -4903,6 +4905,7 @@ function exportExcel(){
       W(ci++,otH>0?+otH.toFixed(2):'',otH>0?S.numDec(C.purple2,bg):S.empty(bg));
       W(ci++,holH>0?+holH.toFixed(2):'',holH>0?S.numDec(C.orange2,bg):S.empty(bg));
       W(ci++,s.adays||'',s.adays?S.num(C.rose,bg):S.empty(bg));
+      W(ci++,s.dedShortH>0?+s.dedShortH.toFixed(2):'',s.dedShortH>0?S.numDec(C.rose,bg):S.empty(bg));
 
       // 수당 금액
       W(ci++,Math.round(s.tExtraWorkPay)||'',(s.tExtraWorkPay||0)?S.num('1565C0',bg):S.empty(bg));
