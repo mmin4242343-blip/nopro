@@ -118,7 +118,9 @@ const rk=(id,y,m,d)=>`${id}_${y}-${pad(m)}-${pad(d)}`;
 const pT=t=>{if(!t||!t.includes(':'))return null;const[h,m]=t.split(':').map(Number);return h*60+m;};
 const rEnd=(s,e)=>e<=s?e+1440:e;
 const fmt$=n=>(Math.round(Math.round(n)/10)*10).toLocaleString('ko-KR');
-const fmtH=m=>{if(!m||m<=0)return '';const hrs=Math.round(m/60*100)/100;return hrs%1===0?`${hrs}h`:`${hrs.toFixed(2).replace(/0$/,'')}h`;};
+// 분→시간 변환: 소수점 셋째 자리에서 반올림 (10분=0.17, 20분=0.33, 40분=0.67)
+const m2h=m=>Math.round(m/60*100)/100;
+const fmtH=m=>{if(!m||m<=0)return '';const hrs=m2h(m);return hrs%1===0?`${hrs}h`:`${hrs.toFixed(2).replace(/0$/,'')}h`;};
 function parseTimeInput(raw){
   if(!raw||!raw.trim())return '';
   const s=raw.trim().replace(/[^0-9]/g,'');
@@ -496,11 +498,11 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate){
       const pohalRate=pRate||Math.round((POL.baseMonthly||2455750)/209);
       if(_holMS){
         const stdM=Math.min(work,480);
-        holDayStdPay=r10(pohalRate*1.5*(stdM/60));
+        holDayStdPay=r10(pohalRate*1.5*m2h(stdM));
       }
       if(_holMO){
         const otM=Math.max(0,work-480);
-        holDayOtPay=r10(pohalRate*2.0*(otM/60));
+        holDayOtPay=r10(pohalRate*2.0*m2h(otM));
       }
     }
     const totalPay=holDayStdPay+holDayOtPay;
@@ -518,8 +520,8 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate){
     if(isHol&&_holM){
       const stdM=Math.min(work,480);
       const otM=Math.max(0,work-480);
-      if(_holMS) holDayStdPay=r10(pRate*1.5*(stdM/60));
-      if(_holMO) holDayOtPay =r10(pRate*2.0*(otM/60));
+      if(_holMS) holDayStdPay=r10(pRate*1.5*m2h(stdM));
+      if(_holMO) holDayOtPay =r10(pRate*2.0*m2h(otM));
     }
     const totalPay=holDayStdPay+holDayOtPay;
     return{gross,deduct,bkMins,nightBkMins,work,nightM:0,otDay:0,otNight:0,ot:Math.max(0,work-480),crossed,
@@ -551,15 +553,15 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate){
     let basePay = 0; // 소정근무제는 기본급 월합산으로 처리
     // 소정근로외 실근무수당 (×1.0) - 평일 8h초과 or 휴일 전체
     const _extF = POL.extFixed??true;
-    let extraWorkPay = _extF ? r10(pRate*1.0*(extraWork/60)) : 0;
+    let extraWorkPay = _extF ? r10(pRate*1.0*m2h(extraWork)) : 0;
     // 고정야간수당 (×0.5) - 야간 전체 구간
-    let nightPay = _ntF ? r10(pRate*0.5*(nightM/60)) : 0;
+    let nightPay = _ntF ? r10(pRate*0.5*m2h(nightM)) : 0;
     // 주간연장 가산수당 (×0.5 추가) - 8h초과 주간 구간
-    let otDayPay = (_otF&&overDay>0) ? r10(pRate*0.5*(overDay/60)) : 0;
+    let otDayPay = (_otF&&overDay>0) ? r10(pRate*0.5*m2h(overDay)) : 0;
     // 야간연장 가산수당 (×0.5 추가) - 8h초과 야간 구간
-    let otNightPay = (_otF&&_ntF&&overNight>0) ? r10(pRate*0.5*(overNight/60)) : 0;
+    let otNightPay = (_otF&&_ntF&&overNight>0) ? r10(pRate*0.5*m2h(overNight)) : 0;
     // 초과휴일수당 (×0.5)
-    let holPay = (_holF&&isHol) ? r10(pRate*0.5*(work/60)) : 0;
+    let holPay = (_holF&&isHol) ? r10(pRate*0.5*m2h(work)) : 0;
 
     // holDayStdPay 등 기존 필드 호환용
     const holDayStdPay  = holPay;
@@ -585,17 +587,17 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate){
       // 시급제 휴일 가산 (통상시급 기준)
       const holDayStd  = Math.min(dayM,480);
       const holNtStd   = Math.min(nightM, Math.max(0,480-dayM));
-      holDayStdPay  = r10(pRate*1.5*(holDayStd/60));
-      holNightStdPay= r10(pRate*2.0*(holNtStd/60));
-      holDayOtPay   = r10(pRate*2.0*(otDay/60));
-      holNightOtPay = r10(pRate*2.5*(otNight/60));
+      holDayStdPay  = r10(pRate*1.5*m2h(holDayStd));
+      holNightStdPay= r10(pRate*2.0*m2h(holNtStd));
+      holDayOtPay   = r10(pRate*2.0*m2h(otDay));
+      holNightOtPay = r10(pRate*2.5*m2h(otNight));
     } else {
       // 평일: basePay는 기본시급, 가산수당은 통상시급
-      basePay = r10(rate*1.0*(Math.min(dayM,480)/60));
-      if(_ntH) nightPay = r10(pRate*1.5*(Math.min(nightM,480)/60));
-      else     nightPay = r10(rate*1.0*(Math.min(nightM,480)/60));
-      if(_otH&&otDay>0)   otDayPay  = r10(pRate*1.5*(otDay/60));
-      if(_otH&&otNight>0) otNightPay= r10(pRate*2.0*(otNight/60));
+      basePay = r10(rate*1.0*m2h(Math.min(dayM,480)));
+      if(_ntH) nightPay = r10(pRate*1.5*m2h(Math.min(nightM,480)));
+      else     nightPay = r10(rate*1.0*m2h(Math.min(nightM,480)));
+      if(_otH&&otDay>0)   otDayPay  = r10(pRate*1.5*m2h(otDay));
+      if(_otH&&otNight>0) otNightPay= r10(pRate*2.0*m2h(otNight));
     }
     const totalPay=basePay+nightPay+otDayPay+otNightPay+holDayStdPay+holNightStdPay+holDayOtPay+holNightOtPay;
     return{gross,deduct,bkMins,nightBkMins,work,nightM,otDay,otNight,ot,crossed,
@@ -693,7 +695,7 @@ function monthSummary(eid,y,m){
     wdays++;
     // 월급제는 시간기준 공제 없음 (주말/휴일 근무 시에도 공제 안 함)
     if(empPayMode!=='monthly' && POL.dedMode==='hour'&&c.work<dailyStd*60&&!autoH){
-      const sh=dailyStd*60-c.work;if(sh>10){deduction+=rate*(sh/60);dedShortMins+=sh;}
+      const sh=dailyStd*60-c.work;if(sh>10){deduction+=rate*m2h(sh);dedShortMins+=sh;}
     }
   }
   if(empPayMode==='fixed')tBase=rate*sot;
@@ -740,7 +742,7 @@ function monthSummary(eid,y,m){
   // 급여 = 기본급 + 수당합계 → 시급 = 급여 ÷ 소정근로시간
   if(empPayMode!=='monthly' && empPayMode!=='hourly'){
     const effectiveRate = Math.round((tBase + totalAllowance) / sot);
-    deduction = Math.round(effectiveRate * (adays * dailyStd + dedShortMins / 60));
+    deduction = Math.round(effectiveRate * (adays * dailyStd + m2h(dedShortMins)));
   }
   // 총급여 = 기본급 + 수당 + 주휴 + 연차 + 총가산수당 + 월급제휴일 + 상여 - 결근차감
   const total=(tBase+totalAllowance) + wkly + annualPay + tTotalBonus + tMonthlyHolStdPay + tMonthlyHolOtPay + bonus - deduction;
