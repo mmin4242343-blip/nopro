@@ -760,7 +760,7 @@ function monthSummary(eid,y,m){
 // ══════════════════════════════════════
 // leaveYear, companyYear: 아래 연차관리 블록에서 선언
 
-// 연차 발생 계산 (입사일 기준, 예진 방식)
+// 연차 발생 계산 (회계연도 기준)
 
 
 
@@ -6094,10 +6094,10 @@ function saveLeaveSettings(){
 function leaveYearNav(d){ leaveYear += d; renderLeave(); }
 
 // ── 연차 계산 핵심 로직 ──
-// 입사일 기준 월별 적립 방식
-// 1년 미만: 입사 후 매월(입사일 기준) 1개씩 적립 (최대 11개)
-// 1년차(해당년도): 전년도 재직월수/12 × 15 반올림
-// 2년차 이후: 15개, 3년마다 1개 추가 (최대 25개)
+// 회계연도(1/1~12/31) 기준
+// 입사 첫해: 입사 다음달부터 매월 1개씩 (최대 11개)
+// 1년차(다음해 1/1): 전년도 재직월수/12 × 15 반올림, 1/1 일괄 발생
+// 2년차 이후: 15개 + 2년마다 1개 추가 (최대 25개), 1/1 일괄 발생
 function calcLeaveForYear(emp, year) {
   if (!emp.join) return { total: 0, accrued: 0, used: 0, remain: 0, monthly: [] };
 
@@ -6107,7 +6107,6 @@ function calcLeaveForYear(emp, year) {
   const joinD = joinDate.getDate();
 
   const yearStart = new Date(year, 0, 1);
-  const yearEnd = new Date(year, 11, 31);
   const today = new Date();
 
   // 퇴사자: 해당년도 이전 퇴사면 0
@@ -6119,16 +6118,15 @@ function calcLeaveForYear(emp, year) {
   // 입사년도보다 이전이면 0
   if (year < joinY) return { total: 0, accrued: 0, used: 0, remain: 0, monthly: [] };
 
-  // 근속 연수 (해당 연도 말 기준)
+  // 근속 연수 (해당 연도 1/1 기준)
   const yearsWorked = year - joinY; // 입사년도=0년차
 
   let total = 0;
   let monthly = []; // 월별 적립 현황
 
   if (yearsWorked === 0) {
-    // 입사 첫해: 매월 1개 (입사월 다음달부터)
+    // 입사 첫해: 매월 1개 (입사 다음달부터 12월까지)
     for (let m = 0; m < 12; m++) {
-      // 적립일: 입사일과 같은 날의 m+1번째 달
       const accrueDate = new Date(joinY, joinM + m + 1, joinD);
       if (accrueDate.getFullYear() !== year) {
         monthly.push({ month: m + 1, count: 0, date: null });
@@ -6140,51 +6138,26 @@ function calcLeaveForYear(emp, year) {
       total += earned;
     }
   } else {
-    // 2년차 이상: 전년도 재직월수 기준 비례 또는 고정
+    // 1년차 이상: 회계연도 1/1에 일괄 발생
     let baseLeave;
     if (yearsWorked === 1) {
-      // 입사 1주년~2주년: 전년(입사년도) 재직월수/12 × 15 반올림
-      // 단, 만 1년이 되는 시점부터 발생
-      const anniversary = new Date(joinY + 1, joinM, joinD);
-      if (anniversary.getFullYear() === year) {
-        // 해당 연도에 1주년 도래
-        const workMonthsInJoinYear = 12 - joinM; // 입사 후 남은 월수
-        baseLeave = Math.round(workMonthsInJoinYear / 12 * 15);
-        baseLeave = Math.max(1, Math.min(baseLeave, 15));
-      } else if (anniversary < yearStart) {
-        baseLeave = 15;
-      } else {
-        baseLeave = 0;
-      }
+      // 전년도(입사년도) 재직월수 기준 비례배분
+      const workMonths = 12 - joinM; // 입사월~12월 재직월수
+      baseLeave = Math.round(workMonths / 12 * 15);
+      baseLeave = Math.max(1, Math.min(baseLeave, 15));
     } else {
-      // 3년차 이상: 15개 + 2년마다 1개 (3년차부터)
+      // 2년차 이상: 15개 + 2년마다 1개 추가 (최대 25개)
       const extra = Math.floor((yearsWorked - 1) / 2);
       baseLeave = Math.min(15 + extra, 25);
     }
-
-    // 해당 연도의 1월1일 기준으로 발생 (또는 입사기념일 기준)
-    const accrueDate = new Date(year, joinM, joinD); // 입사 기념일
-    if (accrueDate.getFullYear() < year) {
-      // 기념일이 전년도에 속하면 1월1일 기준
-    }
     total = baseLeave;
 
-    // monthly: 이 경우 연 단위 발생
+    // monthly: 1월에 일괄 발생
     for (let m = 0; m < 12; m++) {
       monthly.push({ month: m + 1, count: 0, date: null });
     }
-    // 발생월에 표시
-    if (yearsWorked === 1) {
-      const anniversary = new Date(joinY + 1, joinM, joinD);
-      if (anniversary.getFullYear() === year) {
-        monthly[anniversary.getMonth()].count = total;
-        monthly[anniversary.getMonth()].date = anniversary;
-      }
-    } else {
-      // 회계연도 기준: 1월에 일괄 발생
-      monthly[0].count = total;
-      monthly[0].date = new Date(year, 0, 1);
-    }
+    monthly[0].count = total;
+    monthly[0].date = new Date(year, 0, 1);
   }
 
   // 사용 연차
