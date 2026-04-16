@@ -736,6 +736,12 @@ function monthSummary(eid,y,m){
   const tTotalBonus = empPayMode==='fixed'
     ? tExtraWorkPay + tNightPay + tOtDayPay + tOtNightPay + tHolPayNew
     : tNightPay + tOtDayPay + tOtNightPay + (tHolDayPay||0) + (tHolNightPay||0) + (tHolDayOtPay||0) + (tHolNightOtPay||0);
+  // 결근차감: 개인별 시급(급여÷209) 기준으로 재계산
+  // 급여 = 기본급 + 수당합계 → 시급 = 급여 ÷ 소정근로시간
+  if(empPayMode!=='monthly' && empPayMode!=='hourly'){
+    const effectiveRate = Math.round((tBase + totalAllowance) / sot);
+    deduction = Math.round(effectiveRate * (adays * dailyStd + dedShortMins / 60));
+  }
   // 총급여 = 기본급 + 수당 + 주휴 + 연차 + 총가산수당 + 월급제휴일 + 상여 - 결근차감
   const total=(tBase+totalAllowance) + wkly + annualPay + tTotalBonus + tMonthlyHolStdPay + tMonthlyHolOtPay + bonus - deduction;
 
