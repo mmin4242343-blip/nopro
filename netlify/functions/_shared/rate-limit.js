@@ -1,55 +1,38 @@
 import { supabase } from './supabase.js';
 
+// ── Rate Limit 설정 ──
+// 이메일 기반 DB-only (서버리스 환경에서 in-memory는 인스턴스마다 독립이라 무의미)
 const WINDOW_MINUTES = 15;
 const MAX_ATTEMPTS = 10;
 
-// In-memory burst protection (per warm instance)
-const memoryMap = new Map();
-const MEM_WINDOW_MS = 60_000; // 1분
-const MEM_MAX = 5;
+// 관리자 계정은 더 엄격한 제한
+const ADMIN_WINDOW_MINUTES = 30;
+const ADMIN_MAX_ATTEMPTS = 5;
 
-function checkMemoryLimit(key) {
-  const now = Date.now();
-  const record = memoryMap.get(key);
-  if (!record) {
-    memoryMap.set(key, { count: 1, start: now });
-    return true;
-  }
-  if (now - record.start > MEM_WINDOW_MS) {
-    memoryMap.set(key, { count: 1, start: now });
-    return true;
-  }
-  record.count++;
-  return record.count <= MEM_MAX;
-}
+export async function checkRateLimit(email, ip, isAdmin = false) {
+  const window = isAdmin ? ADMIN_WINDOW_MINUTES : WINDOW_MINUTES;
+  const max = isAdmin ? ADMIN_MAX_ATTEMPTS : MAX_ATTEMPTS;
 
-function clearMemoryLimit(key) {
-  memoryMap.delete(key);
-}
-
-export async function checkRateLimit(email, ip) {
-  // 1) In-memory burst check
-  const memKey = `${email}_${ip}`;
-  if (!checkMemoryLimit(memKey)) {
-    return { allowed: false, retryAfter: 60 };
-  }
-
-  // 2) DB-backed persistent check
   try {
-    const since = new Date(Date.now() - WINDOW_MINUTES * 60_000).toISOString();
+    const since = new Date(Date.now() - window * 60_000).toISOString();
     const { count, error } = await supabase
       .from('login_attempts')
       .select('*', { count: 'exact', head: true })
       .eq('email', email)
       .gte('attempted_at', since);
 
-    if (error) return { allowed: true }; // DB 오류 시 허용 (가용성 우선)
+    // DB 오류 시 차단 (fail-closed: 공격자가 DB 부하로 우회하는 것 방지)
+    if (error) {
+      console.error('Rate limit DB error:', error);
+      return { allowed: false, retryAfter: 60 };
+    }
 
-    if (count >= MAX_ATTEMPTS) {
-      return { allowed: false, retryAfter: WINDOW_MINUTES * 60 };
+    if (count >= max) {
+      return { allowed: false, retryAfter: window * 60 };
     }
   } catch {
-    return { allowed: true }; // 예외 시 허용
+    // 예외 시에도 차단 (fail-closed)
+    return { allowed: false, retryAfter: 60 };
   }
 
   return { allowed: true };
@@ -69,7 +52,6 @@ export async function recordLoginAttempt(email, ip) {
 
 export async function clearLoginAttempts(email) {
   try {
-    clearMemoryLimit(email);
     await supabase.from('login_attempts').delete().eq('email', email);
   } catch {
     // 삭제 실패해도 무방

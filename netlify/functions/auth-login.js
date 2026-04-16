@@ -13,9 +13,12 @@ export const handler = async (event) => {
     const { email, password } = parsed;
     if (!email || !password) return err(400, '이메일과 비밀번호를 입력해주세요', event);
 
-    // Rate limiting 체크
-    const clientIp = event.headers['x-forwarded-for'] || event.headers['client-ip'] || 'unknown';
-    const rateCheck = await checkRateLimit(email, clientIp);
+    // Rate limiting 체크 (이메일 기반, IP는 로그용으로만 기록)
+    const rawIp = event.headers['x-forwarded-for'] || event.headers['client-ip'] || 'unknown';
+    // X-Forwarded-For 첫 번째 값만 사용 (프록시 체인에서 원본 IP)
+    const clientIp = rawIp.split(',')[0].trim();
+    const isAdmin = email === process.env.ADMIN_EMAIL;
+    const rateCheck = await checkRateLimit(email, clientIp, isAdmin);
     if (!rateCheck.allowed) {
       const wait = Math.ceil((rateCheck.retryAfter || 60) / 60);
       return {

@@ -77,5 +77,5 @@ export const handler = async (event) => {
 function shouldRefresh(decoded) {
   if (!decoded.exp) return false;
   const remaining = decoded.exp - Math.floor(Date.now() / 1000);
-  return remaining < 21600; // 만료 6시간 전부터 갱신
+  return remaining < 1800; // 만료 30분 전부터 갱신 (토큰 수명 2h 기준)
 }

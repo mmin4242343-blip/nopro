@@ -2,6 +2,21 @@ import { supabase } from './_shared/supabase.js';
 
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://noprohr.netlify.app,http://localhost:8888').split(',').map(s => s.trim());
 
+// TBM 엔드포인트 Rate Limit (토큰 무차별 대입 방지)
+const tbmAttempts = new Map();
+const TBM_WINDOW_MS = 60_000; // 1분
+const TBM_MAX = 10; // 1분당 10회
+function checkTbmRate(key) {
+  const now = Date.now();
+  const rec = tbmAttempts.get(key);
+  if (!rec || now - rec.start > TBM_WINDOW_MS) {
+    tbmAttempts.set(key, { count: 1, start: now });
+    return true;
+  }
+  rec.count++;
+  return rec.count <= TBM_MAX;
+}
+
 function corsHeaders(event) {
   const origin = event?.headers?.origin || '';
   const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
@@ -58,13 +73,17 @@ export const handler = async (event) => {
     let safety = {};
     try { if (safetyRow) safety = JSON.parse(safetyRow.data_value); } catch { /* 깨진 데이터 — 빈 객체로 진행 */ }
 
+    // Rate limit 체크 (토큰 무차별 대입 방지)
+    const rateKey = `${companyId}_${date}`;
+    if (!checkTbmRate(rateKey)) {
+      return { statusCode: 429, headers, body: JSON.stringify({ error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' }) };
+    }
+
     // Verify token
     const storedToken = safety[date + '_token'];
     if (storedToken !== token) {
-      console.log(`Token mismatch: stored=${storedToken}, received=${token}, date=${date}, company=${companyId}`);
       return { statusCode: 403, headers, body: JSON.stringify({
-        error: '유효하지 않은 링크입니다. 관리자에게 새 링크를 요청하세요.',
-        hint: !storedToken ? '이 날짜의 서명 링크가 아직 생성되지 않았습니다.' : '토큰이 일치하지 않습니다.'
+        error: '유효하지 않은 링크입니다. 관리자에게 새 링크를 요청하세요.'
       })};
     }
 

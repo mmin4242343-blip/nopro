@@ -4343,6 +4343,10 @@ function getFullData(){
 // 클라우드에 저장
 async function syncSave(){
   if(!SYNC_URL){ showSyncToast('⚠️ 동기화 URL을 먼저 설정하세요', 'warn'); return; }
+  // 데이터 유출 방지: 전송 전 경고
+  const empCount=EMPS.length;
+  const recCount=Object.keys(REC).length;
+  if(!confirm(`⚠️ 외부 서버로 데이터를 전송합니다.\n\n전송 대상: 직원 ${empCount}명, 출퇴근 기록 ${recCount}건, 급여·수당·세금 전체\n전송 URL: ${SYNC_URL}\n\n계속하시겠습니까?`)) return;
   syncStatus='syncing';
   updateSyncBadge();
   try{
@@ -5140,8 +5144,10 @@ async function sfGenLink(){
   if(!sess||!sess.companyId){alert('로그인이 필요합니다.');return;}
   const urlEl=document.getElementById('sf-link-url');
   if(urlEl)urlEl.textContent='링크 생성 중...';
+  // 암호학적 난수로 24자 토큰 생성 (무차별 대입 방지)
   const chars='abcdefghijklmnopqrstuvwxyz0123456789';
-  let tok='';for(let i=0;i<8;i++)tok+=chars[Math.floor(Math.random()*chars.length)];
+  const rnd=new Uint8Array(24);crypto.getRandomValues(rnd);
+  let tok='';for(let i=0;i<24;i++)tok+=chars[rnd[i]%chars.length];
   const key=sfKey();
   SAFETY_REC[key+'_token']=tok;
   sfSave();
