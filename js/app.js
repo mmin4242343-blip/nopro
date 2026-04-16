@@ -3557,25 +3557,81 @@ function showGenEmpNo(empId){
   modal.id='empno-modal';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)';
 
-  // 구분코드에서 시설유형(첫째 자리)만 추출 → 사용자가 선택
-  // 둘째 자리(고용형태/직무)는 감지 정보로 자동 결정
   const codes=getEmpNoCodes();
+  const hasDetection=!!(det.roleTxt||det.deptTxt);
+  const secondLabels={A:'직접고용/사무직',B:'직접고용/현장직',C:'아웃소싱/사무직',D:'아웃소싱/현장직'};
+
+  // 시설유형(첫째 자리) 그룹 추출
   const facilityMap=new Map();
   codes.filter(c=>c.code&&c.code.length>=2).forEach(c=>{
     const first=c.code[0];
     if(!facilityMap.has(first)){
-      // label에서 시설유형명 추출 (첫 번째 · 앞부분)
       const fname=c.label.split('·')[0].trim()||first;
       facilityMap.set(first,fname);
     }
   });
-  const facilities=[...facilityMap.entries()]; // [[A,'재활용폐기장'],[B,'대형폐기장']]
-  const secondLabels={A:'직접고용/사무직',B:'직접고용/현장직',C:'아웃소싱/사무직',D:'아웃소싱/현장직'};
+  const facilities=[...facilityMap.entries()];
+
+  // 감지 정보 있으면 → 시설유형만 선택, 없으면 → 전체 코드 표시
+  let selectionHtml='';
+  if(hasDetection){
+    selectionHtml=`
+      <div style="font-size:11px;font-weight:700;color:var(--ink);margin-bottom:8px">시설유형 선택 <span style="font-weight:500;color:var(--ink3)">(나머지는 감지 정보로 자동 적용)</span></div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${facilities.map(([first,fname])=>{
+          const fullCode=first+det.second;
+          const no=genEmpNo(fullCode);
+          return `<div style="display:flex;gap:4px;align-items:stretch">
+            <button onclick="confirmGenEmpNo(${empId},'${no}');document.getElementById('empno-modal').remove()"
+              style="flex:1;display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border:1.5px solid var(--bd);border-radius:10px;background:#fff;cursor:pointer;font-family:inherit;transition:all .14s"
+              onmouseover="this.style.borderColor='var(--navy2)';this.style.background='var(--nbg)'"
+              onmouseout="this.style.borderColor='var(--bd)';this.style.background='#fff'">
+              <div>
+                <div style="font-size:13px;font-weight:700;color:var(--ink)">${esc(fname)}</div>
+                <div style="font-size:10px;color:var(--ink3)">${esc(fname)} · ${secondLabels[det.second]||det.second} · 코드: ${esc(fullCode)}</div>
+              </div>
+              <div style="font-size:14px;font-weight:800;color:var(--navy2);font-variant-numeric:tabular-nums;letter-spacing:.5px">${no}</div>
+            </button>
+            <button onclick="document.getElementById('empno-modal').remove();gp('pg-settings');setTimeout(()=>{const el=document.getElementById('inp-empno-enabled');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});},300)"
+              style="padding:0 10px;border:1.5px solid var(--bd);border-radius:10px;background:#fff;cursor:pointer;font-size:14px;transition:all .14s"
+              onmouseover="this.style.borderColor='var(--navy2)';this.style.background='var(--nbg)'"
+              onmouseout="this.style.borderColor='var(--bd)';this.style.background='#fff'"
+              title="구분코드 편집 (급여설정으로 이동)">✏️</button>
+          </div>`;
+        }).join('')}
+      </div>`;
+  } else {
+    selectionHtml=`
+      <div style="font-size:11px;font-weight:700;color:var(--ink);margin-bottom:4px">구분코드 선택 <span style="font-weight:500;color:var(--ink3)">(직종/소속 미입력 → 전체 표시)</span></div>
+      <div style="font-size:10px;color:var(--amber);margin-bottom:8px;font-weight:600">💡 직원관리에서 직종·소속을 입력하면 자동 감지됩니다</div>
+      <div style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto">
+        ${codes.filter(c=>c.code).map(c=>{
+          const no=genEmpNo(c.code);
+          return `<div style="display:flex;gap:4px;align-items:stretch">
+            <button onclick="confirmGenEmpNo(${empId},'${no}');document.getElementById('empno-modal').remove()"
+              style="flex:1;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border:1.5px solid var(--bd);border-radius:10px;background:#fff;cursor:pointer;font-family:inherit;transition:all .14s"
+              onmouseover="this.style.borderColor='var(--navy2)';this.style.background='var(--nbg)'"
+              onmouseout="this.style.borderColor='var(--bd)';this.style.background='#fff'">
+              <div>
+                <div style="font-size:12px;font-weight:700;color:var(--ink)">${esc(c.label||c.code)}</div>
+                <div style="font-size:10px;color:var(--ink3)">코드: ${esc(c.code)}</div>
+              </div>
+              <div style="font-size:13px;font-weight:800;color:var(--navy2);font-variant-numeric:tabular-nums;letter-spacing:.5px">${no}</div>
+            </button>
+            <button onclick="document.getElementById('empno-modal').remove();gp('pg-settings');setTimeout(()=>{const el=document.getElementById('inp-empno-enabled');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});},300)"
+              style="padding:0 10px;border:1.5px solid var(--bd);border-radius:10px;background:#fff;cursor:pointer;font-size:14px;transition:all .14s"
+              onmouseover="this.style.borderColor='var(--navy2)';this.style.background='var(--nbg)'"
+              onmouseout="this.style.borderColor='var(--bd)';this.style.background='#fff'"
+              title="구분코드 편집 (급여설정으로 이동)">✏️</button>
+          </div>`;
+        }).join('')}
+      </div>`;
+  }
 
   modal.innerHTML=`<div style="background:#fff;border-radius:18px;padding:24px;min-width:320px;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.18)">
     <div style="font-size:15px;font-weight:800;color:var(--ink);margin-bottom:14px">사번 생성 — ${esc(emp.name||'이름없음')}</div>
 
-    <div style="background:var(--surf);border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:14px">
+    ${hasDetection?`<div style="background:var(--surf);border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:14px">
       <div style="font-size:10px;font-weight:700;color:var(--ink3);margin-bottom:8px;letter-spacing:.5px">자동 감지된 정보</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <span style="padding:4px 10px;border-radius:16px;font-size:11px;font-weight:700;background:${det.isOutsource?'#FEF3C7':'var(--nbg)'};color:${det.isOutsource?'#92400E':'var(--navy2)'};border:1px solid ${det.isOutsource?'#FCD34D':'var(--nbg2)'}">
@@ -3588,26 +3644,11 @@ function showGenEmpNo(empId){
           감지 코드: ${det.second} (${secondLabels[det.second]||det.second})
         </span>
       </div>
-      ${!det.roleTxt||!det.deptTxt?'<div style="font-size:10px;color:var(--amber);margin-top:6px;font-weight:600">⚠ 직종/소속이 비어있으면 기본값(직접고용·현장직)으로 판별됩니다</div>':''}
-    </div>
+    </div>`:`<div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:10px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:#92400E">⚠ 직종/소속 정보가 없어 전체 구분코드를 표시합니다</div>
+    </div>`}
 
-    <div style="font-size:11px;font-weight:700;color:var(--ink);margin-bottom:8px">시설유형 선택 <span style="font-weight:500;color:var(--ink3)">(나머지는 감지 정보로 자동 적용)</span></div>
-    <div style="display:flex;flex-direction:column;gap:6px">
-      ${facilities.map(([first,fname])=>{
-        const fullCode=first+det.second;
-        const no=genEmpNo(fullCode);
-        return `<button onclick="confirmGenEmpNo(${empId},'${no}');document.getElementById('empno-modal').remove()"
-          style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border:1.5px solid var(--bd);border-radius:10px;background:#fff;cursor:pointer;font-family:inherit;transition:all .14s"
-          onmouseover="this.style.borderColor='var(--navy2)';this.style.background='var(--nbg)'"
-          onmouseout="this.style.borderColor='var(--bd)';this.style.background='#fff'">
-          <div>
-            <div style="font-size:13px;font-weight:700;color:var(--ink)">${esc(fname)}</div>
-            <div style="font-size:10px;color:var(--ink3)">${esc(fname)} · ${secondLabels[det.second]||det.second} · 코드: ${esc(fullCode)}</div>
-          </div>
-          <div style="font-size:14px;font-weight:800;color:var(--navy2);font-variant-numeric:tabular-nums;letter-spacing:.5px">${no}</div>
-        </button>`;
-      }).join('')}
-    </div>
+    ${selectionHtml}
     <button onclick="document.getElementById('empno-modal').remove()"
       style="margin-top:12px;width:100%;padding:8px;font-size:11px;border:1px solid var(--bd2);border-radius:8px;background:#fff;cursor:pointer;font-family:inherit;color:var(--ink3)">취소</button>
   </div>`;
