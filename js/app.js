@@ -5682,6 +5682,18 @@ function sfRenderList(){
       <span style="font-size:8px;padding:1px 5px;border-radius:20px;background:${pm.bg};color:${pm.c};font-weight:700">${pm.t}</span>
     </div>`;
   }).join('');
+  sfMatchSidebarHeight();
+}
+
+// 사이드바 높이를 왼쪽 메인 컨텐츠에 맞춤
+function sfMatchSidebarHeight(){
+  const main=document.querySelector('#sf-page-daily > div:first-child');
+  const sidebar=document.getElementById('sf-sidebar');
+  if(!main||!sidebar)return;
+  requestAnimationFrame(()=>{
+    const h=main.offsetHeight;
+    if(h>0) sidebar.style.maxHeight=h+'px';
+  });
 }
 
 // 최근 일지
@@ -5704,6 +5716,7 @@ function sfRenderRecent(){
     <span style="flex:1;font-size:10px;color:var(--ink3)">${d.tbm||'교육내용 없음'}</span>
     ${d.photos>0?`<span style="font-size:10px;color:var(--teal);font-weight:700">📷${d.photos}</span>`:''}
   </div>`).join('');
+  sfMatchSidebarHeight();
 }
 
 // 월별 현황표 — 해당 월 전체 일수 동적 생성
