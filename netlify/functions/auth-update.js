@@ -70,6 +70,16 @@ export const handler = async (event) => {
 
     if (updateErr) return err(500, '정보 수정에 실패했습니다', event);
 
+    // 비밀번호 변경 시 기존 JWT 토큰 무효화 (이 시점 이전 발급 토큰 거부)
+    if (password) {
+      await supabase.from('company_data').upsert({
+        company_id: comp.id,
+        data_key: '_token_valid_after',
+        data_value: JSON.stringify(Math.floor(Date.now() / 1000)),
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'company_id,data_key' });
+    }
+
     // 이메일이 변경된 경우 새 토큰 발급
     const newEmail = updates.email || comp.email;
     const token = signToken({ companyId: comp.id, email: newEmail, role: 'user' });

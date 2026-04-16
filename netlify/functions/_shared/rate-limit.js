@@ -23,7 +23,7 @@ export async function checkRateLimit(email, ip, isAdmin = false) {
 
     // DB 오류 시 차단 (fail-closed: 공격자가 DB 부하로 우회하는 것 방지)
     if (error) {
-      console.error('Rate limit DB error:', error);
+      console.error('rate-limit: DB check failed');
       return { allowed: false, retryAfter: 60 };
     }
 

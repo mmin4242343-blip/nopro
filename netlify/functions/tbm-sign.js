@@ -65,7 +65,7 @@ export const handler = async (event) => {
       .eq('data_key', 'safety');
 
     if (dbErr) {
-      console.error('DB 조회 실패:', dbErr);
+      console.error('tbm-sign: DB query failed');
       return { statusCode: 500, headers, body: JSON.stringify({ error: '서버 오류가 발생했습니다' }) };
     }
 
@@ -147,7 +147,7 @@ export const handler = async (event) => {
         }, { onConflict: 'company_id,data_key' });
 
       if (saveErr) {
-        console.error('서명 저장 실패:', saveErr);
+        console.error('tbm-sign: signature save failed');
         return { statusCode: 500, headers, body: JSON.stringify({ error: '서명 저장에 실패했습니다' }) };
       }
 
@@ -161,7 +161,7 @@ export const handler = async (event) => {
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) };
 
   } catch (e) {
-    console.error('tbm-sign error:', e);
+    console.error('tbm-sign: unexpected error');
     return { statusCode: 500, headers, body: JSON.stringify({ error: '서버 오류가 발생했습니다' }) };
   }
 };

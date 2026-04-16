@@ -29,7 +29,7 @@ export const handler = async (event) => {
       .createSignedUrls(validPaths, 3600); // 1시간
 
     if (urlErr) {
-      console.error('SignedUrl error:', urlErr);
+      console.error('file-url: signed URL generation failed');
       return err(500, 'URL 생성 실패', event);
     }
 

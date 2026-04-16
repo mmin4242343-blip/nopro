@@ -72,7 +72,7 @@ export const handler = async (event) => {
       });
 
     if (uploadErr) {
-      console.error('Upload error:', uploadErr);
+      console.error('file-upload: storage upload failed');
       return err(500, '파일 업로드 실패', event);
     }
 
@@ -80,7 +80,7 @@ export const handler = async (event) => {
 
   } catch (e) {
     if (e.message.includes('토큰') || e.message.includes('jwt')) return err(401, '세션이 만료되었습니다', event);
-    console.error('File upload error:', e);
+    console.error('file-upload: unexpected error');
     return err(500, '서버 오류가 발생했습니다', event);
   }
 };

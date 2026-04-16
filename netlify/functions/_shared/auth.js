@@ -10,13 +10,8 @@ export function signToken(payload) {
 }
 
 export function verifyToken(event) {
-  // 1) 쿠키에서 토큰 읽기 (우선)
-  const cookieToken = parseCookie(event.headers.cookie || event.headers.Cookie || '', COOKIE_NAME);
-  // 2) Authorization 헤더 폴백
-  const header = event.headers.authorization || event.headers.Authorization || '';
-  const bearerToken = header.replace('Bearer ', '');
-
-  const token = cookieToken || bearerToken;
+  // httpOnly 쿠키에서만 토큰 읽기 (Authorization 헤더 폴백 제거 — XSS 방어)
+  const token = parseCookie(event.headers.cookie || event.headers.Cookie || '', COOKIE_NAME);
   if (!token) throw new Error('인증 토큰이 없습니다');
   return jwt.verify(token, SECRET(), { algorithms: ['HS256'] });
 }
@@ -41,7 +36,7 @@ export function cors(event) {
   const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     'Access-Control-Allow-Origin': allowed,
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
     'Access-Control-Allow-Credentials': 'true',
     'Content-Type': 'application/json'

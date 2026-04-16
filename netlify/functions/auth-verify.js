@@ -19,7 +19,7 @@ export const handler = async (event) => {
       : e.message.includes('expired') ? 'token_expired'
       : e.message.includes('invalid') ? 'token_invalid'
       : 'token_error';
-    console.log(`auth-verify 실패: ${reason}, cookie present: ${hasCookie}, error: ${e.message}`);
+    console.log(`auth-verify: ${reason}`);
     return {
       statusCode: 401,
       headers: cors(event),
@@ -44,7 +44,7 @@ export const handler = async (event) => {
       .eq('id', decoded.companyId);
 
     if (dbErr) {
-      console.error('auth-verify DB 오류:', dbErr);
+      console.error('auth-verify: DB query failed');
       // DB 오류는 401이 아닌 500 (세션 문제가 아님)
       return err(500, '서버 오류가 발생했습니다', event);
     }
@@ -53,6 +53,25 @@ export const handler = async (event) => {
     if (rows[0].status !== 'active') return err(401, '비활성 계정입니다', event);
 
     const company = rows[0];
+
+    // 비밀번호 변경 후 발급된 토큰인지 확인 (이전 토큰 무효화)
+    if (decoded.iat) {
+      try {
+        const { data: tva } = await supabase
+          .from('company_data')
+          .select('data_value')
+          .eq('company_id', decoded.companyId)
+          .eq('data_key', '_token_valid_after')
+          .maybeSingle();
+        if (tva) {
+          const validAfter = JSON.parse(tva.data_value);
+          if (decoded.iat < validAfter) {
+            return err(401, '비밀번호가 변경되어 재로그인이 필요합니다', event);
+          }
+        }
+      } catch { /* 검증 실패해도 기존 흐름 유지 */ }
+    }
+
     const session = {
       email: company.email,
       company: company.company_name,
@@ -69,7 +88,7 @@ export const handler = async (event) => {
     return ok({ valid: true, session }, event);
 
   } catch (e) {
-    console.error('auth-verify 예외:', e);
+    console.error('auth-verify: unexpected error');
     return err(500, '서버 오류가 발생했습니다', event);
   }
 }

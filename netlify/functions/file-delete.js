@@ -27,7 +27,7 @@ export const handler = async (event) => {
       .remove(validPaths);
 
     if (delErr) {
-      console.error('Delete error:', delErr);
+      console.error('file-delete: storage operation failed');
       return err(500, '파일 삭제 실패', event);
     }
 
