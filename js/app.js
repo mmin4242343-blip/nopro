@@ -3557,8 +3557,20 @@ function showGenEmpNo(empId){
   modal.id='empno-modal';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)';
 
-  // 커스텀 구분코드 목록 사용
+  // 구분코드에서 시설유형(첫째 자리)만 추출 → 사용자가 선택
+  // 둘째 자리(고용형태/직무)는 감지 정보로 자동 결정
   const codes=getEmpNoCodes();
+  const facilityMap=new Map();
+  codes.filter(c=>c.code&&c.code.length>=2).forEach(c=>{
+    const first=c.code[0];
+    if(!facilityMap.has(first)){
+      // label에서 시설유형명 추출 (첫 번째 · 앞부분)
+      const fname=c.label.split('·')[0].trim()||first;
+      facilityMap.set(first,fname);
+    }
+  });
+  const facilities=[...facilityMap.entries()]; // [[A,'재활용폐기장'],[B,'대형폐기장']]
+  const secondLabels={A:'직접고용/사무직',B:'직접고용/현장직',C:'아웃소싱/사무직',D:'아웃소싱/현장직'};
 
   modal.innerHTML=`<div style="background:#fff;border-radius:18px;padding:24px;min-width:320px;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.18)">
     <div style="font-size:15px;font-weight:800;color:var(--ink);margin-bottom:14px">사번 생성 — ${esc(emp.name||'이름없음')}</div>
@@ -3572,21 +3584,25 @@ function showGenEmpNo(empId){
         <span style="padding:4px 10px;border-radius:16px;font-size:11px;font-weight:700;background:${det.isOffice?'#EDE9FE':'var(--gbg)'};color:${det.isOffice?'#5B21B6':'#065F46'};border:1px solid ${det.isOffice?'#DDD6FE':'#A7F3D0'}">
           ${det.isOffice?'사무직':'현장직'}${det.roleTxt?' ('+esc(det.roleTxt)+')':''}
         </span>
+        <span style="padding:4px 10px;border-radius:16px;font-size:11px;font-weight:600;background:#E0F2FE;color:#0369A1;border:1px solid #BAE6FD">
+          감지 코드: ${det.second} (${secondLabels[det.second]||det.second})
+        </span>
       </div>
       ${!det.roleTxt||!det.deptTxt?'<div style="font-size:10px;color:var(--amber);margin-top:6px;font-weight:600">⚠ 직종/소속이 비어있으면 기본값(직접고용·현장직)으로 판별됩니다</div>':''}
     </div>
 
-    <div style="font-size:11px;font-weight:700;color:var(--ink);margin-bottom:8px">구분코드 선택</div>
-    <div style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto">
-      ${codes.filter(c=>c.code).map(c=>{
-        const no=genEmpNo(c.code);
+    <div style="font-size:11px;font-weight:700;color:var(--ink);margin-bottom:8px">시설유형 선택 <span style="font-weight:500;color:var(--ink3)">(나머지는 감지 정보로 자동 적용)</span></div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${facilities.map(([first,fname])=>{
+        const fullCode=first+det.second;
+        const no=genEmpNo(fullCode);
         return `<button onclick="confirmGenEmpNo(${empId},'${no}');document.getElementById('empno-modal').remove()"
           style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border:1.5px solid var(--bd);border-radius:10px;background:#fff;cursor:pointer;font-family:inherit;transition:all .14s"
           onmouseover="this.style.borderColor='var(--navy2)';this.style.background='var(--nbg)'"
           onmouseout="this.style.borderColor='var(--bd)';this.style.background='#fff'">
           <div>
-            <div style="font-size:13px;font-weight:700;color:var(--ink)">${esc(c.label||c.code)}</div>
-            <div style="font-size:10px;color:var(--ink3)">코드: ${esc(c.code)}</div>
+            <div style="font-size:13px;font-weight:700;color:var(--ink)">${esc(fname)}</div>
+            <div style="font-size:10px;color:var(--ink3)">${esc(fname)} · ${secondLabels[det.second]||det.second} · 코드: ${esc(fullCode)}</div>
           </div>
           <div style="font-size:14px;font-weight:800;color:var(--navy2);font-variant-numeric:tabular-nums;letter-spacing:.5px">${no}</div>
         </button>`;
