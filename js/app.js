@@ -742,7 +742,7 @@ function monthSummary(eid,y,m){
   // 급여 = 기본급 + 수당합계 → 시급 = 급여 ÷ 소정근로시간
   if(empPayMode!=='monthly' && empPayMode!=='hourly'){
     const effectiveRate = Math.round((tBase + totalAllowance) / sot);
-    deduction = Math.round(effectiveRate * (adays * dailyStd + m2h(dedShortMins)));
+    deduction = Math.round(effectiveRate * (adays * dailyStd + m2h(dedShortMins)) / 10) * 10;
   }
   // 총급여 = 기본급 + 수당 + 주휴 + 연차 + 총가산수당 + 월급제휴일 + 상여 - 결근차감
   const total=(tBase+totalAllowance) + wkly + annualPay + tTotalBonus + tMonthlyHolStdPay + tMonthlyHolOtPay + bonus - deduction;
@@ -2115,7 +2115,7 @@ function renderXlPreview(){
       <td class="num">${s.wdays}</td>
       <td class="num">${(getEmpPayMode(emp)==='hourly'||getEmpPayMode(emp)==='monthly')?'':sot}</td>
       <td class="num" style="font-size:11px">${joinStr}</td>
-      <td class="num">${fmt$(Math.round(basePay/(emp.sot||POL.sot||209)))}</td>
+      <td class="num">${fmt$(Math.round(basePay/(emp.sot||POL.sot||209)/10)*10)}</td>
       <td class="num" style="font-weight:500">${s.tBase>0?fmt$(s.tBase):'-'}</td>
       <td class="num" style="${getEmpPayMode(emp)==='hourly'&&s.wkly>0?'color:#0D9488;font-weight:700':''}">${getEmpPayMode(emp)==='hourly'?(s.wkly>0?fmt$(s.wkly):''):''}</td>
       <td class="num xl-editable">${s.annualPay>0?fmt$(s.annualPay):''}</td>
@@ -4890,7 +4890,7 @@ function exportExcel(){
       W(ci++,s.wdays||0,S.num(C.navy,bg));
       W(ci++,(_pm==='hourly'||_pm==='monthly')?'':sot,S.num(C.gray,bg));
       W(ci++,emp.join||'',S.cell(C.gray,bg,false,'center'));
-      W(ci++,Math.round(basePay/(emp.sot||POL.sot||209)),S.num(C.blue,C.blue4||bg,true));
+      W(ci++,Math.round(basePay/(emp.sot||POL.sot||209)/10)*10,S.num(C.blue,C.blue4||bg,true));
 
       // 기본급 + 주휴 + 연차수당
       W(ci++,Math.round(s.tBase)||'',s.tBase?S.num(C.navy,bg):S.empty(bg));
@@ -5080,8 +5080,8 @@ function exportDailyExcel(){
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),payModeLabel[empPayMode]||empPayMode,S.cell(C.gray,bg,false,'center'));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),rec.start||'',S.cell(C.gray,bg,false,'center'));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),rec.end||'',S.cell(C.gray,bg,false,'center'));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c?Math.round(c.work/60*100)/100:0,S.num(C.gray,bg,false,'center'));
-    const bkVal = c&&c.bkMins ? Math.round(c.bkMins/60*100)/100 : 0;
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c?m2h(c.work):0,S.num(C.gray,bg,false,'center'));
+    const bkVal = c&&c.bkMins ? m2h(c.bkMins) : 0;
     const nightBkVal = c&&c.nightBkMins ? Math.round(c.nightBkMins/60*100)/100 : 0;
     const bkText = nightBkVal > 0 ? `${bkVal}h (야간${nightBkVal}h)` : (bkVal > 0 ? bkVal : 0);
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),bkText,S.num('#2D6A4F',bg,false,'center'));
@@ -5090,7 +5090,7 @@ function exportDailyExcel(){
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c&&autoH?Math.round(c.work/60*100)/100:0,S.num(C.gray,bg,false,'center'));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),status,S.cell(
       status==='연차'||status==='반차'?C.green:status==='결근'?C.rose:C.gray,bg,false,'center'));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c?Math.round(c.totalPay):0,S.num(C.gray,bg,false,'right'));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c?Math.round(c.totalPay/10)*10:0,S.num(C.gray,bg,false,'right'));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),rec.note||'',S.cell(C.gray,bg,false,'left'));
     ws['!rows'].push({hpt:22});
     R++;
