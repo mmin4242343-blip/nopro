@@ -6096,6 +6096,8 @@ function saveLeaveCustomAmount(val){
 }
 function saveLeaveSettings(){
   leaveSettings.payMode = document.getElementById("leave-pay-mode")?.value || "hourly";
+  const calcSel = document.getElementById("leave-calc-mode");
+  if (calcSel) leaveSettings.calcMode = calcSel.value || 'fiscal';
   localStorage.setItem("npm5_leave_settings", JSON.stringify(leaveSettings));
   saveLS(); // Supabase DB 동기화
   var wrap = document.getElementById("leave-custom-wrap");
@@ -6106,11 +6108,82 @@ function saveLeaveSettings(){
 function leaveYearNav(d){ leaveYear += d; renderLeave(); }
 
 // ── 연차 계산 핵심 로직 ──
-// 회계연도(1/1~12/31) 기준
+// calcMode: 'fiscal' (회계연도 기준, 기본) / 'joinDate' (입사일 기준)
+function calcLeaveForYear(emp, year) {
+  const mode = leaveSettings.calcMode || 'fiscal';
+  if (mode === 'joinDate') return calcLeaveByJoinDate(emp, year);
+  return calcLeaveByFiscal(emp, year);
+}
+
+// ── 회계연도(1/1~12/31) 기준 ──
 // 입사 첫해: 입사 다음달부터 매월 1개씩 (최대 11개)
 // 1년차(다음해 1/1): 전년도 재직월수/12 × 15 반올림, 1/1 일괄 발생
 // 2년차 이후: 15개 + 2년마다 1개 추가 (최대 25개), 1/1 일괄 발생
-function calcLeaveForYear(emp, year) {
+function calcLeaveByFiscal(emp, year) {
+  if (!emp.join) return { total: 0, accrued: 0, used: 0, remain: 0, monthly: [] };
+
+  const joinDate = new Date(emp.join);
+  const joinY = joinDate.getFullYear();
+  const joinM = joinDate.getMonth(); // 0-indexed
+
+  const yearStart = new Date(year, 0, 1);
+  const today = new Date();
+
+  if (emp.leave) {
+    const leaveDate = new Date(emp.leave);
+    if (leaveDate < yearStart) return { total: 0, accrued: 0, used: 0, remain: 0, monthly: [] };
+  }
+  if (year < joinY) return { total: 0, accrued: 0, used: 0, remain: 0, monthly: [] };
+
+  const yearsWorked = year - joinY;
+  let total = 0;
+  let monthly = [];
+
+  if (yearsWorked === 0) {
+    for (let m = 0; m < 12; m++) {
+      const accrueDate = new Date(joinY, joinM + m + 1, joinDate.getDate());
+      if (accrueDate.getFullYear() !== year) {
+        monthly.push({ month: m + 1, count: 0, date: null });
+        continue;
+      }
+      const cutoff = emp.leave ? new Date(emp.leave) : today;
+      const earned = accrueDate <= cutoff ? 1 : 0;
+      monthly.push({ month: m + 1, count: earned, date: accrueDate });
+      total += earned;
+    }
+  } else {
+    let baseLeave;
+    if (yearsWorked === 1) {
+      const workMonths = 12 - joinM;
+      baseLeave = Math.round(workMonths / 12 * 15);
+      baseLeave = Math.max(1, Math.min(baseLeave, 15));
+    } else {
+      const extra = Math.floor((yearsWorked - 1) / 2);
+      baseLeave = Math.min(15 + extra, 25);
+    }
+    total = baseLeave;
+    for (let m = 0; m < 12; m++) {
+      monthly.push({ month: m + 1, count: 0, date: null });
+    }
+    monthly[0].count = total;
+    monthly[0].date = new Date(year, 0, 1);
+  }
+
+  let used = countUsedLeave(emp.id, year);
+  if (leaveOverrides[emp.id] && leaveOverrides[emp.id][year] !== undefined) {
+    const ov = leaveOverrides[emp.id][year];
+    if (ov.used !== undefined && ov.used !== null) used = ov.used;
+  }
+  const remain = Math.max(0, total - used);
+  const r2 = v => Math.round(v * 100) / 100;
+  return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(remain), monthly };
+}
+
+// ── 입사일 기준 ──
+// 입사 첫해: 입사 다음달부터 매월 1개씩 (최대 11개)
+// 1년차(입사기념일): 15일 일괄 발생
+// 2년차 이후: 15개 + 2년마다 1개 추가 (최대 25개), 입사기념일에 일괄 발생
+function calcLeaveByJoinDate(emp, year) {
   if (!emp.join) return { total: 0, accrued: 0, used: 0, remain: 0, monthly: [] };
 
   const joinDate = new Date(emp.join);
@@ -6121,23 +6194,17 @@ function calcLeaveForYear(emp, year) {
   const yearStart = new Date(year, 0, 1);
   const today = new Date();
 
-  // 퇴사자: 해당년도 이전 퇴사면 0
   if (emp.leave) {
     const leaveDate = new Date(emp.leave);
     if (leaveDate < yearStart) return { total: 0, accrued: 0, used: 0, remain: 0, monthly: [] };
   }
-
-  // 입사년도보다 이전이면 0
   if (year < joinY) return { total: 0, accrued: 0, used: 0, remain: 0, monthly: [] };
 
-  // 근속 연수 (해당 연도 1/1 기준)
-  const yearsWorked = year - joinY; // 입사년도=0년차
-
   let total = 0;
-  let monthly = []; // 월별 적립 현황
+  let monthly = [];
 
-  if (yearsWorked === 0) {
-    // 입사 첫해: 매월 1개 (입사 다음달부터 12월까지)
+  if (year === joinY) {
+    // 입사 첫해: 매월 1개씩 적립 (입사 다음달부터)
     for (let m = 0; m < 12; m++) {
       const accrueDate = new Date(joinY, joinM + m + 1, joinD);
       if (accrueDate.getFullYear() !== year) {
@@ -6150,38 +6217,31 @@ function calcLeaveForYear(emp, year) {
       total += earned;
     }
   } else {
-    // 1년차 이상: 회계연도 1/1에 일괄 발생
+    // 1년차 이상: 입사기념일에 일괄 발생
+    const yearsAtAnniv = year - joinY; // 해당 연도 기념일 시점 근속연수
     let baseLeave;
-    if (yearsWorked === 1) {
-      // 전년도(입사년도) 재직월수 기준 비례배분
-      const workMonths = 12 - joinM; // 입사월~12월 재직월수
-      baseLeave = Math.round(workMonths / 12 * 15);
-      baseLeave = Math.max(1, Math.min(baseLeave, 15));
+    if (yearsAtAnniv === 1) {
+      baseLeave = 15; // 입사일 기준: 1년 만근 시 15일 전체 발생
     } else {
-      // 2년차 이상: 15개 + 2년마다 1개 추가 (최대 25개)
-      const extra = Math.floor((yearsWorked - 1) / 2);
+      const extra = Math.floor((yearsAtAnniv - 1) / 2);
       baseLeave = Math.min(15 + extra, 25);
     }
     total = baseLeave;
 
-    // monthly: 1월에 일괄 발생
+    // monthly: 입사 기념월에 일괄 발생
     for (let m = 0; m < 12; m++) {
       monthly.push({ month: m + 1, count: 0, date: null });
     }
-    monthly[0].count = total;
-    monthly[0].date = new Date(year, 0, 1);
+    monthly[joinM].count = total;
+    monthly[joinM].date = new Date(year, joinM, joinD);
   }
 
-  // 사용 연차: 출퇴근 기록에서 자동 집계
   let used = countUsedLeave(emp.id, year);
-  // 직접수정 override — 사용연차만 수정 가능 (총연차는 회계연도 계산값 고정)
   if (leaveOverrides[emp.id] && leaveOverrides[emp.id][year] !== undefined) {
     const ov = leaveOverrides[emp.id][year];
     if (ov.used !== undefined && ov.used !== null) used = ov.used;
   }
-
   const remain = Math.max(0, total - used);
-  // 소수점 2자리까지만 (엑셀 import 시 부동소수점 방지)
   const r2 = v => Math.round(v * 100) / 100;
   return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(remain), monthly };
 }
@@ -6209,14 +6269,19 @@ function renderLeave() {
   renderFilterBar('leave-filter-bar','leave');
   document.getElementById('leave-year-disp').textContent = leaveYear;
 
+  // calcMode select 동기화
+  const calcSel = document.getElementById('leave-calc-mode');
+  if (calcSel) calcSel.value = leaveSettings.calcMode || 'fiscal';
+
   // payMode select 동기화
   const sel = document.getElementById('leave-pay-mode');
   if (sel) sel.value = leaveSettings.payMode || 'hourly';
 
   // 설명 텍스트
   const desc = document.getElementById('leave-pay-desc');
+  const calcModeLabel = (leaveSettings.calcMode || 'fiscal') === 'fiscal' ? '회계연도(1/1~12/31) 기준' : '입사일 기준';
   const modeLabels = { hourly: '시급 × 8h', daily: '일급 (소정근로시간 기준)', custom: '직접 입력 금액' };
-  if (desc) desc.textContent = `연차수당 계산 방식: ${modeLabels[leaveSettings.payMode || 'hourly']}`;
+  if (desc) desc.textContent = `${calcModeLabel} · 연차수당: ${modeLabels[leaveSettings.payMode || 'hourly']}`;
 
   // 직접입력 금액 입력란 동기화
   var customWrap = document.getElementById("leave-custom-wrap");

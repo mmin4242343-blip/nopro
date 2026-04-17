@@ -1475,7 +1475,7 @@ document.addEventListener('click',e=>{
   <div class="ph">
     <div>
       <div class="pt">연차 관리</div>
-      <div class="pt-s">직원별 연차 자동 계산 · 입사일 기준 월 적립 방식</div>
+      <div class="pt-s">직원별 연차 자동 계산</div>
     </div>
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
       <div style="display:flex;align-items:center;gap:4px;background:var(--card);border:1px solid var(--bd);border-radius:9px;padding:3px 8px">
@@ -1483,6 +1483,13 @@ document.addEventListener('click',e=>{
         <button class="dar" onclick="leaveYearNav(-1)">‹</button>
         <span id="leave-year-disp" style="font-size:14px;font-weight:700;color:var(--navy);min-width:40px;text-align:center">2026</span>
         <button class="dar" onclick="leaveYearNav(1)">›</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;background:var(--card);border:1px solid var(--bd);border-radius:9px;padding:4px 10px">
+        <span style="font-size:11px;color:var(--ink3);font-weight:600">연차 기준</span>
+        <select id="leave-calc-mode" class="si" onchange="saveLeaveSettings()" style="font-size:11px;font-weight:700">
+          <option value="fiscal">회계연도 (1/1~12/31)</option>
+          <option value="joinDate">입사일 기준</option>
+        </select>
       </div>
       <div style="display:flex;align-items:center;gap:4px;background:var(--card);border:1px solid var(--bd);border-radius:9px;padding:4px 10px">
         <span style="font-size:11px;color:var(--ink3);font-weight:600">연차수당 계산</span>
