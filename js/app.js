@@ -6144,7 +6144,15 @@ function calcLeaveForYear(emp, year) {
 // 3년차: 15일
 // 4년차~: 15 + floor((회계연수)/2), 최대 25일
 function calcLeaveByFiscal(emp, year) {
-  if (!emp.join) return { total: 0, accrued: 0, used: 0, remain: 0, monthly: [] };
+  const r2 = v => Math.round(v * 10) / 10;
+  // 사용 연차는 입사일/퇴사 여부와 무관하게 항상 집계
+  let used = countUsedLeave(emp.id, year);
+  if (leaveOverrides[emp.id] && leaveOverrides[emp.id][year] !== undefined) {
+    const ov = leaveOverrides[emp.id][year];
+    if (ov.used !== undefined && ov.used !== null) used = ov.used;
+  }
+
+  if (!emp.join) return { total: 0, accrued: 0, used: r2(used), remain: r2(0 - used), monthly: [] };
 
   const joinDate = new Date(emp.join);
   const joinY = joinDate.getFullYear();
@@ -6155,9 +6163,9 @@ function calcLeaveByFiscal(emp, year) {
 
   if (emp.leave) {
     const leaveDate = new Date(emp.leave);
-    if (leaveDate < yearStart) return { total: 0, accrued: 0, used: 0, remain: 0, monthly: [] };
+    if (leaveDate < yearStart) return { total: 0, accrued: 0, used: r2(used), remain: r2(0 - used), monthly: [] };
   }
-  if (year < joinY) return { total: 0, accrued: 0, used: 0, remain: 0, monthly: [] };
+  if (year < joinY) return { total: 0, accrued: 0, used: r2(used), remain: r2(0 - used), monthly: [] };
 
   const yearsWorked = year - joinY;
   let total = 0;
@@ -6205,13 +6213,8 @@ function calcLeaveByFiscal(emp, year) {
     monthly[0].date = new Date(year, 0, 1);
   }
 
-  let used = countUsedLeave(emp.id, year);
-  if (leaveOverrides[emp.id] && leaveOverrides[emp.id][year] !== undefined) {
-    const ov = leaveOverrides[emp.id][year];
-    if (ov.used !== undefined && ov.used !== null) used = ov.used;
-  }
+  // used는 함수 상단에서 이미 집계됨
   const remain = total - used;
-  const r2 = v => Math.round(v * 10) / 10;
   return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(remain), monthly };
 }
 
@@ -6220,7 +6223,15 @@ function calcLeaveByFiscal(emp, year) {
 // 1년차(입사기념일): 15일 일괄 발생
 // 2년차 이후: 15개 + 2년마다 1개 추가 (최대 25개), 입사기념일에 일괄 발생
 function calcLeaveByJoinDate(emp, year) {
-  if (!emp.join) return { total: 0, accrued: 0, used: 0, remain: 0, monthly: [] };
+  const r2 = v => Math.round(v * 10) / 10;
+  // 사용 연차는 항상 집계
+  let used = countUsedLeave(emp.id, year);
+  if (leaveOverrides[emp.id] && leaveOverrides[emp.id][year] !== undefined) {
+    const ov = leaveOverrides[emp.id][year];
+    if (ov.used !== undefined && ov.used !== null) used = ov.used;
+  }
+
+  if (!emp.join) return { total: 0, accrued: 0, used: r2(used), remain: r2(0 - used), monthly: [] };
 
   const joinDate = new Date(emp.join);
   const joinY = joinDate.getFullYear();
@@ -6232,9 +6243,9 @@ function calcLeaveByJoinDate(emp, year) {
 
   if (emp.leave) {
     const leaveDate = new Date(emp.leave);
-    if (leaveDate < yearStart) return { total: 0, accrued: 0, used: 0, remain: 0, monthly: [] };
+    if (leaveDate < yearStart) return { total: 0, accrued: 0, used: r2(used), remain: r2(0 - used), monthly: [] };
   }
-  if (year < joinY) return { total: 0, accrued: 0, used: 0, remain: 0, monthly: [] };
+  if (year < joinY) return { total: 0, accrued: 0, used: r2(used), remain: r2(0 - used), monthly: [] };
 
   let total = 0;
   let monthly = [];
@@ -6272,13 +6283,8 @@ function calcLeaveByJoinDate(emp, year) {
     monthly[joinM].date = new Date(year, joinM, joinD);
   }
 
-  let used = countUsedLeave(emp.id, year);
-  if (leaveOverrides[emp.id] && leaveOverrides[emp.id][year] !== undefined) {
-    const ov = leaveOverrides[emp.id][year];
-    if (ov.used !== undefined && ov.used !== null) used = ov.used;
-  }
+  // used는 함수 상단에서 이미 집계됨
   const remain = total - used;
-  const r2 = v => Math.round(v * 10) / 10;
   return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(remain), monthly };
 }
 
