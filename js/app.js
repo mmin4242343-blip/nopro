@@ -6701,19 +6701,22 @@ function leaveUploadApply(){
       if(!Object.keys(leaveOverrides[m.empId]).length) delete leaveOverrides[m.empId];
     }
   });
+  // 먼저 기존 override 초기화 (꼬임 방지)
+  matched.forEach(m=>{
+    if(leaveOverrides[m.empId]&&leaveOverrides[m.empId][year]) delete leaveOverrides[m.empId][year];
+  });
   let count=0;
   matched.forEach(m=>{
     if(!leaveOverrides[m.empId]) leaveOverrides[m.empId]={};
     if(!leaveOverrides[m.empId][year]) leaveOverrides[m.empId][year]={};
-    // 잔여연차 저장
-    if(!isNaN(m.xlRemain)) leaveOverrides[m.empId][year].remain=m.xlRemain;
-    // 사용연차: 엑셀에 사용열 있으면 그 값, 없으면 시스템 총연차 - 엑셀 잔여로 역산
-    if(!isNaN(m.xlUsed)){
-      leaveOverrides[m.empId][year].used=m.xlUsed;
-    } else if(!isNaN(m.xlRemain)){
+    // 사용연차: 시스템 총연차(override 없는 상태) - 엑셀 잔여로 역산
+    if(!isNaN(m.xlRemain)){
       const emp=EMPS.find(e=>e.id===m.empId);
       const lv=emp?calcLeaveForYear(emp,year):{total:0};
-      leaveOverrides[m.empId][year].used=Math.max(0,lv.total-m.xlRemain);
+      const usedFromExcel=Math.max(0,lv.total-m.xlRemain);
+      leaveOverrides[m.empId][year].used=usedFromExcel;
+    } else if(!isNaN(m.xlUsed)){
+      leaveOverrides[m.empId][year].used=m.xlUsed;
     }
     count++;
   });
