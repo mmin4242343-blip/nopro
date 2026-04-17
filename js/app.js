@@ -118,6 +118,8 @@ const rk=(id,y,m,d)=>`${id}_${y}-${pad(m)}-${pad(d)}`;
 const pT=t=>{if(!t||!t.includes(':'))return null;const[h,m]=t.split(':').map(Number);return h*60+m;};
 const rEnd=(s,e)=>e<=s?e+1440:e;
 const fmt$=n=>(Math.round(Math.round(n)/10)*10).toLocaleString('ko-KR');
+// 10원 단위 반올림 (일의 자리 반올림)
+const r10=n=>Math.round(n/10)*10;
 // 분→시간 변환: 소수점 셋째 자리에서 반올림 (10분=0.17, 20분=0.33, 40분=0.67)
 const m2h=m=>Math.round(m/60*100)/100;
 const fmtH=m=>{if(!m||m<=0)return '';const hrs=m2h(m);return hrs%1===0?`${hrs}h`:`${hrs.toFixed(2).replace(/0$/,'')}h`;};
@@ -481,7 +483,6 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate){
   const ot=Math.max(0,work-480);
   const crossed=eR<=s;
   const mode=empMode||POL.basePayMode;
-  const r10=n=>Math.round(n/10)*10;
 
   // 연장 구간 분리 (야간/주간)
   const otNight=Math.max(0, nightM - Math.max(0, 480-dayM));
@@ -633,7 +634,7 @@ function monthSummary(eid,y,m){
       aldays+=0.5;
       // 반차: 출퇴근 없으면 4h 기본 지급
       if(!rec.start||!rec.end){
-        const halfPay=rate*4;
+        const halfPay=r10(rate*4);
         tBase+=halfPay; wdays++;
         continue;
       }
@@ -648,12 +649,12 @@ function monthSummary(eid,y,m){
           const workDaysInMonth=Array.from({length:days},(_,i)=>i+1).filter(dd=>{
             return !isAutoHol(y,m,dd,emp);
           }).length;
-          deduction+=Math.round(monthlyBase/(workDaysInMonth||1));
+          deduction+=r10(monthlyBase/(workDaysInMonth||1));
         }
       } else if(empPayMode==='hourly'){
         // 시급제: 결근은 단순 미근무 = 급여 미발생, 별도 공제 없음
       } else if(POL.dedMode==='hour'){
-        deduction+=rate*dailyStd;
+        deduction+=r10(rate*dailyStd);
       }
       continue;
     }
@@ -695,11 +696,11 @@ function monthSummary(eid,y,m){
     wdays++;
     // 월급제는 시간기준 공제 없음 (주말/휴일 근무 시에도 공제 안 함)
     if(empPayMode!=='monthly' && POL.dedMode==='hour'&&c.work<dailyStd*60&&!autoH){
-      const sh=dailyStd*60-c.work;if(sh>10){deduction+=rate*m2h(sh);dedShortMins+=sh;}
+      const sh=dailyStd*60-c.work;if(sh>10){deduction+=r10(rate*m2h(sh));dedShortMins+=sh;}
     }
   }
-  if(empPayMode==='fixed')tBase=rate*sot;
-  else if(empPayMode==='monthly')tBase=getEmpMonthlyAt(emp, y, m, 1);
+  if(empPayMode==='fixed')tBase=r10(rate*sot);
+  else if(empPayMode==='monthly')tBase=r10(getEmpMonthlyAt(emp, y, m, 1));
   else if(empPayMode==='hourly'){
     // 시급제: calcSession에서 이미 basePay 계산됨 (아래 루프에서 tNt/tOt와 함께 집계)
   }
@@ -720,7 +721,7 @@ function monthSummary(eid,y,m){
         if(c&&c.work>0){weekWork+=c.work;weekDays++;}
       }
       // 주 15h 이상이면 주휴수당 지급
-      if(weekWork>=900) weeklyPay+=rate*8; // 900분=15h
+      if(weekWork>=900) weeklyPay+=r10(rate*8); // 900분=15h
     }
     wkly=weeklyPay;
   }
@@ -745,7 +746,7 @@ function monthSummary(eid,y,m){
     deduction = Math.round(effectiveRate * (adays * dailyStd + m2h(dedShortMins)) / 10) * 10;
   }
   // 총급여 = 기본급 + 수당 + 주휴 + 연차 + 총가산수당 + 월급제휴일 + 상여 - 결근차감
-  const total=(tBase+totalAllowance) + wkly + annualPay + tTotalBonus + tMonthlyHolStdPay + tMonthlyHolOtPay + bonus - deduction;
+  const total=r10((tBase+totalAllowance) + wkly + annualPay + tTotalBonus + tMonthlyHolStdPay + tMonthlyHolOtPay + bonus - deduction);
 
   return{wdays,adays,aldays,twkH:m2h(twk),tNightH:m2h(tNightM),tOtDayH:m2h(tOtDayM),tOtNightH:m2h(tOtNightM),tHolDayH:m2h(tHolDayM),tHolNightH:m2h(tHolNightM),tHolDayOtH:m2h(tHolDayOtM),tHolNightOtH:m2h(tHolNightOtM),
     tBase,tNightPay,tOtDayPay,tOtNightPay,tHolDayPay,tHolNightPay,tHolDayOtPay,tHolNightOtPay,
@@ -5962,9 +5963,9 @@ function sfRenderSummary(){
     const hasPhoto=photoSet.has(d);
     let cellSub='';
     if(!fut){
-      if(has&&hasPhoto)cellSub=`<div style="font-size:7px;color:#1D4ED8">✓TBM 📷</div>`;
+      if(has&&hasPhoto)cellSub=`<div style="font-size:7px;color:#1D4ED8">✓TBM</div><div style="font-size:7px;color:#059669;font-weight:700">이미지완료</div>`;
       else if(has)cellSub=`<div style="font-size:8px;color:#1D4ED8">✓TBM</div>`;
-      else if(hasPhoto)cellSub=`<div style="font-size:8px;color:#059669">📷</div>`;
+      else if(hasPhoto)cellSub=`<div style="font-size:7px;color:#059669;font-weight:700">이미지완료</div>`;
     }
     e.innerHTML=`<div>${d}</div>${cellSub}`;
     if(!fut){
