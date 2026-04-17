@@ -6168,8 +6168,13 @@ function calcLeaveForYear(emp, year) {
 // 4년차~: 15 + floor((회계연수)/2), 최대 25일
 function calcLeaveByFiscal(emp, year) {
   const r2 = v => Math.round(v * 10) / 10;
-  // 사용 연차: 항상 출퇴근 기록(REC)에서 자동 집계 (override 무시)
-  let used = countUsedLeave(emp.id, year);
+  // 사용 연차: REC 자동 집계 + 엑셀 업로드 값 중 큰 값
+  const autoUsed = countUsedLeave(emp.id, year);
+  let used = autoUsed;
+  if (leaveOverrides[emp.id] && leaveOverrides[emp.id][year]) {
+    const ov = leaveOverrides[emp.id][year];
+    if (ov.used !== undefined && ov.used !== null && ov.used > autoUsed) used = ov.used;
+  }
 
   if (!emp.join) return { total: 0, accrued: 0, used: r2(used), remain: r2(0 - used), monthly: [] };
 
@@ -6232,12 +6237,7 @@ function calcLeaveByFiscal(emp, year) {
     monthly[0].date = new Date(year, 0, 1);
   }
 
-  // total override 적용 (엑셀 업로드 또는 수동 입력)
-  if (leaveOverrides[emp.id] && leaveOverrides[emp.id][year] !== undefined) {
-    const ov = leaveOverrides[emp.id][year];
-    if (ov.total !== undefined && ov.total !== null) total = ov.total;
-  }
-  // used는 함수 상단에서 REC 기반 자동 집계됨
+  // 총연차는 회계연도 기준 자동계산만 (override 없음)
   const remain = total - used;
   return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(remain), monthly };
 }
@@ -6248,8 +6248,13 @@ function calcLeaveByFiscal(emp, year) {
 // 2년차 이후: 15개 + 2년마다 1개 추가 (최대 25개), 입사기념일에 일괄 발생
 function calcLeaveByJoinDate(emp, year) {
   const r2 = v => Math.round(v * 10) / 10;
-  // 사용 연차: 항상 출퇴근 기록(REC)에서 자동 집계 (override 무시)
-  let used = countUsedLeave(emp.id, year);
+  // 사용 연차: REC 자동 집계 + 엑셀 업로드 값 중 큰 값
+  const autoUsed = countUsedLeave(emp.id, year);
+  let used = autoUsed;
+  if (leaveOverrides[emp.id] && leaveOverrides[emp.id][year]) {
+    const ov = leaveOverrides[emp.id][year];
+    if (ov.used !== undefined && ov.used !== null && ov.used > autoUsed) used = ov.used;
+  }
 
   if (!emp.join) return { total: 0, accrued: 0, used: r2(used), remain: r2(0 - used), monthly: [] };
 
@@ -6303,12 +6308,7 @@ function calcLeaveByJoinDate(emp, year) {
     monthly[joinM].date = new Date(year, joinM, joinD);
   }
 
-  // total override 적용 (엑셀 업로드 또는 수동 입력)
-  if (leaveOverrides[emp.id] && leaveOverrides[emp.id][year] !== undefined) {
-    const ov = leaveOverrides[emp.id][year];
-    if (ov.total !== undefined && ov.total !== null) total = ov.total;
-  }
-  // used는 함수 상단에서 REC 기반 자동 집계됨
+  // 총연차는 입사일 기준 자동계산만 (override 없음)
   const remain = total - used;
   return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(remain), monthly };
 }
