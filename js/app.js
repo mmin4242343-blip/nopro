@@ -6189,7 +6189,7 @@ function calcLeaveByFiscal(emp, year) {
     if (ov.used !== undefined && ov.used !== null) used = ov.used;
   }
   const remain = Math.max(0, total - used);
-  const r2 = v => Math.round(v * 100) / 100;
+  const r2 = v => Math.round(v * 10) / 10;
   return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(remain), monthly };
 }
 
@@ -6256,7 +6256,7 @@ function calcLeaveByJoinDate(emp, year) {
     if (ov.used !== undefined && ov.used !== null) used = ov.used;
   }
   const remain = Math.max(0, total - used);
-  const r2 = v => Math.round(v * 100) / 100;
+  const r2 = v => Math.round(v * 10) / 10;
   return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(remain), monthly };
 }
 
