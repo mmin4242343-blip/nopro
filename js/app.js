@@ -5943,20 +5943,30 @@ function sfRenderSummary(){
   const today=new Date();
   // TBM 기록이 있는 날짜 (교육내용 또는 서명 존재)
   const tbmSet=new Set();
+  const photoSet=new Set();
   for(let d=1;d<=days;d++){
     const k=`${y}-${pad(mo)}-${pad(d)}`;
     if(SAFETY_REC[k+'_tbm']||SAFETY_REC[k+'_signs'])tbmSet.add(d);
+    const photos=SAFETY_REC[k];
+    if(Array.isArray(photos)&&photos.length>0)photoSet.add(d);
   }
   for(let i=0;i<fd;i++){const e=document.createElement('div');e.style.cssText='visibility:hidden';e.textContent='x';cal.appendChild(e);}
   for(let d=1;d<=days;d++){
     const e=document.createElement('div');
     const isToday=y===today.getFullYear()&&mo===today.getMonth()+1&&d===today.getDate();
-    const has=tbmSet.has(d),fut=d>today.getDate()&&y===today.getFullYear()&&mo===today.getMonth()+1;
+    const has=tbmSet.has(d),hasP=photoSet.has(d),fut=d>today.getDate()&&y===today.getFullYear()&&mo===today.getMonth()+1;
     if(isToday)e.style.cssText='padding:4px 2px;border-radius:6px;text-align:center;background:var(--navy);color:#fff;font-weight:700;font-size:10px;min-height:34px;cursor:pointer';
-    else if(has&&!fut)e.style.cssText='padding:4px 2px;border-radius:6px;text-align:center;background:#DBEAFE;color:#1D4ED8;font-weight:700;border:1px solid #93C5FD;font-size:10px;min-height:34px;cursor:pointer';
+    else if((has||hasP)&&!fut)e.style.cssText='padding:4px 2px;border-radius:6px;text-align:center;background:#DBEAFE;color:#1D4ED8;font-weight:700;border:1px solid #93C5FD;font-size:10px;min-height:34px;cursor:pointer';
     else if(fut)e.style.cssText='padding:4px 2px;border-radius:6px;text-align:center;color:var(--bd2);font-size:10px;min-height:34px';
     else e.style.cssText='padding:4px 2px;border-radius:6px;text-align:center;font-size:10px;min-height:34px;border:1px solid transparent';
-    e.innerHTML=`<div>${d}</div>${has&&!fut?`<div style="font-size:8px;color:#1D4ED8">✓TBM</div>`:''}`;
+    const hasPhoto=photoSet.has(d);
+    let cellSub='';
+    if(!fut){
+      if(has&&hasPhoto)cellSub=`<div style="font-size:7px;color:#1D4ED8">✓TBM 📷</div>`;
+      else if(has)cellSub=`<div style="font-size:8px;color:#1D4ED8">✓TBM</div>`;
+      else if(hasPhoto)cellSub=`<div style="font-size:8px;color:#059669">📷</div>`;
+    }
+    e.innerHTML=`<div>${d}</div>${cellSub}`;
     if(!fut){
       e.style.cursor='pointer';
       e.addEventListener('click',(()=>{const dd=d;return()=>{sfD=dd;sfUpdBar2();sfLoadTbm();sfRenderList();sfRenderRecent();sf2RenderPhotos();sfSwitchTab('daily');}})());

@@ -2404,7 +2404,18 @@ noprohr.netlify.app/tbm_sign.html
             <div><div class="sl">사이트코드 (앞 5자리)</div>
               <div class="ss">선별장유형(1) + 광역(2) + 세부(2)<br>예: 12013 = 자체/인천/남동구</div>
             </div>
-            <input class="ni" type="text" id="inp-site-code" maxlength="5" placeholder="12013" style="width:80px;text-align:center;letter-spacing:1px;font-size:13px">
+            <select class="ni" id="inp-site-code" style="width:140px;text-align:center;font-size:12px;font-weight:600;padding:4px 6px">
+              <option value="">선택</option>
+              <option value="12013">12013 남동구</option>
+              <option value="12034">12034 중구(인천)</option>
+              <option value="21020">21020 도봉구</option>
+              <option value="21027">21027 성북구</option>
+              <option value="21034">21034 중구(서울)</option>
+              <option value="21014">21014 강서구</option>
+              <option value="24111">24111 청주시</option>
+              <option value="24212">24212 공주시</option>
+              <option value="24118">24118 진천군</option>
+            </select>
           </div>
           <div style="margin-top:12px;border-top:1px solid var(--bd);padding-top:12px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
