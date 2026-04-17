@@ -186,9 +186,9 @@ function rrn2nation(back){
 // ══════════════════════════════════════
 // 연차 계산
 // ══════════════════════════════════════
-function calcAnnualLeave(emp){
-  // calcLeaveForYear 기반 wrapper (현재 연도 기준)
-  const year = new Date().getFullYear();
+function calcAnnualLeave(emp, forYear){
+  // calcLeaveForYear 기반 wrapper (지정 연도 또는 뷰 연도 기준)
+  const year = forYear || cY || new Date().getFullYear();
   const lv = calcLeaveForYear(emp, year);
   return {total: lv.total, used: lv.used, remain: lv.remain};
 }
@@ -1251,7 +1251,7 @@ function renderTable(){
         <div class="av" style="width:26px;height:26px;font-size:11px;background:${safeColor(emp.color,'#DBEAFE')};color:${safeColor(emp.tc,'#1E3A5F')}">${esc(emp.name)[0]}</div>
         <div>
           <div style="font-size:12px;font-weight:700;color:var(--ink)">${esc(emp.name)}${holTag}<span class="emp-mode-badge ${getEmpPayModeLabel(emp).cls}">${getEmpPayModeLabel(emp).text}</span><span style="font-size:9px;padding:1px 5px;border-radius:5px;background:${getEmpShiftLabel(emp).bg};color:${getEmpShiftLabel(emp).color};font-weight:700;margin-left:2px">${getEmpShiftLabel(emp).text}</span></div>
-          <div style="font-size:9px;color:var(--ink3)">${esc(emp.role)} · 연차${al.remain}개</div>
+          <div style="font-size:9px;color:var(--ink3)">${esc(emp.role)} · 연차<span style="color:${al.remain<0?'var(--rose)':'inherit'};font-weight:${al.remain<0?'700':'inherit'}">${al.remain}개</span></div>
         </div>
       </div>
     </td>`;
@@ -1828,7 +1828,7 @@ function renderCal(){
   <div style="background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:11px 15px;margin-bottom:11px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 3px rgba(0,0,0,.05)">
     <div>
       <div style="font-size:12px;font-weight:700;color:var(--ink)">${vY}년 ${vM}월 상여금</div>
-      <div style="font-size:10px;color:var(--ink3);margin-top:2px">연차잔여 ${al.remain}개 (총 ${al.total}개 중 ${al.used}개 사용)</div>
+      <div style="font-size:10px;color:${al.remain<0?'var(--rose)':'var(--ink3)'};margin-top:2px;font-weight:${al.remain<0?'700':'400'}">연차잔여 ${al.remain}개 (총 ${al.total}개 중 ${al.used}개 사용)</div>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
       <input type="number" value="${curBonus}" placeholder="0"
@@ -6210,7 +6210,7 @@ function calcLeaveByFiscal(emp, year) {
     const ov = leaveOverrides[emp.id][year];
     if (ov.used !== undefined && ov.used !== null) used = ov.used;
   }
-  const remain = Math.max(0, total - used);
+  const remain = total - used;
   const r2 = v => Math.round(v * 10) / 10;
   return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(remain), monthly };
 }
@@ -6277,7 +6277,7 @@ function calcLeaveByJoinDate(emp, year) {
     const ov = leaveOverrides[emp.id][year];
     if (ov.used !== undefined && ov.used !== null) used = ov.used;
   }
-  const remain = Math.max(0, total - used);
+  const remain = total - used;
   const r2 = v => Math.round(v * 10) / 10;
   return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(remain), monthly };
 }
@@ -6365,8 +6365,8 @@ function renderLeave() {
         <span style="font-size:9px;color:var(--ink3)">일</span>
         ${hasUsedOverride ? '<span style="font-size:8px;background:var(--abg);color:#92400E;padding:1px 4px;border-radius:4px;font-weight:700;display:block;margin-top:2px">수정됨</span>' : ''}
       </td>
-      <td style="padding:10px 8px;text-align:center;background:var(--teal-dim)">
-        <span style="font-size:15px;font-weight:700;color:var(--navy2)">${lv.remain}</span>
+      <td style="padding:10px 8px;text-align:center;background:${lv.remain<0?'#FFF1F2':'var(--teal-dim)'}">
+        <span style="font-size:15px;font-weight:700;color:${lv.remain<0?'var(--rose)':'var(--navy2)'}">${lv.remain}</span>
         <span style="font-size:9px;color:var(--ink3)">일</span>
       </td>
       <td style="padding:10px 8px;text-align:center">
