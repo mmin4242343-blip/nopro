@@ -6145,11 +6145,13 @@ function calcLeaveForYear(emp, year) {
 // 4년차~: 15 + floor((회계연수)/2), 최대 25일
 function calcLeaveByFiscal(emp, year) {
   const r2 = v => Math.round(v * 10) / 10;
-  // 사용 연차는 입사일/퇴사 여부와 무관하게 항상 집계
-  let used = countUsedLeave(emp.id, year);
+  // 사용 연차: 출퇴근 기록에서 자동 집계 (항상 최신 반영)
+  const autoUsed = countUsedLeave(emp.id, year);
+  // override가 있으면 override와 자동집계 중 큰 값 사용 (연차 추가 체크 시 반영)
+  let used = autoUsed;
   if (leaveOverrides[emp.id] && leaveOverrides[emp.id][year] !== undefined) {
     const ov = leaveOverrides[emp.id][year];
-    if (ov.used !== undefined && ov.used !== null) used = ov.used;
+    if (ov.used !== undefined && ov.used !== null) used = Math.max(ov.used, autoUsed);
   }
 
   if (!emp.join) return { total: 0, accrued: 0, used: r2(used), remain: r2(0 - used), monthly: [] };
@@ -6224,11 +6226,12 @@ function calcLeaveByFiscal(emp, year) {
 // 2년차 이후: 15개 + 2년마다 1개 추가 (최대 25개), 입사기념일에 일괄 발생
 function calcLeaveByJoinDate(emp, year) {
   const r2 = v => Math.round(v * 10) / 10;
-  // 사용 연차는 항상 집계
-  let used = countUsedLeave(emp.id, year);
+  // 사용 연차: 출퇴근 기록에서 자동 집계 (항상 최신 반영)
+  const autoUsed = countUsedLeave(emp.id, year);
+  let used = autoUsed;
   if (leaveOverrides[emp.id] && leaveOverrides[emp.id][year] !== undefined) {
     const ov = leaveOverrides[emp.id][year];
-    if (ov.used !== undefined && ov.used !== null) used = ov.used;
+    if (ov.used !== undefined && ov.used !== null) used = Math.max(ov.used, autoUsed);
   }
 
   if (!emp.join) return { total: 0, accrued: 0, used: r2(used), remain: r2(0 - used), monthly: [] };
