@@ -6545,8 +6545,8 @@ function leaveUploadParseSheet(){
   if(!ws)return;
   const data=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
 
-  // 헤더 자동 탐색 (행0~행5에서 "이름"/"성명", "입사일", "잔여" 포함 열 찾기)
-  let nameCol=-1,joinCol=-1,remainCol=-1,totalCol=-1,dataStartRow=-1;
+  // 헤더 자동 탐�� (이름, 입사일, 잔여연차, 사용연차 열 찾기)
+  let nameCol=-1,joinCol=-1,remainCol=-1,usedCol=-1,dataStartRow=-1;
   for(let r=0;r<Math.min(6,data.length);r++){
     const row=data[r];
     for(let c=0;c<row.length;c++){
@@ -6554,9 +6554,9 @@ function leaveUploadParseSheet(){
       if(v==='이름'||v==='성명') nameCol=c;
       if(v==='입사일') joinCol=c;
       if(v.includes('잔여')) remainCol=c;
-      if(v==='연차갯수'||v==='연월차갯수') totalCol=c;
+      if(v.includes('사용')) usedCol=c;
     }
-    if(nameCol>=0&&joinCol>=0&&remainCol>=0) {dataStartRow=r+1; break;}
+    if(nameCol>=0&&remainCol>=0) {dataStartRow=r+1; break;}
   }
   // 날짜 행(1,2,3...) 건너뛰기
   if(dataStartRow>=0&&dataStartRow<data.length){
@@ -6564,8 +6564,8 @@ function leaveUploadParseSheet(){
     if(typeof firstVal==='number'||firstVal==='') dataStartRow++;
   }
 
-  if(nameCol<0||joinCol<0||remainCol<0){
-    _luSet('leave-upload-result',el=>{el.innerHTML='<div style="color:var(--rose);font-weight:600">헤더를 찾을 수 없습니다 (이름, 입사일, 잔여일수 열 필요)</div>';});
+  if(nameCol<0||remainCol<0){
+    _luSet('leave-upload-result',el=>{el.innerHTML='<div style="color:var(--rose);font-weight:600">헤더를 찾을 수 없습니다 (이름, 잔여연차 열 필요)</div>';});
     _leaveUploadMatches=[];
     return;
   }
@@ -6576,9 +6576,9 @@ function leaveUploadParseSheet(){
   for(let r=dataStartRow;r<data.length;r++){
     const row=data[r];
     const xlName=String(row[nameCol]||'').trim();
-    const xlJoin=_excelDateToISO(row[joinCol]);
+    const xlJoin=joinCol>=0?_excelDateToISO(row[joinCol]):'';
     const xlRemain=parseFloat(row[remainCol]);
-    const xlTotal=totalCol>=0?parseFloat(row[totalCol]):NaN;
+    const xlUsed=usedCol>=0?parseFloat(row[usedCol]):NaN;
     if(!xlName)continue;
 
     // EMPS에서 매칭: 이름+입사일 우선, 이름만으로도 매칭
@@ -6598,7 +6598,7 @@ function leaveUploadParseSheet(){
     const skipAuto=emp&&LEAVE_AUTO_NAMES.includes(xlName);
 
     _leaveUploadMatches.push({
-      xlName, xlJoin, xlRemain, xlTotal,
+      xlName, xlJoin, xlRemain, xlUsed,
       empId:emp?emp.id:null,
       empName:emp?emp.name:null,
       matched:!!emp,
@@ -6657,9 +6657,15 @@ function leaveUploadApply(){
   matched.forEach(m=>{
     if(!leaveOverrides[m.empId]) leaveOverrides[m.empId]={};
     if(!leaveOverrides[m.empId][year]) leaveOverrides[m.empId][year]={};
-    if(!isNaN(m.xlTotal)) leaveOverrides[m.empId][year].total=m.xlTotal;
-    if(!isNaN(m.xlTotal)&&!isNaN(m.xlRemain)){
-      leaveOverrides[m.empId][year].used=Math.max(0,m.xlTotal-m.xlRemain);
+    // 잔여연차 저장
+    if(!isNaN(m.xlRemain)) leaveOverrides[m.empId][year].remain=m.xlRemain;
+    // 사용연차: 엑셀에 사용열 있으면 그 값, 없으면 시스템 총연차 - 엑셀 잔여로 역산
+    if(!isNaN(m.xlUsed)){
+      leaveOverrides[m.empId][year].used=m.xlUsed;
+    } else if(!isNaN(m.xlRemain)){
+      const emp=EMPS.find(e=>e.id===m.empId);
+      const lv=emp?calcLeaveForYear(emp,year):{total:0};
+      leaveOverrides[m.empId][year].used=Math.max(0,lv.total-m.xlRemain);
     }
     count++;
   });
