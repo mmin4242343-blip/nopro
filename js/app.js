@@ -708,21 +708,33 @@ function monthSummary(eid,y,m){
   const annualPay=0;
   let wkly=0;
   if(POL.juhyu&&empPayMode==='hourly'){
-    // 주휴수당: 주 15h 이상 개근 시 1일치(8h) 추가
-    // 해당 월 주별 체크
+    // 주휴수당: 실제 월~일 기준 주 분할 + 개근 + 15h 이상 시 지급
     const daysInMonth=dim(y,m);
     let weeklyPay=0;
-    for(let weekStart=1;weekStart<=daysInMonth;weekStart+=7){
-      let weekWork=0, weekDays=0;
-      for(let d=weekStart;d<weekStart+7&&d<=daysInMonth;d++){
-        const rec=REC[rk(eid,y,m,d)];
-        if(!rec||rec.absent||rec.annual) continue;
+    // 해당 월 첫째 날의 요일 → 해당 주의 월요일 계산
+    const firstDow = new Date(y, m-1, 1).getDay(); // 0=일,1=월,...,6=토
+    const firstMonday = 1 - ((firstDow + 6) % 7); // 해당 월 포함 첫 주 월요일 (음수 가능)
+    for(let weekMon=firstMonday; weekMon<=daysInMonth; weekMon+=7){
+      let weekWork=0;
+      let hasAbsent=false;
+      for(let offset=0; offset<7; offset++){
+        const d = weekMon + offset;
+        if(d < 1 || d > daysInMonth) continue;
+        const rec = REC[rk(eid,y,m,d)];
+        if(!rec) continue;
+        // 소정근로일 판단
+        const dow = new Date(y,m-1,d).getDay();
+        const isHol = isAutoHol(y,m,d,emp);
+        const isWorkDay = !isHol; // 공휴일/주말 제외 = 소정근로일
+        if(!isWorkDay) continue;
+        if(rec.absent){ hasAbsent=true; continue; }
+        if(rec.annual || rec.halfAnnual) continue; // 연차는 개근 인정, 시간만 skip
         const bks=getActiveBk(y,m,d);
-        const c=rec.start&&rec.end?calcSession(rec.start,rec.end,rate,isAutoHol(y,m,d,emp),bks,rec.outTimes||[],empPayMode,ordRate):null;
-        if(c&&c.work>0){weekWork+=c.work;weekDays++;}
+        const c=rec.start&&rec.end?calcSession(rec.start,rec.end,rate,isHol,bks,rec.outTimes||[],empPayMode,ordRate):null;
+        if(c&&c.work>0) weekWork+=c.work;
       }
-      // 주 15h 이상이면 주휴수당 지급
-      if(weekWork>=900) weeklyPay+=r10(rate*8); // 900분=15h
+      // 결근 없고 15h(900분) 이상이면 주휴수당 지급
+      if(!hasAbsent && weekWork>=900) weeklyPay+=r10(rate*8);
     }
     wkly=weeklyPay;
   }
