@@ -6232,7 +6232,12 @@ function calcLeaveByFiscal(emp, year) {
     monthly[0].date = new Date(year, 0, 1);
   }
 
-  // used는 함수 상단에서 이미 집계됨
+  // total override 적용 (엑셀 업로드 또는 수동 입력)
+  if (leaveOverrides[emp.id] && leaveOverrides[emp.id][year] !== undefined) {
+    const ov = leaveOverrides[emp.id][year];
+    if (ov.total !== undefined && ov.total !== null) total = ov.total;
+  }
+  // used는 함수 상단에서 REC 기반 자동 집계됨
   const remain = total - used;
   return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(remain), monthly };
 }
@@ -6298,7 +6303,12 @@ function calcLeaveByJoinDate(emp, year) {
     monthly[joinM].date = new Date(year, joinM, joinD);
   }
 
-  // used는 함수 상단에서 이미 집계됨
+  // total override 적용 (엑셀 업로드 또는 수동 입력)
+  if (leaveOverrides[emp.id] && leaveOverrides[emp.id][year] !== undefined) {
+    const ov = leaveOverrides[emp.id][year];
+    if (ov.total !== undefined && ov.total !== null) total = ov.total;
+  }
+  // used는 함수 상단에서 REC 기반 자동 집계됨
   const remain = total - used;
   return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(remain), monthly };
 }
@@ -6571,12 +6581,17 @@ function leaveUploadParseSheet(){
     const xlTotal=totalCol>=0?parseFloat(row[totalCol]):NaN;
     if(!xlName)continue;
 
-    // EMPS에서 이름+입사일 매칭
-    const emp=EMPS.find(e=>{
+    // EMPS에서 매칭: 이름+입사일 우선, 이름만으로도 매칭
+    let emp=EMPS.find(e=>{
       const eName=(e.name||'').trim();
       const eJoin=(e.join||'').trim();
       return eName===xlName && eJoin===xlJoin;
     });
+    if(!emp){
+      // 이름만으로 매칭 (동명이인이 아닌 경우)
+      const nameMatches=EMPS.filter(e=>(e.name||'').trim()===xlName && !matchedIds.has(e.id));
+      if(nameMatches.length===1) emp=nameMatches[0];
+    }
 
     // 자동계산 유지 대상 (입사일 기준 계산 고정)
     const LEAVE_AUTO_NAMES=['배수연','김인자'];
