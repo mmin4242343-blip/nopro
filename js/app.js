@@ -301,8 +301,7 @@ function getEmpPayModeLabel(emp){
   const m=getEmpPayMode(emp);
   if(m==='fixed')return{text:'통상임금제',cls:'emb-fixed'};
   if(m==='hourly')return{text:'시급제',cls:'emb-hourly'};
-  if(m==='monthly')return{text:'월급제',cls:'emb-monthly'};
-  if(m==='pohal')return{text:'포괄임금',cls:'emb-pohal'};
+  if(m==='monthly'||m==='pohal')return{text:'포괄임금제',cls:'emb-pohal'};
   return{text:'통상임금제',cls:'emb-fixed'};
 }
 function getEmpShiftLabel(emp){
@@ -708,33 +707,39 @@ function monthSummary(eid,y,m){
   const annualPay=0;
   let wkly=0;
   if(POL.juhyu&&empPayMode==='hourly'){
-    // 주휴수당: 실제 월~일 기준 주 분할 + 개근 + 15h 이상 시 지급
+    // 주휴수당: 실제 월~일 기준 주 + 근무형태 등록/미등록 분기
     const daysInMonth=dim(y,m);
     let weeklyPay=0;
-    // 해당 월 첫째 날의 요일 → 해당 주의 월요일 계산
-    const firstDow = new Date(y, m-1, 1).getDay(); // 0=일,1=월,...,6=토
-    const firstMonday = 1 - ((firstDow + 6) % 7); // 해당 월 포함 첫 주 월요일 (음수 가능)
-    for(let weekMon=firstMonday; weekMon<=daysInMonth; weekMon+=7){
+    const DOW_KO=['일','월','화','수','목','금','토'];
+    const workDays=emp.workDays||[];
+    const isRegistered=workDays.length>0; // 근무형태 등록 여부
+    // 실제 월~일 기준 주 계산
+    const firstDow=new Date(y,m-1,1).getDay();
+    const firstMonday=1-((firstDow+6)%7);
+    for(let mon=firstMonday;mon<=daysInMonth;mon+=7){
       let weekWork=0;
       let hasAbsent=false;
-      for(let offset=0; offset<7; offset++){
-        const d = weekMon + offset;
-        if(d < 1 || d > daysInMonth) continue;
-        const rec = REC[rk(eid,y,m,d)];
-        if(!rec) continue;
-        // 소정근로일 판단
-        const dow = new Date(y,m-1,d).getDay();
-        const isHol = isAutoHol(y,m,d,emp);
-        const isWorkDay = !isHol; // 공휴일/주말 제외 = 소정근로일
-        if(!isWorkDay) continue;
-        if(rec.absent){ hasAbsent=true; continue; }
-        if(rec.annual || rec.halfAnnual) continue; // 연차는 개근 인정, 시간만 skip
+      for(let offset=0;offset<7;offset++){
+        const d=mon+offset;
+        if(d<1||d>daysInMonth) continue;
+        // 근무형태 등록된 경우만 소정근로일 체크
+        if(isRegistered){
+          const dowKo=DOW_KO[new Date(y,m-1,d).getDay()];
+          if(!workDays.includes(dowKo)) continue; // 소정근로일 아니면 skip
+        }
+        const rec=REC[rk(eid,y,m,d)];
+        // 등록된 경우: 소정근로일에 기록 없거나 결근이면 개근 실패
+        if(isRegistered&&(!rec||rec.absent)){hasAbsent=true;continue;}
+        if(!rec||rec.absent) continue; // 미등록은 그냥 skip
+        if(rec.annual||rec.halfAnnual) continue; // 연차는 개근 인정
         const bks=getActiveBk(y,m,d);
-        const c=rec.start&&rec.end?calcSession(rec.start,rec.end,rate,isHol,bks,rec.outTimes||[],empPayMode,ordRate):null;
+        const c=rec.start&&rec.end
+          ?calcSession(rec.start,rec.end,rate,isAutoHol(y,m,d,emp),bks,rec.outTimes||[],empPayMode,ordRate)
+          :null;
         if(c&&c.work>0) weekWork+=c.work;
       }
-      // 결근 없고 15h(900분) 이상이면 주휴수당 지급
-      if(!hasAbsent && weekWork>=900) weeklyPay+=r10(rate*8);
+      // 등록: 개근+15h이상 / 미등록: 15h이상이면 지급
+      if(!hasAbsent&&weekWork>=900) weeklyPay+=r10(rate*8);
     }
     wkly=weeklyPay;
   }
@@ -855,7 +860,7 @@ function renderSb(filter=''){
     const isFor = e.nation==='foreign' || e.foreigner===true;
     if(SBF.nation==='korean' && isFor) return false;
     if(SBF.nation==='foreign' && !isFor) return false;
-    if(SBF.pay!=='all' && (e.payMode||'fixed')!==SBF.pay) return false;
+    if(SBF.pay!=='all'){const ep=e.payMode||'fixed';if(SBF.pay==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}else{if(ep!==SBF.pay)return false;}}
     return true;
   });
   document.getElementById('sb-list').innerHTML=sbSorted.map((e,i)=>`
@@ -1107,7 +1112,12 @@ function applyCommonFilter(emps, tab, refDate){
     const isFor = emp.nation==='foreign' || emp.foreigner===true;
     if(f.nation==='korean'  && isFor)  return false;
     if(f.nation==='foreign' && !isFor) return false;
-    if(f.pay!=='all' && emp.payMode && emp.payMode!==f.pay) return false;
+    if(f.pay!=='all'){
+      const ep=emp.payMode||'fixed';
+      // 포괄임금제 필터: monthly + pohal 모두 매칭
+      if(f.pay==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}
+      else{if(ep!==f.pay)return false;}
+    }
     if(f.dept && f.dept!=='all' && (emp.dept||'').trim()!==(f.dept||'').trim()) return false;
     if(f.search && !(emp.name||'').toLowerCase().includes(f.search)) return false;
     return true;
@@ -1788,7 +1798,7 @@ function renderMonthly(){
   const mvEmps = EMPS.filter(e=>{
     // 퇴사자: 해당 월 시작 전에 퇴사했으면 제외
     if(e.leave){const ld=new Date(e.leave);if(ld<mvMonthStart)return false;}
-    if(mvFilter!=='all' && (e.payMode||'fixed')!==mvFilter) return false;
+    if(mvFilter!=='all'){const ep=e.payMode||'fixed';if(mvFilter==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}else{if(ep!==mvFilter)return false;}}
     if(MF.shift!=='all' && (e.shift||'day')!==MF.shift) return false;
     const isFor = e.nation==='foreign'||e.foreigner===true;
     if(MF.nation==='korean' && isFor) return false;
@@ -1868,7 +1878,7 @@ function renderOv(){
   for(let d=1;d<=days;d++){const dow=(fdow(vY,vM)+d-1)%7;const ph=getPhName(vY,vM,d);const autoH=isAutoHol(vY,vM,d);th+=`<th style="${dow===0||autoH?'color:#FCA5A5':dow===6?'color:#93C5FD':''}" title="${ph||''}">${d}${ph?'🎌':''}<br><span style="font-weight:400;font-size:8px;opacity:.7">${DOW[dow]}</span></th>`;}
   th+=`<th style="background:#0E4D2E">근무일</th><th style="background:#0E4D2E">연차</th><th style="background:#0E4D2E">실근무</th><th style="background:#0E4D2E">월급여</th>`;
   const mvEmps = EMPS.filter(e=>{
-    if(mvFilter!=='all' && (e.payMode||'fixed')!==mvFilter) return false;
+    if(mvFilter!=='all'){const ep=e.payMode||'fixed';if(mvFilter==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}else{if(ep!==mvFilter)return false;}}
     if(MF.shift!=='all' && (e.shift||'day')!==MF.shift) return false;
     const isFor = e.nation==='foreign' || e.foreigner===true;
     if(MF.nation==='korean' && isFor) return false;
@@ -5793,7 +5803,7 @@ function sfRenderList(){
     if(sf2NaF==='foreign'&&!isFor)return false;
     if(sf2ShF!=='all'&&(e.shift||'day')!==sf2ShF)return false;
     if(sf2DpF!=='all'&&(e.dept||'')!==sf2DpF)return false;
-    if(sf2PmF!=='all'&&(e.payMode||'fixed')!==sf2PmF)return false;
+    if(sf2PmF!=='all'){const ep=e.payMode||'fixed';if(sf2PmF==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}else{if(ep!==sf2PmF)return false;}}
     if(sf2StF==='done'&&!signs[String(e.id)])return false;
     if(sf2StF==='wait'&&signs[String(e.id)])return false;
     if(q&&!(e.name||'').toLowerCase().includes(q))return false;
@@ -6901,7 +6911,7 @@ function exportMonthlyExcel(){
     const emps = EMPS.filter(e=>{
       if(!e.join||new Date(e.join)>new Date(vY,vM,0)) return false;
       if(e.leave&&new Date(e.leave)<new Date(vY,vM-1,1)) return false;
-      if(mvFilter!=='all'&&(e.payMode||'fixed')!==mvFilter) return false;
+      if(mvFilter!=='all'){const ep=e.payMode||'fixed';if(mvFilter==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}else{if(ep!==mvFilter)return false;}}
       if(MF.shift!=='all'&&(e.shift||'day')!==MF.shift) return false;
       const isFor=e.nation==='foreign'||e.foreigner===true;
       if(MF.nation==='korean'&&isFor) return false;
@@ -6959,7 +6969,7 @@ function exportMonthlyExcel(){
   const calEmps=EMPS.filter(e=>{
     if(!e.join||new Date(e.join)>new Date(vY,vM,0)) return false;
     if(e.leave&&new Date(e.leave)<new Date(vY,vM-1,1)) return false;
-    if(mvFilter!=='all'&&(e.payMode||'fixed')!==mvFilter) return false;
+    if(mvFilter!=='all'){const ep=e.payMode||'fixed';if(mvFilter==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}else{if(ep!==mvFilter)return false;}}
     return true;
   });
 
@@ -7256,7 +7266,7 @@ function exportCompanyExcel(){
 
   // ── 데이터 ──
   const emps=EMPS.filter(e=>{
-    if(companyFilter!=='all'&&(e.payMode||'fixed')!==companyFilter) return false;
+    if(companyFilter!=='all'){const ep=e.payMode||'fixed';if(companyFilter==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}else{if(ep!==companyFilter)return false;}}
     if(!e.join||new Date(e.join)>new Date(companyYear,11,31)) return false;
     return true;
   });

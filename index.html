@@ -1405,7 +1405,8 @@ document.addEventListener('click',e=>{
       <div style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:3px">
         <button class="mvf-btn btn btn-xs on" data-f="all" onclick="setMvFilter('all')">전체</button>
         <button class="mvf-btn btn btn-xs" data-f="fixed" onclick="setMvFilter('fixed')">통상임금제</button>
-        <button class="mvf-btn btn btn-xs" data-f="hourly" onclick="setMvFilter('hourly')">시급</button>
+        <button class="mvf-btn btn btn-xs" data-f="monthly" onclick="setMvFilter('monthly')">포괄임금제</button>
+        <button class="mvf-btn btn btn-xs" data-f="hourly" onclick="setMvFilter('hourly')">시급제</button>
 
       </div>
       <div style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:3px">
@@ -1565,7 +1566,8 @@ document.addEventListener('click',e=>{
     <div style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:3px">
         <button class="cpf-btn btn btn-xs on" data-f="all" onclick="setCompanyFilter('all')">전체</button>
         <button class="cpf-btn btn btn-xs" data-f="fixed" onclick="setCompanyFilter('fixed')">통상임금제</button>
-        <button class="cpf-btn btn btn-xs" data-f="hourly" onclick="setCompanyFilter('hourly')">시급</button>
+        <button class="cpf-btn btn btn-xs" data-f="monthly" onclick="setCompanyFilter('monthly')">포괄임금제</button>
+        <button class="cpf-btn btn btn-xs" data-f="hourly" onclick="setCompanyFilter('hourly')">시급제</button>
 
       </div>
       <div style="display:flex;align-items:center;gap:4px;background:var(--card);border:1px solid var(--bd);border-radius:9px;padding:3px 8px">
@@ -2048,9 +2050,8 @@ noprohr.netlify.app/tbm_sign.html
         <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px" id="sf-chips-pm">
           <span class="sf-chip sf-chip-on" onclick="sfFc('pm','all',this)">전체</span>
           <span class="sf-chip" onclick="sfFc('pm','fixed',this)">통상임금제</span>
+          <span class="sf-chip" onclick="sfFc('pm','monthly',this)">포괄임금제</span>
           <span class="sf-chip" onclick="sfFc('pm','hourly',this)">시급제</span>
-          <span class="sf-chip" onclick="sfFc('pm','monthly',this)">월급제</span>
-          <span class="sf-chip" onclick="sfFc('pm','pohal',this)">포괄임금</span>
         </div>
         <div style="font-size:9px;color:var(--ink3);margin-bottom:3px">소속</div>
         <div style="display:flex;gap:4px;flex-wrap:wrap" id="sf-chips-dp">
@@ -2084,7 +2085,7 @@ noprohr.netlify.app/tbm_sign.html
       <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
         <select id="sf-f-sh" onchange="sfRenderM()" style="padding:5px 9px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;background:var(--card);color:var(--ink);font-family:inherit;outline:none"><option value="all">주야간 전체</option><option value="day">주간</option><option value="night">야간</option></select>
         <select id="sf-f-na" onchange="sfRenderM()" style="padding:5px 9px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;background:var(--card);color:var(--ink);font-family:inherit;outline:none"><option value="all">내·외국인 전체</option><option value="korean">내국인</option><option value="foreign">외국인</option></select>
-        <select id="sf-f-pm" onchange="sfRenderM()" style="padding:5px 9px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;background:var(--card);color:var(--ink);font-family:inherit;outline:none"><option value="all">급여방식 전체</option><option value="fixed">통상임금제</option><option value="hourly">시급제</option><option value="monthly">월급제</option><option value="pohal">포괄임금</option></select>
+        <select id="sf-f-pm" onchange="sfRenderM()" style="padding:5px 9px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;background:var(--card);color:var(--ink);font-family:inherit;outline:none"><option value="all">급여방식 전체</option><option value="fixed">통상임금제</option><option value="monthly">포괄임금제</option><option value="hourly">시급제</option></select>
         <select id="sf-f-dp" onchange="sfRenderM()" style="padding:5px 9px;border:1px solid var(--bd2);border-radius:7px;font-size:10px;background:var(--card);color:var(--ink);font-family:inherit;outline:none"><option value="all">소속 전체</option></select>
         <button class="sf-fbtn sf-fbtn-on" onclick="sfSetMF('all',this)">전체</button>
         <button class="sf-fbtn" onclick="sfSetMF('done',this)">완료만</button>
