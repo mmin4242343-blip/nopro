@@ -698,13 +698,21 @@ function monthSummary(eid,y,m){
     }
   }
   // ── 누적 시간(hours) × 시급 → r10 한 번 (엑셀 방식) ──
+  // 엑셀 수식과 정확히 일치시키려면 화면 표시 시간(각 구간 2자리 반올림 후 합산)을 그대로 사용.
+  // rh 는 표시/계산 양쪽에서 동일하게 쓰이는 2자리 반올림.
+  const _rh = v=>Math.round(v*100)/100;
   if(empPayMode==='fixed'){
+    const _ntF=POL.ntFixed??true, _otF=POL.otFixed??true;
     tBase=r10(rate*sot);
-    tNightPay=(POL.ntFixed??true)?r10(ordRate*0.5*tAllNightH):0;
-    tOtDayPay=(POL.otFixed??true)?r10(ordRate*0.5*tAllOtDayH):0;
-    tOtNightPay=((POL.otFixed??true)&&(POL.ntFixed??true))?r10(ordRate*0.5*tAllOtNightH):0;
-    tExtraWorkPay=(POL.extFixed??true)?r10(ordRate*1.0*tFixExtraH):0;
-    tHolPayNew=(POL.holFixed??true)?r10(ordRate*0.5*tFixHolWorkH):0;
+    tNightPay=_ntF?r10(ordRate*0.5*_rh(tAllNightH)):0;
+    // 초과연장: 엑셀 X = rh(주간연장) + rh(야간연장, ntF꺼지면 제외) → 1회 ROUND (주간/야간 배율 동일 0.5로 통합 가능)
+    const otHExcel = _rh(tAllOtDayH) + (_ntF?_rh(tAllOtNightH):0);
+    tOtDayPay=_otF?r10(ordRate*0.5*otHExcel):0;
+    tOtNightPay=0;
+    tExtraWorkPay=(POL.extFixed??true)?r10(ordRate*1.0*_rh(tFixExtraH)):0;
+    // 초과휴일: 엑셀 Y = rh(주간휴일)+rh(야간휴일)+rh(주간휴일연장)+rh(야간휴일연장) → 1회 ROUND
+    const holHExcel = _rh(tHolDayH)+_rh(tHolNightH)+_rh(tHolDayOtH)+_rh(tHolNightOtH);
+    tHolPayNew=(POL.holFixed??true)?r10(ordRate*0.5*holHExcel):0;
   } else if(empPayMode==='hourly'){
     tBase=r10(rate*1.0*tHrBaseH);
     tNightPay=(POL.ntHourly??true)?r10(ordRate*0.5*tHrNightH):0;
