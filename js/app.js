@@ -6168,13 +6168,15 @@ function calcLeaveForYear(emp, year) {
 // 4년차~: 15 + floor((회계연수)/2), 최대 25일
 function calcLeaveByFiscal(emp, year) {
   const r2 = v => Math.round(v * 10) / 10;
-  // 사용 연차: 엑셀 업로드분(override) + REC 직접체크분 합산
-  const autoUsed = countUsedLeave(emp.id, year);
+  // 사용 연차: 엑셀 업로드분(override, 지정 월까지) + REC 그 이후 월 합산
   let overrideUsed = 0;
+  let overrideUntil = 0; // 엑셀이 커버하는 마지막 월 (1~12), 0이면 override 없음
   if (leaveOverrides[emp.id] && leaveOverrides[emp.id][year]) {
     const ov = leaveOverrides[emp.id][year];
     if (ov.used !== undefined && ov.used !== null) overrideUsed = ov.used;
+    if (ov.usedUntilMonth) overrideUntil = ov.usedUntilMonth;
   }
+  const autoUsed = countUsedLeave(emp.id, year, overrideUntil + 1);
   let used = overrideUsed + autoUsed;
 
   if (!emp.join) return { total: 0, accrued: 0, used: r2(used), remain: r2(0 - used), monthly: [] };
@@ -6249,13 +6251,15 @@ function calcLeaveByFiscal(emp, year) {
 // 2년차 이후: 15개 + 2년마다 1개 추가 (최대 25개), 입사기념일에 일괄 발생
 function calcLeaveByJoinDate(emp, year) {
   const r2 = v => Math.round(v * 10) / 10;
-  // 사용 연차: 엑셀 업로드분(override) + REC 직접체크분 합산
-  const autoUsed = countUsedLeave(emp.id, year);
+  // 사용 연차: 엑셀 업로드분(override, 지정 월까지) + REC 그 이후 월 합산
   let overrideUsed = 0;
+  let overrideUntil = 0;
   if (leaveOverrides[emp.id] && leaveOverrides[emp.id][year]) {
     const ov = leaveOverrides[emp.id][year];
     if (ov.used !== undefined && ov.used !== null) overrideUsed = ov.used;
+    if (ov.usedUntilMonth) overrideUntil = ov.usedUntilMonth;
   }
+  const autoUsed = countUsedLeave(emp.id, year, overrideUntil + 1);
   let used = overrideUsed + autoUsed;
 
   if (!emp.join) return { total: 0, accrued: 0, used: r2(used), remain: r2(0 - used), monthly: [] };
@@ -6315,9 +6319,10 @@ function calcLeaveByJoinDate(emp, year) {
   return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(remain), monthly };
 }
 
-function countUsedLeave(empId, year) {
+function countUsedLeave(empId, year, fromMonth) {
   let used = 0;
-  for (let m = 1; m <= 12; m++) {
+  const startM = Math.max(1, fromMonth || 1);
+  for (let m = startM; m <= 12; m++) {
     const days = dim(year, m);
     for (let d = 1; d <= days; d++) {
       const rec = REC[rk(empId, year, m, d)];
@@ -6694,6 +6699,11 @@ function leaveUploadApply(){
   const matched=_leaveUploadMatches.filter(m=>m.matched&&!m.skip);
   if(!matched.length)return;
   const year=leaveYear;
+  // 업로드한 시트 월 추출 (예: "3월" → 3). 엑셀값은 해당 월 말 기준 누적 사용분
+  const sels=_luEl('leave-upload-sheet');
+  const sheetName=sels.length?sels[0].value:'';
+  const monthMatch=sheetName.match(/^(\d{1,2})월$/);
+  const sheetMonth=monthMatch?parseInt(monthMatch[1]):0;
   // 자동계산 대상은 override 제거 (항상 입사일 기준 계산 유지)
   _leaveUploadMatches.filter(m=>m.skip&&m.empId).forEach(m=>{
     if(leaveOverrides[m.empId]&&leaveOverrides[m.empId][year]){
@@ -6718,6 +6728,8 @@ function leaveUploadApply(){
     } else if(!isNaN(m.xlUsed)){
       leaveOverrides[m.empId][year].used=m.xlUsed;
     }
+    // 엑셀이 커버하는 마지막 월을 기록 → 그 이후 REC만 추가 합산되도록
+    if(sheetMonth) leaveOverrides[m.empId][year].usedUntilMonth=sheetMonth;
     count++;
   });
   localStorage.setItem('npm5_leave_overrides',JSON.stringify(leaveOverrides));
