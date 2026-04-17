@@ -6166,11 +6166,13 @@ function calcLeaveByFiscal(emp, year) {
       // 3년차: 15일 고정
       baseLeave = 15;
     } else {
-      // 4년차~: 15 + floor((yearsWorked-1)/2), 최대 25일
-      // 회계연수 = yearsWorked - 1
-      // 4년차(yw=3): 15+floor(2/2)=16, 5년차(yw=4): 15+floor(3/2)=16
-      // 6년차(yw=5): 17, 7년차(yw=6): 17, 8년차(yw=7): 18 ...
-      const extra = Math.floor((yearsWorked - 1) / 2);
+      // 4년차~: nodong.kr 엑셀 수식 준용
+      // 입사일이 1/1인 경우: 15 + floor((yw-1)/2) → 4년차부터 가산 시작
+      // 입사일이 1/1 외인 경우: 15 + floor((yw-2)/2) → 5년차부터 가산 시작
+      const isJoinOnFiscalStart = (joinM === 0 && joinDate.getDate() === 1);
+      const extra = isJoinOnFiscalStart
+        ? Math.floor((yearsWorked - 1) / 2)
+        : Math.floor((yearsWorked - 2) / 2);
       baseLeave = Math.min(15 + extra, 25);
     }
     total = baseLeave;
