@@ -593,10 +593,10 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate){
       holDayOtPay   = r10(pRate*2.0*m2h(otDay));
       holNightOtPay = r10(pRate*2.5*m2h(otNight));
     } else {
-      // 평일: basePay는 기본시급, 가산수당은 통상시급
-      basePay = r10(rate*1.0*m2h(Math.min(dayM,480)));
-      if(_ntH) nightPay = r10(pRate*1.5*m2h(Math.min(nightM,480)));
-      else     nightPay = r10(rate*1.0*m2h(Math.min(nightM,480)));
+      // 평일: basePay = 주간+야간 전체 실근무 ×1.0 (통상임���제와 동일 구조)
+      basePay = r10(rate*1.0*m2h(Math.min(dayM,480)+Math.min(nightM,480)));
+      // nightPay: 야간 ���산만 ×0.5 (토글 OFF시 0)
+      nightPay = _ntH ? r10(pRate*0.5*m2h(Math.min(nightM,480))) : 0;
       if(_otH&&otDay>0)   otDayPay  = r10(pRate*1.5*m2h(otDay));
       if(_otH&&otNight>0) otNightPay= r10(pRate*2.0*m2h(otNight));
     }
@@ -694,8 +694,9 @@ function monthSummary(eid,y,m){
       tHolNightOtPay+=c.holNightOtPay||0;
     }
     wdays++;
-    // 월급제는 시간기준 공제 없음 (주말/휴일 근무 시에도 공제 안 함)
-    if(empPayMode!=='monthly' && POL.dedMode==='hour'&&c.work<dailyStd*60&&!autoH){
+    // 월급제·시급제는 시��기준 공제 없음
+    // 시급제: 실��무시간 기��� 계산이라 별도 공제 불필요
+    if(empPayMode!=='monthly' && empPayMode!=='hourly' && POL.dedMode==='hour'&&c.work<dailyStd*60&&!autoH){
       const sh=dailyStd*60-c.work;if(sh>10){deduction+=r10(rate*m2h(sh));dedShortMins+=sh;}
     }
   }
