@@ -615,13 +615,15 @@ function monthSummary(eid,y,m){
   if(emp.leave){const ld=new Date(emp.leave);if(ld<new Date(y,m-1,1))return{wdays:0,adays:0,aldays:0,twkH:0,tNightH:0,tOtDayH:0,tOtNightH:0,tHolDayH:0,tHolNightH:0,tHolDayOtH:0,tHolNightOtH:0,tBase:0,tNightPay:0,tOtDayPay:0,tOtNightPay:0,tHolDayPay:0,tHolNightPay:0,tHolDayOtPay:0,tHolNightOtPay:0,annualPay:0,wkly:0,bonus:0,allowances:{},totalAllowance:0,deduction:0,total:0};}
   const days=dim(y,m);
   const sot=emp.sot||POL.sot||209;
-  let wdays=0,adays=0,aldays=0,twk=0,tNightM=0,tOtDayM=0,tOtNightM=0,tHolDayM=0,tHolNightM=0,tHolDayOtM=0,tHolNightOtM=0,tBase=0,tNightPay=0,tOtDayPay=0,tOtNightPay=0,tHolDayPay=0,tHolNightPay=0,tHolDayOtPay=0,tHolNightOtPay=0,deduction=0,dedShortMins=0;
-  // 분(minutes) 합산용 (월말에 한 번만 r10)
-  let tExtraWorkH=0,tExtraWorkPay=0,tHolPayNew=0;
-  let tFixHolWorkM=0; // 통상임금제 휴일 근무분
-  let tHrBaseM=0,tHrNightM=0; // 시급제 기본/야간 (일별 cap 적용 후 합산)
-  let tMhHolStdM=0,tMhHolOtM=0; // 포괄/월급 휴일 표준/연장분
+  let wdays=0,adays=0,aldays=0,tBase=0,tNightPay=0,tOtDayPay=0,tOtNightPay=0,tHolDayPay=0,tHolNightPay=0,tHolDayOtPay=0,tHolNightOtPay=0,deduction=0,dedShortMins=0;
+  let tExtraWorkPay=0,tHolPayNew=0;
   let tMonthlyHolStdPay=0,tMonthlyHolOtPay=0;
+  // 시간(hours) 합산: 매일 m2h 변환 후 누적 (출퇴근 기록 소수점 그대로 합산)
+  let twkH=0,tAllNightH=0,tAllOtDayH=0,tAllOtNightH=0;
+  let tHolDayH=0,tHolNightH=0,tHolDayOtH=0,tHolNightOtH=0;
+  let tFixExtraH=0,tFixHolWorkH=0; // 통상임금제
+  let tHrBaseH=0,tHrNightH=0,tHrOtDayH=0,tHrOtNightH=0; // 시급제 (비휴일, 일별 cap)
+  let tMhHolStdH=0,tMhHolOtH=0; // 포괄/월급 휴일
   const empPayMode=getEmpPayModeAt(emp, y, m, 1);
   // 소정근로 1일 기준시간: 고정/월급제=8h, 시급제=sot기반
   const dailyStd = (empPayMode==='fixed'||empPayMode==='monthly') ? 8 : sot/4.345/5;
@@ -664,28 +666,29 @@ function monthSummary(eid,y,m){
     const msBks = rec.customBk ? (rec.customBkList||[]) : bks;
     const c=rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,msBks,rec.outTimes||[],empPayMode,ordRate):null;
     if(!c)continue;
-    twk+=c.work; tNightM+=c.nightM; tOtDayM+=c.otDay; tOtNightM+=c.otNight;
-    // 분(minutes)만 합산 (pay는 루프 후 한 번에 계산)
+    // 매일 m2h 변환 후 시간(hours) 누적 (출퇴근 기록 소수점 그대로 합산)
+    twkH+=m2h(c.work); tAllNightH+=m2h(c.nightM); tAllOtDayH+=m2h(c.otDay); tAllOtNightH+=m2h(c.otNight);
     if(empPayMode==='fixed'){
-      const extraWork = autoH ? c.work : Math.max(0,c.work-480);
-      tExtraWorkH += extraWork;
-      if(autoH) tFixHolWorkM += c.work;
+      tFixExtraH += m2h(autoH ? c.work : Math.max(0,c.work-480));
+      if(autoH) tFixHolWorkH += m2h(c.work);
     }
     if(empPayMode==='hourly' && !autoH){
       const dayM = Math.max(0, c.work - c.nightM);
-      tHrBaseM += Math.min(dayM, 480) + Math.min(c.nightM, 480);
-      tHrNightM += Math.min(c.nightM, 480);
+      tHrBaseH += m2h(Math.min(dayM, 480) + Math.min(c.nightM, 480));
+      tHrNightH += m2h(Math.min(c.nightM, 480));
+      tHrOtDayH += m2h(c.otDay);
+      tHrOtNightH += m2h(c.otNight);
     }
     if((empPayMode==='pohal'||empPayMode==='monthly') && autoH){
-      tMhHolStdM += Math.min(c.work, 480);
-      tMhHolOtM += Math.max(0, c.work - 480);
+      tMhHolStdH += m2h(Math.min(c.work, 480));
+      tMhHolOtH += m2h(Math.max(0, c.work - 480));
     }
     if(autoH){
       const holDayM=Math.max(0,c.work-c.nightM);
-      tHolDayM   +=Math.min(holDayM,480);
-      tHolNightM +=Math.min(c.nightM,Math.max(0,480-holDayM));
-      tHolDayOtM +=c.otDay;
-      tHolNightOtM+=c.otNight;
+      tHolDayH   +=m2h(Math.min(holDayM,480));
+      tHolNightH +=m2h(Math.min(c.nightM,Math.max(0,480-holDayM)));
+      tHolDayOtH +=m2h(c.otDay);
+      tHolNightOtH+=m2h(c.otNight);
     }
     wdays++;
     // 월급제·시급제는 시��기준 공제 없음
@@ -694,34 +697,34 @@ function monthSummary(eid,y,m){
       const sh=dailyStd*60-c.work;if(sh>10){deduction+=r10(rate*m2h(sh));dedShortMins+=sh;}
     }
   }
-  // ── 분 합산 → 한 번만 r10 (엑셀 방식) ──
+  // ── 누적 시간(hours) × 시급 → r10 한 번 (엑셀 방식) ──
   if(empPayMode==='fixed'){
     tBase=r10(rate*sot);
-    tNightPay=(POL.ntFixed??true)?r10(ordRate*0.5*m2h(tNightM)):0;
-    tOtDayPay=(POL.otFixed??true)?r10(ordRate*0.5*m2h(tOtDayM)):0;
-    tOtNightPay=((POL.otFixed??true)&&(POL.ntFixed??true))?r10(ordRate*0.5*m2h(tOtNightM)):0;
-    tExtraWorkPay=(POL.extFixed??true)?r10(ordRate*1.0*m2h(tExtraWorkH)):0;
-    tHolPayNew=(POL.holFixed??true)?r10(ordRate*0.5*m2h(tFixHolWorkM)):0;
+    tNightPay=(POL.ntFixed??true)?r10(ordRate*0.5*tAllNightH):0;
+    tOtDayPay=(POL.otFixed??true)?r10(ordRate*0.5*tAllOtDayH):0;
+    tOtNightPay=((POL.otFixed??true)&&(POL.ntFixed??true))?r10(ordRate*0.5*tAllOtNightH):0;
+    tExtraWorkPay=(POL.extFixed??true)?r10(ordRate*1.0*tFixExtraH):0;
+    tHolPayNew=(POL.holFixed??true)?r10(ordRate*0.5*tFixHolWorkH):0;
   } else if(empPayMode==='hourly'){
-    tBase=r10(rate*1.0*m2h(tHrBaseM));
-    tNightPay=(POL.ntHourly??true)?r10(ordRate*0.5*m2h(tHrNightM)):0;
-    tOtDayPay=(POL.otHourly??true)?r10(ordRate*1.5*m2h(tOtDayM)):0;
-    tOtNightPay=(POL.otHourly??true)?r10(ordRate*2.0*m2h(tOtNightM)):0;
+    tBase=r10(rate*1.0*tHrBaseH);
+    tNightPay=(POL.ntHourly??true)?r10(ordRate*0.5*tHrNightH):0;
+    tOtDayPay=(POL.otHourly??true)?r10(ordRate*1.5*tHrOtDayH):0;
+    tOtNightPay=(POL.otHourly??true)?r10(ordRate*2.0*tHrOtNightH):0;
     if(POL.holHourly??true){
-      tHolDayPay=r10(ordRate*1.5*m2h(tHolDayM));
-      tHolNightPay=r10(ordRate*2.0*m2h(tHolNightM));
-      tHolDayOtPay=r10(ordRate*2.0*m2h(tHolDayOtM));
-      tHolNightOtPay=r10(ordRate*2.5*m2h(tHolNightOtM));
+      tHolDayPay=r10(ordRate*1.5*tHolDayH);
+      tHolNightPay=r10(ordRate*2.0*tHolNightH);
+      tHolDayOtPay=r10(ordRate*2.0*tHolDayOtH);
+      tHolNightOtPay=r10(ordRate*2.5*tHolNightOtH);
     }
   } else if(empPayMode==='monthly'){
     tBase=r10(getEmpMonthlyAt(emp, y, m, 1));
-    tMonthlyHolStdPay=(POL.holMonthlyStd??true)?r10(ordRate*1.5*m2h(tMhHolStdM)):0;
-    tMonthlyHolOtPay=(POL.holMonthlyOt??true)?r10(ordRate*2.0*m2h(tMhHolOtM)):0;
+    tMonthlyHolStdPay=(POL.holMonthlyStd??true)?r10(ordRate*1.5*tMhHolStdH):0;
+    tMonthlyHolOtPay=(POL.holMonthlyOt??true)?r10(ordRate*2.0*tMhHolOtH):0;
   } else if(empPayMode==='pohal'){
     tBase=r10(rate*sot);
     const pohalRate=ordRate||Math.round((POL.baseMonthly||2455750)/209);
-    tMonthlyHolStdPay=(POL.holMonthlyStd??true)?r10(pohalRate*1.5*m2h(tMhHolStdM)):0;
-    tMonthlyHolOtPay=(POL.holMonthlyOt??true)?r10(pohalRate*2.0*m2h(tMhHolOtM)):0;
+    tMonthlyHolStdPay=(POL.holMonthlyStd??true)?r10(pohalRate*1.5*tMhHolStdH):0;
+    tMonthlyHolOtPay=(POL.holMonthlyOt??true)?r10(pohalRate*2.0*tMhHolOtH):0;
   }
   const annualPay=0;
   let wkly=0;
@@ -785,9 +788,10 @@ function monthSummary(eid,y,m){
   // 총급여 = 기본급 + 수당 + 주휴 + 연차 + 총가산수당 + 월급제휴일 + 상여 - 결근차감
   const total=r10((tBase+totalAllowance) + wkly + annualPay + tTotalBonus + tMonthlyHolStdPay + tMonthlyHolOtPay + bonus - deduction);
 
-  return{wdays,adays,aldays,twkH:m2h(twk),tNightH:m2h(tNightM),tOtDayH:m2h(tOtDayM),tOtNightH:m2h(tOtNightM),tHolDayH:m2h(tHolDayM),tHolNightH:m2h(tHolNightM),tHolDayOtH:m2h(tHolDayOtM),tHolNightOtH:m2h(tHolNightOtM),
+  const rh=v=>Math.round(v*100)/100; // 시간 소수점 2자리
+  return{wdays,adays,aldays,twkH:rh(twkH),tNightH:rh(tAllNightH),tOtDayH:rh(tAllOtDayH),tOtNightH:rh(tAllOtNightH),tHolDayH:rh(tHolDayH),tHolNightH:rh(tHolNightH),tHolDayOtH:rh(tHolDayOtH),tHolNightOtH:rh(tHolNightOtH),
     tBase,tNightPay,tOtDayPay,tOtNightPay,tHolDayPay,tHolNightPay,tHolDayOtPay,tHolNightOtPay,
-    tExtraWorkH:m2h(tExtraWorkH),tExtraWorkPay,tHolPayNew,tTotalBonus,
+    tExtraWorkH:rh(tFixExtraH),tExtraWorkPay,tHolPayNew,tTotalBonus,
     tMonthlyHolStdPay,tMonthlyHolOtPay,
     annualPay,wkly,bonus,allowances,totalAllowance,deduction,dedShortH:dedShortMins/60,total};
 }
@@ -2158,7 +2162,7 @@ function renderXlPreview(){
       <td class="num">${s.wdays}</td>
       <td class="num">${(getEmpPayMode(emp)==='hourly'||getEmpPayMode(emp)==='monthly')?'':sot}</td>
       <td class="num" style="font-size:11px">${joinStr}</td>
-      <td class="num">${fmt$(Math.round(basePay/(emp.sot||POL.sot||209)/10)*10)}</td>
+      <td class="num">${fmt$(Math.round(basePay/(emp.sot||POL.sot||209)))}</td>
       <td class="num" style="font-weight:500">${s.tBase>0?fmt$(s.tBase):'-'}</td>
       <td class="num" style="${getEmpPayMode(emp)==='hourly'&&s.wkly>0?'color:#0D9488;font-weight:700':''}">${getEmpPayMode(emp)==='hourly'?(s.wkly>0?fmt$(s.wkly):''):''}</td>
       <td class="num xl-editable">${s.annualPay>0?fmt$(s.annualPay):''}</td>
@@ -4933,7 +4937,7 @@ function exportExcel(){
       W(ci++,s.wdays||0,S.num(C.navy,bg));
       W(ci++,(_pm==='hourly'||_pm==='monthly')?'':sot,S.num(C.gray,bg));
       W(ci++,emp.join||'',S.cell(C.gray,bg,false,'center'));
-      W(ci++,Math.round(basePay/(emp.sot||POL.sot||209)/10)*10,S.num(C.blue,C.blue4||bg,true));
+      W(ci++,Math.round(basePay/(emp.sot||POL.sot||209)),S.num(C.blue,C.blue4||bg,true));
 
       // 기본급 + 주휴 + 연차수당
       W(ci++,Math.round(s.tBase)||'',s.tBase?S.num(C.navy,bg):S.empty(bg));
