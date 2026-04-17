@@ -6116,9 +6116,11 @@ function calcLeaveForYear(emp, year) {
 }
 
 // ── 회계연도(1/1~12/31) 기준 ──
-// 입사 첫해: 입사 다음달부터 매월 1개씩 (최대 11개)
-// 1년차(다음해 1/1): 전년도 재직월수/12 × 15 반올림, 1/1 일괄 발생
-// 2년차 이후: 15개 + 2년마다 1개 추가 (최대 25개), 1/1 일괄 발생
+// nodong.kr 연차계산기 로직 준용
+// 1년차(입사년): 매월 1개씩 (최대 11개)
+// 2년차(첫 회계연도): 비례배분 15 × (첫회계일-입사일)/365 (일 기준)
+// 3년차: 15일
+// 4년차~: 15 + floor((회계연수)/2), 최대 25일
 function calcLeaveByFiscal(emp, year) {
   if (!emp.join) return { total: 0, accrued: 0, used: 0, remain: 0, monthly: [] };
 
@@ -6140,6 +6142,7 @@ function calcLeaveByFiscal(emp, year) {
   let monthly = [];
 
   if (yearsWorked === 0) {
+    // 1년차(입사년): 매월 1개씩 적립
     for (let m = 0; m < 12; m++) {
       const accrueDate = new Date(joinY, joinM + m + 1, joinDate.getDate());
       if (accrueDate.getFullYear() !== year) {
@@ -6154,10 +6157,19 @@ function calcLeaveByFiscal(emp, year) {
   } else {
     let baseLeave;
     if (yearsWorked === 1) {
-      const workMonths = 12 - joinM;
-      baseLeave = Math.round(workMonths / 12 * 15);
-      baseLeave = Math.max(1, Math.min(baseLeave, 15));
+      // 2년차: 비례배분 15 × (첫회계일 - 입사일) / 365 (일 기준, nodong.kr 방식)
+      const firstFiscal = new Date(year, 0, 1);
+      const daysDiff = Math.round((firstFiscal - joinDate) / (1000 * 60 * 60 * 24));
+      baseLeave = 15 * daysDiff / 365;
+      baseLeave = Math.max(0, Math.min(baseLeave, 15));
+    } else if (yearsWorked === 2) {
+      // 3년차: 15일 고정
+      baseLeave = 15;
     } else {
+      // 4년차~: 15 + floor((yearsWorked-1)/2), 최대 25일
+      // 회계연수 = yearsWorked - 1
+      // 4년차(yw=3): 15+floor(2/2)=16, 5년차(yw=4): 15+floor(3/2)=16
+      // 6년차(yw=5): 17, 7년차(yw=6): 17, 8년차(yw=7): 18 ...
       const extra = Math.floor((yearsWorked - 1) / 2);
       baseLeave = Math.min(15 + extra, 25);
     }
