@@ -6614,6 +6614,15 @@ function _excelDateToISO(serial){
   return d.toISOString().slice(0,10);
 }
 
+// 특정 월 말일까지의 누적 적립 연차 합산 (sheetMonth=0이면 연 총합 fallback)
+function _accruedByMonthEnd(emp, year, sheetMonth){
+  const lv = calcLeaveForYear(emp, year);
+  if(!sheetMonth) return lv.total;
+  const sheetMonthEnd = new Date(year, sheetMonth, 0); // 해당 월 마지막 날
+  return (lv.monthly||[]).reduce((sum, mv) =>
+    (mv.date && mv.date <= sheetMonthEnd) ? sum + mv.count : sum, 0);
+}
+
 function leaveUploadParseSheet(){
   if(!_leaveUploadWB)return;
   const sels=_luEl('leave-upload-sheet');
@@ -6623,6 +6632,8 @@ function leaveUploadParseSheet(){
   const ws=_leaveUploadWB.Sheets[sheetName];
   if(!ws)return;
   const data=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+  const _pMonthMatch=sheetName.match(/^(\d{1,2})월$/);
+  const _pSheetMonth=_pMonthMatch?parseInt(_pMonthMatch[1]):0;
 
   // 헤더 자동 탐�� (이름, 입사일, 잔여연차, 사용연차 열 찾기)
   let nameCol=-1,joinCol=-1,remainCol=-1,usedCol=-1,dataStartRow=-1;
@@ -6697,7 +6708,9 @@ function leaveUploadParseSheet(){
       const emp=EMPS.find(e=>e.id===m.empId);
       const lv=emp?calcLeaveForYear(emp,leaveYear):{total:0};
       const sysTotal=lv.total;
-      const used=!isNaN(m.xlRemain)?Math.max(0,sysTotal-m.xlRemain):'—';
+      // 사용: (sheetMonth 말일까지 누적 적립) - xlRemain. 음수 허용.
+      const accruedByEnd = emp ? _accruedByMonthEnd(emp, leaveYear, _pSheetMonth) : sysTotal;
+      const used=!isNaN(m.xlRemain)?(accruedByEnd - m.xlRemain):'—';
       html+=`<tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 8px;font-size:11px">${esc(m.xlName)}</td><td style="padding:4px 8px;font-size:11px;text-align:center">${esc(m.xlJoin)}</td><td style="padding:4px 8px;font-size:11px;text-align:center;font-weight:600">${sysTotal}</td><td style="padding:4px 8px;font-size:11px;text-align:center;color:var(--green);font-weight:700">${isNaN(m.xlRemain)?'—':m.xlRemain}</td><td style="padding:4px 8px;font-size:11px;text-align:center">${used}</td></tr>`;
     });
     html+='</table>';
@@ -6748,12 +6761,12 @@ function leaveUploadApply(){
   matched.forEach(m=>{
     if(!leaveOverrides[m.empId]) leaveOverrides[m.empId]={};
     if(!leaveOverrides[m.empId][year]) leaveOverrides[m.empId][year]={};
-    // 사용연차: 시스템 총연차(override 없는 상태) - 엑셀 잔여로 역산
+    // 사용연차: (sheetMonth 말일까지 적립분) - 엑셀 잔여 = 그 시점까지 사용한 연차
+    // sheetMonth 이후 적립은 calcLeave에서 자동 추가되므로 잔여에 반영됨. 음수 허용(초과 사용).
     if(!isNaN(m.xlRemain)){
       const emp=EMPS.find(e=>e.id===m.empId);
-      const lv=emp?calcLeaveForYear(emp,year):{total:0};
-      const usedFromExcel=Math.max(0,lv.total-m.xlRemain);
-      leaveOverrides[m.empId][year].used=usedFromExcel;
+      const accruedByEnd = emp ? _accruedByMonthEnd(emp, year, sheetMonth) : 0;
+      leaveOverrides[m.empId][year].used = accruedByEnd - m.xlRemain;
     } else if(!isNaN(m.xlUsed)){
       leaveOverrides[m.empId][year].used=m.xlUsed;
     }
