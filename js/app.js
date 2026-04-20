@@ -5565,60 +5565,96 @@ async function sfExcelCore(){
   ws1.views=[{state:'frozen',xSplit:6,ySplit:2}];
   ws1.autoFilter={from:{row:2,column:1},to:{row:2+emps.length,column:6+days.length+3}};
 
-  // ── 시트2: 일자별 사진 + TBM 교육내용 (서명자 리스트는 시트1 매트릭스와 중복되어 제거) ──
+  // ── 시트2: 일자별 사진 (가로 형태) ──
+  // 각 날짜 1행, 사진을 오른쪽 컬럼으로 펼침
   const ws2=wb.addWorksheet(sfMMo+'월 일자별 사진');
-  ws2.getColumn(1).width=18;ws2.getColumn(2).width=18;
-  for(let i=3;i<=7;i++)ws2.getColumn(i).width=14;
-  let r2=1;
+  // 최대 사진 수 파악 (컬럼 수 결정용)
+  let maxPhotos = 0;
+  for(const d of days){
+    const k = sfMY+'-'+pad(sfMMo)+'-'+pad(d);
+    const photos = SAFETY_REC[k]||[];
+    if(photos.length > maxPhotos) maxPhotos = photos.length;
+  }
+  if(maxPhotos < 1) maxPhotos = 1;
+  // 컬럼 너비
+  ws2.getColumn(1).width = 10;  // 날짜
+  ws2.getColumn(2).width = 6;   // 요일
+  ws2.getColumn(3).width = 9;   // 서명자
+  ws2.getColumn(4).width = 42;  // 교육내용
+  for(let i=0;i<maxPhotos;i++) ws2.getColumn(5+i).width = 22;
+  // 타이틀
   ws2.addRow([sfMY+'년 '+sfMMo+'월 일자별 교육내용 및 현장 사진']);
-  ws2.getRow(r2).font={bold:true,size:13,color:{argb:'FF1E3A5F'}};
-  ws2.mergeCells(r2,1,r2,7);r2++;r2++;
+  ws2.getRow(1).font={bold:true,size:14,color:{argb:'FF1E3A5F'}};
+  ws2.mergeCells(1,1,1,4+maxPhotos);
+  ws2.getRow(1).height=26;
+  // 헤더
+  const ws2Hdr=['날짜','요일','서명자','교육내용'];
+  for(let i=1;i<=maxPhotos;i++) ws2Hdr.push('사진'+i);
+  const hRow2=ws2.addRow(ws2Hdr);
+  hRow2.eachCell(c=>{
+    c.fill={type:'pattern',pattern:'solid',fgColor:NAVY};
+    c.font={bold:true,size:10,color:WHITE};
+    c.alignment={horizontal:'center',vertical:'middle'};
+    c.border={bottom:{style:'thin',color:{argb:'FF94A3B8'}}};
+  });
+  hRow2.height=24;
+  let r2=3;
+  // 데이터 행
   for(const d of days){
     const k=sfMY+'-'+pad(sfMMo)+'-'+pad(d);
     const tbm=SAFETY_REC[k+'_tbm']||'';
     const photos=SAFETY_REC[k]||[];
     const signs=SAFETY_REC[k+'_signs']||{};
     const signedCount=Object.values(signs).filter(v=>v).length;
-    // 사진도 없고 TBM도 없고 서명도 없으면 이 날짜는 건너뜀 (빈 줄 방지)
+    // 사진/TBM/서명 모두 없는 날짜는 생략
     if(!tbm && photos.length===0 && signedCount===0) continue;
     const dw=new Date(sfMY,sfMMo-1,d).getDay();
-    // 날짜 헤더 (요일별 색상)
-    const titleText=sfMMo+'월 '+d+'일('+DNW[dw]+') · 서명 '+signedCount+'명 · 사진 '+photos.length+'장';
-    const titleRow=ws2.addRow([titleText]);
-    titleRow.eachCell(c=>{c.fill={type:'pattern',pattern:'solid',fgColor:NAVY};c.font={bold:true,size:11,color:WHITE};c.alignment={vertical:'middle'};});
-    ws2.mergeCells(r2,1,r2,7);ws2.getRow(r2).height=22;r2++;
-    // 교육내용
-    if(tbm){
-      const tbmRow=ws2.addRow(['교육: '+tbm]);
-      tbmRow.getCell(1).font={size:10,color:{argb:'FF1D4ED8'}};
-      tbmRow.getCell(1).alignment={wrapText:true,vertical:'top'};
-      ws2.mergeCells(r2,1,r2,7);r2++;
+    const dowKo=DNW[dw];
+    const dowColor=dw===0?{argb:'FFDC2626'}:dw===6?{argb:'FF2563EB'}:{argb:'FF1E293B'};
+    // 날짜 행: [날짜, 요일, 서명자수, 교육내용, '', '', ...(사진칸 공란)]
+    const rowData=[sfMMo+'/'+d, dowKo, signedCount+'명', tbm];
+    for(let i=0;i<maxPhotos;i++) rowData.push('');
+    const dataRow=ws2.addRow(rowData);
+    dataRow.height=110;  // 사진 높이 맞춤
+    // 셀 스타일
+    dataRow.getCell(1).font={bold:true,size:11,color:{argb:'FF1E3A5F'}};
+    dataRow.getCell(1).alignment={horizontal:'center',vertical:'middle'};
+    dataRow.getCell(2).font={bold:true,size:10,color:dowColor};
+    dataRow.getCell(2).alignment={horizontal:'center',vertical:'middle'};
+    dataRow.getCell(3).font={size:10,color:{argb:'FF059669'}};
+    dataRow.getCell(3).alignment={horizontal:'center',vertical:'middle'};
+    dataRow.getCell(4).font={size:10,color:{argb:'FF1D4ED8'}};
+    dataRow.getCell(4).alignment={wrapText:true,vertical:'middle',horizontal:'left',indent:1};
+    // 테두리
+    for(let c=1;c<=4+maxPhotos;c++){
+      dataRow.getCell(c).border={top:{style:'hair',color:{argb:'FFE2E8F0'}},bottom:{style:'hair',color:{argb:'FFE2E8F0'}},left:{style:'hair',color:{argb:'FFE2E8F0'}},right:{style:'hair',color:{argb:'FFE2E8F0'}}};
     }
-    // 사진 삽입 (강화된 헬퍼 사용)
+    // 사진 삽입 (가로로 펼침): col 5부터
     for(let pi=0;pi<photos.length;pi++){
       const p=photos[pi];
-      ws2.addRow([]);r2++;
-      ws2.addRow([]);r2++;
-      const imgRow=r2-1;
       let inserted=false;
       try{
         const img = await sfFetchPhotoBuffer(p);
         if(img && img.buf && img.buf.byteLength>0){
           const imgId=wb.addImage({buffer:img.buf,extension:img.ext});
-          ws2.addImage(imgId,{tl:{col:0,row:imgRow-2},br:{col:3,row:imgRow}});
-          ws2.getRow(imgRow-1).height=120;
-          ws2.getRow(imgRow).height=120;
+          ws2.addImage(imgId,{
+            tl:{col:4+pi, row:r2-1},   // 0-indexed: col 4+pi = 엑셀 5+pi열, row r2-1 = 엑셀 r2행
+            ext:{width:140, height:100}
+          });
           inserted=true;
         }
-      }catch(e){console.warn('[엑셀 사진] 삽입 실패:', e);}
+      }catch(e){console.warn('[엑셀 사진] 삽입 실패:',e);}
       if(!inserted){
-        ws2.getRow(imgRow).getCell(1).value='[사진'+(pi+1)+'] '+(p.name||'')+' (로드 실패 — storagePath: '+(p.storagePath||'없음')+')';
-        ws2.getRow(imgRow).getCell(1).font={size:9,color:{argb:'FFDC2626'},italic:true};
+        const cell=dataRow.getCell(5+pi);
+        cell.value='[사진'+(pi+1)+'] 로드 실패';
+        cell.font={size:8,color:{argb:'FFDC2626'},italic:true};
+        cell.alignment={horizontal:'center',vertical:'middle',wrapText:true};
       }
     }
-    // 구분선
-    ws2.addRow([]);r2++;
+    r2++;
   }
+  // 좌측 4열 + 상단 2행 고정 (스크롤 시 기준 유지)
+  ws2.views=[{state:'frozen',xSplit:4,ySplit:2}];
 
   // ── 시트3: 요약통계 ──
   const ws3=wb.addWorksheet('요약통계');
