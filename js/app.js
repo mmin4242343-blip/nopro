@@ -6204,28 +6204,29 @@ function calcLeaveForYear(emp, year) {
 // 2년차(첫 회계연도): 비례배분 15 × (첫회계일-입사일)/365 (일 기준)
 // 3년차: 15일
 // 4년차~: 15 + floor((회계연수)/2), 최대 25일
+// 월별 만근 판정: 해당 calendar 월에 REC.absent=true인 날이 있으면 false
+// 연차·반차는 만근 인정. REC 없는 날(미입력)은 결근 아님으로 간주.
+function hadFullAttendance(emp, year, month) {
+  if (month < 1 || month > 12) return true;
+  const days = dim(year, month);
+  for (let d = 1; d <= days; d++) {
+    const rec = REC[rk(emp.id, year, month, d)];
+    if (rec && rec.absent) return false;
+  }
+  return true;
+}
+
 function calcLeaveByFiscal(emp, year) {
   const r2 = v => Math.round(v * 10) / 10;
-  // Override 구분: (신규) 엑셀 잔여 직접 저장 {remain, untilMonth}
-  //                (레거시) 사용 역산 저장 {used, usedUntilMonth}
-  let overrideUsed = 0;
-  let overrideUntil = 0;
-  let remainOverride = null;
-  let remainUntilMonth = 0;
-  if (leaveOverrides[emp.id] && leaveOverrides[emp.id][year]) {
-    const ov = leaveOverrides[emp.id][year];
-    if (ov.remain !== undefined && ov.remain !== null && ov.untilMonth) {
-      remainOverride = ov.remain;
-      remainUntilMonth = ov.untilMonth;
-    } else {
-      if (ov.used !== undefined && ov.used !== null) overrideUsed = ov.used;
-      if (ov.usedUntilMonth) overrideUntil = ov.usedUntilMonth;
-    }
-  }
-  const autoUsed = countUsedLeave(emp.id, year, overrideUntil + 1);
-  let used = overrideUsed + autoUsed;
+  // Override: 엑셀 기반 {baselineTotal, baselineRemain, untilMonth}
+  // OR 수동 사용 override {used} — 엑셀 미업로드 시 사용자가 직접 입력한 사용일수
+  const ov = (leaveOverrides[emp.id] && leaveOverrides[emp.id][year]) || null;
+  const hasBaseline = ov && ov.baselineTotal !== undefined && ov.untilMonth;
 
-  if (!emp.join) return { total: 0, accrued: 0, used: r2(used), remain: r2(0 - used), monthly: [] };
+  if (!emp.join) {
+    const u = (ov && ov.used !== undefined && ov.used !== null) ? ov.used : 0;
+    return { total: 0, accrued: 0, used: r2(u), remain: r2(0 - u), monthly: [] };
+  }
 
   const joinDate = new Date(emp.join);
   const joinY = joinDate.getFullYear();
@@ -6236,16 +6237,22 @@ function calcLeaveByFiscal(emp, year) {
 
   if (emp.leave) {
     const leaveDate = new Date(emp.leave);
-    if (leaveDate < yearStart) return { total: 0, accrued: 0, used: r2(used), remain: r2(0 - used), monthly: [] };
+    if (leaveDate < yearStart) {
+      const u = (ov && ov.used !== undefined && ov.used !== null) ? ov.used : 0;
+      return { total: 0, accrued: 0, used: r2(u), remain: r2(0 - u), monthly: [] };
+    }
   }
-  if (year < joinY) return { total: 0, accrued: 0, used: r2(used), remain: r2(0 - used), monthly: [] };
+  if (year < joinY) {
+    const u = (ov && ov.used !== undefined && ov.used !== null) ? ov.used : 0;
+    return { total: 0, accrued: 0, used: r2(u), remain: r2(0 - u), monthly: [] };
+  }
 
   const yearsWorked = year - joinY;
   let total = 0;
   let monthly = [];
 
   if (yearsWorked === 0) {
-    // 1년차(입사년): 매월 1개씩 적립
+    // 1년차(입사년): 월 만근 시 매월 1개씩 적립
     for (let m = 0; m < 12; m++) {
       const accrueDate = new Date(joinY, joinM + m + 1, joinDate.getDate());
       if (accrueDate.getFullYear() !== year) {
@@ -6253,7 +6260,13 @@ function calcLeaveByFiscal(emp, year) {
         continue;
       }
       const cutoff = emp.leave ? new Date(emp.leave) : today;
-      const earned = accrueDate <= cutoff ? 1 : 0;
+      let earned = 0;
+      if (accrueDate <= cutoff) {
+        // accrueDate 전 calendar 월 = 만근 체크 대상월 (1-indexed)
+        const workMonth = accrueDate.getMonth(); // Feb(getMonth=1) → 1(Jan, 1-indexed)
+        const workYear = accrueDate.getFullYear();
+        if (workMonth >= 1 && hadFullAttendance(emp, workYear, workMonth)) earned = 1;
+      }
       monthly.push({ month: m + 1, count: earned, date: accrueDate });
       total += earned;
     }
@@ -6286,16 +6299,28 @@ function calcLeaveByFiscal(emp, year) {
     monthly[0].date = new Date(year, 0, 1);
   }
 
-  // 총연차는 회계연도 기준 자동계산만. 잔여는 override(엑셀 잔여) 있으면 기준월 이후 적립/사용만 합산
-  if (remainOverride !== null) {
-    const monthEnd = new Date(year, remainUntilMonth, 0);
-    const postAccrued = monthly.filter(mv => mv.date && mv.date > monthEnd).reduce((s, mv) => s + mv.count, 0);
-    const postUsed = countUsedLeave(emp.id, year, remainUntilMonth + 1);
-    const remain = remainOverride + postAccrued - postUsed;
-    return { total: r2(total), accrued: r2(total), used: r2(total - remain), remain: r2(remain), monthly };
+  // 1) 엑셀 baseline 있음: baselineTotal/Remain 기준 + 기준월 이후 적립/사용
+  if (hasBaseline) {
+    // postAccrued: 엑셀 기준월 이후 = 만근 기반 적립 (work month > untilMonth인 것만)
+    const postAccrued = monthly.reduce((sum, mv) => {
+      if (!mv.date || !mv.count) return sum;
+      const workMonth = mv.date.getMonth(); // 1-indexed prev calendar month
+      if (workMonth <= ov.untilMonth) return sum; // 엑셀이 이미 반영
+      return sum + mv.count;
+    }, 0);
+    const postUsed = countUsedLeave(emp.id, year, ov.untilMonth + 1);
+    const tTotal = ov.baselineTotal + postAccrued;
+    const tRemain = ov.baselineRemain + postAccrued - postUsed;
+    return { total: r2(tTotal), accrued: r2(tTotal), used: r2(tTotal - tRemain), remain: r2(tRemain), monthly };
   }
-  const remain = total - used;
-  return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(remain), monthly };
+  // 2) 수동 used override (Excel 없이 사용자가 직접 수정한 값)
+  if (ov && ov.used !== undefined && ov.used !== null) {
+    const used = ov.used;
+    return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(total - used), monthly };
+  }
+  // 3) 자동계산 (override 없음)
+  const autoUsed = countUsedLeave(emp.id, year, 1);
+  return { total: r2(total), accrued: r2(total), used: r2(autoUsed), remain: r2(total - autoUsed), monthly };
 }
 
 // ── 입사일 기준 ──
@@ -6304,25 +6329,13 @@ function calcLeaveByFiscal(emp, year) {
 // 2년차 이후: 15개 + 2년마다 1개 추가 (최대 25개), 입사기념일에 일괄 발생
 function calcLeaveByJoinDate(emp, year) {
   const r2 = v => Math.round(v * 10) / 10;
-  // Override 구분: (신규) {remain, untilMonth} / (레거시) {used, usedUntilMonth}
-  let overrideUsed = 0;
-  let overrideUntil = 0;
-  let remainOverride = null;
-  let remainUntilMonth = 0;
-  if (leaveOverrides[emp.id] && leaveOverrides[emp.id][year]) {
-    const ov = leaveOverrides[emp.id][year];
-    if (ov.remain !== undefined && ov.remain !== null && ov.untilMonth) {
-      remainOverride = ov.remain;
-      remainUntilMonth = ov.untilMonth;
-    } else {
-      if (ov.used !== undefined && ov.used !== null) overrideUsed = ov.used;
-      if (ov.usedUntilMonth) overrideUntil = ov.usedUntilMonth;
-    }
-  }
-  const autoUsed = countUsedLeave(emp.id, year, overrideUntil + 1);
-  let used = overrideUsed + autoUsed;
+  const ov = (leaveOverrides[emp.id] && leaveOverrides[emp.id][year]) || null;
+  const hasBaseline = ov && ov.baselineTotal !== undefined && ov.untilMonth;
 
-  if (!emp.join) return { total: 0, accrued: 0, used: r2(used), remain: r2(0 - used), monthly: [] };
+  if (!emp.join) {
+    const u = (ov && ov.used !== undefined && ov.used !== null) ? ov.used : 0;
+    return { total: 0, accrued: 0, used: r2(u), remain: r2(0 - u), monthly: [] };
+  }
 
   const joinDate = new Date(emp.join);
   const joinY = joinDate.getFullYear();
@@ -6334,15 +6347,21 @@ function calcLeaveByJoinDate(emp, year) {
 
   if (emp.leave) {
     const leaveDate = new Date(emp.leave);
-    if (leaveDate < yearStart) return { total: 0, accrued: 0, used: r2(used), remain: r2(0 - used), monthly: [] };
+    if (leaveDate < yearStart) {
+      const u = (ov && ov.used !== undefined && ov.used !== null) ? ov.used : 0;
+      return { total: 0, accrued: 0, used: r2(u), remain: r2(0 - u), monthly: [] };
+    }
   }
-  if (year < joinY) return { total: 0, accrued: 0, used: r2(used), remain: r2(0 - used), monthly: [] };
+  if (year < joinY) {
+    const u = (ov && ov.used !== undefined && ov.used !== null) ? ov.used : 0;
+    return { total: 0, accrued: 0, used: r2(u), remain: r2(0 - u), monthly: [] };
+  }
 
   let total = 0;
   let monthly = [];
 
   if (year === joinY) {
-    // 입사 첫해: 매월 1개씩 적립 (입사 다음달부터)
+    // 입사 첫해: 월 만근 시 매월 1개씩 적립 (입사 다음달부터)
     for (let m = 0; m < 12; m++) {
       const accrueDate = new Date(joinY, joinM + m + 1, joinD);
       if (accrueDate.getFullYear() !== year) {
@@ -6350,7 +6369,12 @@ function calcLeaveByJoinDate(emp, year) {
         continue;
       }
       const cutoff = emp.leave ? new Date(emp.leave) : today;
-      const earned = accrueDate <= cutoff ? 1 : 0;
+      let earned = 0;
+      if (accrueDate <= cutoff) {
+        const workMonth = accrueDate.getMonth(); // 1-indexed prev calendar month
+        const workYear = accrueDate.getFullYear();
+        if (workMonth >= 1 && hadFullAttendance(emp, workYear, workMonth)) earned = 1;
+      }
       monthly.push({ month: m + 1, count: earned, date: accrueDate });
       total += earned;
     }
@@ -6374,16 +6398,27 @@ function calcLeaveByJoinDate(emp, year) {
     monthly[joinM].date = new Date(year, joinM, joinD);
   }
 
-  // 총연차는 입사일 기준 자동계산만. 잔여는 override(엑셀 잔여) 있으면 기준월 이후 적립/사용만 합산
-  if (remainOverride !== null) {
-    const monthEnd = new Date(year, remainUntilMonth, 0);
-    const postAccrued = monthly.filter(mv => mv.date && mv.date > monthEnd).reduce((s, mv) => s + mv.count, 0);
-    const postUsed = countUsedLeave(emp.id, year, remainUntilMonth + 1);
-    const remain = remainOverride + postAccrued - postUsed;
-    return { total: r2(total), accrued: r2(total), used: r2(total - remain), remain: r2(remain), monthly };
+  // 1) 엑셀 baseline
+  if (hasBaseline) {
+    const postAccrued = monthly.reduce((sum, mv) => {
+      if (!mv.date || !mv.count) return sum;
+      const workMonth = mv.date.getMonth();
+      if (workMonth <= ov.untilMonth) return sum;
+      return sum + mv.count;
+    }, 0);
+    const postUsed = countUsedLeave(emp.id, year, ov.untilMonth + 1);
+    const tTotal = ov.baselineTotal + postAccrued;
+    const tRemain = ov.baselineRemain + postAccrued - postUsed;
+    return { total: r2(tTotal), accrued: r2(tTotal), used: r2(tTotal - tRemain), remain: r2(tRemain), monthly };
   }
-  const remain = total - used;
-  return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(remain), monthly };
+  // 2) 수동 used override
+  if (ov && ov.used !== undefined && ov.used !== null) {
+    const used = ov.used;
+    return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(total - used), monthly };
+  }
+  // 3) 자동계산
+  const autoUsed = countUsedLeave(emp.id, year, 1);
+  return { total: r2(total), accrued: r2(total), used: r2(autoUsed), remain: r2(total - autoUsed), monthly };
 }
 
 function countUsedLeave(empId, year, fromMonth) {
@@ -6494,10 +6529,10 @@ function renderLeave() {
     }).join('');
 
     // override 여부 (사용연차 수동 입력 시에만 표시)
-    // "수정됨" 뱃지: 신규 remain 저장 또는 레거시 used 저장 둘 다 감지
+    // "수정됨" 뱃지: 엑셀 baseline 또는 수동 used override 있으면 표시
     const _ov = leaveOverrides[emp.id] && leaveOverrides[emp.id][leaveYear];
     const hasUsedOverride = !!_ov && (
-      (_ov.remain !== undefined && _ov.remain !== null) ||
+      (_ov.baselineTotal !== undefined && _ov.untilMonth) ||
       (_ov.used !== undefined && _ov.used !== null)
     );
 
@@ -6591,16 +6626,12 @@ function overrideLeaveTotal(empId, year, val) {
 
 function overrideLeaveUsed(empId, year, val) {
   if (!leaveOverrides[empId]) leaveOverrides[empId] = {};
-  if (!leaveOverrides[empId][year]) leaveOverrides[empId][year] = {};
   if (val === null) {
-    // 비우면 자동계산으로 복귀: used/usedUntilMonth/remain/untilMonth 모두 제거
-    delete leaveOverrides[empId][year].used;
-    delete leaveOverrides[empId][year].usedUntilMonth;
-    delete leaveOverrides[empId][year].remain;
-    delete leaveOverrides[empId][year].untilMonth;
-    if (!Object.keys(leaveOverrides[empId][year]).length) delete leaveOverrides[empId][year];
+    // 자동계산으로 복귀: 해당 연도 override 전체 제거 (엑셀 baseline 포함)
+    delete leaveOverrides[empId][year];
+    if (Object.keys(leaveOverrides[empId]).length === 0) delete leaveOverrides[empId];
   } else {
-    // 수동 used 설정 시 remain override(엑셀 기반)와 충돌 방지
+    // 수동 used 설정: 엑셀 baseline과 상호 배타로 교체
     leaveOverrides[empId][year] = { used: val };
   }
   localStorage.setItem('npm5_leave_overrides', JSON.stringify(leaveOverrides));
@@ -6662,15 +6693,6 @@ function _excelDateToISO(serial){
   return d.toISOString().slice(0,10);
 }
 
-// 특정 월 말일까지의 누적 적립 연차 합산 (sheetMonth=0이면 연 총합 fallback)
-function _accruedByMonthEnd(emp, year, sheetMonth){
-  const lv = calcLeaveForYear(emp, year);
-  if(!sheetMonth) return lv.total;
-  const sheetMonthEnd = new Date(year, sheetMonth, 0); // 해당 월 마지막 날
-  return (lv.monthly||[]).reduce((sum, mv) =>
-    (mv.date && mv.date <= sheetMonthEnd) ? sum + mv.count : sum, 0);
-}
-
 function leaveUploadParseSheet(){
   if(!_leaveUploadWB)return;
   const sels=_luEl('leave-upload-sheet');
@@ -6683,18 +6705,19 @@ function leaveUploadParseSheet(){
   const _pMonthMatch=sheetName.match(/^(\d{1,2})월$/);
   const _pSheetMonth=_pMonthMatch?parseInt(_pMonthMatch[1]):0;
 
-  // 헤더 자동 탐�� (이름, 입사일, 잔여연차, 사용연차 열 찾기)
-  let nameCol=-1,joinCol=-1,remainCol=-1,usedCol=-1,dataStartRow=-1;
+  // 헤더 자동 탐색 (이름, 총연차, 잔여연차 필수 / 입사일·사용 선택)
+  let nameCol=-1,joinCol=-1,totalCol=-1,remainCol=-1,usedCol=-1,dataStartRow=-1;
   for(let r=0;r<Math.min(6,data.length);r++){
     const row=data[r];
     for(let c=0;c<row.length;c++){
       const v=String(row[c]||'').replace(/\s/g,'');
       if(v==='이름'||v==='성명') nameCol=c;
       if(v==='입사일') joinCol=c;
-      if(v.includes('잔여')) remainCol=c;
-      if(v.includes('사용')) usedCol=c;
+      if(v.includes('총연차')||v==='총월차'||v.includes('총월차')||v==='발생연차'||v==='부여연차') totalCol=c;
+      else if(v.includes('잔여')) remainCol=c;
+      else if(v.includes('사용')) usedCol=c;
     }
-    if(nameCol>=0&&remainCol>=0) {dataStartRow=r+1; break;}
+    if(nameCol>=0&&totalCol>=0&&remainCol>=0) {dataStartRow=r+1; break;}
   }
   // 날짜 행(1,2,3...) 건너뛰기
   if(dataStartRow>=0&&dataStartRow<data.length){
@@ -6702,8 +6725,12 @@ function leaveUploadParseSheet(){
     if(typeof firstVal==='number'||firstVal==='') dataStartRow++;
   }
 
-  if(nameCol<0||remainCol<0){
-    _luSet('leave-upload-result',el=>{el.innerHTML='<div style="color:var(--rose);font-weight:600">헤더를 찾을 수 없습니다 (이름, 잔여연차 열 필요)</div>';});
+  if(nameCol<0||totalCol<0||remainCol<0){
+    const missing=[];
+    if(nameCol<0) missing.push('이름');
+    if(totalCol<0) missing.push('총연차');
+    if(remainCol<0) missing.push('잔여연차');
+    _luSet('leave-upload-result',el=>{el.innerHTML=`<div style="color:var(--rose);font-weight:600">헤더를 찾을 수 없습니다 — 필수 열: ${missing.join(', ')}</div>`;});
     _leaveUploadMatches=[];
     return;
   }
@@ -6719,6 +6746,7 @@ function leaveUploadParseSheet(){
     const row=data[r];
     const xlName=String(row[nameCol]||'').trim();
     const xlJoin=joinCol>=0?_excelDateToISO(row[joinCol]):'';
+    const xlTotal=parseFloat(row[totalCol]);
     const xlRemain=parseFloat(row[remainCol]);
     const xlUsed=usedCol>=0?parseFloat(row[usedCol]):NaN;
     if(!xlName)continue;
@@ -6726,7 +6754,7 @@ function leaveUploadParseSheet(){
     // 별칭 우선 적용
     const searchName = LEAVE_NAME_ALIAS[xlName] || xlName;
 
-    // 이름만으로 매칭 (이미 매칭된 직원은 제외 → 동명이인 중복 방지)
+    // 이름만으로 매칭
     const nameMatches = EMPS.filter(e =>
       (e.name||'').trim() === searchName && !matchedIds.has(e.id));
     const emp = nameMatches.length ? nameMatches[0] : null;
@@ -6736,7 +6764,7 @@ function leaveUploadParseSheet(){
     const skipAuto = emp && LEAVE_AUTO_NAMES.includes(searchName);
 
     _leaveUploadMatches.push({
-      xlName, xlJoin, xlRemain, xlUsed,
+      xlName, xlJoin, xlTotal, xlRemain, xlUsed,
       empId:emp?emp.id:null,
       empName:emp?emp.name:null,
       matched:!!emp,
@@ -6751,23 +6779,25 @@ function leaveUploadParseSheet(){
   const unmatched=_leaveUploadMatches.filter(m=>!m.matched);
   let html=`<div style="margin-bottom:8px;font-weight:600;color:var(--green)">✓ 적용 대상 ${matched.length}명</div>`;
   if(matched.length){
-    html+='<table style="width:100%;border-collapse:collapse;margin-bottom:10px"><tr style="background:var(--surf)"><th style="padding:4px 8px;font-size:10px;text-align:left">이름</th><th style="padding:4px 8px;font-size:10px;text-align:center">입사일</th><th style="padding:4px 8px;font-size:10px;text-align:center">총연차</th><th style="padding:4px 8px;font-size:10px;text-align:center">엑셀잔여</th><th style="padding:4px 8px;font-size:10px;text-align:center" title="오늘 기준 잔여 = 엑셀잔여 + 이후 월별 적립 − 이후 REC 사용">적용후 잔여</th></tr>';
+    html+='<table style="width:100%;border-collapse:collapse;margin-bottom:10px"><tr style="background:var(--surf)"><th style="padding:4px 8px;font-size:10px;text-align:left">이름</th><th style="padding:4px 8px;font-size:10px;text-align:center">엑셀 총연차</th><th style="padding:4px 8px;font-size:10px;text-align:center">엑셀 잔여</th><th style="padding:4px 8px;font-size:10px;text-align:center" title="오늘 기준 = 엑셀 총연차 + 이후 월 만근 적립">적용후 총연차</th><th style="padding:4px 8px;font-size:10px;text-align:center" title="오늘 기준 = 엑셀 잔여 + 이후 적립 − 이후 REC 사용">적용후 잔여</th></tr>';
     matched.forEach(m=>{
       const emp=EMPS.find(e=>e.id===m.empId);
       const lv=emp?calcLeaveForYear(emp,leaveYear):{total:0, monthly:[]};
-      const sysTotal=lv.total;
-      // 적용 후 잔여(예상) = 엑셀잔여 + (sheetMonth 이후 적립) - (sheetMonth 이후 REC 사용)
-      let projRemain='—';
-      if(emp && !isNaN(m.xlRemain) && _pSheetMonth){
-        const _me = new Date(leaveYear, _pSheetMonth, 0);
-        const _pa = (lv.monthly||[]).filter(mv=>mv.date && mv.date>_me).reduce((s,mv)=>s+mv.count, 0);
+      // 적용 후 예상치 = 엑셀값 + (기준월 이후 만근 적립) - (기준월 이후 REC 사용)
+      let projTotal='—', projRemain='—';
+      if(emp && !isNaN(m.xlTotal) && !isNaN(m.xlRemain) && _pSheetMonth){
+        const _pa = (lv.monthly||[]).reduce((s,mv)=>{
+          if(!mv.date||!mv.count) return s;
+          const wm = mv.date.getMonth(); // 1-indexed 전달
+          if(wm <= _pSheetMonth) return s;
+          return s + mv.count;
+        }, 0);
         const _pu = countUsedLeave(emp.id, leaveYear, _pSheetMonth+1);
+        projTotal = Math.round((m.xlTotal + _pa)*10)/10;
         projRemain = Math.round((m.xlRemain + _pa - _pu)*10)/10;
-      } else if(emp && !isNaN(m.xlRemain)) {
-        projRemain = m.xlRemain;
       }
       const projColor = (typeof projRemain==='number' && projRemain<0) ? 'var(--rose)' : 'var(--navy2)';
-      html+=`<tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 8px;font-size:11px">${esc(m.xlName)}</td><td style="padding:4px 8px;font-size:11px;text-align:center">${esc(m.xlJoin)}</td><td style="padding:4px 8px;font-size:11px;text-align:center;font-weight:600">${sysTotal}</td><td style="padding:4px 8px;font-size:11px;text-align:center;color:var(--green);font-weight:700">${isNaN(m.xlRemain)?'—':m.xlRemain}</td><td style="padding:4px 8px;font-size:11px;text-align:center;color:${projColor};font-weight:700">${projRemain}</td></tr>`;
+      html+=`<tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 8px;font-size:11px">${esc(m.xlName)}</td><td style="padding:4px 8px;font-size:11px;text-align:center;font-weight:600">${isNaN(m.xlTotal)?'—':m.xlTotal}</td><td style="padding:4px 8px;font-size:11px;text-align:center;color:var(--green);font-weight:700">${isNaN(m.xlRemain)?'—':m.xlRemain}</td><td style="padding:4px 8px;font-size:11px;text-align:center;font-weight:600">${projTotal}</td><td style="padding:4px 8px;font-size:11px;text-align:center;color:${projColor};font-weight:700">${projRemain}</td></tr>`;
     });
     html+='</table>';
   }
@@ -6814,23 +6844,20 @@ function leaveUploadApply(){
     if(leaveOverrides[m.empId]&&leaveOverrides[m.empId][year]) delete leaveOverrides[m.empId][year];
   });
   let count=0;
+  // sheetMonth 필수 (시트명이 "N월" 형태여야 함)
+  if(!sheetMonth){
+    if(typeof showSyncToast==='function') showSyncToast('시트명은 "3월", "4월" 같은 형식이어야 합니다','error');
+    return;
+  }
   matched.forEach(m=>{
-    if(!leaveOverrides[m.empId]) leaveOverrides[m.empId]={};
-    // 엑셀 잔여를 그대로 저장 (시스템 적립 가정 의존 제거). 1~sheetMonth 구간의 만근 여부를 시스템이
-    // 모르므로 역산하지 않고, 사용자가 넣은 잔여를 진실로 사용한다. 이후 월은 calcLeave가 자동으로
-    // postAccrued - postUsed 합산. 음수 허용(초과 사용).
-    if(!isNaN(m.xlRemain) && sheetMonth){
-      leaveOverrides[m.empId][year] = { remain: m.xlRemain, untilMonth: sheetMonth };
-    } else if(!isNaN(m.xlUsed)){
-      // 드물게 '사용' 열만 제공된 경우 레거시 방식 유지
-      leaveOverrides[m.empId][year] = { used: m.xlUsed };
-      if(sheetMonth) leaveOverrides[m.empId][year].usedUntilMonth = sheetMonth;
-    } else if(!isNaN(m.xlRemain)){
-      // sheetMonth를 못 추출했을 때만 레거시 방식(used 역산)으로 폴백
-      const emp = EMPS.find(e=>e.id===m.empId);
-      const accruedByEnd = emp ? _accruedByMonthEnd(emp, year, 0) : 0;
-      leaveOverrides[m.empId][year] = { used: accruedByEnd - m.xlRemain };
-    }
+    if(isNaN(m.xlTotal) || isNaN(m.xlRemain)) return;
+    // 엑셀이 진실의 원천. 기준월까지는 엑셀 값, 이후 월은 calcLeave가 만근 기반 적립 + REC 사용 차감.
+    leaveOverrides[m.empId] = leaveOverrides[m.empId] || {};
+    leaveOverrides[m.empId][year] = {
+      baselineTotal: m.xlTotal,
+      baselineRemain: m.xlRemain,
+      untilMonth: sheetMonth,
+    };
     count++;
   });
   localStorage.setItem('npm5_leave_overrides',JSON.stringify(leaveOverrides));
