@@ -242,6 +242,46 @@ function saveLS(){
   }catch(e){}
 }
 
+// 디바운스 중인 저장을 즉시 서버로 전송 (수당 추가/삭제 등 유실 방지 필요한 동작용)
+function flushPendingSave(){
+  try{
+    if(saveLS._timer){ clearTimeout(saveLS._timer); saveLS._timer=null; }
+    const _sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
+    if(_sess && _sess.companyId){
+      return sbSaveAll(_sess.companyId).catch(e=>console.warn('즉시 저장 실패:',e));
+    }
+  }catch(e){}
+}
+
+// 페이지 이탈 직전 pending 저장을 beacon으로 신뢰성 있게 전송
+// (beforeunload 시점엔 일반 fetch는 취소될 수 있으나 sendBeacon은 OS 레벨 큐에 적재)
+function _flushSaveOnUnload(){
+  if(!saveLS._timer) return;  // pending 없으면 스킵
+  try{
+    clearTimeout(saveLS._timer); saveLS._timer=null;
+    const _sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
+    if(!_sess || !_sess.companyId) return;
+    if(typeof navigator === 'undefined' || !navigator.sendBeacon) return;
+    const items = [
+      {key:'emps', value:EMPS},
+      {key:'pol', value:POL},
+      {key:'bk', value:DEF_BK},
+      {key:'bonus', value:BONUS_REC},
+      {key:'allow', value:ALLOWANCE_REC},
+      {key:'tax', value:JSON.parse(localStorage.getItem('npm5_tax')||'{}')},
+      {key:'leave_settings', value:JSON.parse(localStorage.getItem('npm5_leave_settings')||'{}')},
+      {key:'leave_overrides', value:JSON.parse(localStorage.getItem('npm5_leave_overrides')||'{}')},
+    ];
+    const blob = new Blob([JSON.stringify({items})], {type:'application/json'});
+    navigator.sendBeacon((typeof API_BASE!=='undefined'?API_BASE:'')+'/data-save', blob);
+  }catch(e){ console.warn('beacon 저장 실패:', e); }
+}
+window.addEventListener('pagehide', _flushSaveOnUnload);
+window.addEventListener('beforeunload', _flushSaveOnUnload);
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'hidden') _flushSaveOnUnload();
+});
+
 // ══════════════════════════════════════
 // 상태
 // ══════════════════════════════════════
@@ -4050,11 +4090,18 @@ function renderAllowanceList(){
   }).join('');
 }
 
-function addAllowance(isDeduct=false){
+async function addAllowance(isDeduct=false){
   POL.allowances.push({id:'custom_'+Date.now(),name:isDeduct?'새 공제항목':'새 수당',isDeduct:isDeduct});
-  saveLS();renderAllowanceList();renderPayroll();
+  saveLS();
+  renderAllowanceList();renderPayroll();
+  await flushPendingSave();  // DB 반영 완료까지 대기
 }
-function delAllowance(i){POL.allowances.splice(i,1);saveLS();renderAllowanceList();renderPayroll();}
+async function delAllowance(i){
+  POL.allowances.splice(i,1);
+  saveLS();
+  renderAllowanceList();renderPayroll();
+  await flushPendingSave();
+}
 function renderDefBk(){
   const MINS=[0,5,10,15,20,25,30,35,40,45,50,55];
   const mkHO=s=>Array.from({length:24},(_,h)=>`<option value="${h}"${h==s?' selected':''}>${pad(h)}</option>`).join('');
