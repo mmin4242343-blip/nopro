@@ -6669,7 +6669,11 @@ function leaveUploadParseSheet(){
     return;
   }
 
-  // 직원 매칭
+  // 직원 매칭 — 이름 only + 별칭(ALIAS) 매핑
+  // 엑셀의 다른 이름 → 시스템 이름 매핑
+  const LEAVE_NAME_ALIAS = {
+    '메리 클레어2': '메리클레어',
+  };
   _leaveUploadMatches=[];
   const matchedIds=new Set();
   for(let r=dataStartRow;r<data.length;r++){
@@ -6680,21 +6684,17 @@ function leaveUploadParseSheet(){
     const xlUsed=usedCol>=0?parseFloat(row[usedCol]):NaN;
     if(!xlName)continue;
 
-    // EMPS에서 매칭: 이름+입사일 우선, 이름만으로도 매칭
-    let emp=EMPS.find(e=>{
-      const eName=(e.name||'').trim();
-      const eJoin=(e.join||'').trim();
-      return eName===xlName && eJoin===xlJoin;
-    });
-    if(!emp){
-      // 이름만으로 매칭 (동명이인이 아닌 경우)
-      const nameMatches=EMPS.filter(e=>(e.name||'').trim()===xlName && !matchedIds.has(e.id));
-      if(nameMatches.length===1) emp=nameMatches[0];
-    }
+    // 별칭 우선 적용
+    const searchName = LEAVE_NAME_ALIAS[xlName] || xlName;
+
+    // 이름만으로 매칭 (이미 매칭된 직원은 제외 → 동명이인 중복 방지)
+    const nameMatches = EMPS.filter(e =>
+      (e.name||'').trim() === searchName && !matchedIds.has(e.id));
+    const emp = nameMatches.length ? nameMatches[0] : null;
 
     // 자동계산 유지 대상 (입사일 기준 계산 고정)
     const LEAVE_AUTO_NAMES=['배수연','김인자'];
-    const skipAuto=emp&&LEAVE_AUTO_NAMES.includes(xlName);
+    const skipAuto = emp && LEAVE_AUTO_NAMES.includes(searchName);
 
     _leaveUploadMatches.push({
       xlName, xlJoin, xlRemain, xlUsed,
@@ -6735,7 +6735,7 @@ function leaveUploadParseSheet(){
     html+='</table>';
   }
   if(unmatched.length){
-    html+=`<div style="margin-bottom:4px;font-weight:600;color:var(--rose)">✗ 미매칭 ${unmatched.length}명 <span style="font-weight:400;font-size:10px;color:var(--ink3)">(이름+입사일 불일치 — 건너뜀)</span></div>`;
+    html+=`<div style="margin-bottom:4px;font-weight:600;color:var(--rose)">✗ 미매칭 ${unmatched.length}명 <span style="font-weight:400;font-size:10px;color:var(--ink3)">(이름 불일치 — 건너뜀)</span></div>`;
     html+='<div style="display:flex;flex-wrap:wrap;gap:4px">';
     unmatched.forEach(m=>{
       html+=`<span style="padding:2px 8px;background:var(--rbg);border-radius:6px;font-size:10px;color:var(--rose)">${esc(m.xlName)} (${esc(m.xlJoin)})</span>`;
