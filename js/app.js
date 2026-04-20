@@ -631,6 +631,12 @@ function monthSummary(eid,y,m){
   const rate = getEmpRateAt(emp, y, m, 1);
   const ordRate = getOrdinaryRate(emp, y, m); // 통상시급 (가산수당용)
   for(let d=1;d<=days;d++){
+    // 퇴사일 이후 날짜는 근태/급여 집계 제외 (daily 필터와 동일 규칙: 퇴사일 당일까지 근무 인정)
+    if(emp.leave){
+      const ld=new Date(emp.leave);
+      const curDate=new Date(y,m-1,d);
+      if(ld<=curDate) continue;
+    }
     const rec=REC[rk(eid,y,m,d)];if(!rec)continue;
     if(rec.annual){aldays+=1;continue;}
     if(rec.halfAnnual){
@@ -1133,8 +1139,8 @@ function setSearch(tab, val){
 function applyCommonFilter(emps, tab, refDate){
   const f = F[tab];
   return emps.filter(emp=>{
-    // 퇴사자 필터: 기준일 이전에 퇴사한 직원 제외
-    if(emp.leave){
+    // 퇴사자 필터: 기준일 이전 퇴사자 제외. 단, 직원관리(emps) 탭에서는 퇴사자도 하단에 표시하기 위해 필터 스킵
+    if(emp.leave && tab!=='emps'){
       const ld=new Date(emp.leave);
       const ref=refDate||new Date();
       if(ld<ref) return false;
@@ -1874,8 +1880,17 @@ function renderCal(){
   ['일','월','화','수','목','금','토'].forEach((x,i)=>h+=`<div class="cdh ${i===0?'su':i===6?'sa':''}">${x}</div>`);
   const fd=fdow(vY,vM);for(let i=0;i<fd;i++)h+=`<div class="cdc em"></div>`;
   const calEmpMode=emp?getEmpPayMode(emp):POL.basePayMode;
+  const calLeaveDate = emp.leave ? new Date(emp.leave) : null;
   for(let d=1;d<=days;d++){
     const dow=(fd+d-1)%7,rec=REC[rk(vEid,vY,vM,d)];
+    // 퇴사일 이후 날짜는 비활성 표시 (근무시간 미집계와 UI 일치)
+    if(calLeaveDate){
+      const curDate=new Date(vY,vM-1,d);
+      if(calLeaveDate<=curDate){
+        h+=`<div class="cdc em" style="opacity:.45;background:var(--rose-dim,#FEE2E2)"><div class="cdn ${dow===0?'su':dow===6?'sa':''}">${d}</div><div style="font-size:9px;color:var(--rose);font-weight:700">퇴사후</div></div>`;
+        continue;
+      }
+    }
     const autoH=isAutoHol(vY,vM,d,emp),phName=getPhName(vY,vM,d);
     const rate=getEmpRate(emp);
     const isAl=rec&&rec.annual;
@@ -1919,8 +1934,14 @@ function renderOv(){
   });
   const rows=mvEmps.map(emp=>{
     const rate=getEmpRate(emp);
-    let tr=`<td class="ec"><div style="display:flex;align-items:center;gap:4px"><div class="av" style="width:19px;height:19px;font-size:9px;background:${safeColor(emp.color,'#DBEAFE')};color:${safeColor(emp.tc,'#1E3A5F')}">${esc(emp.name)[0]}</div>${esc(emp.name)}</div></td>`;
+    const ovLeaveDate = emp.leave ? new Date(emp.leave) : null;
+    let tr=`<td class="ec"><div style="display:flex;align-items:center;gap:4px"><div class="av" style="width:19px;height:19px;font-size:9px;background:${safeColor(emp.color,'#DBEAFE')};color:${safeColor(emp.tc,'#1E3A5F')}">${esc(emp.name)[0]}</div>${esc(emp.name)}${emp.leave?'<span style="font-size:8px;color:var(--rose);margin-left:2px">퇴사</span>':''}</div></td>`;
     for(let d=1;d<=days;d++){
+      // 퇴사일 이후 셀은 비활성 표시
+      if(ovLeaveDate){
+        const curDate=new Date(vY,vM-1,d);
+        if(ovLeaveDate<=curDate){ tr+=`<td class="mt" style="background:var(--rose-dim,#FEE2E2);color:var(--rose);opacity:.5">-</td>`; continue; }
+      }
       const rec=REC[rk(emp.id,vY,vM,d)];
       const autoH=isAutoHol(vY,vM,d);
       const isAl=rec&&rec.annual;
