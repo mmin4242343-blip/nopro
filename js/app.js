@@ -8712,6 +8712,12 @@ function getEmpHistoryAt(emp, y, m, d) {
 function getEmpRateAt(emp, y, m, d) {
   const hist = getEmpHistoryAt(emp, y, m, d);
   if (hist && hist.rate) return hist.rate;
+  // 월급제: 월급/209를 시급 상당으로 환산 (getEmpRate와 동일 로직)
+  const mode = (hist && hist.payMode) || emp.payMode;
+  if (mode === 'monthly') {
+    const monthly = (hist && hist.monthly) || emp.monthly || POL.baseMonthly || 0;
+    if (monthly > 0) return Math.round(monthly / 209);
+  }
   return emp.rate || POL.baseRate || 0;
 }
 
