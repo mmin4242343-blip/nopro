@@ -7,3 +7,5 @@ node_modules/
 .vscode/
 .idea/
 leave_import_data.json
+workspace.code-workspace
+.vscode/
