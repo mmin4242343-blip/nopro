@@ -758,6 +758,8 @@ function monthSummary(eid,y,m){
       for(let offset=0;offset<7;offset++){
         const d=mon+offset;
         if(d<1||d>daysInMonth) continue;
+        // 퇴사일 이후 날짜는 주휴수당 판정 제외
+        if(emp.leave){const ld=new Date(emp.leave);if(ld<=new Date(y,m-1,d)) continue;}
         // 근무형태 등록된 경우만 소정근로일 체크
         if(isRegistered){
           const dowKo=DOW_KO[new Date(y,m-1,d).getDay()];
@@ -1630,11 +1632,11 @@ function applyRecentAll() {
 }
 
 function activeDayEmpsForCopy(){
-  // 현재 필터 + 입사일 조건 적용한 직원 목록
+  // 현재 필터 + 입사일 + 퇴사일 조건 적용한 직원 목록 (퇴사일 이후엔 자동 복사 방지)
+  const dayDate=new Date(cY,cM-1,cD);
   return EMPS.filter(emp=>{
-    if(!emp.join) return true;
-    const jd=new Date(emp.join);
-    if(jd>new Date(cY,cM-1,cD)) return false;
+    if(emp.join){const jd=new Date(emp.join);if(jd>dayDate) return false;}
+    if(emp.leave){const ld=new Date(emp.leave);if(ld<=dayDate) return false;}
     if(payFilter!=='all' && emp.payMode && emp.payMode!==payFilter) return false;
     return true;
   });
@@ -7073,11 +7075,17 @@ function exportMonthlyExcel(){
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),emp.name,S.cell(C.navy,bg,true,'center'));
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),`${emp.role}${emp.grade?'/'+emp.grade:''}`,S.cell(C.gray,bg,false,'center'));
 
+      const empLeaveDate = emp.leave ? new Date(emp.leave) : null;
       for(let d=1;d<=days;d++){
-        const rec=REC[rk(emp.id,vY,vM,d)];
-        const autoH=isAutoHol(vY,vM,d);
         const dow=new Date(vY,vM-1,d).getDay();
         const isWe=[0,6].includes(dow);
+        const autoH=isAutoHol(vY,vM,d);
+        // 퇴사일 이후 날짜는 빈 셀
+        if(empLeaveDate && empLeaveDate<=new Date(vY,vM-1,d)){
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:d+1}),'',S.cell(C.gray,'F5F5F5',false,'center'));
+          continue;
+        }
+        const rec=REC[rk(emp.id,vY,vM,d)];
         let val='', cellBg=bg, fg=C.gray;
         if(autoH||isWe) cellBg=ei%2===0?'FFEBEE':'FFCDD2';
         if(rec){
@@ -7131,11 +7139,11 @@ function exportMonthlyExcel(){
       fill:{fgColor:{rgb:'EFF6FF'}}, alignment:{horizontal:'left',vertical:'center'},
     });
     xlsMerge(ws,0,0,0,4);
-    xlsWrite(ws,XLSX.utils.encode_cell({r:1,c:0}),`${monthStr} 근태 현황  ·  ${emp.role}${emp.dept?' · '+emp.dept:''}  ·  입사 ${emp.join||''}`, {
+    xlsWrite(ws,XLSX.utils.encode_cell({r:1,c:0}),`${monthStr} 근태 현황  ·  ${emp.role}${emp.dept?' · '+emp.dept:''}  ·  입사 ${emp.join||''}${emp.leave?' · 퇴사 '+emp.leave:''}`, {
       font:{sz:9,color:{rgb:C.gray2},name:'맑은 고딕'},
       fill:{fgColor:{rgb:'EFF6FF'}}, alignment:{horizontal:'left',vertical:'center'},
     });
-    xlsMerge(ws,1,0,1,9);
+    xlsMerge(ws,1,0,1,10);
     R=2;
 
     // 요약 카드 행
@@ -7165,17 +7173,18 @@ function exportMonthlyExcel(){
     R++;
     R++; // 공백행
 
-    // 테이블 헤더
-    const tHdrs=['날짜','요일','출근','퇴근','실근무(h)','야간(h)','연장(h)','휴일(h)','연차/결근','비고'];
-    const tBgs=[C.navy,C.navy,C.navy2,C.navy2,C.teal2,C.purple2,C.blue,C.orange2,'2E7D32',C.gray];
+    // 테이블 헤더 (휴게(h) 칼럼 신설)
+    const tHdrs=['날짜','요일','출근','퇴근','휴게(h)','실근무(h)','야간(h)','연장(h)','휴일(h)','연차/결근','비고'];
+    const tBgs=[C.navy,C.navy,C.navy2,C.navy2,'2D6A4F',C.teal2,C.purple2,C.blue,C.orange2,'2E7D32',C.gray];
     tHdrs.forEach((h,ci)=>{
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),h,S.mainHdr(tBgs[ci],'FFFFFF','center'));
     });
     ws['!rows'].push({hpt:8},{hpt:26});
     R++;
 
+    const empLeaveDate2 = emp.leave ? new Date(emp.leave) : null;
+    let totalBk = 0;
     for(let d=1;d<=days;d++){
-      const rec=REC[rk(emp.id,vY,vM,d)];
       const autoH=isAutoHol(vY,vM,d);
       const dow=new Date(vY,vM-1,d).getDay();
       const isSun=dow===0; const isSat=dow===6;
@@ -7192,44 +7201,58 @@ function exportMonthlyExcel(){
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),dateStr,S.cell(C.navy,rowBg,false,'center'));
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),phName||dowLabel,S.cell(autoH?C.rose:dowColor,rowBg,autoH||isSun||isSat,'center'));
 
+      // 퇴사일 이후 날짜는 빈 행 (REC 무시)
+      if(empLeaveDate2 && empLeaveDate2<=new Date(vY,vM-1,d)){
+        [2,3,4,5,6,7,8,9,10].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty('F5F5F5')));
+        ws['!rows'].push({hpt:18});
+        R++;
+        continue;
+      }
+
+      const rec=REC[rk(emp.id,vY,vM,d)];
       if(rec){
         const bks=getActiveBk(vY,vM,d);
-        const c2=rec.start&&rec.end?calcSession(rec.start,rec.end,getEmpRate(emp),autoH,bks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM)):null;
+        const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
+        const c2=rec.start&&rec.end?calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM)):null;
         const note=rec.absent?'결근':rec.annual?'연차':rec.halfAnnual?'반차':'';
         const noteBg=rec.absent?C.rose3:rec.annual?C.green3:rec.halfAnnual?C.blue3:rowBg;
         const noteFg=rec.absent?C.rose:rec.annual?C.green:rec.halfAnnual?C.blue:C.gray;
+        const bkH = c2 && c2.bkMins ? +m2h(c2.bkMins).toFixed(2) : 0;
+        if(c2 && c2.bkMins) totalBk += c2.bkMins;
 
         xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),rec.start||'',S.cell(C.navy,rec.start?C.teal4:rowBg,!!rec.start,'center'));
         xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),rec.end||'',S.cell(C.navy,rec.end?C.teal4:rowBg,!!rec.end,'center'));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),c2?+m2h(c2.work).toFixed(2):0,S.numDec(c2?.work>=480?C.green:C.navy,c2?.work>=480?C.green4:rowBg,c2?.work>=480));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),c2&&c2.nightM>0?+m2h(c2.nightM).toFixed(2):0,S.numDec(C.purple2,c2?.nightM>0?C.purple4:rowBg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),c2&&c2.ot>0?+m2h(c2.ot).toFixed(2):0,S.numDec(C.blue,c2?.ot>0?C.blue4:rowBg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),autoH&&c2?+m2h(c2.work).toFixed(2):0,S.numDec(C.orange2,autoH&&c2?C.orange4:rowBg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),note,S.accent(noteFg,noteBg,!!note));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),bkH,S.numDec('2D6A4F',bkH>0?'E8F5E9':rowBg,bkH>0));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),c2?+m2h(c2.work).toFixed(2):0,S.numDec(c2?.work>=480?C.green:C.navy,c2?.work>=480?C.green4:rowBg,c2?.work>=480));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),c2&&c2.nightM>0?+m2h(c2.nightM).toFixed(2):0,S.numDec(C.purple2,c2?.nightM>0?C.purple4:rowBg));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),c2&&c2.ot>0?+m2h(c2.ot).toFixed(2):0,S.numDec(C.blue,c2?.ot>0?C.blue4:rowBg));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),autoH&&c2?+m2h(c2.work).toFixed(2):0,S.numDec(C.orange2,autoH&&c2?C.orange4:rowBg));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),note,S.accent(noteFg,noteBg,!!note));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
       } else {
-        [2,3,4,5,6,7,8,9].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty(rowBg)));
+        [2,3,4,5,6,7,8,9,10].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty(rowBg)));
       }
       ws['!rows'].push({hpt:18});
       R++;
     }
 
-    // 합계행
+    // 합계행 (휴게 칼럼 추가로 인한 인덱스 shift)
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),'합 계',S.mainHdr(C.teal,'FFFFFF','center'));
     xlsMerge(ws,R,0,R,3);
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),'',S.mainHdr(C.teal));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),'',S.mainHdr(C.teal));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),'',S.mainHdr(C.teal));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),+s.twkH.toFixed(2),XLS.S.total('FFFFFF',C.teal));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),+(s.tNightH||0).toFixed(2),XLS.S.total('FFFFFF',C.purple));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),XLS.S.total('FFFFFF',C.blue));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),+((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0)).toFixed(2),XLS.S.total('FFFFFF',C.orange2));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),+s.aldays.toFixed(1),XLS.S.total('FFFFFF',C.green));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),'',S.mainHdr(C.gray));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),+m2h(totalBk).toFixed(2),XLS.S.total('FFFFFF','2D6A4F'));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),+s.twkH.toFixed(2),XLS.S.total('FFFFFF',C.teal));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),+(s.tNightH||0).toFixed(2),XLS.S.total('FFFFFF',C.purple));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),XLS.S.total('FFFFFF',C.blue));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),+((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0)).toFixed(2),XLS.S.total('FFFFFF',C.orange2));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),+s.aldays.toFixed(1),XLS.S.total('FFFFFF',C.green));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),'',S.mainHdr(C.gray));
     ws['!rows'].push({hpt:24});
 
-    ws['!cols']=[{wch:7},{wch:6},{wch:7},{wch:7},{wch:10},{wch:8},{wch:8},{wch:8},{wch:8},{wch:16}];
-    xlsRange(ws,0,0,R,9);
+    ws['!cols']=[{wch:7},{wch:6},{wch:7},{wch:7},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},{wch:8},{wch:16}];
+    xlsRange(ws,0,0,R,10);
     XLSX.utils.book_append_sheet(wb,ws,emp.name.slice(0,8));
   });
 
