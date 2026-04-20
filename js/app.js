@@ -5458,6 +5458,31 @@ function sfDoExcel(){
 function sf_b64toAB(b64){const bin=atob(b64);const buf=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)buf[i]=bin.charCodeAt(i);return buf.buffer;}
 function sf_imgExt(b64){if(b64.includes('image/png'))return'png';if(b64.includes('image/gif'))return'gif';return'jpeg';}
 
+// 사진 data 확보 (p.data 우선, 없으면 storagePath fetch, 재시도 1회 포함)
+async function sfFetchPhotoBuffer(p, retry=1){
+  if(p.data && typeof p.data==='string' && p.data.startsWith('data:image')){
+    return {buf: sf_b64toAB(p.data.split(',')[1]), ext: sf_imgExt(p.data)};
+  }
+  if(!p.storagePath) return null;
+  for(let attempt=0; attempt<=retry; attempt++){
+    try{
+      const urls = await getFileUrls([p.storagePath]);
+      const imgUrl = urls[p.storagePath];
+      if(!imgUrl) { if(attempt<retry) await new Promise(r=>setTimeout(r,300)); continue; }
+      const resp = await fetch(imgUrl);
+      if(!resp.ok) { if(attempt<retry) await new Promise(r=>setTimeout(r,300)); continue; }
+      const buf = await resp.arrayBuffer();
+      if(buf.byteLength === 0){ if(attempt<retry) await new Promise(r=>setTimeout(r,300)); continue; }
+      const ext = (p.name||'').toLowerCase().includes('.png') ? 'png'
+                : (p.name||'').toLowerCase().includes('.gif') ? 'gif' : 'jpeg';
+      return {buf, ext};
+    }catch(e){
+      console.warn('[엑셀 사진] 시도'+(attempt+1)+' 실패:', e.message);
+    }
+  }
+  return null;
+}
+
 async function sfExcelCore(){
   const wb=new ExcelJS.Workbook();
   const emps=sfGetFilteredEmps();
@@ -5467,8 +5492,19 @@ async function sfExcelCore(){
   const RED_BG={argb:'FFFFC7CE'};const BLUE_BG={argb:'FFDDEBF7'};const GRAY_BG={argb:'FFF2F2F2'};
   const GREEN_FT={argb:'FF276221'};const RED_FT={argb:'FF9C0006'};const TEAL_BG={argb:'FF059669'};
 
-  // ── 시트1: 월별 서명현황표 ──
-  const ws1=wb.addWorksheet(sfMMo+'월 현황표');
+  // 모든 사진 storagePath를 한번에 병렬 prefetch (캐시 warmup)
+  try{
+    const allPaths = [];
+    for(const d of days){
+      const k = sfMY+'-'+pad(sfMMo)+'-'+pad(d);
+      const photos = SAFETY_REC[k]||[];
+      photos.forEach(p=>{ if(p.storagePath && !(p.data&&p.data.startsWith('data:image'))) allPaths.push(p.storagePath); });
+    }
+    if(allPaths.length) await getFileUrls([...new Set(allPaths)]);
+  }catch(e){ console.warn('[엑셀 사진] prefetch 실패:', e); }
+
+  // ── 시트1: 월별 서명현황 매트릭스 (기존 시트1+시트2 서명부분 통합, 자동필터+색상+고정) ──
+  const ws1=wb.addWorksheet(sfMMo+'월 현황');
   // 타이틀
   ws1.addRow([sfMY+'년 '+sfMMo+'월 TBM 서명 현황표']);
   ws1.getRow(1).font={bold:true,size:14,color:{argb:'FF1E3A5F'}};
@@ -5525,92 +5561,59 @@ async function sfExcelCore(){
   for(let i=3;i<=6;i++)ws1.getColumn(i).width=9;
   for(let i=7;i<=6+days.length;i++)ws1.getColumn(i).width=6;
   ws1.getColumn(6+days.length+1).width=7;ws1.getColumn(6+days.length+2).width=5;ws1.getColumn(6+days.length+3).width=8;
-  // 틀 고정
+  // 틀 고정 + 자동 필터 (주간/야간/내외국인/소속/급여방식 필터링 가능)
   ws1.views=[{state:'frozen',xSplit:6,ySplit:2}];
+  ws1.autoFilter={from:{row:2,column:1},to:{row:2+emps.length,column:6+days.length+3}};
 
-  // ── 시트2: 일자별 현황 + 사진 ──
-  const ws2=wb.addWorksheet(sfMMo+'월 일자별');
+  // ── 시트2: 일자별 사진 + TBM 교육내용 (서명자 리스트는 시트1 매트릭스와 중복되어 제거) ──
+  const ws2=wb.addWorksheet(sfMMo+'월 일자별 사진');
   ws2.getColumn(1).width=18;ws2.getColumn(2).width=18;
   for(let i=3;i<=7;i++)ws2.getColumn(i).width=14;
   let r2=1;
-  ws2.addRow([sfMY+'년 '+sfMMo+'월 일자별 TBM 현황']);
+  ws2.addRow([sfMY+'년 '+sfMMo+'월 일자별 교육내용 및 현장 사진']);
   ws2.getRow(r2).font={bold:true,size:13,color:{argb:'FF1E3A5F'}};
   ws2.mergeCells(r2,1,r2,7);r2++;r2++;
   for(const d of days){
     const k=sfMY+'-'+pad(sfMMo)+'-'+pad(d);
     const tbm=SAFETY_REC[k+'_tbm']||'';
     const photos=SAFETY_REC[k]||[];
-    if(photos.length>0) console.log('[안전교육 엑셀] '+k+': 사진 '+photos.length+'장', photos.map(p=>({storagePath:p.storagePath,data:!!(p.data)})));
     const signs=SAFETY_REC[k+'_signs']||{};
+    const signedCount=Object.values(signs).filter(v=>v).length;
+    // 사진도 없고 TBM도 없고 서명도 없으면 이 날짜는 건너뜀 (빈 줄 방지)
+    if(!tbm && photos.length===0 && signedCount===0) continue;
     const dw=new Date(sfMY,sfMMo-1,d).getDay();
-    // 날짜 헤더
-    const titleRow=ws2.addRow([sfMMo+'월 '+d+'일('+DNW[dw]+') TBM','','사진: '+photos.length+'장','서명여부','직원명','주야간','소속']);
-    titleRow.eachCell(c=>{c.fill={type:'pattern',pattern:'solid',fgColor:NAVY};c.font={bold:true,size:10,color:WHITE};});
-    ws2.mergeCells(r2,1,r2,2);r2++;
+    // 날짜 헤더 (요일별 색상)
+    const titleText=sfMMo+'월 '+d+'일('+DNW[dw]+') · 서명 '+signedCount+'명 · 사진 '+photos.length+'장';
+    const titleRow=ws2.addRow([titleText]);
+    titleRow.eachCell(c=>{c.fill={type:'pattern',pattern:'solid',fgColor:NAVY};c.font={bold:true,size:11,color:WHITE};c.alignment={vertical:'middle'};});
+    ws2.mergeCells(r2,1,r2,7);ws2.getRow(r2).height=22;r2++;
     // 교육내용
     if(tbm){
       const tbmRow=ws2.addRow(['교육: '+tbm]);
-      tbmRow.getCell(1).font={size:9,color:{argb:'FF1D4ED8'}};
+      tbmRow.getCell(1).font={size:10,color:{argb:'FF1D4ED8'}};
+      tbmRow.getCell(1).alignment={wrapText:true,vertical:'top'};
       ws2.mergeCells(r2,1,r2,7);r2++;
     }
-    // 서명자 명단
-    const empList=emps.slice();
-    for(let i=0;i<empList.length;i++){
-      const emp=empList[i];
-      const signed=!!signs[String(emp.id)];
-      const dataRow=ws2.addRow(['','','',
-        signed?'✓ 완료':'— 미서명',
-        emp.name||'',
-        emp.shift==='night'?'야간':'주간',
-        emp.dept||'']);
-      const sc=dataRow.getCell(4);
-      if(signed){sc.fill={type:'pattern',pattern:'solid',fgColor:GREEN_BG};sc.font={size:9,bold:true,color:GREEN_FT};}
-      else{sc.fill={type:'pattern',pattern:'solid',fgColor:RED_BG};sc.font={size:9,color:RED_FT};}
-      r2++;
-    }
-    // 사진 헤더
-    if(photos.length>0){
-      const phdr=ws2.addRow(['📷 현장 사진 ('+photos.length+'장)']);
-      phdr.getCell(1).font={bold:true,size:10,color:{argb:'FF0D9488'}};
-      ws2.mergeCells(r2,1,r2,7);r2++;
-    } else {
-      ws2.addRow(['(사진 없음)']);
-      ws2.getRow(r2).getCell(1).font={size:9,color:{argb:'FF94A3B8'},italic:true};
-      r2++;
-    }
-    // 사진 삽입 (직원 목록 아래 별도 행)
+    // 사진 삽입 (강화된 헬퍼 사용)
     for(let pi=0;pi<photos.length;pi++){
       const p=photos[pi];
+      ws2.addRow([]);r2++;
+      ws2.addRow([]);r2++;
+      const imgRow=r2-1;
       let inserted=false;
-      // 사진용 빈 행 2개 추가
-      ws2.addRow([]);r2++;
-      ws2.addRow([]);r2++;
-      const imgRow=r2-1; // 사진이 들어갈 행
       try{
-        let buf=null, ext='jpeg';
-        if(p.data&&typeof p.data==='string'&&p.data.startsWith('data:image')){
-          buf=sf_b64toAB(p.data.split(',')[1]);
-          ext=sf_imgExt(p.data);
-        }
-        if(!buf&&p.storagePath){
-          try{
-            const urls=await getFileUrls([p.storagePath]);
-            const imgUrl=urls[p.storagePath];
-            if(imgUrl){const resp=await fetch(imgUrl);if(resp.ok){buf=await resp.arrayBuffer();ext=(p.name||'').toLowerCase().includes('.png')?'png':'jpeg';}}
-          }catch(e2){console.warn('[엑셀 사진] fetch 실패:',e2.message);}
-        }
-        if(buf&&buf.byteLength>0){
-          const imgId=wb.addImage({buffer:buf,extension:ext});
+        const img = await sfFetchPhotoBuffer(p);
+        if(img && img.buf && img.buf.byteLength>0){
+          const imgId=wb.addImage({buffer:img.buf,extension:img.ext});
           ws2.addImage(imgId,{tl:{col:0,row:imgRow-2},br:{col:3,row:imgRow}});
           ws2.getRow(imgRow-1).height=120;
           ws2.getRow(imgRow).height=120;
           inserted=true;
-          console.log('[엑셀 사진] '+k+' #'+(pi+1)+': 삽입 성공');
         }
-      }catch(e){console.warn('[엑셀 사진] 삽입 실패:',e);}
+      }catch(e){console.warn('[엑셀 사진] 삽입 실패:', e);}
       if(!inserted){
-        ws2.getRow(imgRow).getCell(1).value='[사진'+(pi+1)+'] '+(p.name||'')+' (로드 실패)';
-        ws2.getRow(imgRow).getCell(1).font={size:8,color:{argb:'FF6B7280'},italic:true};
+        ws2.getRow(imgRow).getCell(1).value='[사진'+(pi+1)+'] '+(p.name||'')+' (로드 실패 — storagePath: '+(p.storagePath||'없음')+')';
+        ws2.getRow(imgRow).getCell(1).font={size:9,color:{argb:'FFDC2626'},italic:true};
       }
     }
     // 구분선
@@ -8537,7 +8540,8 @@ function renderShiftList(){
       :`<span class="shift-unreg">미등록</span>`;
     const days=(emp.workDays||[]).join('');
     const dBtn=hasShift
-      ?`<button onclick="event.stopPropagation();openShiftDetail(${emp.id})" style="font-size:11px;color:var(--navy2);border:1px solid var(--navy2);border-radius:4px;padding:3px 8px;background:transparent;cursor:pointer;font-family:inherit;">상세보기</button>`
+      ?`<button onclick="event.stopPropagation();openShiftDetail(${emp.id})" style="font-size:11px;color:var(--navy2);border:1px solid var(--navy2);border-radius:4px;padding:3px 8px;background:transparent;cursor:pointer;font-family:inherit;">상세보기</button>
+         <button onclick="event.stopPropagation();clearEmpShift(${emp.id})" style="font-size:11px;color:#DC2626;border:1px solid #FECACA;border-radius:4px;padding:3px 8px;background:transparent;cursor:pointer;font-family:inherit;margin-left:4px;" title="근무형태 할당 해제">🗑 삭제</button>`
       :`<button onclick="event.stopPropagation();shiftSelected.add(${emp.id});updateShiftToolbar();openShiftModal('register')" style="font-size:11px;color:#e97d2b;border:1px solid #e97d2b;border-radius:4px;padding:3px 8px;background:transparent;cursor:pointer;font-family:inherit;">등록</button>`;
     const chk=shiftSelected.has(emp.id);
     html+=`<div class="shift-emp-row${chk?' checked':''}" id="shift-row-${emp.id}" onclick="shiftToggleRow(${emp.id})">
@@ -8646,6 +8650,25 @@ function openShiftDetail(id){
   shiftSelected.clear();shiftSelected.add(id);updateShiftToolbar();
   document.getElementById('shift-detail-modal').style.display='flex';
 }
+// 직원의 근무형태 할당 해제 (shiftName/workStart/workEnd/workDays/workBks 초기화)
+function clearEmpShift(empId){
+  const emp = EMPS.find(e => e.id === empId);
+  if(!emp) return;
+  const name = emp.name || '이름 없음';
+  if(!confirm(`"${name}" 직원의 근무형태를 삭제하시겠습니까?\n\n상태가 "미등록"으로 변경되고 저장된 shiftName·출퇴근 시간·소정근로일·휴게시간 설정이 제거됩니다.`)) return;
+  saveEmpWithHistory(empId, {
+    shiftName: '',
+    workStart: '',
+    workEnd: '',
+    workDays: [],
+    workBks: [],
+  });
+  saveLS();
+  renderShiftList();
+  try{ renderTable(); }catch(e){}
+  if(typeof showSyncToast==='function') showSyncToast(`"${name}" 근무형태 삭제 완료`,'ok');
+}
+
 function addSmBk(){addSmBkWithVal('12:00','13:00');}
 function addSmBkWithVal(s,e){
   const list=document.getElementById('sm-bk-list');
@@ -9374,6 +9397,50 @@ function closeTbmSign(){
 (function(){
   const p=new URLSearchParams(location.search);
   if(p.has('tbm')) window.addEventListener('DOMContentLoaded',()=>openTbmSign(p.get('tbm')));
+})();
+
+// ══ 전역 ESC 핸들러: 열려있는 모달/팝업 중 z-index 최대 것 닫기 ══
+// 제외 대상: auth-overlay(로그인 전 진입점), landing-overlay(랜딩페이지 본체)
+(function(){
+  const EXCLUDE_IDS = new Set(['auth-overlay','landing-overlay','app','sidebar']);
+  const isVisible = (el) => {
+    if(!el) return false;
+    const s = getComputedStyle(el);
+    if(s.display === 'none' || s.visibility === 'hidden') return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  };
+  document.addEventListener('keydown', (e) => {
+    if(e.key !== 'Escape') return;
+    // input/textarea에 포커스되어 있고 값이 차 있는 상태면 ESC는 기본 브라우저 동작(포커스 해제)에 맡김
+    const ae = document.activeElement;
+    if(ae && (ae.tagName==='INPUT' || ae.tagName==='TEXTAREA') && ae.value){
+      // value 초기화가 아닌 포커스만 날려주기 위해 blur 호출 후 모달은 닫지 않음
+      ae.blur();
+      return;
+    }
+    // 후보: id*="modal"/"overlay"/"popup" + .modal/.overlay/.popup 클래스
+    const candidates = Array.from(document.querySelectorAll(
+      '[id$="-modal"], [id$="-overlay"], #popup'
+    )).filter(el => !EXCLUDE_IDS.has(el.id) && isVisible(el));
+    if(!candidates.length) return;
+    // z-index 큰 순으로 정렬
+    candidates.sort((a,b) => {
+      const za = parseInt(getComputedStyle(a).zIndex) || 0;
+      const zb = parseInt(getComputedStyle(b).zIndex) || 0;
+      return zb - za;
+    });
+    const top = candidates[0];
+    // 기존 닫기 버튼이 있으면 우선 클릭 시도 (상태 정리 목적)
+    const closeBtn = top.querySelector('[onclick*="display=\'none\'"], [onclick*="closeModal"], .close, .modal-close');
+    if(closeBtn){
+      closeBtn.click();
+    } else {
+      top.style.display = 'none';
+      top.classList.remove('show','open','active');
+    }
+    e.preventDefault();
+  });
 })();
 
 let tbmCurLang='ko';
