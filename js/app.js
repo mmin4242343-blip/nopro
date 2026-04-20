@@ -7103,7 +7103,8 @@ function exportMonthlyExcel(){
             const _s1Bks=getActiveBk(vY,vM,d);
             const _s1ActiveBks = rec.customBk ? (rec.customBkList||[]) : _s1Bks;
             const c2=calcSession(rec.start,rec.end,getEmpRate(emp),autoH,_s1ActiveBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM));
-            if(c2){val=+m2h(c2.work).toFixed(1);fg=C.navy;}
+            // m2h가 이미 2자리 반올림 처리. toFixed로 추가 절삭하지 않음 → UI(6.83) ≡ 엑셀(6.83)
+            if(c2){val=m2h(c2.work);fg=C.navy;}
           }
         }
         const isNum=typeof val==='number';
