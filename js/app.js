@@ -771,8 +771,9 @@ function monthSummary(eid,y,m){
         if(!rec||rec.absent) continue; // 미등록은 그냥 skip
         if(rec.annual||rec.halfAnnual) continue; // 연차는 개근 인정
         const bks=getActiveBk(y,m,d);
+        const _whActiveBks = rec.customBk ? (rec.customBkList||[]) : bks;
         const c=rec.start&&rec.end
-          ?calcSession(rec.start,rec.end,rate,isAutoHol(y,m,d,emp),bks,rec.outTimes||[],empPayMode,ordRate)
+          ?calcSession(rec.start,rec.end,rate,isAutoHol(y,m,d,emp),_whActiveBks,rec.outTimes||[],empPayMode,ordRate)
           :null;
         if(c&&c.work>0) weekWork+=c.work;
       }
@@ -1060,8 +1061,9 @@ function _updateDailyRowCells(eid){
   if(!emp) return;
   const autoH=isAutoHol(cY,cM,cD,emp);
   const bks=getActiveBk(cY,cM,cD);
+  const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
   try{
-    const c=calcSession(rec.start,rec.end,getEmpRate(emp),autoH,bks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,cY,cM));
+    const c=calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,cY,cM));
     if(!c) return;
     // row 찾기
     const rows=document.querySelectorAll('#daily-tbody tr');
@@ -1574,7 +1576,8 @@ function updateRowCalc(eid){
   if(!emp) return;
   const autoH = isAutoHol(cY, cM, cD);
   const bks = getActiveBk(cY, cM, cD);
-  const c = calcSession(rec.start, rec.end, getEmpRate(emp), autoH, bks, rec.outTimes||[], getEmpPayMode(emp), getOrdinaryRate(emp,cY,cM));
+  const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
+  const c = calcSession(rec.start, rec.end, getEmpRate(emp), autoH, activeBks, rec.outTimes||[], getEmpPayMode(emp), getOrdinaryRate(emp,cY,cM));
   if(!c) return;
   // 해당 행의 수치 셀 업데이트
   const rows = document.querySelectorAll('#daily-tbody tr');
@@ -1897,7 +1900,9 @@ function renderCal(){
     const rate=getEmpRate(emp);
     const isAl=rec&&rec.annual;
     const isHalf=rec&&rec.halfAnnual;
-    const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,getActiveBk(vY,vM,d),rec.outTimes||[],calEmpMode,getOrdinaryRate(emp,vY,vM)):null;
+    const _calBks=getActiveBk(vY,vM,d);
+    const _calActiveBks = rec && rec.customBk ? (rec.customBkList||[]) : _calBks;
+    const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,_calActiveBks,rec.outTimes||[],calEmpMode,getOrdinaryRate(emp,vY,vM)):null;
     const isSel=vY===cY&&vM===cM&&d===cD;
     let cls='cdc '+(rec&&rec.absent?'abd':isAl?'ald':isHalf?'ald':phName?'phd':c?'hd':'')+(isSel?' sel':'');
     let inner=`<div class="cdn ${dow===0?'su':dow===6?'sa':phName?'ph':''}">${d}</div>`;
@@ -1947,7 +1952,9 @@ function renderOv(){
       const rec=REC[rk(emp.id,vY,vM,d)];
       const autoH=isAutoHol(vY,vM,d);
       const isAl=rec&&rec.annual;
-      const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,getActiveBk(vY,vM,d),rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM)):null;
+      const _ovBks=getActiveBk(vY,vM,d);
+      const _ovActiveBks = rec && rec.customBk ? (rec.customBkList||[]) : _ovBks;
+      const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,_ovActiveBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM)):null;
       const ph=getPhName(vY,vM,d);
       if(rec&&rec.absent)tr+=`<td class="ab2">결근</td>`;
       else if(isAl)tr+=`<td class="al2">연차</td>`;
@@ -7093,7 +7100,9 @@ function exportMonthlyExcel(){
           else if(rec.annual){val='연차';cellBg='C8E6C9';fg=C.green;}
           else if(rec.halfAnnual){val='반차';cellBg='B3E5FC';fg='01579B';}
           else if(rec.start&&rec.end){
-            const c2=calcSession(rec.start,rec.end,getEmpRate(emp),autoH,getActiveBk(vY,vM,d),rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM));
+            const _s1Bks=getActiveBk(vY,vM,d);
+            const _s1ActiveBks = rec.customBk ? (rec.customBkList||[]) : _s1Bks;
+            const c2=calcSession(rec.start,rec.end,getEmpRate(emp),autoH,_s1ActiveBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM));
             if(c2){val=+m2h(c2.work).toFixed(1);fg=C.navy;}
           }
         }
