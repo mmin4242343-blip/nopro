@@ -796,11 +796,10 @@ function monthSummary(eid,y,m){
   const tTotalBonus = empPayMode==='fixed'
     ? tExtraWorkPay + tNightPay + tOtDayPay + tOtNightPay + tHolPayNew
     : tNightPay + tOtDayPay + tOtNightPay + (tHolDayPay||0) + (tHolNightPay||0) + (tHolDayOtPay||0) + (tHolNightOtPay||0);
-  // 결근차감: 개인별 시급(급여÷209) 기준으로 재계산
-  // 급여 = 기본급 + 수당합계 → 시급 = 급여 ÷ 소정근로시간
+  // 결근차감: 통상시급(= 기본시급 + '통상' 체크된 수당만 반영) 기준으로 재계산
+  // 근로기준법상 결근 1일=통상임금 1일분 공제
   if(empPayMode!=='monthly' && empPayMode!=='hourly'){
-    const effectiveRate = Math.round((tBase + totalAllowance) / sot);
-    deduction = Math.round(effectiveRate * (adays * dailyStd + m2h(dedShortMins)) / 10) * 10;
+    deduction = Math.round(ordRate * (adays * dailyStd + m2h(dedShortMins)) / 10) * 10;
   }
   // 총급여 = 기본급 + 수당 + 주휴 + 연차 + 총가산수당 + 월급제휴일 + 상여 - 결근차감
   const total=r10((tBase+totalAllowance) + wkly + annualPay + tTotalBonus + tMonthlyHolStdPay + tMonthlyHolOtPay + bonus - deduction);
@@ -2200,7 +2199,7 @@ function renderXlPreview(){
       <td class="num">${s.wdays}</td>
       <td class="num">${(getEmpPayMode(emp)==='hourly'||getEmpPayMode(emp)==='monthly')?'':sot}</td>
       <td class="num" style="font-size:11px">${joinStr}</td>
-      <td class="num">${Math.round(basePay/(emp.sot||POL.sot||209)).toLocaleString('ko-KR')}</td>
+      <td class="num">${getOrdinaryRate(emp, pY, pM).toLocaleString('ko-KR')}</td>
       <td class="num" style="font-weight:500">${s.tBase>0?fmt$(s.tBase):'-'}</td>
       <td class="num" style="${getEmpPayMode(emp)==='hourly'&&s.wkly>0?'color:#0D9488;font-weight:700':''}">${getEmpPayMode(emp)==='hourly'?(s.wkly>0?fmt$(s.wkly):''):''}</td>
       <td class="num xl-editable">${s.annualPay>0?fmt$(s.annualPay):''}</td>
@@ -4975,7 +4974,7 @@ function exportExcel(){
       W(ci++,s.wdays||0,S.num(C.navy,bg));
       W(ci++,(_pm==='hourly'||_pm==='monthly')?'':sot,S.num(C.gray,bg));
       W(ci++,emp.join||'',S.cell(C.gray,bg,false,'center'));
-      W(ci++,Math.round(basePay/(emp.sot||POL.sot||209)),S.num(C.blue,C.blue4||bg,true));
+      W(ci++,getOrdinaryRate(emp, pY, pM),S.num(C.blue,C.blue4||bg,true));
 
       // 기본급 + 주휴 + 연차수당
       W(ci++,Math.round(s.tBase)||'',s.tBase?S.num(C.navy,bg):S.empty(bg));
