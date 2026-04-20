@@ -4090,11 +4090,18 @@ function renderAllowanceList(){
   }).join('');
 }
 
-function addAllowance(isDeduct=false){
+async function addAllowance(isDeduct=false){
   POL.allowances.push({id:'custom_'+Date.now(),name:isDeduct?'새 공제항목':'새 수당',isDeduct:isDeduct});
-  saveLS();flushPendingSave();renderAllowanceList();renderPayroll();
+  saveLS();
+  renderAllowanceList();renderPayroll();
+  await flushPendingSave();  // DB 반영 완료까지 대기
 }
-function delAllowance(i){POL.allowances.splice(i,1);saveLS();flushPendingSave();renderAllowanceList();renderPayroll();}
+async function delAllowance(i){
+  POL.allowances.splice(i,1);
+  saveLS();
+  renderAllowanceList();renderPayroll();
+  await flushPendingSave();
+}
 function renderDefBk(){
   const MINS=[0,5,10,15,20,25,30,35,40,45,50,55];
   const mkHO=s=>Array.from({length:24},(_,h)=>`<option value="${h}"${h==s?' selected':''}>${pad(h)}</option>`).join('');
