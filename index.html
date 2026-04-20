@@ -663,335 +663,493 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 <!-- ══ 랜딩페이지 ══ -->
 <div id="landing-overlay" style="position:fixed;inset:0;z-index:99997;display:block;overflow-y:auto;overflow-x:hidden;background:#fff;">
 <style>
-:root{--bd:#1a2f6e;--bm:#2347b5;--bl:#5b82e8;--bp:#f0f4fd;--bdim:rgba(35,71,181,.10);--bdim2:rgba(35,71,181,.05);--wh:#fff;--tx:#111827;--t2:#6b7280;--t3:#9ca3af;--br:#e5e9f2;--br2:#d1d9f0;--bg:#f7f9fe;}
-#lo{font-family:'Pretendard',-apple-system,sans-serif;color:var(--tx);-webkit-font-smoothing:antialiased;overflow-x:hidden;}
-#lo *{box-sizing:border-box;margin:0;padding:0;}
-#lo .ln{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 40px;height:64px;background:rgba(255,255,255,.95);backdrop-filter:blur(16px);border-bottom:1px solid var(--br);box-shadow:0 1px 4px rgba(35,71,181,.08);}
-#lo .ln-logo{font-size:18px;font-weight:800;letter-spacing:-.04em;color:var(--bd);text-decoration:none;display:flex;align-items:center;gap:8px;}
-#lo .ln-icon{width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,var(--bm),var(--bl));display:flex;align-items:center;justify-content:center;font-size:14px;}
-#lo .ln-links{display:flex;align-items:center;gap:4px;}
-#lo .ln-pill{font-size:13px;font-weight:500;color:var(--t2);padding:7px 14px;border-radius:100px;background:transparent;border:none;cursor:pointer;text-decoration:none;transition:all .2s;}
-#lo .ln-pill:hover{color:var(--bm);background:var(--bdim2);}
-#lo .ln-right{display:flex;align-items:center;gap:8px;}
-#lo .ln-login{font-size:13px;font-weight:600;color:var(--bm);padding:7px 16px;border-radius:100px;border:1.5px solid var(--bm);cursor:pointer;background:transparent;}
-#lo .ln-cta{font-size:13px;font-weight:700;color:var(--wh);padding:8px 20px;border-radius:100px;background:linear-gradient(135deg,var(--bm),var(--bl));box-shadow:0 2px 8px rgba(35,71,181,.3);cursor:pointer;border:none;}
-#lo .ln-ham{display:none;flex-direction:column;gap:5px;cursor:pointer;padding:4px;}
-#lo .ln-ham span{width:22px;height:2px;background:var(--bd);border-radius:2px;}
-#lo .lm-menu{display:none;position:sticky;top:64px;z-index:99;background:var(--wh);border-bottom:1px solid var(--br);padding:16px 20px;box-shadow:0 4px 24px rgba(35,71,181,.12);}
-#lo .lm-menu.open{display:flex;flex-direction:column;gap:4px;}
-#lo .lm-menu a{font-size:15px;font-weight:600;color:var(--tx);padding:12px 16px;border-radius:10px;text-decoration:none;cursor:pointer;}
-#lo .lm-cta{margin-top:8px;display:block;text-align:center;font-size:15px;font-weight:700;color:var(--wh)!important;background:linear-gradient(135deg,var(--bm),var(--bl))!important;border-radius:12px!important;padding:14px!important;}
-#lo .lh{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:80px 24px 60px;position:relative;overflow:hidden;background:linear-gradient(180deg,var(--bp) 0%,var(--wh) 100%);}
-#lo .lh-badge{display:inline-flex;align-items:center;gap:8px;padding:6px 16px;border-radius:100px;background:var(--bdim);border:1px solid rgba(35,71,181,.2);font-size:12px;font-weight:700;color:var(--bm);margin-bottom:24px;}
-#lo .lh-dot{width:6px;height:6px;border-radius:50%;background:var(--bm);animation:lpulse 2s infinite;}
-@keyframes lpulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.4)}}
-#lo .lh-title{font-size:clamp(30px,6vw,64px);font-weight:800;letter-spacing:-.05em;line-height:1.05;margin-bottom:12px;color:var(--bd);}
-#lo .lh-accent{color:var(--bm);}
-#lo .lh-sub{font-size:clamp(13px,1.8vw,17px);font-weight:600;color:var(--t2);letter-spacing:-.02em;margin-bottom:24px;}
-#lo .lh-points{display:flex;flex-direction:column;gap:10px;margin-bottom:32px;width:100%;max-width:560px;}
-#lo .lh-pt{display:flex;align-items:flex-start;gap:12px;background:var(--wh);border:1px solid var(--br);border-radius:12px;padding:14px 18px;text-align:left;box-shadow:0 1px 4px rgba(35,71,181,.08);}
-#lo .lh-pt-icon{font-size:20px;flex-shrink:0;}
-#lo .lh-pt-txt{font-size:13px;color:var(--tx);line-height:1.55;}
-#lo .lh-pt-txt strong{color:var(--bm);}
-#lo .lh-actions{display:flex;align-items:center;gap:12px;margin-bottom:48px;flex-wrap:wrap;justify-content:center;}
-#lo .lb-pr{font-size:15px;font-weight:700;color:var(--wh);padding:14px 28px;border-radius:100px;background:linear-gradient(135deg,var(--bm),var(--bl));border:none;cursor:pointer;display:inline-block;box-shadow:0 4px 16px rgba(35,71,181,.3);}
-#lo .lb-gh{font-size:15px;font-weight:600;color:var(--bm);padding:13px 24px;border-radius:100px;background:transparent;border:1.5px solid var(--br2);cursor:pointer;text-decoration:none;display:inline-block;}
-#lo .lh-stats{display:flex;background:var(--wh);border:1px solid var(--br);border-radius:20px;box-shadow:0 4px 24px rgba(35,71,181,.12);overflow:hidden;flex-wrap:wrap;}
-#lo .lh-stat{text-align:center;padding:20px 28px;flex:1;min-width:120px;}
-#lo .lh-stat+.lh-stat{border-left:1px solid var(--br);}
-#lo .lh-snum{font-size:28px;font-weight:800;letter-spacing:-.05em;color:var(--bm);line-height:1;margin-bottom:4px;}
-#lo .lh-slabel{font-size:11px;font-weight:500;color:var(--t2);}
-#lo .ls{padding:0 24px 64px;background:var(--bg);}
-#lo .ls-inner{max-width:1020px;margin:0 auto;}
-#lo .ls-tabs{display:flex;gap:8px;margin-bottom:16px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;}
-#lo .ls-tabs::-webkit-scrollbar{display:none;}
-#lo .ls-tab{padding:8px 16px;border-radius:100px;font-size:12px;font-weight:600;color:var(--t2);background:var(--wh);border:1.5px solid var(--br);cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .2s;}
-#lo .ls-tab.active{background:var(--bm);color:var(--wh);border-color:var(--bm);}
-#lo .ls-frame{border-radius:14px;overflow:hidden;border:1px solid var(--br2);box-shadow:0 16px 60px rgba(35,71,181,.16);background:var(--wh);}
-#lo .ls-bar{height:36px;background:#1F3864;display:flex;align-items:center;padding:0 14px;gap:5px;}
-#lo .ls-dot{width:9px;height:9px;border-radius:50%;}
-#lo .ls-dot:nth-child(1){background:#ff5f57;}#lo .ls-dot:nth-child(2){background:#ffbd2e;}#lo .ls-dot:nth-child(3){background:#28c940;}
-#lo .ls-url{margin-left:10px;background:rgba(255,255,255,.1);border-radius:4px;padding:2px 12px;font-size:11px;color:rgba(255,255,255,.6);flex:1;max-width:260px;}
-#lo .ls-panel{display:none;}#lo .ls-panel.active{display:block;}
-#lo .ls-img{width:100%;display:block;}
-#lo .ls-cap{padding:16px 20px;background:var(--wh);border-top:1px solid var(--br);display:flex;align-items:center;gap:12px;}
-#lo .ls-cap-icon{width:34px;height:34px;border-radius:9px;background:var(--bdim);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
-#lo .ls-cap-title{font-size:13px;font-weight:700;color:var(--bd);margin-bottom:2px;}
-#lo .ls-cap-desc{font-size:12px;color:var(--t2);line-height:1.5;}
-#lo .lsw{padding:64px 24px;max-width:1020px;margin:0 auto;}
-#lo .l-badge{display:inline-flex;padding:4px 14px;border-radius:100px;background:var(--bdim);border:1px solid rgba(35,71,181,.15);font-size:11px;font-weight:700;color:var(--bm);letter-spacing:.05em;text-transform:uppercase;margin-bottom:14px;}
-#lo .l-title{font-size:clamp(22px,3.5vw,38px);font-weight:800;letter-spacing:-.05em;line-height:1.1;color:var(--bd);margin-bottom:10px;}
-#lo .l-title span{color:var(--t2);}
-#lo .l-desc{font-size:14px;color:var(--t2);line-height:1.7;max-width:520px;}
-#lo .lf-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:40px;}
-#lo .lf-card{background:var(--wh);border:1.5px solid var(--br);border-radius:16px;padding:20px 16px;transition:all .2s;}
-#lo .lf-card:hover{border-color:var(--bm);box-shadow:0 4px 24px rgba(35,71,181,.12);transform:translateY(-2px);}
-#lo .lf-icon{width:40px;height:40px;border-radius:10px;background:var(--bdim);display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:10px;}
-#lo .lf-name{font-size:13px;font-weight:700;color:var(--bd);margin-bottom:5px;}
-#lo .lf-desc{font-size:12px;color:var(--t2);line-height:1.6;}
-#lo .lhow{background:linear-gradient(180deg,var(--bg) 0%,var(--wh) 100%);padding:64px 24px;}
-#lo .lhow-inner{max-width:1020px;margin:0 auto;}
-#lo .lhow-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px;}
-#lo .lhow-step{background:var(--wh);border:1.5px solid var(--br);border-radius:16px;padding:24px 20px;}
-#lo .lhow-num{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--bm),var(--bl));color:var(--wh);font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;margin-bottom:12px;}
-#lo .lhow-ttl{font-size:16px;font-weight:700;color:var(--bd);margin-bottom:6px;}
-#lo .lhow-desc{font-size:13px;color:var(--t2);line-height:1.65;}
-#lo .lcmp{margin-top:40px;border:1.5px solid var(--br2);border-radius:18px;overflow:hidden;}
-#lo .lcmp-hd{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;background:var(--bd);}
-#lo .lcmp-h{padding:14px 16px;font-size:12px;font-weight:700;color:rgba(255,255,255,.65);border-right:1px solid rgba(255,255,255,.1);}
-#lo .lcmp-h:last-child{border-right:none;}#lo .lcmp-h.hl{background:var(--bm);color:var(--wh);}
-#lo .lcmp-row{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;border-top:1px solid var(--br);}
-#lo .lcmp-row:hover{background:var(--bp);}
-#lo .lcmp-c{padding:12px 16px;font-size:12px;color:var(--t2);border-right:1px solid var(--br);display:flex;align-items:center;gap:5px;}
-#lo .lcmp-c:last-child{border-right:none;}#lo .lcmp-c.label{color:var(--tx);font-weight:600;background:var(--bg);}#lo .lcmp-c.hl{background:rgba(35,71,181,.04);}
-#lo .ck{color:#16a34a;}#lo .cx{color:#d1d5db;}#lo .cp{color:#d97706;}
-#lo .lpr{background:var(--bg);padding:64px 24px;}
-#lo .lpr-inner{max-width:1020px;margin:0 auto;}
-#lo .lpr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:40px;}
-#lo .lpr-card{background:var(--wh);border:1.5px solid var(--br);border-radius:16px;padding:28px 22px;display:flex;flex-direction:column;position:relative;transition:all .2s;}
-#lo .lpr-card:hover{transform:translateY(-2px);box-shadow:0 4px 24px rgba(35,71,181,.12);}
-#lo .lpr-card.feat{border-color:var(--bm);box-shadow:0 0 0 3px rgba(35,71,181,.1);}
-#lo .lpr-rec{position:absolute;top:-1px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--bm),var(--bl));color:var(--wh);font-size:11px;font-weight:700;padding:4px 16px;border-radius:0 0 10px 10px;white-space:nowrap;}
-#lo .lpr-tier{font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;}
-#lo .lpr-price{font-size:28px;font-weight:800;letter-spacing:-.05em;color:var(--bd);line-height:1;margin-bottom:4px;}
-#lo .lpr-price sub{font-size:12px;font-weight:500;color:var(--t2);vertical-align:baseline;}
-#lo .lpr-per{font-size:11px;color:var(--t2);margin-bottom:20px;}
-#lo .lpr-feats{list-style:none;flex:1;margin-bottom:20px;}
-#lo .lpr-feats li{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--t2);padding:6px 0;border-bottom:1px solid var(--br);}
-#lo .lpr-feats li:last-child{border-bottom:none;}
-#lo .lpr-btn{width:100%;padding:11px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:center;display:block;border:none;transition:all .2s;}
-#lo .lpr-btn-g{background:transparent;border:1.5px solid var(--br2);color:var(--bm);}
-#lo .lpr-btn-s{background:linear-gradient(135deg,var(--bm),var(--bl));color:var(--wh);}
-#lo .lfaq-list{margin-top:40px;}
-#lo .lfaq-item{border-top:1px solid var(--br);padding:20px 0;}
-#lo .lfaq-item:last-child{border-bottom:1px solid var(--br);}
-#lo .lfaq-q{display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:16px;}
-#lo .lfaq-qtxt{font-size:14px;font-weight:600;color:var(--bd);line-height:1.4;}
-#lo .lfaq-tog{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--br2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:17px;color:var(--t2);transition:all .2s;background:var(--wh);}
-#lo .lfaq-item.open .lfaq-tog{background:var(--bm);border-color:var(--bm);color:var(--wh);transform:rotate(45deg);}
-#lo .lfaq-a{font-size:13px;color:var(--t2);line-height:1.7;max-height:0;overflow:hidden;transition:max-height .3s ease,padding .3s;}
-#lo .lfaq-item.open .lfaq-a{max-height:200px;padding-top:12px;}
-#lo .lcta-wrap{padding:0 24px 64px;}
-#lo .lcta{max-width:1020px;margin:0 auto;background:linear-gradient(135deg,var(--bd) 0%,var(--bm) 60%,var(--bl) 100%);border-radius:22px;padding:64px 48px;text-align:center;position:relative;overflow:hidden;}
-#lo .lcta-title{font-size:clamp(22px,3.5vw,38px);font-weight:800;letter-spacing:-.05em;color:var(--wh);margin-bottom:12px;line-height:1.1;}
-#lo .lcta-desc{font-size:14px;color:rgba(255,255,255,.75);line-height:1.7;margin-bottom:28px;}
-#lo .lcta-btn{display:inline-block;font-size:15px;font-weight:700;color:var(--bd);background:var(--wh);padding:14px 36px;border-radius:100px;cursor:pointer;border:none;box-shadow:0 4px 20px rgba(0,0,0,.2);}
-#lo .lcta-contact{font-size:12px;color:rgba(255,255,255,.6);margin-top:20px;line-height:1.9;}
-#lo .lfoot{background:var(--bd);padding:48px 24px 36px;}
-#lo .lfoot-inner{max-width:1020px;margin:0 auto;display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1fr;gap:32px;}
-#lo .lfoot-brand{font-size:18px;font-weight:800;color:var(--wh);margin-bottom:8px;}
-#lo .lfoot-desc{font-size:12px;color:rgba(255,255,255,.5);line-height:1.65;}
-#lo .lfoot-col-title{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-bottom:12px;}
-#lo .lfoot-links{list-style:none;}
-#lo .lfoot-links li{margin-bottom:8px;}
-#lo .lfoot-links a{font-size:12px;color:rgba(255,255,255,.55);text-decoration:none;}
-#lo .lfoot-bottom{max-width:1020px;margin:28px auto 0;padding-top:20px;border-top:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
-#lo .lfoot-copy{font-size:11px;color:rgba(255,255,255,.3);}
-#lo .ldiv{height:1px;background:var(--br);max-width:1020px;margin:0 auto;}
-@media(max-width:768px){
-  #lo .ln{padding:0 20px;}#lo .ln-links,#lo .ln-right{display:none;}#lo .ln-ham{display:flex;}
-  #lo .lh{padding:80px 20px 48px;min-height:auto;}
-  #lo .lh-stats{flex-direction:column;width:100%;}
-  #lo .lh-stat{width:100%;border-left:none!important;border-top:1px solid var(--br);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;text-align:left;}
-  #lo .lh-stat:first-child{border-top:none;}
-  #lo .lh-actions{flex-direction:column;width:100%;}
-  #lo .lb-pr,#lo .lb-gh{width:100%;text-align:center;}
-  #lo .ls{padding:0 16px 48px;}#lo .lsw{padding:48px 20px;}
-  #lo .lf-grid{grid-template-columns:repeat(2,1fr);}
-  #lo .lhow{padding:48px 20px;}#lo .lhow-steps{grid-template-columns:1fr;}
-  #lo .lpr{padding:48px 20px;}#lo .lpr-grid{grid-template-columns:1fr;}
-  #lo .lcta-wrap{padding:0 20px 48px;}#lo .lcta{padding:48px 24px;}
-  #lo .lfoot{padding:40px 20px 28px;}#lo .lfoot-inner{grid-template-columns:1fr 1fr;gap:24px;}
-}
-@media(max-width:420px){#lo .lf-grid{grid-template-columns:1fr;}#lo .lfoot-inner{grid-template-columns:1fr;}}
+#landing-overlay{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;color:#0F172A;-webkit-font-smoothing:antialiased;line-height:1.65}
+#landing-overlay *,#landing-overlay *::before,#landing-overlay *::after{box-sizing:border-box;margin:0;padding:0}
+#landing-overlay{--lp-primary:#1F3864;--lp-primary-light:#3A5A9E;--lp-primary-dark:#152548;--lp-accent:#2563EB;--lp-bg:#FFFFFF;--lp-bg-soft:#F8FAFC;--lp-bg-muted:#F1F5F9;--lp-ink:#0F172A;--lp-ink-2:#475569;--lp-ink-3:#94A3B8;--lp-line:#E2E8F0;--lp-line-2:#CBD5E1;--lp-success:#10B981;--lp-warning:#F59E0B;--lp-shadow-sm:0 1px 2px rgba(15,23,42,.04);--lp-shadow:0 4px 12px rgba(15,23,42,.06);--lp-shadow-lg:0 20px 40px -12px rgba(15,23,42,.12)}
+#landing-overlay a{color:inherit;text-decoration:none}
+#landing-overlay button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+#landing-overlay img{max-width:100%;display:block}
+#landing-overlay .wrap{max-width:1200px;margin:0 auto;padding:0 24px}
+@media (max-width:640px){#landing-overlay .wrap{padding:0 20px}}
+#landing-overlay .nav{position:sticky;top:0;z-index:100;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--lp-line);padding:14px 0}
+#landing-overlay .nav-inner{display:flex;align-items:center;justify-content:space-between;gap:24px}
+#landing-overlay .logo{font-size:22px;font-weight:800;letter-spacing:-.02em;color:var(--lp-primary)}
+#landing-overlay .nav-links{display:flex;gap:26px;font-size:14px;color:var(--lp-ink-2);font-weight:500}
+#landing-overlay .nav-links a{transition:color .2s;cursor:pointer}
+#landing-overlay .nav-links a:hover{color:var(--lp-primary)}
+#landing-overlay .nav-cta{display:flex;gap:8px;align-items:center}
+#landing-overlay .btn{display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border-radius:10px;font-size:14px;font-weight:600;transition:all .2s ease;letter-spacing:-.01em;white-space:nowrap;cursor:pointer}
+#landing-overlay .btn-ghost{color:var(--lp-ink-2)}
+#landing-overlay .btn-ghost:hover{color:var(--lp-primary);background:var(--lp-bg-muted)}
+#landing-overlay .btn-primary{background:var(--lp-primary);color:#fff;box-shadow:var(--lp-shadow-sm)}
+#landing-overlay .btn-primary:hover{background:var(--lp-primary-dark);transform:translateY(-1px);box-shadow:var(--lp-shadow)}
+#landing-overlay .btn-outline{border:1.5px solid var(--lp-primary);color:var(--lp-primary)}
+#landing-overlay .btn-outline:hover{background:var(--lp-primary);color:#fff}
+#landing-overlay .btn-lg{padding:14px 26px;font-size:15.5px}
+@media (max-width:900px){#landing-overlay .nav-links{display:none}}
+#landing-overlay .hero{padding:80px 0 70px;background:linear-gradient(180deg,#F8FAFC 0%,#FFFFFF 100%);position:relative;overflow:hidden}
+#landing-overlay .hero::before{content:'';position:absolute;top:-200px;right:-200px;width:600px;height:600px;background:radial-gradient(circle,rgba(37,99,235,.08),transparent 70%);border-radius:50%;pointer-events:none}
+#landing-overlay .hero-inner{text-align:center;position:relative;z-index:1}
+#landing-overlay .hero-tag{display:inline-block;font-size:13px;color:var(--lp-accent);background:rgba(37,99,235,.08);padding:6px 14px;border-radius:999px;font-weight:600;margin-bottom:18px}
+#landing-overlay .hero h1{font-size:clamp(32px,5vw,50px);line-height:1.2;letter-spacing:-.03em;font-weight:800;margin-bottom:18px;color:var(--lp-ink)}
+#landing-overlay .hero h1 .highlight{color:var(--lp-primary)}
+#landing-overlay .hero-sub{font-size:18px;color:var(--lp-ink-2);margin-bottom:40px;font-weight:500}
+#landing-overlay .intro-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;max-width:1000px;margin:0 auto 44px;text-align:left}
+#landing-overlay .intro-card{background:#fff;border:1px solid var(--lp-line);border-radius:12px;padding:26px 22px;transition:all .25s;box-shadow:var(--lp-shadow-sm)}
+#landing-overlay .intro-card:hover{border-color:var(--lp-primary-light);box-shadow:var(--lp-shadow)}
+#landing-overlay .intro-card.highlight{border-color:var(--lp-primary);background:linear-gradient(180deg,#F0F5FF 0%,#FFFFFF 100%);box-shadow:var(--lp-shadow)}
+#landing-overlay .intro-emoji{font-size:30px;margin-bottom:12px;display:block}
+#landing-overlay .intro-card p{font-size:14.5px;color:var(--lp-ink-2);line-height:1.65}
+#landing-overlay .intro-card strong{color:var(--lp-ink);font-weight:700}
+#landing-overlay .hero-ctas{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+@media (max-width:800px){#landing-overlay .intro-cards{grid-template-columns:1fr}}
+#landing-overlay .stats{padding:52px 0;background:var(--lp-primary);color:#fff}
+#landing-overlay .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;text-align:center}
+#landing-overlay .stat-num{font-size:44px;font-weight:800;letter-spacing:-.03em;line-height:1;margin-bottom:6px}
+#landing-overlay .stat-label{font-size:13.5px;opacity:.85;font-weight:500}
+@media (max-width:640px){#landing-overlay .stats-grid{grid-template-columns:repeat(2,1fr);gap:28px}#landing-overlay .stat-num{font-size:36px}}
+#landing-overlay .showcase{padding:90px 0;background:var(--lp-bg-soft)}
+#landing-overlay .section-head{text-align:center;margin-bottom:44px}
+#landing-overlay .section-label{display:inline-block;font-size:13px;font-weight:700;color:var(--lp-accent);letter-spacing:.05em;text-transform:uppercase;margin-bottom:12px}
+#landing-overlay .section-title{font-size:clamp(26px,3.5vw,36px);font-weight:800;letter-spacing:-.025em;line-height:1.25;margin-bottom:14px;color:var(--lp-ink)}
+#landing-overlay .section-desc{font-size:16px;color:var(--lp-ink-2);max-width:560px;margin:0 auto}
+#landing-overlay .showcase-tabs{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:28px}
+#landing-overlay .showcase-tab{padding:9px 16px;border-radius:10px;background:#fff;border:1px solid var(--lp-line);font-size:13.5px;font-weight:600;color:var(--lp-ink-2);cursor:pointer;transition:all .2s}
+#landing-overlay .showcase-tab:hover{border-color:var(--lp-primary-light);color:var(--lp-primary)}
+#landing-overlay .showcase-tab.active{background:var(--lp-primary);color:#fff;border-color:var(--lp-primary)}
+#landing-overlay .showcase-frame{background:#fff;border:1px solid var(--lp-line);border-radius:14px;box-shadow:var(--lp-shadow-lg);overflow:hidden;max-width:1100px;margin:0 auto}
+#landing-overlay .showcase-bar{background:#F8FAFC;border-bottom:1px solid var(--lp-line);padding:10px 16px;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--lp-ink-3)}
+#landing-overlay .showcase-dots{display:flex;gap:5px}
+#landing-overlay .showcase-dots span{width:11px;height:11px;border-radius:50%}
+#landing-overlay .showcase-dots span:nth-child(1){background:#FF5F57}
+#landing-overlay .showcase-dots span:nth-child(2){background:#FEBC2E}
+#landing-overlay .showcase-dots span:nth-child(3){background:#28C840}
+#landing-overlay .showcase-body{padding:0;background:#fff;overflow:hidden;position:relative}
+#landing-overlay .showcase-body img{width:100%;height:auto;display:block}
+#landing-overlay .showcase-caption{margin-top:22px;padding:20px;background:#fff;border:1px solid var(--lp-line);border-radius:12px;text-align:center;max-width:700px;margin-left:auto;margin-right:auto}
+#landing-overlay .showcase-caption-emoji{font-size:28px;margin-bottom:6px}
+#landing-overlay .showcase-caption h4{font-size:17px;font-weight:700;margin-bottom:6px}
+#landing-overlay .showcase-caption p{font-size:14px;color:var(--lp-ink-2)}
+#landing-overlay .features{padding:90px 0}
+#landing-overlay .features-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:40px}
+#landing-overlay .feat-card{background:#fff;border:1px solid var(--lp-line);border-radius:12px;padding:26px 22px;transition:all .25s;text-align:left}
+#landing-overlay .feat-card:hover{border-color:var(--lp-primary-light);box-shadow:var(--lp-shadow);transform:translateY(-2px)}
+#landing-overlay .feat-emoji{font-size:28px;margin-bottom:12px;display:block}
+#landing-overlay .feat-title{font-size:16px;font-weight:700;margin-bottom:8px;letter-spacing:-.01em}
+#landing-overlay .feat-desc{font-size:13.5px;color:var(--lp-ink-2);line-height:1.6}
+@media (max-width:900px){#landing-overlay .features-grid{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:500px){#landing-overlay .features-grid{grid-template-columns:1fr}}
+#landing-overlay .safety{padding:90px 0;background:linear-gradient(180deg,#F0FDF4 0%,#F8FAFC 100%);position:relative;overflow:hidden}
+#landing-overlay .safety::before{content:'';position:absolute;top:-100px;left:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(16,185,129,.1),transparent 70%);border-radius:50%}
+#landing-overlay .safety-inner{position:relative;z-index:1}
+#landing-overlay .safety-badge-row{display:flex;justify-content:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+#landing-overlay .safety-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;background:var(--lp-success);color:#fff;font-size:12px;font-weight:700;letter-spacing:.04em}
+#landing-overlay .safety-badge .pulse{width:7px;height:7px;border-radius:50%;background:#fff;animation:lpPulse 2s infinite}
+#landing-overlay .safety-badge.free{background:var(--lp-warning)}
+@keyframes lpPulse{0%,100%{opacity:1}50%{opacity:.5}}
+#landing-overlay .safety-content{display:grid;grid-template-columns:1fr 1.2fr;gap:48px;align-items:center;margin-top:40px}
+#landing-overlay .safety-list{display:flex;flex-direction:column;gap:16px;margin-bottom:24px}
+#landing-overlay .safety-item{display:flex;gap:14px;align-items:flex-start}
+#landing-overlay .safety-check{flex-shrink:0;width:26px;height:26px;border-radius:50%;background:var(--lp-success);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;margin-top:2px}
+#landing-overlay .safety-item-text{flex:1}
+#landing-overlay .safety-item-title{font-size:15.5px;font-weight:700;margin-bottom:3px}
+#landing-overlay .safety-item-desc{font-size:13.5px;color:var(--lp-ink-2);line-height:1.55}
+#landing-overlay .safety-notice{padding:16px 18px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;font-size:13.5px;color:#78350F;line-height:1.55}
+#landing-overlay .safety-notice strong{color:#92400E;font-weight:700}
+#landing-overlay .safety-img{border-radius:12px;box-shadow:var(--lp-shadow-lg);border:1px solid var(--lp-line);overflow:hidden}
+#landing-overlay .safety-img img{width:100%;display:block}
+@media (max-width:900px){#landing-overlay .safety-content{grid-template-columns:1fr;gap:36px}}
+#landing-overlay .how{padding:90px 0;background:var(--lp-bg-soft)}
+#landing-overlay .how-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:44px}
+#landing-overlay .how-step{background:#fff;border:1px solid var(--lp-line);border-radius:12px;padding:32px;text-align:center}
+#landing-overlay .how-num{width:44px;height:44px;border-radius:50%;background:var(--lp-primary);color:#fff;font-size:18px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;margin-bottom:18px}
+#landing-overlay .how-title{font-size:18px;font-weight:700;margin-bottom:10px}
+#landing-overlay .how-desc{font-size:14px;color:var(--lp-ink-2);line-height:1.6}
+@media (max-width:800px){#landing-overlay .how-grid{grid-template-columns:1fr}}
+#landing-overlay .compare{padding:90px 0}
+#landing-overlay .compare-table{margin-top:44px;background:#fff;border:1px solid var(--lp-line);border-radius:12px;overflow:hidden;box-shadow:var(--lp-shadow-sm)}
+#landing-overlay .compare-table table{width:100%;border-collapse:collapse}
+#landing-overlay .compare-table th,#landing-overlay .compare-table td{padding:16px 20px;text-align:center;border-bottom:1px solid var(--lp-line);font-size:14px}
+#landing-overlay .compare-table th{background:var(--lp-bg-soft);font-weight:700;font-size:13.5px;color:var(--lp-ink-2)}
+#landing-overlay .compare-table th.hot{background:var(--lp-primary);color:#fff;font-size:14.5px}
+#landing-overlay .compare-table td:first-child,#landing-overlay .compare-table th:first-child{text-align:left;font-weight:600}
+#landing-overlay .compare-table td.on{color:var(--lp-success);font-weight:700}
+#landing-overlay .compare-table td.mid{color:var(--lp-warning);font-weight:600}
+#landing-overlay .compare-table td.off{color:#DC2626;font-weight:600}
+#landing-overlay .compare-table tr:last-child td{border-bottom:none}
+#landing-overlay .compare-table td.hot{background:rgba(37,99,235,.04)}
+@media (max-width:700px){#landing-overlay .compare-table th,#landing-overlay .compare-table td{padding:12px 8px;font-size:12px}}
+#landing-overlay .pricing{padding:90px 0;background:var(--lp-bg-soft)}
+#landing-overlay .pricing-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:44px}
+#landing-overlay .price-card{background:#fff;border:1.5px solid var(--lp-line);border-radius:12px;padding:26px 18px;display:flex;flex-direction:column;transition:all .25s;position:relative}
+#landing-overlay .price-card:hover{border-color:var(--lp-primary-light);box-shadow:var(--lp-shadow);transform:translateY(-3px)}
+#landing-overlay .price-card.featured{border-color:var(--lp-primary);background:linear-gradient(180deg,#F0F5FF,#fff);box-shadow:var(--lp-shadow)}
+#landing-overlay .price-badge{position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:var(--lp-primary);color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:999px;letter-spacing:.03em}
+#landing-overlay .price-tier{font-size:14px;font-weight:700;color:var(--lp-primary);margin-bottom:2px}
+#landing-overlay .price-size{font-size:12.5px;color:var(--lp-ink-3);margin-bottom:18px;font-weight:500}
+#landing-overlay .price-amount{display:flex;align-items:baseline;gap:3px;margin-bottom:6px}
+#landing-overlay .price-amount .num{font-size:26px;font-weight:800;letter-spacing:-.03em;line-height:1;color:var(--lp-ink)}
+#landing-overlay .price-amount .unit{font-size:12.5px;color:var(--lp-ink-2);font-weight:600}
+#landing-overlay .price-period{font-size:11.5px;color:var(--lp-ink-3);margin-bottom:18px}
+#landing-overlay .price-features{list-style:none;display:flex;flex-direction:column;gap:7px;margin-bottom:20px;flex:1}
+#landing-overlay .price-features li{font-size:12.5px;color:var(--lp-ink-2);padding-left:18px;position:relative;line-height:1.45}
+#landing-overlay .price-features li::before{content:'✓';position:absolute;left:0;color:var(--lp-success);font-weight:700}
+#landing-overlay .price-cta{padding:10px;border-radius:8px;border:1.5px solid var(--lp-line);font-size:13px;font-weight:600;color:var(--lp-ink-2);text-align:center;transition:all .2s;cursor:pointer;width:100%}
+#landing-overlay .price-cta:hover{border-color:var(--lp-primary);color:var(--lp-primary)}
+#landing-overlay .price-card.featured .price-cta{background:var(--lp-primary);color:#fff;border-color:var(--lp-primary)}
+#landing-overlay .price-card.featured .price-cta:hover{background:var(--lp-primary-dark)}
+#landing-overlay .price-enterprise{margin-top:14px;background:#fff;border:1.5px solid var(--lp-line);border-radius:12px;padding:24px 28px;display:flex;justify-content:space-between;align-items:center;gap:24px;flex-wrap:wrap;transition:all .25s}
+#landing-overlay .price-enterprise:hover{border-color:var(--lp-primary-light);box-shadow:var(--lp-shadow)}
+#landing-overlay .pe-left{display:flex;gap:28px;align-items:center;flex-wrap:wrap}
+#landing-overlay .pe-info .price-tier{margin-bottom:2px}
+#landing-overlay .pe-info .price-size{margin-bottom:0}
+#landing-overlay .pe-price{font-size:18px;font-weight:800;color:var(--lp-ink)}
+#landing-overlay .pe-desc{font-size:13.5px;color:var(--lp-ink-2);max-width:360px}
+#landing-overlay .pricing-note{margin-top:22px;padding:18px 22px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:12px;font-size:13.5px;color:#065F46;line-height:1.6;display:flex;gap:12px;align-items:center}
+#landing-overlay .pricing-note .icon{flex-shrink:0;width:30px;height:30px;background:var(--lp-success);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800}
+#landing-overlay .pricing-note strong{color:#047857;font-weight:700}
+@media (max-width:1000px){#landing-overlay .pricing-grid{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:500px){#landing-overlay .pricing-grid{grid-template-columns:1fr}}
+#landing-overlay .faq{padding:90px 0}
+#landing-overlay .faq-list{max-width:780px;margin:44px auto 0}
+#landing-overlay .faq-item{border-bottom:1px solid var(--lp-line)}
+#landing-overlay .faq-q{width:100%;padding:22px 0;display:flex;justify-content:space-between;align-items:center;gap:20px;font-size:16.5px;font-weight:700;text-align:left;color:var(--lp-ink);transition:color .2s;cursor:pointer}
+#landing-overlay .faq-q:hover{color:var(--lp-primary)}
+#landing-overlay .faq-toggle{flex-shrink:0;width:24px;height:24px;border-radius:50%;background:var(--lp-bg-soft);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:var(--lp-primary);transition:transform .3s}
+#landing-overlay .faq-item.open .faq-toggle{transform:rotate(45deg)}
+#landing-overlay .faq-a{max-height:0;overflow:hidden;transition:max-height .4s ease,padding .3s;color:var(--lp-ink-2);font-size:15px;line-height:1.7}
+#landing-overlay .faq-item.open .faq-a{max-height:300px;padding:0 0 22px}
+#landing-overlay .lp-cta{padding:90px 0;background:linear-gradient(135deg,var(--lp-primary) 0%,var(--lp-primary-dark) 100%);color:#fff;text-align:center;position:relative;overflow:hidden}
+#landing-overlay .lp-cta::before{content:'';position:absolute;inset:0;background:radial-gradient(800px 400px at 50% 100%,rgba(255,255,255,.08),transparent 70%)}
+#landing-overlay .cta-inner{position:relative;z-index:1}
+#landing-overlay .lp-cta h2{font-size:clamp(26px,3.5vw,36px);font-weight:800;letter-spacing:-.025em;margin-bottom:14px;line-height:1.25}
+#landing-overlay .lp-cta p{font-size:16.5px;margin-bottom:28px;opacity:.9}
+#landing-overlay .cta-contact{margin-top:32px;padding-top:26px;border-top:1px solid rgba(255,255,255,.15);font-size:14.5px;opacity:.92;display:flex;gap:16px;justify-content:center;flex-wrap:wrap;align-items:center}
+#landing-overlay .cta-contact a{color:#fff;text-decoration:underline}
+#landing-overlay .lp-cta .btn-primary{background:#fff;color:var(--lp-primary)}
+#landing-overlay .lp-cta .btn-primary:hover{background:#F8FAFC}
+#landing-overlay footer.lp-footer{padding:56px 0 28px;background:var(--lp-bg-soft);border-top:1px solid var(--lp-line)}
+#landing-overlay .footer-grid{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:40px;margin-bottom:36px}
+#landing-overlay .foot-about .logo{margin-bottom:12px;display:inline-block}
+#landing-overlay .foot-tag{font-size:14px;color:var(--lp-ink-2);line-height:1.65;max-width:320px}
+#landing-overlay .foot-col h4{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--lp-ink);margin-bottom:14px;font-weight:700}
+#landing-overlay .foot-col ul{list-style:none;display:flex;flex-direction:column;gap:9px}
+#landing-overlay .foot-col a{font-size:13.5px;color:var(--lp-ink-2);transition:color .2s;cursor:pointer}
+#landing-overlay .foot-col a:hover{color:var(--lp-primary)}
+#landing-overlay .foot-bottom{padding-top:22px;border-top:1px solid var(--lp-line);font-size:12.5px;color:var(--lp-ink-3);text-align:center}
+@media (max-width:800px){#landing-overlay .footer-grid{grid-template-columns:1fr 1fr;gap:28px}}
+#landing-overlay .reveal{opacity:0;transform:translateY(20px);transition:opacity .7s,transform .7s}
+#landing-overlay .reveal.in{opacity:1;transform:none}
 </style>
-<div id="lo">
-<nav class="ln">
-  <a href="#" class="ln-logo" style="text-decoration:none;">
-    <svg width="100" height="26" viewBox="0 0 100 26" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;">
-      <rect x="0" y="0" width="26" height="26" rx="7" fill="#2347b5"/>
-      <polygon points="4,4 12,4 22,22 14,22 14,12 11,22 4,22" fill="white" opacity="0.9"/>
-      <polygon points="11,4 22,4 22,12" fill="white" opacity="0.45"/>
-      <circle cx="23" cy="4" r="3" fill="#93c5fd"/>
-      <text x="32" y="19" font-family="Inter,-apple-system,sans-serif" font-size="16" font-weight="900" fill="#1a2f6e" letter-spacing="-0.5">no<tspan fill="#2347b5">pro</tspan></text>
-    </svg>
-  </a>
-  <div class="ln-links">
-    <a href="#lshowcase" class="ln-pill">서비스 화면</a>
-    <a href="#lfeatures" class="ln-pill">기능</a>
-    <a href="#lhow" class="ln-pill">사용방법</a>
-    <a href="#lpricing" class="ln-pill">요금제</a>
-    <a href="#lcontact" class="ln-pill">문의</a>
+
+<nav class="nav">
+  <div class="wrap nav-inner">
+    <a class="logo" onclick="event.preventDefault();window.scrollTo({top:0,behavior:'smooth'})">nopro</a>
+    <div class="nav-links">
+      <a onclick="document.getElementById('lp-showcase').scrollIntoView({behavior:'smooth'})">서비스 화면</a>
+      <a onclick="document.getElementById('lp-features').scrollIntoView({behavior:'smooth'})">기능</a>
+      <a onclick="document.getElementById('lp-safety').scrollIntoView({behavior:'smooth'})">안전관리</a>
+      <a onclick="document.getElementById('lp-how').scrollIntoView({behavior:'smooth'})">사용방법</a>
+      <a onclick="document.getElementById('lp-pricing').scrollIntoView({behavior:'smooth'})">요금제</a>
+      <a onclick="document.getElementById('lp-contact').scrollIntoView({behavior:'smooth'})">문의</a>
+    </div>
+    <div class="nav-cta">
+      <button class="btn btn-ghost" onclick="showAuthModal('login')">로그인</button>
+      <button class="btn btn-primary" onclick="showAuthModal()">무료로 시작하기 →</button>
+    </div>
   </div>
-  <div class="ln-right">
-    <button class="ln-login" onclick="showAuthModal()">로그인</button>
-    <button class="ln-cta" onclick="showAuthModal()">무료로 시작하기 →</button>
-  </div>
-  <div class="ln-ham" onclick="loToggleMenu()" id="lo-ham"><span></span><span></span><span></span></div>
 </nav>
-<div class="lm-menu" id="lo-mmenu">
-  <a onclick="loToggleMenu()">📱 서비스 화면</a>
-  <a onclick="loToggleMenu()">⚡ 기능 소개</a>
-  <a onclick="loToggleMenu()">📖 사용방법</a>
-  <a onclick="loToggleMenu()">💳 요금제</a>
-  <a onclick="loToggleMenu()">📞 문의</a>
-  <a class="lm-cta" onclick="loToggleMenu();showAuthModal()">무료로 시작하기 →</a>
-</div>
-<section class="lh">
-  <svg width="110" height="26" viewBox="0 0 110 26" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;margin-bottom:20px;">
-    <rect x="0" y="0" width="26" height="26" rx="7" fill="#2347b5"/>
-    <polygon points="4,4 12,4 22,22 15,22 15,12 12,22 4,22" fill="white" opacity="0.92"/>
-    <polygon points="12,4 22,4 22,12" fill="white" opacity="0.4"/>
-    <circle cx="23" cy="4.5" r="3" fill="#93c5fd"/>
-    <text x="33" y="19" font-family="Inter,-apple-system,sans-serif" font-size="17" font-weight="900" fill="#1a2f6e" letter-spacing="-0.5">no<tspan fill="#2347b5">pro</tspan></text>
-  </svg>
-  <div class="lh-badge"><span class="lh-dot"></span>소규모 사업장을 위한 근태·급여 관리 플랫폼</div>
-  <h1 class="lh-title">복잡한 근태관리,<br><span class="lh-accent">노프로로 해결하세요</span></h1>
-  <p class="lh-sub">앱도 엑셀도 아닌, 딱 그 중간의 솔루션</p>
-  <div class="lh-points">
-    <div class="lh-pt"><div class="lh-pt-icon">📱</div><div class="lh-pt-txt"><strong>지문인식·앱 방식</strong>은 지각, 조기퇴근, 외출 등 예외 상황에 대응하지 못해 변수가 너무 많습니다.</div></div>
-    <div class="lh-pt"><div class="lh-pt-icon">📊</div><div class="lh-pt-txt"><strong>엑셀 수기 입력</strong>은 야간·연장수당 계산이 번거롭고, 수식 오류로 급여 실수가 잦습니다.</div></div>
-    <div class="lh-pt"><div class="lh-pt-icon">✅</div><div class="lh-pt-txt"><strong>노프로</strong>는 관리자가 출퇴근만 입력하면 모든 수당을 자동 계산합니다. 3분이면 월급 정산 완료.</div></div>
-  </div>
-  <div class="lh-actions">
-    <button class="lb-pr" onclick="showAuthModal()">무료로 시작하기 →</button>
-    <a href="#lshowcase" class="lb-gh">실제 화면 보기</a>
-  </div>
-  <div class="lh-stats">
-    <div class="lh-stat"><div class="lh-snum">100+</div><div class="lh-slabel">사용 중인 기업</div></div>
-    <div class="lh-stat"><div class="lh-snum">29+</div><div class="lh-slabel">법적 검증 케이스</div></div>
-    <div class="lh-stat"><div class="lh-snum">3분</div><div class="lh-slabel">월급 정산 완료</div></div>
-    <div class="lh-stat"><div class="lh-snum">100%</div><div class="lh-slabel">법적 기준 준수</div></div>
+
+<section class="hero">
+  <div class="wrap hero-inner">
+    <span class="hero-tag reveal">소규모 사업장을 위한 근태·급여·안전관리 플랫폼</span>
+    <h1 class="reveal">복잡한 근태관리,<br><span class="highlight">노프로로 해결하세요</span></h1>
+    <p class="hero-sub reveal">앱도 엑셀도 아닌, 딱 그 중간의 솔루션</p>
+
+    <div class="intro-cards">
+      <div class="intro-card reveal">
+        <span class="intro-emoji">📱</span>
+        <p><strong>지문인식·앱 방식</strong>은 지각, 조기퇴근, 외출 등 예외 상황에 대응하지 못해 변수가 너무 많습니다.</p>
+      </div>
+      <div class="intro-card reveal">
+        <span class="intro-emoji">📊</span>
+        <p><strong>엑셀 수기 입력</strong>은 야간·연장수당 계산이 번거롭고, 수식 오류로 급여 실수가 잦습니다.</p>
+      </div>
+      <div class="intro-card highlight reveal">
+        <span class="intro-emoji">✅</span>
+        <p><strong>노프로</strong>는 관리자가 출퇴근만 입력하면 모든 수당을 자동 계산합니다. 3분이면 월급 정산 완료.</p>
+      </div>
+    </div>
+
+    <div class="hero-ctas reveal">
+      <button class="btn btn-primary btn-lg" onclick="showAuthModal()">무료로 시작하기 →</button>
+      <button class="btn btn-outline btn-lg" onclick="document.getElementById('lp-showcase').scrollIntoView({behavior:'smooth'})">실제 화면 보기</button>
+    </div>
   </div>
 </section>
-<div class="ls" id="lshowcase">
-  <div class="ls-inner">
-    <div class="ls-tabs">
-      <div class="ls-tab active" onclick="loScreen(0,this)">📝 출퇴근 기록</div>
-      <div class="ls-tab" onclick="loScreen(1,this)">📅 근태 현황</div>
-      <div class="ls-tab" onclick="loScreen(2,this)">💰 급여 관리</div>
-      <div class="ls-tab" onclick="loScreen(3,this)">🗓 연차 관리</div>
-      <div class="ls-tab" onclick="loScreen(4,this)">👥 직원 관리</div>
+
+<section class="stats">
+  <div class="wrap">
+    <div class="stats-grid">
+      <div><div class="stat-num">100+</div><div class="stat-label">사용 중인 기업</div></div>
+      <div><div class="stat-num">29+</div><div class="stat-label">법적 검증 케이스</div></div>
+      <div><div class="stat-num">3분</div><div class="stat-label">월급 정산 완료</div></div>
+      <div><div class="stat-num">100%</div><div class="stat-label">법적 기준 준수</div></div>
     </div>
-    <div class="ls-frame">
-      <div class="ls-bar"><div class="ls-dot"></div><div class="ls-dot"></div><div class="ls-dot"></div><div class="ls-url">noprohr.netlify.app · 노무관리 Pro v5</div></div>
-      <div id="lo-sc0" class="ls-panel active"><img class="ls-img" src="/images/출퇴근기록입력.png" alt="출퇴근 기록 입력 화면"></div>
-      <div id="lo-sc1" class="ls-panel"><img class="ls-img" src="/images/근태현황.png" alt="근태 현황 화면"></div>
-      <div id="lo-sc2" class="ls-panel"><img class="ls-img" src="/images/급여관리.png" alt="급여 관리 화면"></div>
-      <div id="lo-sc3" class="ls-panel"><img class="ls-img" src="/images/연차관리.png" alt="연차 관리 화면"></div>
-      <div id="lo-sc4" class="ls-panel"><img class="ls-img" src="/images/직원관리.png" alt="직원 관리 화면"></div>
-      <div class="ls-cap" id="lo-cap">
-        <div class="ls-cap-icon">📝</div>
-        <div><div class="ls-cap-title">출퇴근 기록 입력</div><div class="ls-cap-desc">출퇴근 시간만 입력하면 야간·연장·휴일 수당이 자동 계산됩니다.</div></div>
+  </div>
+</section>
+
+<section class="showcase" id="lp-showcase">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-label reveal">📱 서비스 화면</span>
+      <h2 class="section-title reveal">실제 노프로 화면</h2>
+      <p class="section-desc reveal">출퇴근 시간만 입력하면 야간·연장·휴일 수당이 자동 계산됩니다.</p>
+    </div>
+
+    <div class="showcase-tabs reveal">
+      <button class="showcase-tab active" data-tab="0">📝 출퇴근 기록</button>
+      <button class="showcase-tab" data-tab="1">📅 근태 현황</button>
+      <button class="showcase-tab" data-tab="2">🗓 근태 캘린더</button>
+      <button class="showcase-tab" data-tab="3">💰 급여 관리</button>
+      <button class="showcase-tab" data-tab="4">📋 급여 상세 명세</button>
+      <button class="showcase-tab" data-tab="5">⏰ 연차 관리</button>
+      <button class="showcase-tab" data-tab="6">🛡️ 안전교육</button>
+    </div>
+
+    <div class="showcase-frame reveal">
+      <div class="showcase-bar">
+        <div class="showcase-dots"><span></span><span></span><span></span></div>
+        <span>noprohr.netlify.app · 노무관리 Pro v5</span>
+      </div>
+      <div class="showcase-body">
+        <img id="showcaseImg" src="images/landing/1-clock.png" alt="출퇴근 기록 입력" loading="lazy">
+      </div>
+    </div>
+
+    <div class="showcase-caption reveal">
+      <div class="showcase-caption-emoji" id="capEmoji">📝</div>
+      <h4 id="capTitle">출퇴근 기록 입력</h4>
+      <p id="capDesc">출퇴근 시간만 입력하면 야간·연장·휴일 수당이 자동 계산됩니다.</p>
+    </div>
+  </div>
+</section>
+
+<section class="features" id="lp-features">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-label reveal">⚡ 핵심 기능</span>
+      <h2 class="section-title reveal">필요한 기능만, 군더더기 없이</h2>
+      <p class="section-desc reveal">관리자가 출퇴근 시간을 입력하면, 나머지는 노프로가 알아서 합니다.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feat-card reveal"><span class="feat-emoji">💰</span><h3 class="feat-title">급여 자동 계산</h3><p class="feat-desc">야간·연장·휴일 수당을 근로기준법 기준으로 자동 계산.</p></div>
+      <div class="feat-card reveal"><span class="feat-emoji">🕐</span><h3 class="feat-title">출퇴근 기록</h3><p class="feat-desc">관리자 직접 입력으로 모든 예외 상황까지 정확히 처리.</p></div>
+      <div class="feat-card reveal"><span class="feat-emoji">📅</span><h3 class="feat-title">연차 관리</h3><p class="feat-desc">입사일 기준 연차 자동 생성, 잔여 연차 실시간 확인.</p></div>
+      <div class="feat-card reveal"><span class="feat-emoji">📋</span><h3 class="feat-title">상세 명세표</h3><p class="feat-desc">직원별 급여 명세를 항목별 상세 조회.</p></div>
+      <div class="feat-card reveal"><span class="feat-emoji">⚖️</span><h3 class="feat-title">법적 기준 준수</h3><p class="feat-desc">근로기준법 제56조 기준 29가지 케이스 전부 검증.</p></div>
+      <div class="feat-card reveal"><span class="feat-emoji">☁️</span><h3 class="feat-title">클라우드 동기화</h3><p class="feat-desc">설치 없이 브라우저에서 바로. 어디서든 접근 가능.</p></div>
+      <div class="feat-card reveal"><span class="feat-emoji">📊</span><h3 class="feat-title">엑셀 출력</h3><p class="feat-desc">월별 급여 데이터를 엑셀로 즉시 출력.</p></div>
+      <div class="feat-card reveal"><span class="feat-emoji">🔒</span><h3 class="feat-title">데이터 보안</h3><p class="feat-desc">직원 급여 정보는 암호화 저장.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="safety" id="lp-safety">
+  <div class="wrap safety-inner">
+    <div class="section-head">
+      <div class="safety-badge-row reveal">
+        <span class="safety-badge"><span class="pulse"></span>NEW</span>
+        <span class="safety-badge free">🎁 베타 기간 무료</span>
+      </div>
+      <span class="section-label reveal" style="color:#059669">🛡️ 안전관리 전자서명</span>
+      <h2 class="section-title reveal">TBM 서명, 이제 <span style="color:#059669">모바일 한 번</span>으로</h2>
+      <p class="section-desc reveal">안전교육 확인서·TBM 일지를 종이로 출력하고 도장 찍던 시대는 끝.<br>직원이 모바일에서 서명하고, 감독관 점검용 자료는 자동 아카이빙됩니다.</p>
+    </div>
+    <div class="safety-content">
+      <div class="safety-left">
+        <div class="safety-list">
+          <div class="safety-item reveal"><div class="safety-check">✓</div><div class="safety-item-text"><div class="safety-item-title">모바일 서명 · QR·링크 한 번에 전송</div><div class="safety-item-desc">단톡방에 링크 붙이면 직원이 바로 서명. 외국인 근로자는 영어 모드 지원.</div></div></div>
+          <div class="safety-item reveal"><div class="safety-check">✓</div><div class="safety-item-text"><div class="safety-item-title">감독관 점검 대비 자동 아카이빙</div><div class="safety-item-desc">서명일시·서명자 모두 기록. 엑셀/PDF 일괄 다운로드로 제출 자료 즉시 준비.</div></div></div>
+          <div class="safety-item reveal"><div class="safety-check">✓</div><div class="safety-item-text"><div class="safety-item-title">전자문서법 제4조 법적 효력</div><div class="safety-item-desc">종이 서명과 동일한 효력. 산업안전보건법 제29조 교육기록 관리 활용 가능.</div></div></div>
+          <div class="safety-item reveal"><div class="safety-check">✓</div><div class="safety-item-text"><div class="safety-item-title">근태·교육 데이터 연동</div><div class="safety-item-desc">누가 언제 출근했고, 언제 교육받았는지 한 번에 파악. 이중 입력 불필요.</div></div></div>
+        </div>
+        <div class="safety-notice reveal"><strong>🎁 베타 혜택</strong> — 안전관리 전자서명 기능은 <strong>현재 무료</strong>로 제공되며, 정식 출시 후 유료 전환될 예정입니다. 지금 가입하면 기존 플랜 가격 그대로 연장 혜택을 받으실 수 있습니다.</div>
+      </div>
+      <div class="safety-img reveal">
+        <img src="images/landing/7-safety.png" alt="안전교육 일지" loading="lazy">
       </div>
     </div>
   </div>
-</div>
-<section class="lsw" id="lfeatures">
-  <div class="l-badge">핵심 기능</div>
-  <h2 class="l-title">필요한 기능만,<br><span>군더더기 없이</span></h2>
-  <p class="l-desc">관리자가 출퇴근 시간을 입력하면, 나머지는 노프로가 알아서 합니다.</p>
-  <div class="lf-grid">
-    <div class="lf-card"><div class="lf-icon">💰</div><div class="lf-name">급여 자동 계산</div><div class="lf-desc">야간·연장·휴일 수당을 근로기준법 기준으로 자동 계산.</div></div>
-    <div class="lf-card"><div class="lf-icon">🕐</div><div class="lf-name">출퇴근 기록</div><div class="lf-desc">관리자 직접 입력으로 모든 예외 상황까지 정확히 처리.</div></div>
-    <div class="lf-card"><div class="lf-icon">📅</div><div class="lf-name">연차 관리</div><div class="lf-desc">입사일 기준 연차 자동 생성, 잔여 연차 실시간 확인.</div></div>
-    <div class="lf-card"><div class="lf-icon">📋</div><div class="lf-name">상세 명세표</div><div class="lf-desc">직원별 급여 명세를 항목별 상세 조회.</div></div>
-    <div class="lf-card"><div class="lf-icon">⚖️</div><div class="lf-name">법적 기준 준수</div><div class="lf-desc">근로기준법 제56조 기준 29가지 케이스 전부 검증.</div></div>
-    <div class="lf-card"><div class="lf-icon">☁️</div><div class="lf-name">클라우드 동기화</div><div class="lf-desc">설치 없이 브라우저에서 바로. 어디서든 접근 가능.</div></div>
-    <div class="lf-card"><div class="lf-icon">📊</div><div class="lf-name">엑셀 출력</div><div class="lf-desc">월별 급여 데이터를 엑셀로 즉시 출력.</div></div>
-    <div class="lf-card"><div class="lf-icon">🔒</div><div class="lf-name">데이터 보안</div><div class="lf-desc">직원 급여 정보는 암호화 저장.</div></div>
-  </div>
 </section>
-<div class="ldiv"></div>
-<div class="lhow" id="lhow">
-  <div class="lhow-inner">
-    <div class="l-badge">사용방법</div>
-    <h2 class="l-title">3단계로<br><span>바로 시작하세요</span></h2>
-    <p class="l-desc">회원가입부터 첫 급여 정산까지 5분이면 충분합니다.</p>
-    <div class="lhow-steps">
-      <div class="lhow-step"><div class="lhow-num">1</div><div class="lhow-ttl">회원가입</div><div class="lhow-desc">이메일과 회사 정보로 30초 만에 가입 완료.</div></div>
-      <div class="lhow-step"><div class="lhow-num">2</div><div class="lhow-ttl">직원 등록</div><div class="lhow-desc">시급제·통상임금제·포괄임금제 모두 지원. 엑셀 일괄 등록도 가능.</div></div>
-      <div class="lhow-step"><div class="lhow-num">3</div><div class="lhow-ttl">급여 정산</div><div class="lhow-desc">출퇴근 시간 입력하면 수당이 자동 계산됩니다.</div></div>
+
+<section class="how" id="lp-how">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-label reveal">📖 사용방법</span>
+      <h2 class="section-title reveal">3단계로 바로 시작하세요</h2>
+      <p class="section-desc reveal">회원가입부터 첫 급여 정산까지 5분이면 충분합니다.</p>
+    </div>
+    <div class="how-grid">
+      <div class="how-step reveal"><div class="how-num">1</div><h3 class="how-title">회원가입</h3><p class="how-desc">이메일과 회사 정보로 30초 만에 가입 완료.</p></div>
+      <div class="how-step reveal"><div class="how-num">2</div><h3 class="how-title">직원 등록</h3><p class="how-desc">시급제·통상임금제·포괄임금제 모두 지원. 엑셀 일괄 등록도 가능.</p></div>
+      <div class="how-step reveal"><div class="how-num">3</div><h3 class="how-title">급여 정산</h3><p class="how-desc">출퇴근 시간 입력하면 수당이 자동 계산됩니다.</p></div>
     </div>
   </div>
-</div>
-<div class="ldiv"></div>
-<section class="lsw">
-  <div class="l-badge">비교</div>
-  <h2 class="l-title">왜 노프로인가요?</h2>
-  <p class="l-desc">지문인식 앱과 엑셀 사이, 딱 필요한 것만 갖춘 솔루션입니다.</p>
-  <div class="lcmp">
-    <div class="lcmp-hd"><div class="lcmp-h">기능 비교</div><div class="lcmp-h hl">✦ 노프로</div><div class="lcmp-h">지문인식 앱</div><div class="lcmp-h">엑셀 수기</div></div>
-    <div class="lcmp-row"><div class="lcmp-c label">야간·연장·휴일 자동 계산</div><div class="lcmp-c hl"><span class="ck">✓</span> 완전 자동</div><div class="lcmp-c"><span class="cp">△</span> 일부</div><div class="lcmp-c"><span class="cx">✕</span> 수동</div></div>
-    <div class="lcmp-row"><div class="lcmp-c label">예외 상황 처리</div><div class="lcmp-c hl"><span class="ck">✓</span> 완벽</div><div class="lcmp-c"><span class="cx">✕</span> 불가</div><div class="lcmp-c"><span class="cp">△</span> 번거로움</div></div>
-    <div class="lcmp-row"><div class="lcmp-c label">설치 없이 사용</div><div class="lcmp-c hl"><span class="ck">✓</span> 브라우저</div><div class="lcmp-c"><span class="cx">✕</span> 설치 필요</div><div class="lcmp-c"><span class="ck">✓</span> 가능</div></div>
-    <div class="lcmp-row"><div class="lcmp-c label">엑셀 출력</div><div class="lcmp-c hl"><span class="ck">✓</span> 즉시</div><div class="lcmp-c"><span class="cp">△</span> 제한적</div><div class="lcmp-c"><span class="ck">✓</span> 가능</div></div>
-    <div class="lcmp-row"><div class="lcmp-c label">월 비용</div><div class="lcmp-c hl"><span class="ck">✓</span> 5만원~</div><div class="lcmp-c"><span class="cx">✕</span> 수십만원~</div><div class="lcmp-c"><span class="ck">✓</span> 무료</div></div>
-  </div>
 </section>
-<div class="ldiv"></div>
-<div class="lpr" id="lpricing">
-  <div class="lpr-inner">
-    <div class="l-badge">요금제</div>
-    <h2 class="l-title">투명한 요금제</h2>
-    <p class="l-desc">숨겨진 비용 없이, 직원 수에 맞게 선택하세요.</p>
-    <div class="lpr-grid">
-      <div class="lpr-card"><div class="lpr-tier">Starter</div><div class="lpr-price">₩50,000<sub>/월</sub></div><div class="lpr-per">직원 10명까지</div><ul class="lpr-feats"><li><span class="ck">✓</span> 급여 자동 계산</li><li><span class="ck">✓</span> 출퇴근 기록</li><li><span class="ck">✓</span> 연차 관리</li><li><span class="ck">✓</span> 엑셀 출력</li></ul><button class="lpr-btn lpr-btn-g" onclick="showAuthModal()">시작하기</button></div>
-      <div class="lpr-card feat"><div class="lpr-rec">가장 인기</div><div class="lpr-tier">Growth</div><div class="lpr-price">₩150,000<sub>/월</sub></div><div class="lpr-per">직원 50명까지</div><ul class="lpr-feats"><li><span class="ck">✓</span> Starter 모든 기능</li><li><span class="ck">✓</span> 3가지 급여 방식</li><li><span class="ck">✓</span> 상세 명세표</li><li><span class="ck">✓</span> 이메일 지원</li></ul><button class="lpr-btn lpr-btn-s" onclick="showAuthModal()">시작하기 →</button></div>
-      <div class="lpr-card"><div class="lpr-tier">Scale</div><div class="lpr-price">₩200,000<sub>/월</sub></div><div class="lpr-per">직원 100명까지</div><ul class="lpr-feats"><li><span class="ck">✓</span> Growth 모든 기능</li><li><span class="ck">✓</span> 전담 매니저</li><li><span class="ck">✓</span> 우선 지원</li><li><span class="ck">✓</span> 커스텀 설정</li></ul><button class="lpr-btn lpr-btn-g" onclick="showAuthModal()">시작하기</button></div>
+
+<section class="compare">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-label reveal">🔍 비교</span>
+      <h2 class="section-title reveal">왜 노프로인가요?</h2>
+      <p class="section-desc reveal">지문인식 앱과 엑셀 사이, 딱 필요한 것만 갖춘 솔루션입니다.</p>
+    </div>
+    <div class="compare-table reveal">
+      <table>
+        <thead><tr><th>기능 비교</th><th class="hot">✦ 노프로</th><th>지문인식 앱</th><th>엑셀 수기</th></tr></thead>
+        <tbody>
+          <tr><td>야간·연장·휴일 자동 계산</td><td class="on hot">✓ 완전 자동</td><td class="mid">△ 일부</td><td class="off">✕ 수동</td></tr>
+          <tr><td>예외 상황 처리</td><td class="on hot">✓ 완벽</td><td class="off">✕ 불가</td><td class="mid">△ 번거로움</td></tr>
+          <tr><td>설치 없이 사용</td><td class="on hot">✓ 브라우저</td><td class="off">✕ 설치 필요</td><td class="on">✓ 가능</td></tr>
+          <tr><td>안전관리 전자서명</td><td class="on hot">✓ 지원 (무료)</td><td class="off">✕ 불가</td><td class="off">✕ 불가</td></tr>
+          <tr><td>엑셀 출력</td><td class="on hot">✓ 즉시</td><td class="mid">△ 제한적</td><td class="on">✓ 가능</td></tr>
+          <tr><td>월 비용</td><td class="on hot">✓ 5만원~</td><td class="off">✕ 수십만원~</td><td class="on">✓ 무료</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
-</div>
-<div class="ldiv"></div>
-<section class="lsw">
-  <div class="l-badge">자주 묻는 질문</div>
-  <h2 class="l-title">궁금한 점을<br><span>해소해 드립니다</span></h2>
-  <div class="lfaq-list">
-    <div class="lfaq-item open"><div class="lfaq-q" onclick="this.closest('.lfaq-item').classList.toggle('open')"><div class="lfaq-qtxt">야간·연장·휴일 수당이 자동으로 계산되나요?</div><div class="lfaq-tog">+</div></div><div class="lfaq-a">네. 출퇴근 시간만 입력하면 근로기준법 제56조 기준으로 자동 계산됩니다. 29가지 케이스를 모두 검증했습니다.</div></div>
-    <div class="lfaq-item"><div class="lfaq-q" onclick="this.closest('.lfaq-item').classList.toggle('open')"><div class="lfaq-qtxt">지문인식 앱과 다른 점이 뭔가요?</div><div class="lfaq-tog">+</div></div><div class="lfaq-a">노프로는 관리자가 직접 입력하기 때문에 모든 예외 상황까지 정확히 처리할 수 있습니다.</div></div>
-    <div class="lfaq-item"><div class="lfaq-q" onclick="this.closest('.lfaq-item').classList.toggle('open')"><div class="lfaq-qtxt">설치 없이 바로 사용할 수 있나요?</div><div class="lfaq-tog">+</div></div><div class="lfaq-a">네. 별도 설치 없이 브라우저에서 바로 사용할 수 있습니다.</div></div>
+</section>
+
+<section class="pricing" id="lp-pricing">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-label reveal">💳 요금제</span>
+      <h2 class="section-title reveal">투명한 요금제</h2>
+      <p class="section-desc reveal">숨겨진 비용 없이, 직원 수에 맞게 선택하세요.</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="price-card reveal">
+        <div class="price-tier">Starter</div><div class="price-size">직원 10인 이하</div>
+        <div class="price-amount"><span class="num">₩50,000</span></div><div class="price-period">/ 월 · VAT 별도</div>
+        <ul class="price-features"><li>급여 자동 계산</li><li>출퇴근 기록</li><li>연차 관리</li><li>안전관리 전자서명 (무료)</li><li>엑셀 출력</li></ul>
+        <button class="price-cta" onclick="showAuthModal()">시작하기</button>
+      </div>
+      <div class="price-card reveal">
+        <div class="price-tier">Basic</div><div class="price-size">직원 30인 이하</div>
+        <div class="price-amount"><span class="num">₩100,000</span></div><div class="price-period">/ 월 · VAT 별도</div>
+        <ul class="price-features"><li>Starter 모든 기능</li><li>3가지 급여 방식</li><li>상세 명세표</li><li>안전관리 전자서명 (무료)</li><li>이메일 지원</li></ul>
+        <button class="price-cta" onclick="showAuthModal()">시작하기</button>
+      </div>
+      <div class="price-card featured reveal">
+        <div class="price-badge">가장 인기</div>
+        <div class="price-tier">Growth</div><div class="price-size">직원 50인 이하</div>
+        <div class="price-amount"><span class="num">₩150,000</span></div><div class="price-period">/ 월 · VAT 별도</div>
+        <ul class="price-features"><li>Basic 모든 기능</li><li>상세 급여 명세</li><li>다중 사업장 관리</li><li>안전관리 전자서명 (무료)</li><li>우선 지원</li></ul>
+        <button class="price-cta" onclick="showAuthModal()">시작하기 →</button>
+      </div>
+      <div class="price-card reveal">
+        <div class="price-tier">Scale</div><div class="price-size">직원 80인 이하</div>
+        <div class="price-amount"><span class="num">₩200,000</span></div><div class="price-period">/ 월 · VAT 별도</div>
+        <ul class="price-features"><li>Growth 모든 기능</li><li>전담 매니저</li><li>커스텀 설정</li><li>안전관리 전자서명 (무료)</li><li>우선 지원</li></ul>
+        <button class="price-cta" onclick="showAuthModal()">시작하기</button>
+      </div>
+      <div class="price-card reveal">
+        <div class="price-tier">Pro</div><div class="price-size">직원 100인 이하</div>
+        <div class="price-amount"><span class="num">₩250,000</span></div><div class="price-period">/ 월 · VAT 별도</div>
+        <ul class="price-features"><li>Scale 모든 기능</li><li>전용 온보딩</li><li>우선 기술 지원</li><li>안전관리 전자서명 (무료)</li><li>맞춤 보고서</li></ul>
+        <button class="price-cta" onclick="showAuthModal()">시작하기</button>
+      </div>
+    </div>
+    <div class="price-enterprise reveal">
+      <div class="pe-left">
+        <div class="pe-info"><div class="price-tier">Enterprise</div><div class="price-size">직원 100인 이상</div></div>
+        <div class="pe-price">별도 문의</div>
+        <div class="pe-desc">지사·현장 다중 관리, 전용 온보딩, 맞춤 기능 개발까지. 직접 상담해드립니다.</div>
+      </div>
+      <button class="btn btn-primary" onclick="document.getElementById('lp-contact').scrollIntoView({behavior:'smooth'})">상담 요청 →</button>
+    </div>
+    <div class="pricing-note reveal">
+      <span class="icon">🎁</span>
+      <div><strong>안전관리 전자서명 기능</strong>은 현재 모든 플랜에서 <strong>무료</strong>로 제공됩니다. 추후 유료 전환 시 기존 가입자에게 사전 안내드리며, 특별 할인 혜택을 드립니다.</div>
+    </div>
   </div>
 </section>
-<div class="lcta-wrap" id="lcontact">
-  <div class="lcta">
-    <h2 class="lcta-title">복잡한 급여 계산,<br>노프로가 대신합니다</h2>
-    <p class="lcta-desc">설치 없이 브라우저에서 바로. 5분이면 첫 급여 정산까지 완료됩니다.</p>
-    <button class="lcta-btn" onclick="showAuthModal()">무료로 시작하기 →</button>
-    <div class="lcta-contact">📧 sangmin275@naver.com &nbsp;|&nbsp; 📞 010-2349-4208<br>평일 09:00 – 18:00 운영</div>
+
+<section class="faq">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-label reveal">💬 자주 묻는 질문</span>
+      <h2 class="section-title reveal">궁금한 점을 해소해 드립니다</h2>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item reveal"><button class="faq-q">야간·연장·휴일 수당이 자동으로 계산되나요?<span class="faq-toggle">+</span></button><div class="faq-a">네. 출퇴근 시간만 입력하면 근로기준법 제56조 기준으로 자동 계산됩니다. 29가지 케이스를 모두 검증했습니다.</div></div>
+      <div class="faq-item reveal"><button class="faq-q">지문인식 앱과 다른 점이 뭔가요?<span class="faq-toggle">+</span></button><div class="faq-a">노프로는 관리자가 직접 입력하기 때문에 모든 예외 상황(지각·조퇴·외출)까지 정확히 처리할 수 있습니다.</div></div>
+      <div class="faq-item reveal"><button class="faq-q">설치 없이 바로 사용할 수 있나요?<span class="faq-toggle">+</span></button><div class="faq-a">네. 별도 설치 없이 브라우저에서 바로 사용할 수 있습니다. 어디서든 접근 가능해요.</div></div>
+      <div class="faq-item reveal"><button class="faq-q">안전관리 전자서명은 정말 무료인가요?<span class="faq-toggle">+</span></button><div class="faq-a">네, 현재 베타 기간 동안 모든 플랜에서 무료로 제공됩니다. 정식 출시 후 유료 전환 예정이며, 그 전에 가입하신 고객께는 특별 혜택을 안내드립니다.</div></div>
+      <div class="faq-item reveal"><button class="faq-q">5인 미만 사업장도 사용 가능한가요?<span class="faq-toggle">+</span></button><div class="faq-a">네. 가산수당 의무 적용이 다르기 때문에 사업장 설정에서 5인 이상/미만 옵션을 선택할 수 있고, 그에 맞게 급여가 자동 계산됩니다.</div></div>
+      <div class="faq-item reveal"><button class="faq-q">외국인 근로자도 쓸 수 있나요?<span class="faq-toggle">+</span></button><div class="faq-a">네. 안전교육 서명 페이지는 한국어/영어 토글을 지원합니다. 관리자는 내외국인 필터로 서명 현황을 따로 확인할 수 있습니다.</div></div>
+    </div>
   </div>
-</div>
-<div class="lfoot">
-  <div class="lfoot-inner">
-    <div><div class="lfoot-brand">🏢 노프로</div><div class="lfoot-desc">소규모 사업장을 위한 노무 관리 플랫폼.</div></div>
-    <div><div class="lfoot-col-title">서비스</div><ul class="lfoot-links"><li><a href="#lfeatures">기능 소개</a></li><li><a href="#lhow">사용방법</a></li></ul></div>
-    <div><div class="lfoot-col-title">바로가기</div><ul class="lfoot-links"><li><a href="#lpricing">요금제</a></li><li><a href="#lcontact">문의</a></li></ul></div>
-    <div><div class="lfoot-col-title">법적 정보</div><ul class="lfoot-links"><li><a href="#">개인정보처리방침</a></li><li><a href="#">이용약관</a></li></ul></div>
-    <div><div class="lfoot-col-title">고객센터</div><ul class="lfoot-links"><li><a href="tel:01023494208">010-2349-4208</a></li><li><a href="mailto:sangmin275@naver.com">sangmin275@naver.com</a></li></ul></div>
+</section>
+
+<section class="lp-cta" id="lp-contact">
+  <div class="wrap cta-inner">
+    <h2>복잡한 급여 계산, 노프로가 대신합니다</h2>
+    <p>설치 없이 브라우저에서 바로. 5분이면 첫 급여 정산까지 완료됩니다.</p>
+    <button class="btn btn-primary btn-lg" onclick="showAuthModal()">무료로 시작하기 →</button>
+    <div class="cta-contact">
+      <span>📧 <a href="mailto:sangmin275@naver.com">sangmin275@naver.com</a></span>
+      <span>|</span>
+      <span>📞 <a href="tel:01023494208">010-2349-4208</a></span>
+      <span>|</span>
+      <span>평일 09:00 – 18:00</span>
+    </div>
   </div>
-  <div class="lfoot-bottom"><div class="lfoot-copy">© 2025-2026 노프로. All rights reserved.</div></div>
-</div>
-</div>
+</section>
+
+<footer class="lp-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="foot-about"><span class="logo">🏢 노프로</span><p class="foot-tag">소규모 사업장을 위한 노무 관리 플랫폼. 근태·급여·안전관리까지 한 번에.</p></div>
+      <div class="foot-col"><h4>서비스</h4><ul><li><a onclick="document.getElementById('lp-features').scrollIntoView({behavior:'smooth'})">기능 소개</a></li><li><a onclick="document.getElementById('lp-safety').scrollIntoView({behavior:'smooth'})">안전관리</a></li><li><a onclick="document.getElementById('lp-how').scrollIntoView({behavior:'smooth'})">사용방법</a></li></ul></div>
+      <div class="foot-col"><h4>바로가기</h4><ul><li><a onclick="document.getElementById('lp-pricing').scrollIntoView({behavior:'smooth'})">요금제</a></li><li><a onclick="document.getElementById('lp-contact').scrollIntoView({behavior:'smooth'})">문의</a></li><li><a onclick="event.preventDefault()">개인정보처리방침</a></li><li><a onclick="event.preventDefault()">이용약관</a></li></ul></div>
+      <div class="foot-col"><h4>고객센터</h4><ul><li><a href="tel:01023494208">010-2349-4208</a></li><li><a href="mailto:sangmin275@naver.com">sangmin275@naver.com</a></li><li>평일 09:00 – 18:00</li></ul></div>
+    </div>
+    <div class="foot-bottom">© 2025-2026 노프로. All rights reserved.</div>
+  </div>
+</footer>
+
 <script>
-const loCaps=[
-  {icon:'📝',title:'출퇴근 기록 입력',desc:'출퇴근 시간만 입력하면 야간·연장·휴일 수당이 자동 계산됩니다.'},
-  {icon:'📅',title:'근태 현황 캘린더',desc:'직원별 월간 근태를 캘린더로 한눈에 확인할 수 있습니다.'},
-  {icon:'💰',title:'급여 관리',desc:'직원별 급여를 카드 형태로 상세하게 조회할 수 있습니다.'},
-  {icon:'🗓',title:'연차 관리',desc:'입사일 기준 연차 자동 생성. 연차수당도 자동 계산됩니다.'},
-  {icon:'👥',title:'직원 관리',desc:'직원 정보 등록·수정. 드래그로 순서 변경도 가능합니다.'}
-];
-function loScreen(idx,tab){
-  document.querySelectorAll('.ls-panel').forEach((p,i)=>p.classList.toggle('active',i===idx));
-  document.querySelectorAll('.ls-tab').forEach((t,i)=>t.classList.toggle('active',i===idx));
-  const c=loCaps[idx];
-  document.getElementById('lo-cap').innerHTML=`<div class="ls-cap-icon">${c.icon}</div><div><div class="ls-cap-title">${c.title}</div><div class="ls-cap-desc">${c.desc}</div></div>`;
-}
-function loToggleMenu(){document.getElementById('lo-mmenu').classList.toggle('open');}
-document.addEventListener('click',e=>{
-  const m=document.getElementById('lo-mmenu');const h=document.getElementById('lo-ham');
-  if(m&&h&&!m.contains(e.target)&&!h.contains(e.target))m.classList.remove('open');
-});
+(function(){
+  const capData = [{"emoji":"📝","title":"출퇴근 기록 입력","desc":"출퇴근 시간만 입력하면 야간·연장·휴일 수당이 자동 계산됩니다.","img":"images/landing/1-clock.png"},{"emoji":"📅","title":"근태 현황","desc":"월별 전체 직원 근무시간을 한 눈에. 엑셀 내보내기 지원.","img":"images/landing/2-attendance.png"},{"emoji":"🗓","title":"근태 캘린더","desc":"개인별 월 캘린더로 야간·연장·휴일을 한눈에 확인.","img":"images/landing/3-calendar.png"},{"emoji":"💰","title":"급여 관리","desc":"직원별 급여 카드로 기본급·수당·공제를 한눈에.","img":"images/landing/4-payroll.png"},{"emoji":"📋","title":"급여 상세 명세","desc":"전체 직원 급여 테이블. 주휴·연차·야간수당까지 세부 항목 표시.","img":"images/landing/5-payslip.png"},{"emoji":"⏰","title":"연차 관리","desc":"입사일 기준 자동 계산 + 연차수당까지 자동 산출.","img":"images/landing/6-leave.png"},{"emoji":"🛡️","title":"안전교육 일지","desc":"TBM 전자서명 · 실시간 현황 · 엑셀/PDF 저장.","img":"images/landing/7-safety.png"}];
+  const lo = document.getElementById('landing-overlay');
+  if(!lo) return;
+  // FAQ 토글
+  lo.querySelectorAll('.faq-q').forEach(btn=>{
+    btn.addEventListener('click',()=>btn.parentElement.classList.toggle('open'));
+  });
+  // Showcase 탭
+  lo.querySelectorAll('.showcase-tab').forEach(tab=>{
+    tab.addEventListener('click',()=>{
+      lo.querySelectorAll('.showcase-tab').forEach(t=>t.classList.remove('active'));
+      tab.classList.add('active');
+      const idx = +tab.dataset.tab;
+      const d = capData[idx];
+      lo.querySelector('#capEmoji').textContent = d.emoji;
+      lo.querySelector('#capTitle').textContent = d.title;
+      lo.querySelector('#capDesc').textContent = d.desc;
+      const img = lo.querySelector('#showcaseImg');
+      img.src = d.img; img.alt = d.title;
+    });
+  });
+  // Reveal 애니메이션
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target);} });
+  },{threshold:.1, rootMargin:'0px 0px -40px 0px'});
+  lo.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+})();
 </script>
-</div>
 </div>
 
 <!-- ══ 로그인/회원가입 오버레이 ══ -->
