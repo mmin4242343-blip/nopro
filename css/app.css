@@ -153,16 +153,16 @@ button,div,span{letter-spacing:-.01em}
 .tw{background:var(--card);border:.5px solid var(--bd);border-radius:var(--radius);overflow:hidden;overflow-x:auto;margin-bottom:14px;box-shadow:var(--shadow-sm)}
 .et{width:100%;border-collapse:collapse;min-width:580px}
 
-/* 헤더 — 인라인 style로 박힌 네이비/블루/퍼플/오렌지 전부 덮어쓰기 */
-.et thead th{color:rgba(255,255,255,.92)!important;padding:11px 6px;font-size:10.5px;font-weight:500;text-align:center;border-right:.5px solid rgba(255,255,255,.08)!important;letter-spacing:.04em;text-transform:uppercase;background:#2E2E30!important}
-.et thead tr:first-child th{background:#2E2E30!important}
-/* 헤더 서브 그룹 (실근무/휴게/야간/연장/휴일) — 같은 블랙 베이스에 살짝 톤 차이만 */
+/* 헤더 — 라이트 톤 (흰 배경 + 짙은 텍스트) */
+.et thead th{color:#1D1D1F!important;padding:12px 6px;font-size:10.5px;font-weight:600;text-align:center;border-right:.5px solid #E8E8ED!important;border-bottom:.5px solid #D2D2D7!important;letter-spacing:.02em;background:#FAFAFA!important}
+.et thead tr:first-child th{background:#FAFAFA!important}
+/* 수당 그룹 (실근무/휴게/야간/연장/휴일) — 살짝 톤 다운으로만 구분 */
 .et thead th[style*="1A3A6E"],
 .et thead th[style*="2D6A4F"],
 .et thead th[style*="1A5276"],
 .et thead th[style*="4A1A7E"],
-.et thead th[style*="7A2E0E"]{background:#3C3C40!important}
-.et thead tr:last-child th{background:#4A4A4E!important;color:rgba(255,255,255,.6)!important;border-top:.5px solid rgba(255,255,255,.06)!important}
+.et thead th[style*="7A2E0E"]{background:#F5F5F7!important;color:#1D1D1F!important}
+.et thead tr:last-child th{background:#F0F0F3!important;color:#86868B!important;font-weight:500;font-size:9.5px;border-top:.5px solid #E8E8ED!important}
 .et thead th:last-child{border-right:none!important}
 
 /* 행 — hover/zebra로 분리 가시화 */
@@ -232,7 +232,7 @@ button,div,span{letter-spacing:-.01em}
 /* 전체현황표 */
 .ov-w{overflow-x:auto;border:.5px solid var(--bd);border-radius:var(--radius);background:var(--card);box-shadow:var(--shadow-sm)}
 .ov-t{border-collapse:collapse;width:100%}
-.ov-t th{padding:11px 8px;font-size:10.5px;font-weight:500;color:rgba(255,255,255,.9);background:var(--ink);border-right:.5px solid rgba(255,255,255,.06);text-align:center;white-space:nowrap;letter-spacing:.04em;text-transform:uppercase}
+.ov-t th{padding:12px 8px;font-size:10.5px;font-weight:600;color:#1D1D1F;background:#FAFAFA;border-right:.5px solid #E8E8ED;border-bottom:.5px solid #D2D2D7;text-align:center;white-space:nowrap;letter-spacing:.02em}
 .ov-t td{padding:8px 8px;font-size:10.5px;border-bottom:.5px solid #F0F0F2;border-right:.5px solid #F0F0F2;text-align:center;white-space:nowrap;font-weight:400;letter-spacing:-.01em;color:var(--ink)}
 .ov-t tr:last-child td{border-bottom:none}
 .ov-t td.ec{text-align:left;font-weight:500;background:var(--surf);position:sticky;left:0;z-index:1;border-right:1px solid var(--bd)}
@@ -241,7 +241,7 @@ button,div,span{letter-spacing:-.01em}
 .ov-t td.ph2{background:var(--surf);color:var(--ink)}
 .ov-t td.al2{background:rgba(48,209,88,.08);color:var(--green)}
 .ov-t td.mt{color:var(--ink3)}
-.ov-t td.sm{background:var(--ink);font-weight:600;color:#fff}
+.ov-t td.sm{background:#F5F5F7;font-weight:700;color:#1D1D1F;border-top:.5px solid #D2D2D7}
 
 /* 급여카드 */
 .pg2{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:20px}
@@ -261,9 +261,9 @@ button,div,span{letter-spacing:-.01em}
 /* 📋 직원관리·연차 테이블 — 칸 분리 강화          */
 /* ══════════════════════════════════════════ */
 .emt{width:100%;border-collapse:collapse;table-layout:auto}
-.emt th{text-align:center!important;padding:11px 8px!important;font-size:10.5px;font-weight:500;color:rgba(255,255,255,.92)!important;background:#2E2E30!important;border-right:.5px solid rgba(255,255,255,.08)!important;letter-spacing:.04em;text-transform:uppercase;position:relative;white-space:nowrap}
+.emt th{text-align:center!important;padding:12px 8px!important;font-size:10.5px;font-weight:600;color:#1D1D1F!important;background:#FAFAFA!important;border-right:.5px solid #E8E8ED!important;border-bottom:.5px solid #D2D2D7!important;letter-spacing:.02em;position:relative;white-space:nowrap}
 .emt th .col-resize{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:2}
-.emt th .col-resize:hover,.emt th .col-resize.active{background:rgba(255,255,255,.2)}
+.emt th .col-resize:hover,.emt th .col-resize.active{background:rgba(0,0,0,.1)}
 
 /* 셀 — 세로·가로 구분선 강화 */
 .emt td{padding:10px 8px;font-size:11.5px;border-bottom:.5px solid #E8E8ED;border-right:.5px solid #F0F0F2;overflow:visible!important;letter-spacing:-.01em;white-space:nowrap}
@@ -283,15 +283,15 @@ button,div,span{letter-spacing:-.01em}
 /* 성별 컨테이너 — 잘림 방지 */
 .emt td:nth-child(11){overflow:visible!important;min-width:56px}
 
-/* 연차 테이블 — 컬러풀 헤더 무채색화 + 칸 분리 */
-#leave-table thead tr{background:#2E2E30!important}
-#leave-table thead th{background:#2E2E30!important;border-right:.5px solid rgba(255,255,255,.08)!important;color:rgba(255,255,255,.92)!important}
-/* 사용연차/잔여연차/시급/잔여연차수당 헤더 — 살짝 톤 변주로 구분 */
+/* 연차 테이블 — 라이트 헤더 */
+#leave-table thead tr{background:#FAFAFA!important}
+#leave-table thead th{background:#FAFAFA!important;border-right:.5px solid #E8E8ED!important;border-bottom:.5px solid #D2D2D7!important;color:#1D1D1F!important;font-weight:600!important}
+/* 강조 컬럼 (사용연차·잔여연차·시급·잔여연차수당) — 살짝 다른 톤으로 구분 */
 #leave-table thead th[style*="0E4D2E"],
-#leave-table thead th[style*="0E4D3E"]{background:#3C3C40!important}
-#leave-table thead th[style*="0A3D5C"]{background:#4A4A4E!important}
-#leave-table thead th[style*="1a3a5c"]{background:#3C3C40!important}
-#leave-table thead th[style*="2d1a4f"]{background:#4A4A4E!important}
+#leave-table thead th[style*="0E4D3E"]{background:#F5F5F7!important;color:#1D1D1F!important}
+#leave-table thead th[style*="0A3D5C"]{background:#F5F5F7!important;color:#1D1D1F!important}
+#leave-table thead th[style*="1a3a5c"]{background:#F5F5F7!important;color:#1D1D1F!important}
+#leave-table thead th[style*="2d1a4f"]{background:#F5F5F7!important;color:#1D1D1F!important}
 #leave-table tbody td{border-bottom:.5px solid #E8E8ED!important;border-right:.5px solid #F0F0F2!important;padding:10px 8px!important;letter-spacing:-.01em}
 #leave-table tbody td:last-child{border-right:none!important}
 #leave-table tbody tr:nth-child(even) td{background:#FAFAFA}
@@ -346,8 +346,8 @@ button,div,span{letter-spacing:-.01em}
 /* 엑셀 */
 .xl-wrap{overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 260px);margin-top:14px;border:.5px solid var(--bd);border-radius:var(--radius);background:var(--card);box-shadow:var(--shadow-sm);position:relative}
 .xl-t{border-collapse:collapse;font-size:10px;white-space:nowrap;min-width:1400px}
-.xl-t th{background:var(--ink);color:#fff;padding:7px 10px;text-align:center;border:.5px solid #3C3C40;font-weight:500;font-size:9.5px;position:sticky;top:0;z-index:4;letter-spacing:.02em}
-.xl-t th.yw{background:#3C3C40;color:#fff}
+.xl-t th{background:#FAFAFA;color:#1D1D1F;padding:8px 10px;text-align:center;border:.5px solid #E8E8ED;border-bottom:.5px solid #D2D2D7;font-weight:600;font-size:9.5px;position:sticky;top:0;z-index:4;letter-spacing:.02em}
+.xl-t th.yw{background:#F5F5F7;color:#1D1D1F}
 .xl-t td{padding:6px 9px;border:.5px solid var(--bd);text-align:center;font-variant-numeric:tabular-nums;color:var(--ink)}
 .xl-t tr:nth-child(even) td{background:var(--surf)}
 .xl-t td.nm{text-align:left;font-weight:500;background:var(--surf);position:sticky;left:0;z-index:2}
@@ -630,7 +630,7 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
   .cdh{font-size:9px;padding:4px 0}
   #leave-table{min-width:700px!important}
   #leave-table th,#leave-table td{padding:7px 5px!important;font-size:10.5px!important}
-  #leave-table thead th:first-child{position:sticky!important;left:0!important;z-index:11!important;background:var(--ink)!important}
+  #leave-table thead th:first-child{position:sticky!important;left:0!important;z-index:11!important;background:#FAFAFA!important}
   #leave-table tbody td:first-child{position:sticky!important;left:0!important;z-index:3!important;background:#fff!important}
   .set-g{grid-template-columns:1fr;gap:10px}
   .sr{flex-wrap:wrap}
@@ -640,9 +640,9 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
   .ei2{padding:4px 5px;font-size:10.5px}
   .emt thead th:nth-child(1),.emt tbody td:nth-child(1){display:none!important}
   .emt thead th:nth-child(2),.emt tbody td:nth-child(2){display:none!important}
-  .emt thead th:nth-child(3){position:sticky!important;left:0!important;z-index:3!important;background:var(--ink)!important;min-width:80px!important;width:80px!important}
+  .emt thead th:nth-child(3){position:sticky!important;left:0!important;z-index:3!important;background:#FAFAFA!important;min-width:80px!important;width:80px!important}
   .emt tbody td:nth-child(3){position:sticky!important;left:0!important;z-index:2!important;background:#fff!important;min-width:80px!important}
-  .emt thead th:nth-child(4){position:sticky!important;left:80px!important;z-index:3!important;background:var(--ink)!important;min-width:60px!important;border-right:1px solid rgba(255,255,255,.15)!important}
+  .emt thead th:nth-child(4){position:sticky!important;left:80px!important;z-index:3!important;background:#FAFAFA!important;min-width:60px!important;border-right:.5px solid #D2D2D7!important}
   .emt tbody td:nth-child(4){position:sticky!important;left:80px!important;z-index:2!important;background:#fff!important;border-right:1px solid var(--bd)!important}
   .emt tbody tr:hover td:nth-child(3),.emt tbody tr:hover td:nth-child(4){background:var(--surf)!important}
   .emt th,.emt td{min-width:60px!important;white-space:nowrap!important}
