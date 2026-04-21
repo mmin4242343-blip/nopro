@@ -2,6 +2,16 @@
 const API_BASE = '/api';
 const AUTH_REFRESH_INTERVAL_MS = 20 * 60 * 1000; // 쿠키 수명 2h 대비 20분마다 /auth-verify 호출해 슬라이딩 갱신
 
+// 디버깅용: REC 쓰기 이력 추적 (콘솔에서 window.__recWrites 로 확인)
+// "입력한 적 없는 데이터가 들어있다" 증상 재현 시 원인 경로 추적용 — 최대 500건 순환
+window.__recWrites = window.__recWrites || [];
+function __recWrite(source, eid, key, extra){
+  try {
+    window.__recWrites.push(Object.assign({ts: new Date().toISOString(), source, eid, key}, extra||{}));
+    if(window.__recWrites.length > 500) window.__recWrites.shift();
+  } catch(e){}
+}
+
 // API 호출 헬퍼 (httpOnly 쿠키 기반 인증)
 async function apiFetch(endpoint, method='POST', body=null){
   const hdrs={'Content-Type':'application/json'};
@@ -1672,14 +1682,29 @@ function getPrevDayRec(empId) {
   return null;
 }
 function applyRecentAll() {
-  let cnt = 0;
   const empsToApply = activeDayEmpsForCopy();
+  if(empsToApply.length===0){
+    const toast=document.createElement('div');
+    toast.style.cssText='position:fixed;bottom:24px;right:24px;background:#B45309;color:#fff;padding:10px 18px;border-radius:9px;font-size:12px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2)';
+    toast.textContent='⚠ 대상 직원이 없습니다 (사이드바 필터를 확인해주세요)';
+    document.body.appendChild(toast); setTimeout(()=>toast.remove(),2500);
+    return;
+  }
+  const dateStr=`${cY}-${pad(cM)}-${pad(cD)}`;
+  const search=(document.getElementById('sb-search-inp')?.value||'').trim();
+  const filterActive=SBF.shift!=='all'||SBF.nation!=='all'||SBF.pay!=='all'||!!search;
+  const filterNote=filterActive?`\n(사이드바 필터 적용됨: shift=${SBF.shift}, nation=${SBF.nation}, pay=${SBF.pay}${search?`, 검색="${search}"`:''})`:'';
+  const preview=empsToApply.slice(0,5).map(e=>e.name).join(', ')+(empsToApply.length>5?` 외 ${empsToApply.length-5}명`:'');
+  const msg=`📋 ${dateStr}에 직원 ${empsToApply.length}명의 가장 최근 출퇴근 기록을 복사합니다.\n\n대상: ${preview}${filterNote}\n\n※ 이미 기록이 있는 직원은 건너뜁니다.\n진행하시겠습니까?`;
+  if(!confirm(msg)) return;
+
+  let cnt=0, skipped=0, noRecent=0;
+  const applied=[];
   empsToApply.forEach(emp => {
     const k = rk(emp.id, cY, cM, cD);
     const prev = getPrevDayRec(emp.id);
-    if (!prev || !prev.start || !prev.end) return;
-    // 이미 오늘 기록이 있으면 건너뜀
-    if (REC[k] && (REC[k].start || REC[k].absent || REC[k].annual || REC[k].halfAnnual)) return;
+    if (!prev || !prev.start || !prev.end){ noRecent++; return; }
+    if (REC[k] && (REC[k].start || REC[k].absent || REC[k].annual || REC[k].halfAnnual)){ skipped++; return; }
     REC[k] = {
       empId: emp.id,
       start: prev.start,
@@ -1688,23 +1713,42 @@ function applyRecentAll() {
       note: '', outTimes: [],
       customBk: false, customBkList: []
     };
+    __recWrite('applyRecentAll', emp.id, k, {start:prev.start, end:prev.end, name:emp.name});
     cnt++;
+    applied.push(emp.name);
   });
   saveLS(); renderTable();
-  // 결과 토스트
-  const toast = document.createElement('div');
-  toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:var(--navy);color:#fff;padding:10px 18px;border-radius:9px;font-size:12px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2)';
-  toast.textContent = cnt > 0 ? `📋 ${cnt}명 최근 기록 불러옴` : '불러올 기록이 없거나 이미 입력됨';
+  const toast=document.createElement('div');
+  toast.style.cssText='position:fixed;bottom:24px;right:24px;background:var(--navy);color:#fff;padding:10px 18px;border-radius:9px;font-size:12px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2);max-width:320px;line-height:1.5';
+  if(cnt>0){
+    const preview2=applied.slice(0,3).join(', ')+(applied.length>3?` 외 ${applied.length-3}명`:'');
+    toast.innerHTML=`📋 ${dateStr}에 ${cnt}명 불러옴<br><span style="font-size:10px;opacity:.85">${preview2}</span>${skipped?`<br><span style="font-size:10px;opacity:.7">기존 기록 유지: ${skipped}명</span>`:''}${noRecent?`<br><span style="font-size:10px;opacity:.7">최근 기록 없음: ${noRecent}명</span>`:''}`;
+  } else {
+    toast.textContent = '불러올 기록이 없거나 이미 입력됨';
+  }
   document.body.appendChild(toast);
-  setTimeout(()=>toast.remove(), 2200);
+  setTimeout(()=>toast.remove(), 3200);
 }
 
 function activeDayEmpsForCopy(){
   // 현재 필터 + 입사일 + 퇴사일 조건 적용한 직원 목록 (퇴사일 이후엔 자동 복사 방지)
   const dayDate=new Date(cY,cM-1,cD);
+  const search=(document.getElementById('sb-search-inp')?.value||'').trim();
   return EMPS.filter(emp=>{
     if(emp.join){const jd=new Date(emp.join);if(jd>dayDate) return false;}
     if(emp.leave){const ld=new Date(emp.leave);if(ld<=dayDate) return false;}
+    // 사이드바 필터 반영 (renderSb와 동일 로직)
+    if(SBF.shift!=='all' && (emp.shift||'day')!==SBF.shift) return false;
+    const isFor = emp.nation==='foreign' || emp.foreigner===true;
+    if(SBF.nation==='korean' && isFor) return false;
+    if(SBF.nation==='foreign' && !isFor) return false;
+    if(SBF.pay!=='all'){
+      const ep=emp.payMode||'fixed';
+      if(SBF.pay==='monthly'){ if(ep!=='monthly'&&ep!=='pohal') return false; }
+      else if(ep!==SBF.pay) return false;
+    }
+    if(search && !(emp.name||'').includes(search)) return false;
+    // 급여 관리 페이지용 payFilter 전역은 하위호환 유지
     if(payFilter!=='all' && emp.payMode && emp.payMode!==payFilter) return false;
     return true;
   });
@@ -1734,6 +1778,7 @@ function saveDay(){
     const k=rk(eid,cY,cM,cD);
     if(!REC[k])REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
     REC[k][field]=parsed;
+    __recWrite('saveDay', eid, k, {field, value:parsed});
   });
   saveLS();
   const svMsg=document.getElementById('sv-msg');
@@ -1826,7 +1871,7 @@ function execMoveDate(tY,tM,tD,mode){
     const srcRec=REC[srcKey];
     if(!srcRec) return;
     const dstExists=REC[dstKey]&&(REC[dstKey].start||REC[dstKey].end||REC[dstKey].absent||REC[dstKey].annual);
-    if(!(dstExists&&mode==='keep')) REC[dstKey]={...srcRec};
+    if(!(dstExists&&mode==='keep')){ REC[dstKey]={...srcRec}; __recWrite('execMoveDate', e.id, dstKey, {from:srcKey, mode}); }
     delete REC[srcKey];
     moved++;
   });
@@ -4863,6 +4908,7 @@ document.addEventListener('keydown', function(e) {
     const k = rk(eid, cY, cM, cD);
     if(!REC[k]) REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
     REC[k][field] = parsed;
+    __recWrite('keyTab', eid, k, {field, value:parsed});
     try { localStorage.setItem(LS.R, JSON.stringify(REC)); } catch(err){}
     // Supabase 비동기
     try{const s=JSON.parse(localStorage.getItem('nopro_session')||'null');if(s&&s.companyId)sbSaveAll(s.companyId).catch(()=>{});}catch(err){}
@@ -8849,6 +8895,7 @@ function fillNormalAttend(empIds){
       REC[k].customBk = true;
       REC[k].customBkList = emp.workBks.map(b=>({start:b.start||b.s, end:b.end||b.e}));
     }
+    __recWrite('fillNormalAttend', id, k, {start:emp.workStart, end:emp.workEnd, name:emp.name});
     filled++;
   });
   if(blocked.length>0&&typeof showSyncToast==='function')
