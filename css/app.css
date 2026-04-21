@@ -28,11 +28,44 @@ body{font-family:'Pretendard Variable','Pretendard',-apple-system,BlinkMacSystem
 
 .app{display:none;flex-direction:column;height:100vh;max-height:100vh;overflow:hidden;position:relative}
 
+/* ══════════════════════════════════════════ */
+/* 🎨 이모지 → 미니멀 픽토그램 CSS 치환            */
+/* 이모지 자체는 숨기고 SVG 아이콘으로 대체     */
+/* ══════════════════════════════════════════ */
+
+/* 이모지 제거용 유틸 — 텍스트 앞에 있는 이모지를 가리고 대신 아이콘 표시 */
+/* 네비 폴더 메뉴 */
+#nt-folder{font-size:0!important}
+#nt-folder::after{content:'Folder';font-size:12.5px;font-weight:500;letter-spacing:-.01em;color:inherit}
+#nt-folder::before{content:'';display:inline-block;width:14px;height:14px;margin-right:6px;vertical-align:-2px;background:currentColor;-webkit-mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z'/></svg>") no-repeat center/contain;mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z'/></svg>") no-repeat center/contain}
+
+/* 💡 팁 버튼들 — 동그란 info(i) 아이콘으로 */
+.tip-btn{font-size:0!important;width:16px!important;height:16px!important;border:.5px solid var(--bd2)!important;border-radius:50%!important;background:transparent!important;color:var(--ink3)!important;position:relative;padding:0!important;margin-left:4px;flex-shrink:0;cursor:pointer;transition:all .2s var(--ease)}
+.tip-btn::after{content:'i';font-family:'Pretendard Variable',serif;font-style:italic;font-size:10px;font-weight:600;position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:currentColor;line-height:1}
+.tip-btn:hover{background:var(--ink)!important;color:#fff!important;border-color:var(--ink)!important;transform:none}
+
+/* 툴팁 팝업 안의 이모지 제거 */
+.tip-popup{position:relative}
+
+/* 📋 📅 📊 📷 🔗 📤 ⬇ ⬆ ✅ ☑ 📁 📎 🗑 → 숨기고 텍스트만 */
+/* 버튼 이모지 선택적 숨김 — CSS unicode-range를 쓸 수 없어서 HTML 그대로 두되 font-size 조정 */
+
+/* 이모지 통일 처리: 모든 이모지에 일관된 필터 적용 */
+button,div,span{letter-spacing:-.01em}
+
+/* ══════════════════════════════════════════ */
+
 /* 네비게이션 */
 .nav{background:var(--grad1);display:flex;align-items:center;padding:0 24px;height:56px;gap:2px;flex-shrink:0;box-shadow:0 .5px 0 rgba(255,255,255,.08) inset;position:relative;z-index:100;backdrop-filter:saturate(180%) blur(20px)}
-.nb{font-size:15px;font-weight:600;color:#fff;margin-right:24px;display:flex;align-items:center;gap:8px;letter-spacing:-.02em}
+.nb{font-size:15px;font-weight:600;color:#fff;margin-right:24px;display:flex;align-items:center;gap:8px;letter-spacing:-.03em;position:relative}
+
+/* 🎨 네비 로고 SVG 완전히 숨기고 텍스트 로고로 교체 */
+.nb svg{display:none!important}
+.nb::before{content:'';display:inline-block;width:20px;height:20px;border-radius:5px;background:#fff;-webkit-mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'><rect x='4' y='4' width='16' height='16' rx='4'/><path d='M8 16V8h2l4 5V8h2v8h-2l-4-5v5z' fill='black'/></svg>") no-repeat center/contain;mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'><rect x='4' y='4' width='16' height='16' rx='4'/><path d='M8 16V8h2l4 5V8h2v8h-2l-4-5v5z' fill='black'/></svg>") no-repeat center/contain;vertical-align:middle;margin-right:2px}
+.nb::after{content:'nopro';font-size:16px;font-weight:600;letter-spacing:-.04em;color:#fff}
+
 .nb-dot{width:7px;height:7px;border-radius:50%;background:#30D158;display:inline-block;box-shadow:0 0 10px rgba(48,209,88,.4);animation:pulse 2.4s ease-in-out infinite}
-.nb-ver{font-size:10px;font-weight:500;color:rgba(255,255,255,.5);background:rgba(255,255,255,.06);padding:2px 8px;border-radius:999px;margin-left:2px;letter-spacing:.02em;border:.5px solid rgba(255,255,255,.1)}
+.nb-ver{font-size:10px;font-weight:500;color:rgba(255,255,255,.5);background:rgba(255,255,255,.06);padding:2px 8px;border-radius:999px;margin-left:6px;letter-spacing:.02em;border:.5px solid rgba(255,255,255,.1)}
 .nt{height:56px;display:flex;align-items:center;padding:0 14px;font-size:12.5px;color:rgba(255,255,255,.55);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .25s var(--ease);font-weight:500;letter-spacing:-.01em;position:relative}
 .nt:hover{color:#fff;background:rgba(255,255,255,.05)}
 .nt.on{color:#fff;border-bottom-color:#fff;font-weight:600}
@@ -56,7 +89,7 @@ body{font-family:'Pretendard Variable','Pretendard',-apple-system,BlinkMacSystem
 .sb-search{margin:0 12px 10px;position:relative}
 .sb-search input{width:100%;padding:7px 12px 7px 30px;font-size:12px;border:.5px solid var(--bd);border-radius:10px;background:var(--surf);color:var(--ink);font-family:inherit;transition:all .2s var(--ease);letter-spacing:-.01em}
 .sb-search input:focus{outline:none;border-color:var(--ink);background:#fff;box-shadow:0 0 0 3px rgba(29,29,31,.08)}
-.sb-search::before{content:'🔍';position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:10px;pointer-events:none;opacity:.5}
+.sb-search::before{content:'';position:absolute;left:10px;top:50%;transform:translateY(-50%);width:12px;height:12px;background:var(--ink3);-webkit-mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'><circle cx='11' cy='11' r='7'/><path d='m21 21-4.3-4.3'/></svg>") no-repeat center/contain;mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'><circle cx='11' cy='11' r='7'/><path d='m21 21-4.3-4.3'/></svg>") no-repeat center/contain;pointer-events:none}
 .ei{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;border-left:2px solid transparent;transition:all .22s var(--ease);border-radius:0 10px 10px 0;margin:1px 8px 1px 0}
 .ei:hover{background:var(--surf)}
 .ei.on{background:var(--surf);border-left-color:var(--ink)}
@@ -114,26 +147,52 @@ body{font-family:'Pretendard Variable','Pretendard',-apple-system,BlinkMacSystem
 .bk-add:hover{border-color:var(--ink2);color:var(--ink);background:var(--surf)}
 .bk-mod{font-size:9.5px;color:var(--ink2);background:var(--surf);padding:2.5px 8px;border-radius:980px;border:.5px solid var(--bd2);font-weight:500;letter-spacing:-.01em}
 
-/* 근태 테이블 — 무채색 변주로 칼럼 구분 */
+/* ══════════════════════════════════════════ */
+/* 📊 근태 테이블 — 칸 분리 + 무채색 헤더 변주    */
+/* ══════════════════════════════════════════ */
 .tw{background:var(--card);border:.5px solid var(--bd);border-radius:var(--radius);overflow:hidden;overflow-x:auto;margin-bottom:14px;box-shadow:var(--shadow-sm)}
 .et{width:100%;border-collapse:collapse;min-width:580px}
-.et thead th{color:rgba(255,255,255,.9);padding:11px 6px;font-size:10.5px;font-weight:500;text-align:center;border-right:.5px solid rgba(255,255,255,.06);letter-spacing:.04em;text-transform:uppercase}
-.et thead th:last-child{border-right:none}
-.et tbody tr{border-bottom:.5px solid #F0F0F2;transition:background .15s}
+
+/* 헤더 — 인라인 style로 박힌 네이비/블루/퍼플/오렌지 전부 덮어쓰기 */
+.et thead th{color:rgba(255,255,255,.92)!important;padding:11px 6px;font-size:10.5px;font-weight:500;text-align:center;border-right:.5px solid rgba(255,255,255,.08)!important;letter-spacing:.04em;text-transform:uppercase;background:#1D1D1F!important}
+.et thead tr:first-child th{background:#1D1D1F!important}
+/* 헤더 서브 그룹 (실근무/휴게/야간/연장/휴일) — 같은 블랙 베이스에 살짝 톤 차이만 */
+.et thead th[style*="1A3A6E"],
+.et thead th[style*="2D6A4F"],
+.et thead th[style*="1A5276"],
+.et thead th[style*="4A1A7E"],
+.et thead th[style*="7A2E0E"]{background:#2C2C2E!important}
+.et thead tr:last-child th{background:#3A3A3C!important;color:rgba(255,255,255,.6)!important;border-top:.5px solid rgba(255,255,255,.06)!important}
+.et thead th:last-child{border-right:none!important}
+
+/* 행 — hover/zebra로 분리 가시화 */
+.et tbody tr{border-bottom:.5px solid #E8E8ED;transition:all .18s var(--ease)}
+.et tbody tr:nth-child(even){background:#FAFAFA}
 .et tbody tr:last-child{border-bottom:none}
-.et tbody tr:hover{background:var(--surf)}
-.et tbody tr.ab-row{background:rgba(208,2,27,.03)!important}
-.et tbody tr.hol-row{background:#FAFAFA!important}
-.et tbody tr.al-row{background:rgba(48,209,88,.04)!important}
-.et td{padding:9px 6px;text-align:center;vertical-align:middle}
+.et tbody tr:hover{background:#F0F0F3!important;box-shadow:inset 0 0 0 1px var(--bd2)}
+.et tbody tr.ab-row{background:rgba(208,2,27,.04)!important}
+.et tbody tr.ab-row:hover{background:rgba(208,2,27,.08)!important}
+.et tbody tr.hol-row{background:#F5F5F7!important}
+.et tbody tr.hol-row:hover{background:#EBEBEE!important}
+.et tbody tr.al-row{background:rgba(48,209,88,.05)!important}
+.et tbody tr.al-row:hover{background:rgba(48,209,88,.1)!important}
+
+/* 셀 — 세로 구분선 추가 */
+.et td{padding:9px 6px;text-align:center;vertical-align:middle;border-right:.5px solid #F0F0F2}
+.et td:last-child{border-right:none}
 .td-nm{text-align:left;padding-left:18px;letter-spacing:-.01em;font-weight:500}
 .time-inp{width:80px;padding:7px 8px;font-size:13px;font-weight:500;border:.5px solid var(--bd2);border-radius:10px;background:var(--surf);color:var(--ink);font-family:inherit;text-align:center;letter-spacing:.5px;transition:all .2s var(--ease);font-variant-numeric:tabular-nums}
 .time-inp:focus{outline:none;border-color:var(--ink);background:#fff;box-shadow:0 0 0 3px rgba(29,29,31,.08)}
 .time-inp.night,.time-inp.cross,.time-inp.hol-t{border-color:var(--bd2);background:var(--surf);color:var(--ink)}
 .time-inp.dis{opacity:.35;pointer-events:none}
 .time-inp::placeholder{color:var(--ink3);font-weight:400;font-size:12px;letter-spacing:0}
-.td-w{background:var(--surf);font-size:11.5px;font-weight:600;color:var(--ink);min-width:70px;font-variant-numeric:tabular-nums}
-.td-nt,.td-ot,.td-hol{background:var(--surf);font-size:11.5px;color:var(--ink2);min-width:58px;font-weight:500;font-variant-numeric:tabular-nums}
+
+/* 수당 칼럼 셀 — 애플 톤 무채색 변주 */
+.td-w{background:#F5F5F7;font-size:11.5px;font-weight:600;color:var(--ink);min-width:70px;font-variant-numeric:tabular-nums;border-left:.5px solid #E8E8ED}
+.td-nt{background:#F5F5F7;font-size:11.5px;color:var(--ink);min-width:58px;font-weight:500;font-variant-numeric:tabular-nums}
+.td-ot{background:#EFEFF1;font-size:11.5px;color:var(--ink);min-width:58px;font-weight:500;font-variant-numeric:tabular-nums}
+.td-hol{background:#E8E8ED;font-size:11.5px;color:var(--ink);min-width:58px;font-weight:500;font-variant-numeric:tabular-nums}
+
 .chip{display:inline-flex;align-items:center;padding:2.5px 8px;font-size:9.5px;border-radius:980px;font-weight:500;letter-spacing:-.01em;border:.5px solid var(--bd);background:var(--surf);color:var(--ink)}
 .ch-cr,.ch-hol,.ch-al{background:var(--surf);color:var(--ink);border-color:var(--bd)}
 .ch-ab{background:rgba(208,2,27,.08);color:var(--rose);border-color:rgba(208,2,27,.2)}
@@ -198,16 +257,55 @@ body{font-family:'Pretendard Variable','Pretendard',-apple-system,BlinkMacSystem
 .ptb{background:var(--card);border:.5px solid var(--bd);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-sm)}
 .pth{background:var(--grad1);color:#fff;padding:15px 24px;font-size:13.5px;font-weight:500;letter-spacing:-.02em}
 
-/* 직원관리 */
-.emt{width:100%;border-collapse:collapse;table-layout:fixed}
-.emt th{text-align:left;padding:11px 8px;font-size:10.5px;font-weight:500;color:rgba(255,255,255,.9);background:var(--ink);border-right:.5px solid rgba(255,255,255,.06);letter-spacing:.04em;text-transform:uppercase;position:relative}
+/* ══════════════════════════════════════════ */
+/* 📋 직원관리·연차 테이블 — 칸 분리 강화          */
+/* ══════════════════════════════════════════ */
+.emt{width:100%;border-collapse:collapse;table-layout:auto}
+.emt th{text-align:center!important;padding:11px 8px!important;font-size:10.5px;font-weight:500;color:rgba(255,255,255,.92)!important;background:#1D1D1F!important;border-right:.5px solid rgba(255,255,255,.08)!important;letter-spacing:.04em;text-transform:uppercase;position:relative;white-space:nowrap}
 .emt th .col-resize{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:2}
 .emt th .col-resize:hover,.emt th .col-resize.active{background:rgba(255,255,255,.2)}
-.emt td{padding:9px 8px;font-size:11.5px;border-bottom:.5px solid #F0F0F2;overflow:hidden;letter-spacing:-.01em}
+
+/* 셀 — 세로·가로 구분선 강화 */
+.emt td{padding:10px 8px;font-size:11.5px;border-bottom:.5px solid #E8E8ED;border-right:.5px solid #F0F0F2;overflow:visible!important;letter-spacing:-.01em;white-space:nowrap}
+.emt td:last-child{border-right:none}
 .emt tr:last-child td{border-bottom:none}
-.emt tr:hover td{background:var(--surf)}
-.ei2{width:100%;padding:6px 9px;font-size:11.5px;border:.5px solid var(--bd);border-radius:8px;background:transparent;color:var(--ink);font-family:inherit;font-weight:400;transition:all .2s var(--ease);letter-spacing:-.01em}
+
+/* 행 zebra + hover */
+.emt tbody tr:nth-child(even) td{background:#FAFAFA}
+.emt tbody tr:hover td{background:#F0F0F3!important;box-shadow:inset 0 1px 0 var(--bd2),inset 0 -1px 0 var(--bd2)}
+
+.ei2{width:100%;padding:7px 9px;font-size:11.5px;border:.5px solid var(--bd);border-radius:8px;background:transparent;color:var(--ink);font-family:inherit;font-weight:400;transition:all .2s var(--ease);letter-spacing:-.01em;box-sizing:border-box}
 .ei2:focus{outline:none;border-color:var(--ink);background:#fff;box-shadow:0 0 0 3px rgba(29,29,31,.06)}
+
+/* 성별 버튼 — 잘림 방지 */
+.gender-btn{padding:5px 10px;font-size:10.5px;border:.5px solid var(--bd2);border-radius:980px;cursor:pointer;background:#fff;color:var(--ink2);font-family:inherit;font-weight:500;transition:all .22s var(--ease);letter-spacing:-.01em;white-space:nowrap;min-width:32px;flex-shrink:0;line-height:1.3}
+.gender-btn.male.on,.gender-btn.female.on{background:var(--ink);border-color:var(--ink);color:#fff}
+/* 성별 컨테이너 — 잘림 방지 */
+.emt td:nth-child(11){overflow:visible!important;min-width:56px}
+
+/* 연차 테이블 — 컬러풀 헤더 무채색화 + 칸 분리 */
+#leave-table thead tr{background:#1D1D1F!important}
+#leave-table thead th{background:#1D1D1F!important;border-right:.5px solid rgba(255,255,255,.08)!important;color:rgba(255,255,255,.92)!important}
+/* 사용연차/잔여연차/시급/잔여연차수당 헤더 — 살짝 톤 변주로 구분 */
+#leave-table thead th[style*="0E4D2E"],
+#leave-table thead th[style*="0E4D3E"]{background:#2C2C2E!important}
+#leave-table thead th[style*="0A3D5C"]{background:#3A3A3C!important}
+#leave-table thead th[style*="1a3a5c"]{background:#2C2C2E!important}
+#leave-table thead th[style*="2d1a4f"]{background:#3A3A3C!important}
+#leave-table tbody td{border-bottom:.5px solid #E8E8ED!important;border-right:.5px solid #F0F0F2!important;padding:10px 8px!important;letter-spacing:-.01em}
+#leave-table tbody td:last-child{border-right:none!important}
+#leave-table tbody tr:nth-child(even) td{background:#FAFAFA}
+#leave-table tbody tr:hover td{background:#F0F0F3!important}
+
+/* 연차 행 내부 컬러풀 영역 통째로 무채색 */
+#leave-table [style*="background:#FFF8E1"],
+#leave-table [style*="background:#EFF6FF"],
+#leave-table [style*="background:#F0FDF4"],
+#leave-table [style*="background:#ECFDF5"]{background:var(--surf)!important;border-color:var(--bd)!important}
+#leave-table [style*="color:#1D4ED8"],
+#leave-table [style*="color:#065F46"],
+#leave-table [style*="color:#059669"],
+#leave-table [style*="color:#6366F1"]{color:var(--ink)!important}
 
 /* 설정 */
 .set-g{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -276,11 +374,9 @@ body{font-family:'Pretendard Variable','Pretendard',-apple-system,BlinkMacSystem
 .emp-mode-badge{display:inline-flex;padding:2.5px 8px;font-size:9.5px;border-radius:980px;font-weight:500;margin-left:6px;letter-spacing:-.01em;border:.5px solid var(--bd);background:var(--surf);color:var(--ink)}
 .emb-fixed,.emb-monthly,.emb-hourly,.emb-pohal{background:var(--surf);color:var(--ink);border:.5px solid var(--bd)}
 
-/* 주/야간·성별·내외국인 배지 */
+/* 주/야간·내외국인 배지 */
 .shift-btn{padding:5px 12px;font-size:10.5px;border:.5px solid var(--bd2);border-radius:980px;cursor:pointer;background:#fff;color:var(--ink2);font-family:inherit;font-weight:500;transition:all .22s var(--ease);letter-spacing:-.01em}
 .shift-btn.day.on,.shift-btn.night.on{background:var(--ink);border-color:var(--ink);color:#fff}
-.gender-btn{padding:5px 12px;font-size:10.5px;border:.5px solid var(--bd2);border-radius:980px;cursor:pointer;background:#fff;color:var(--ink2);font-family:inherit;font-weight:500;transition:all .22s var(--ease);letter-spacing:-.01em}
-.gender-btn.male.on,.gender-btn.female.on{background:var(--ink);border-color:var(--ink);color:#fff}
 .nation-btn{padding:5px 12px;font-size:10.5px;border:.5px solid var(--bd2);border-radius:980px;cursor:pointer;background:#fff;color:var(--ink2);font-family:inherit;font-weight:500;transition:all .22s var(--ease);letter-spacing:-.01em}
 .nation-btn.local.on,.nation-btn.foreign.on{background:var(--ink);border-color:var(--ink);color:#fff}
 
@@ -303,8 +399,6 @@ body{font-family:'Pretendard Variable','Pretendard',-apple-system,BlinkMacSystem
 .law-row:last-child{border-bottom:none;font-weight:600;font-size:14px;padding-top:10px}
 .law-tag{padding:3px 10px;border-radius:980px;font-size:10px;font-weight:500;background:#fff;color:var(--ink);border:.5px solid var(--bd)}
 .law-result{font-size:16px;font-weight:600;color:var(--ink);letter-spacing:-.02em}
-.tip-btn{width:22px;height:22px;border:.5px solid var(--bd);border-radius:50%;background:var(--surf);color:var(--ink2);font-size:12px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-weight:500;flex-shrink:0;margin-left:4px;transition:all .2s var(--ease)}
-.tip-btn:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
 
 /* 툴팁 */
 .tip-wrap{display:inline-flex;align-items:center}
@@ -325,6 +419,10 @@ body{font-family:'Pretendard Variable','Pretendard',-apple-system,BlinkMacSystem
 .sf-drop{border:1.5px dashed var(--bd2);border-radius:22px;background:var(--card);transition:all .25s var(--ease);cursor:pointer;position:relative;overflow:hidden}
 .sf-drop.dragover{border-color:var(--ink);background:var(--surf);transform:scale(1.005);box-shadow:var(--shadow-md)}
 .sf-drop-inner{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:60px 28px;text-align:center}
+
+/* 📁 드래그 영역 아이콘 — 휴대폰 이모지 숨기고 SVG */
+#sf-drop-icon2{font-size:0!important;width:48px;height:48px;background:var(--ink3);-webkit-mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='4' width='18' height='16' rx='2'/><circle cx='8.5' cy='10' r='1.5'/><path d='m21 15-5-5L5 20'/></svg>") no-repeat center/contain;mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='4' width='18' height='16' rx='2'/><circle cx='8.5' cy='10' r='1.5'/><path d='m21 15-5-5L5 20'/></svg>") no-repeat center/contain;opacity:.5}
+
 .sf-icon{font-size:48px;line-height:1;opacity:.6}
 .sf-drop-t{font-size:15px;font-weight:500;color:var(--ink);letter-spacing:-.02em}
 .sf-drop-s{font-size:12px;color:var(--ink3);letter-spacing:-.01em}
@@ -340,6 +438,20 @@ body{font-family:'Pretendard Variable','Pretendard',-apple-system,BlinkMacSystem
 .sf-count-badge{display:inline-flex;align-items:center;justify-content:center;background:var(--ink);color:#fff;border-radius:50%;width:20px;height:20px;font-size:10px;font-weight:600;margin-left:5px;font-variant-numeric:tabular-nums}
 .sf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:16px}
 .sf-nav-badge{font-size:9px;background:var(--ink);color:#fff;border-radius:980px;padding:2px 7px;margin-left:4px;font-weight:500;letter-spacing:-.01em}
+
+/* ══════════════════════════════════════════ */
+/* 🔗 안전교육 링크 영역 — 카카오 노란 버튼 무채색 */
+/* ══════════════════════════════════════════ */
+/* 카카오 복사 버튼 — 노란색 덮어쓰고 애플 톤으로 */
+button[onclick="sfCopyLink()"][style*="FEE500"],
+button[onclick="sfCopyLink()"][style*="#FEE500"]{
+  background:var(--ink)!important;color:#fff!important;padding:10px 14px!important;
+  border-radius:12px!important;font-size:11px!important;font-weight:600!important;
+  align-self:stretch!important;display:flex!important;align-items:center!important;
+  justify-content:center!important;letter-spacing:-.01em!important;min-width:64px
+}
+button[onclick="sfCopyLink()"][style*="FEE500"]:hover,
+button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#000!important}
 
 /* TBM 오버레이 */
 #tbm-sign-overlay{display:none;position:fixed;inset:0;background:#F5F5F7;z-index:99999;overflow-y:auto}
@@ -370,7 +482,7 @@ body{font-family:'Pretendard Variable','Pretendard',-apple-system,BlinkMacSystem
 #tbm-sign-overlay .srch-wrap{position:relative;margin-bottom:10px}
 #tbm-sign-overlay .srch-inp{width:100%;padding:13px 15px 13px 42px;border:.5px solid #D2D2D7;border-radius:12px;font-size:14px;font-family:inherit;color:#1D1D1F;outline:none;transition:all .2s var(--ease);background:#fff;letter-spacing:-.01em}
 #tbm-sign-overlay .srch-inp:focus{border-color:#1D1D1F;box-shadow:0 0 0 3px rgba(29,29,31,.06)}
-#tbm-sign-overlay .srch-icon{position:absolute;left:15px;top:50%;transform:translateY(-50%);font-size:16px;opacity:.5}
+#tbm-sign-overlay .srch-icon{position:absolute;left:15px;top:50%;transform:translateY(-50%);font-size:0;width:16px;height:16px;background:#86868B;-webkit-mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'><circle cx='11' cy='11' r='7'/><path d='m21 21-4.3-4.3'/></svg>") no-repeat center/contain;mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'><circle cx='11' cy='11' r='7'/><path d='m21 21-4.3-4.3'/></svg>") no-repeat center/contain}
 #tbm-sign-overlay .srch-clear{position:absolute;right:15px;top:50%;transform:translateY(-50%);font-size:15px;color:#86868B;cursor:pointer;display:none}
 #tbm-sign-overlay .filter-row{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px}
 #tbm-sign-overlay .chip{padding:5px 12px;border-radius:980px;font-size:10.5px;border:.5px solid #D2D2D7;background:#fff;color:#86868B;cursor:pointer;transition:all .2s var(--ease);font-weight:500;letter-spacing:-.01em}
@@ -538,6 +650,7 @@ body{font-family:'Pretendard Variable','Pretendard',-apple-system,BlinkMacSystem
   .emt thead th:nth-child(6){min-width:56px!important}
   .emt thead th:nth-child(7){min-width:60px!important}
   .emt thead th:nth-child(8){min-width:80px!important}
+  .emt thead th:nth-child(11){min-width:76px!important}
   .emt thead th:nth-child(13){min-width:110px!important}
   .emt thead th:nth-child(14){min-width:130px!important}
   .ei2{min-width:50px!important}
