@@ -1,4 +1,4 @@
-/* �먥븧 釉붾줉 1 (湲곗〈 index.html line 8-664) �먥븧 */
+/* 占쎈�釉� �됰뗀以� 1 (疫꿸퀣�� index.html line 8-664) 占쎈�釉� */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:13px;background:#F1F5F9;color:#0F172A}
@@ -18,16 +18,16 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
   --radius:14px;--radius-sm:8px;--radius-lg:20px;
 }
 
-/* ���� �좊땲硫붿씠�� ���� */
+/* 占쏙옙占쏙옙 占쎌쥓�뀐쭖遺우뵠占쏙옙 占쏙옙占쏙옙 */
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideIn{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:translateX(0)}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 .fade-in{animation:fadeIn .22s ease}
 
-/* ���� �� 援ъ“ ���� */
+/* 占쏙옙占쏙옙 占쏙옙 �닌듼�� 占쏙옙占쏙옙 */
 .app{display:none;flex-direction:column;height:100vh;max-height:100vh;overflow:hidden;position:relative;}
 
-/* ���� �ㅻ퉬寃뚯씠�� ���� */
+/* 占쏙옙占쏙옙 占썬끇�у칰��뵠占쏙옙 占쏙옙占쏙옙 */
 .nav{background:var(--grad1);display:flex;align-items:center;padding:0 20px;height:54px;gap:2px;flex-shrink:0;
   box-shadow:0 2px 20px rgba(15,41,82,.4);position:relative;z-index:100}
 .nb{font-size:15px;font-weight:800;color:#fff;margin-right:20px;display:flex;align-items:center;gap:8px;letter-spacing:-.3px}
@@ -48,10 +48,10 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
   transition:all .15s;letter-spacing:.2px}
 .nxa:hover{background:rgba(255,255,255,.22);border-color:rgba(255,255,255,.4);transform:translateY(-1px)}
 
-/* ���� �덉씠�꾩썐 ���� */
+/* 占쏙옙占쏙옙 占쎈뜆�좑옙袁⑹뜍 占쏙옙占쏙옙 */
 .body{display:flex;flex:1;overflow:hidden}
 
-/* ���� �ъ씠�쒕컮 ���� */
+/* 占쏙옙占쏙옙 占싼딆뵠占쎌뮆而� 占쏙옙占쏙옙 */
 .sb{width:176px;background:var(--card);border-right:1px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0;height:100%;overflow:hidden;
   box-shadow:2px 0 12px rgba(0,0,0,.04);position:relative;transition:width .2s ease}
 .sb-toggle{position:absolute;top:10px;right:8px;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--bd);
@@ -68,7 +68,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .sb-search input{width:100%;padding:6px 10px 6px 28px;font-size:11px;border:1.5px solid var(--bd);
   border-radius:8px;background:var(--surf);color:var(--ink);font-family:inherit;transition:all .15s}
 .sb-search input:focus{outline:none;border-color:var(--navy2);background:#fff;box-shadow:0 0 0 3px rgba(29,78,216,.1)}
-.sb-search::before{content:'�뵇';position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:10px;pointer-events:none}
+.sb-search::before{content:'占쎈탥';position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:10px;pointer-events:none}
 .ei{display:flex;align-items:center;gap:7px;padding:7px 12px;cursor:pointer;
   border-left:3px solid transparent;transition:all .14s;border-radius:0 8px 8px 0;margin:1px 6px 1px 0}
 .ei:hover{background:var(--nbg);transform:translateX(2px)}
@@ -80,14 +80,14 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .pg{padding:0;display:none;}
 .pg.on{display:block;animation:fadeIn .2s ease;min-height:100%;}
 
-/* ���� �섏씠吏� �ㅻ뜑 ���� */
+/* 占쏙옙占쏙옙 占쎌꼷�좑쭪占� 占썬끇�� 占쏙옙占쏙옙 */
 .ph{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;padding:20px 22px 0}
 .sticky-hd{position:sticky;top:0;z-index:50;background:var(--surf);border-bottom:1px solid var(--bd);}
 .sticky-hd .ph{margin-bottom:0;border-bottom:none;}
 .pt{font-size:18px;font-weight:800;color:var(--ink);letter-spacing:-.4px}
 .pt-s{font-size:11px;color:var(--ink3);margin-top:3px;font-weight:400}
 
-/* ���� 踰꾪듉 ���� */
+/* 占쏙옙占쏙옙 甕곌쑵�� 占쏙옙占쏙옙 */
 .btn{padding:7px 14px;font-size:11px;border:1.5px solid var(--bd2);border-radius:9px;cursor:pointer;
   background:var(--card);color:var(--ink);font-family:inherit;transition:all .14s;font-weight:600;line-height:1;
   box-shadow:var(--shadow-sm)}
@@ -99,7 +99,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .btn-t:hover{background:#0F766E;color:#fff;border-color:#0F766E;box-shadow:0 4px 16px rgba(13,148,136,.35)}
 .btn-sm{padding:5px 11px;font-size:10px;border-radius:7px}
 .btn-xs{padding:3px 8px;font-size:10px;border-radius:6px}
-/* ���� �좎쭨諛� ���� */
+/* 占쏙옙占쏙옙 占쎌쥙彛②쳸占� 占쏙옙占쏙옙 */
 .dbar{display:inline-flex;align-items:center;background:var(--card);border:1.5px solid var(--bd);
   border-radius:12px;overflow:hidden;margin-bottom:14px;box-shadow:var(--shadow-sm)}
 .ds{display:flex;align-items:center;border-right:1px solid var(--bd)}
@@ -110,7 +110,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .dar{padding:6px 8px;background:var(--surf);color:var(--ink3);cursor:pointer;font-size:15px;user-select:none;transition:all .1s}
 .dar:hover{background:var(--nbg);color:var(--navy2)}
 .ddow{padding:6px 12px;font-size:11px;color:var(--ink3);background:var(--surf);white-space:nowrap;font-weight:500}
-/* ���� �닿쾶 ���� */
+/* 占쏙옙占쏙옙 占쎈떯苡� 占쏙옙占쏙옙 */
 .bk-box{background:var(--card);border:1.5px solid var(--bd);border-radius:var(--radius);
   margin-bottom:14px;overflow:hidden;box-shadow:var(--shadow-sm)}
 .bk-hd{background:var(--grad1);color:#fff;padding:10px 16px;font-size:12px;font-weight:700;
@@ -133,7 +133,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .bk-add:hover{border-color:var(--navy2);color:var(--navy2);background:var(--nbg)}
 .bk-mod{font-size:9px;color:var(--amber);background:var(--abg);padding:2px 8px;border-radius:10px;
   border:1px solid #FCD34D;font-weight:700}
-/* ���� 洹쇳깭 �뚯씠釉� ���� */
+/* 占쏙옙占쏙옙 域뱀눛源� 占쎈슣�좈뇡占� 占쏙옙占쏙옙 */
 .tw{background:var(--card);border:1.5px solid var(--bd);border-radius:var(--radius);overflow:hidden;overflow-x:auto;
   margin-bottom:12px;box-shadow:var(--shadow-md)}
 .et{width:100%;border-collapse:collapse;min-width:580px}
@@ -168,7 +168,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .ch-al{background:#D1FAE5;color:#065F46}
 .note-inp{padding:4px 7px;font-size:10px;border:1.5px solid var(--bd);border-radius:6px;background:transparent;color:var(--ink2);font-family:inherit;width:400px}
 .note-inp:focus{outline:none;border-color:var(--navy2);background:#fff}
-/* ���� �ㅽ꺈 移대뱶 ���� */
+/* 占쏙옙占쏙옙 占썬끋爰� 燁삳�諭� 占쏙옙占쏙옙 */
 .sg5{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px}
 .sg4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
 .sc{background:var(--card);border:1.5px solid var(--bd);border-radius:var(--radius);padding:14px 16px;
@@ -178,7 +178,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .sc-l{font-size:10px;color:var(--ink3);margin-bottom:5px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
 .sc-v{font-size:19px;font-weight:800;color:var(--ink);letter-spacing:-.5px}
 .sc-u{font-size:11px;color:var(--ink3);font-weight:500;margin-left:1px}
-/* ���� 罹섎┛�� ���� */
+/* 占쏙옙占쏙옙 筌�꼶�쏉옙占� 占쏙옙占쏙옙 */
 .cgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
 .cdh{text-align:center;font-size:10px;font-weight:700;padding:6px 0;color:var(--ink3);letter-spacing:.3px}
 .cdh.su{color:#EF4444}.cdh.sa{color:#3B82F6}
@@ -198,7 +198,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .cti{font-size:8px;color:var(--ink2);line-height:1.4;font-weight:500}
 .tch{font-size:7px;padding:1px 4px;border-radius:8px;display:inline-block;margin-top:1px;font-weight:700}
 .ph-name{font-size:8px;color:#DC2626;font-weight:700;margin-top:1px}
-/* ���� �꾩껜�꾪솴�� ���� */
+/* 占쏙옙占쏙옙 占쎄쑴猿쒙옙袁れ넺占쏙옙 占쏙옙占쏙옙 */
 .ov-w{overflow-x:auto;border:1.5px solid var(--bd);border-radius:var(--radius);background:var(--card);box-shadow:var(--shadow-md)}
 .ov-t{border-collapse:collapse;width:100%}
 .ov-t th{padding:9px 7px;font-size:10px;font-weight:700;color:rgba(255,255,255,.92);background:var(--navy);
@@ -213,7 +213,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .ov-t td.al2{background:#D1FAE5;color:#059669}
 .ov-t td.mt{color:var(--ink3)}
 .ov-t td.sm{background:linear-gradient(135deg,#D1FAE5,#A7F3D0);font-weight:700;color:#065F46}
-/* ���� 湲됱뿬移대뱶 ���� */
+/* 占쏙옙占쏙옙 疫뀀맩肉х㎉��諭� 占쏙옙占쏙옙 */
 .pg2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:16px}
 .pc{background:var(--card);border:1.5px solid var(--bd);border-radius:var(--radius-lg);overflow:hidden;
   box-shadow:var(--shadow-md);transition:all .15s}
@@ -228,7 +228,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .prx{font-size:9px;color:var(--ink3);margin-left:3px;font-weight:500}
 .ptb{background:var(--card);border:1.5px solid var(--bd);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-md)}
 .pth{background:var(--grad1);color:#fff;padding:12px 18px;font-size:13px;font-weight:700;letter-spacing:-.2px}
-/* ���� 吏곸썝愿�由� ���� */
+/* 占쏙옙占쏙옙 筌욊낯�앮꽴占썹뵳占� 占쏙옙占쏙옙 */
 .emt{width:100%;border-collapse:collapse;table-layout:fixed}
 .emt th{text-align:left;padding:10px 7px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);background:var(--navy);border-right:1px solid rgba(255,255,255,.1);letter-spacing:.3px;position:relative}
 .emt th .col-resize{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:2}
@@ -238,7 +238,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .emt tr:hover td{background:#F8FAFF}
 .ei2{width:100%;padding:5px 7px;font-size:11px;border:1.5px solid var(--bd);border-radius:6px;background:transparent;color:var(--ink);font-family:inherit;font-weight:500;transition:all .12s}
 .ei2:focus{outline:none;border-color:var(--navy2);background:#fff;box-shadow:0 0 0 3px rgba(29,78,216,.1)}
-/* ���� �ㅼ젙 ���� */
+/* 占쏙옙占쏙옙 占썬끉�� 占쏙옙占쏙옙 */
 .set-g{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .set-c{background:var(--card);border:1.5px solid var(--bd);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-sm)}
 .set-h{background:var(--grad1);color:#fff;padding:11px 16px;font-size:12px;font-weight:700;letter-spacing:.1px}
@@ -272,7 +272,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .mode-fixed{background:var(--nbg);color:var(--navy2);border:1.5px solid var(--nbg2)}
 .mode-daily{background:var(--tbg);color:var(--teal);border:1.5px solid #99F6E4}
 .mode-pohal{background:var(--pbg);color:var(--purple);border:1.5px solid #DDD6FE}
-/* ���� �묒� 誘몃━蹂닿린 ���� */
+/* 占쏙옙占쏙옙 占쎈쵐占� 沃섎챶�곮퉪�용┛ 占쏙옙占쏙옙 */
 .xl-wrap{overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 260px);margin-top:14px;border:1.5px solid var(--bd);border-radius:var(--radius);background:var(--card);box-shadow:var(--shadow-sm);position:relative}
 .xl-t{border-collapse:collapse;font-size:10px;white-space:nowrap;min-width:1400px}
 .xl-t th{background:#1F3864;color:#fff;padding:6px 9px;text-align:center;border:1px solid #3A5A9E;font-weight:700;font-size:9px;position:sticky;top:0;z-index:4}
@@ -282,12 +282,12 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .xl-t td.nm{text-align:left;font-weight:700;background:#EFF6FF;position:sticky;left:0;z-index:2}
 .xl-t td.num{text-align:right}
 .xl-t td.yw-cell{background:#FEF3C7;color:#92400E;font-weight:700}
-/* ���� 吏곸콉�섎떦 ���� */
+/* 占쏙옙占쏙옙 筌욊낯肄됵옙�롫뼣 占쏙옙占쏙옙 */
 .allowance-item{display:flex;align-items:center;gap:9px;padding:8px 12px;background:var(--surf);border:1.5px solid var(--bd);border-radius:10px;margin-bottom:6px;transition:all .12s}
 .allowance-item:hover{border-color:var(--bd2);background:#F8FAFC}
 .allowance-name{flex:1;padding:5px 8px;font-size:12px;border:1.5px solid var(--bd);border-radius:7px;background:#fff;color:var(--ink);font-family:inherit;font-weight:700}
 .allowance-name:focus{outline:none;border-color:var(--navy2);box-shadow:0 0 0 3px rgba(29,78,216,.1)}
-/* ���� �몄텧 ���� */
+/* 占쏙옙占쏙옙 占쎈챷�� 占쏙옙占쏙옙 */
 .out-btn{padding:4px 10px;font-size:10px;border:1.5px solid var(--bd2);border-radius:7px;cursor:pointer;background:var(--surf);color:var(--ink2);font-family:inherit;font-weight:600;transition:all .12s}
 .out-btn:hover{background:var(--abg);border-color:var(--amber);color:var(--amber)}
 .out-btn.active{background:var(--abg);border-color:var(--amber);color:var(--amber);font-weight:700}
@@ -296,13 +296,13 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .out-time:focus{outline:none;border-color:var(--amber);box-shadow:0 0 0 3px rgba(217,119,6,.1)}
 .out-x{width:18px;height:18px;border:none;background:none;cursor:pointer;color:var(--ink3);font-size:14px;border-radius:50%;padding:0}
 .out-x:hover{color:var(--rose);background:var(--rbg)}
-/* ���� 吏곸썝 諛곗� ���� */
+/* 占쏙옙占쏙옙 筌욊낯�� 獄쏄퀣占� 占쏙옙占쏙옙 */
 .emp-mode-badge{display:inline-flex;padding:2px 7px;font-size:9px;border-radius:7px;font-weight:700;margin-left:4px}
 .emb-fixed{background:var(--nbg);color:var(--navy2)}
 .emb-monthly{background:#F5F3FF;color:#5B21B6}
 .emb-hourly{background:var(--tbg);color:var(--teal)}
 .emb-pohal{background:var(--pbg);color:var(--purple)}
-/* ���� 二�/�쇨컙 諛곗� ���� */
+/* 占쏙옙占쏙옙 雅뚳옙/占쎌눊而� 獄쏄퀣占� 占쏙옙占쏙옙 */
 .shift-btn{padding:4px 10px;font-size:10px;border:1.5px solid var(--bd2);border-radius:16px;cursor:pointer;background:#fff;color:var(--ink2);font-family:inherit;font-weight:600;transition:all .14s}
 .shift-btn.day.on{background:#FEF3C7;border-color:#F59E0B;color:#92400E;font-weight:700}
 .shift-btn.night.on{background:#EDE9FE;border-color:#7C3AED;color:#4C1D95;font-weight:700}
@@ -312,7 +312,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .nation-btn{padding:4px 9px;font-size:10px;border:1.5px solid var(--bd2);border-radius:14px;cursor:pointer;background:#fff;color:var(--ink2);font-family:inherit;font-weight:600;transition:all .14s}
 .nation-btn.local.on{background:var(--nbg);border-color:var(--navy2);color:var(--navy2);font-weight:700}
 .nation-btn.foreign.on{background:#FEF3C7;border-color:#F59E0B;color:#92400E;font-weight:700}
-/* ���� �ш큵�꾧툑 ���� */
+/* 占쏙옙占쏙옙 占싼덊겣占쎄쑨�� 占쏙옙占쏙옙 */
 .pohal-row{display:flex;align-items:center;gap:7px;padding:7px 10px;background:#F5F3FF;border:1.5px solid #DDD6FE;border-radius:10px}
 .pohal-label{font-size:10px;font-weight:700;color:#6D28D9;background:#EDE9FE;padding:3px 9px;border-radius:7px;white-space:nowrap}
 .att-btn{padding:6px 14px;font-size:11px;border:1.5px solid var(--bd2);border-radius:9px;cursor:pointer;background:#fff;color:var(--ink2);font-family:inherit;font-weight:600;transition:all .14s}
@@ -320,7 +320,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .att-btn.on-work{background:#D1FAE5;border-color:#10B981;color:#065F46;font-weight:700}
 .att-btn.on-annual{background:#D1FAE5;border-color:#10B981;color:#065F46;font-weight:700}
 .att-btn.on-absent{background:#FEE2E2;border-color:#EF4444;color:#991B1B;font-weight:700}
-/* ���� 踰뺤젙湲곗� 紐⑤떖 ���� */
+/* 占쏙옙占쏙옙 甕곕벡�숁묾怨쀯옙 筌뤴뫀�� 占쏙옙占쏙옙 */
 .law-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
 .law-modal{background:#fff;border-radius:22px;padding:30px 34px;max-width:580px;width:92%;box-shadow:var(--shadow-lg);max-height:88vh;overflow-y:auto}
 .law-modal-title{font-size:18px;font-weight:800;color:var(--ink);margin-bottom:4px;letter-spacing:-.3px}
@@ -333,14 +333,14 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .law-result{font-size:15px;font-weight:800;color:var(--teal)}
 .tip-btn{width:22px;height:22px;border:none;border-radius:50%;background:var(--abg);color:var(--amber);font-size:13px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;margin-left:4px;transition:all .14s}
 .tip-btn:hover{background:var(--amber);color:#fff;transform:scale(1.1)}
-/* ���� �댄똻 �앹뾽 ���� */
+/* 占쏙옙占쏙옙 占쎈똾�� 占쎌빘毓� 占쏙옙占쏙옙 */
 .tip-wrap{display:inline-flex;align-items:center}
 .tip-popup-bg{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
 .tip-popup{background:#fff;color:#0F172A;font-size:13px;line-height:1.75;padding:24px 26px;border-radius:20px;max-width:90vw;width:420px;max-height:85vh;overflow-y:auto;box-shadow:var(--shadow-lg);position:relative;white-space:normal;font-weight:400;animation:fadeIn .18s ease}
 .tip-popup-close{position:absolute;top:14px;right:16px;background:none;border:none;color:#94A3B8;font-size:22px;cursor:pointer;line-height:1;padding:0;transition:color .1s}
 .tip-popup-close:hover{color:var(--ink)}
 .tip-wrap .tip-btn{pointer-events:all}
-/* ���� �덉쟾援먯쑁 �쇱� ���� */
+/* 占쏙옙占쏙옙 占쎈뜆�얏뤃癒�몓 占쎌눘占� 占쏙옙占쏙옙 */
 .sf-chip{padding:3px 8px;border-radius:20px;font-size:9px;border:1px solid var(--bd2);background:var(--card);color:var(--ink3);cursor:pointer;transition:all .15s;user-select:none}
 .sf-chip-on{background:var(--navy);color:#fff;border-color:var(--navy)}
 .sf-fbtn{padding:4px 10px;border-radius:20px;font-size:9px;border:1px solid var(--bd2);background:var(--card);color:var(--ink3);cursor:pointer;transition:all .15s}
@@ -368,7 +368,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .sf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:16px}
 .sf-nav-badge{font-size:9px;background:var(--teal);color:#fff;border-radius:8px;padding:1px 6px;margin-left:3px;font-weight:700}
 
-/* ���� TBM 吏곸썝 �쒕챸 �ㅻ쾭�덉씠 ���� */
+/* 占쏙옙占쏙옙 TBM 筌욊낯�� 占쎌뮆梨� 占썬끇苡�옙�됱뵠 占쏙옙占쏙옙 */
 #tbm-sign-overlay{display:none;position:fixed;inset:0;background:#F1F5F9;z-index:99999;overflow-y:auto;}
 #tbm-sign-overlay.show{display:block;}
 #tbm-sign-overlay .hdr{background:linear-gradient(135deg,#0F2952,#1e3a8a,#1D4ED8);padding:18px 20px 16px;text-align:center;position:relative;}
@@ -431,7 +431,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 #tbm-sign-overlay .agree-item.checked{background:#F0FDF4;border-color:#86EFAC;}
 #tbm-sign-overlay .agree-chk{width:22px;height:22px;border:2px solid #CBD5E1;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;transition:all .15s;}
 #tbm-sign-overlay .agree-chk.on{background:#059669;border-color:#059669;}
-#tbm-sign-overlay .agree-chk.on::after{content:'��';color:#fff;font-size:13px;font-weight:700;}
+#tbm-sign-overlay .agree-chk.on::after{content:'占쏙옙';color:#fff;font-size:13px;font-weight:700;}
 #tbm-sign-overlay .agree-txt{flex:1;}
 #tbm-sign-overlay .agree-main{font-size:12px;font-weight:700;color:#0F172A;line-height:1.5;}
 #tbm-sign-overlay .agree-sub{font-size:10px;color:#94A3B8;margin-top:3px;line-height:1.5;}
@@ -458,7 +458,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 #tbm-sign-overlay .lang-ko .en-only{display:none!important;}
 #tbm-sign-overlay .step-page{display:none;}
 #tbm-sign-overlay .step-page.on{display:block;}
-/* ���� �덉쟾援먯쑁 �щ젰 紐⑤떖 ���� */
+/* 占쏙옙占쏙옙 占쎈뜆�얏뤃癒�몓 占싼됱젾 筌뤴뫀�� 占쏙옙占쏙옙 */
 .sf-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:10px}
 .sf-cal-day{text-align:center;padding:4px 2px;font-size:9px;font-weight:700;color:var(--ink3);letter-spacing:.3px}
 .sf-cal-day.su{color:#EF4444}.sf-cal-day.sa{color:#3B82F6}
@@ -472,7 +472,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .sf-cal-cnt{font-size:8px;font-weight:700;color:#1D4ED8;margin-top:2px}
 .sf-cal-dot{width:5px;height:5px;border-radius:50%;background:var(--teal);margin:3px auto 0}
 
-/* �먥븧 紐⑤컮�� 諛섏쓳�� �먥븧 */
+/* 占쎈�釉� 筌뤴뫀而�옙占� 獄쏆꼷�놂옙占� 占쎈�釉� */
 .mob-ham{display:none;align-items:center;justify-content:center;width:36px;height:36px;
   background:rgba(255,255,255,.12);border:none;border-radius:8px;cursor:pointer;flex-shrink:0;margin-right:6px}
 .mob-ham-bar{display:block;width:18px;height:2px;background:#fff;border-radius:2px;position:relative}
@@ -481,13 +481,13 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .mob-sb-dim{display:none;position:fixed;inset:0;top:54px;background:rgba(0,0,0,.4);z-index:199;-webkit-tap-highlight-color:transparent}
 
 @media(max-width:768px){
-  /* �� 而⑦뀒�대꼫 */
+  /* 占쏙옙 �뚢뫂�믭옙��瑗� */
   .app{height:100dvh;max-height:100dvh}
 
-  /* �꾨쾭嫄� �쒖떆 */
+  /* 占쎄쑬苡�쳞占� 占쎌뮇�� */
   .mob-ham{display:flex}
 
-  /* �ㅻ퉬寃뚯씠��: 媛�濡� �ㅽ겕濡� */
+  /* 占썬끇�у칰��뵠占쏙옙: 揶쏉옙嚥∽옙 占썬끋寃뺞에占� */
   .nav{padding:0 6px;height:46px;gap:0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
   .nav::-webkit-scrollbar{display:none}
   .nb{margin-right:6px;flex-shrink:0}
@@ -498,7 +498,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
   .nxa{padding:4px 8px;font-size:10px;white-space:nowrap;flex-shrink:0}
   .nav button[onclick*="authLogout"]{padding:4px 8px!important;font-size:10px!important;margin-right:4px!important;white-space:nowrap}
 
-  /* �ъ씠�쒕컮: �ㅻ쾭�덉씠 �щ씪�대뱶 */
+  /* 占싼딆뵠占쎌뮆而�: 占썬끇苡�옙�됱뵠 占싼됱뵬占쎈�諭� */
   .sb{display:none;position:fixed;top:46px;left:0;bottom:0;z-index:200;width:220px;
     box-shadow:4px 0 24px rgba(0,0,0,.18);animation:mobSlideIn .2s ease}
   .sb.mob-open{display:flex}
@@ -507,11 +507,11 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
   .mob-sb-dim.on{display:block}
   @keyframes mobSlideIn{from{transform:translateX(-100%)}to{transform:translateX(0)}}
 
-  /* 蹂몃Ц */
+  /* 癰귣챶揆 */
   .body{flex-direction:column}
   .main{width:100%}
 
-  /* �섏씠吏� 怨듯넻 */
+  /* 占쎌꼷�좑쭪占� �⑤벏�� */
   .pg.on{padding:0 8px 16px}
   .ph{padding:10px 0 0;gap:6px;flex-direction:column}
   .ph>div{width:100%}
@@ -521,29 +521,29 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
   .sticky-hd{padding:0 8px}
   .sticky-hd .ph{padding:8px 0 6px}
 
-  /* �좎쭨諛� */
+  /* 占쎌쥙彛②쳸占� */
   .dbar{margin-bottom:6px}
   .dl{padding:3px 5px;font-size:8px}
   .dv{padding:3px 5px;font-size:11px;min-width:22px}
   .dar{padding:3px 4px;font-size:12px}
 
-  /* �ㅻ뜑 踰꾪듉 異뺤냼 */
+  /* 占썬끇�� 甕곌쑵�� �곕벡�� */
   .btn{padding:5px 8px;font-size:10px}
   .btn-sm{padding:4px 7px;font-size:9px}
   .btn-xs{padding:3px 6px;font-size:9px}
 
-  /* �ㅽ꺈 移대뱶 */
+  /* 占썬끋爰� 燁삳�諭� */
   .sg5,.sg4{grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:8px}
   .sc{padding:8px 8px}
   .sc-v{font-size:14px}
   .sc-l{font-size:8px}
 
-  /* �닿쾶�쒓컙 */
+  /* 占쎈떯苡띰옙�볦퍢 */
   .bk-box{margin-bottom:6px}
   .bk-body{padding:6px 8px;gap:4px}
   .bk-hd{padding:7px 10px;font-size:10px}
 
-  /* 洹쇳깭 �뚯씠釉� (媛�濡쒖뒪�щ·) */
+  /* 域뱀눛源� 占쎈슣�좈뇡占� (揶쏉옙嚥≪뮇�わ옙�쨌) */
   .tw,.ov-w{border-radius:8px}
   .et{min-width:480px}
   .et thead th{padding:7px 3px;font-size:9px}
@@ -552,7 +552,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
   .note-inp{width:120px!important;min-width:0!important;max-width:200px!important;font-size:9px}
   .td-w,.td-nt,.td-ot,.td-hol{min-width:38px;font-size:9px}
 
-  /* 異쒗눜洹� �뚯씠釉�: 泥댄겕諛뺤뒪 �④린怨� �대쫫 �� 怨좎젙 */
+  /* �곗뮉�쒏뉩占� 占쎈슣�좈뇡占�: 筌ｋ똾寃뺠쳸類ㅻ뮞 占썩몿由경�⑨옙 占쎈�已� 占쏙옙 �⑥쥙�� */
   .et thead th:first-child,.et tbody td:first-child{display:none!important}
   .et col:first-child{width:0!important}
   .et thead th:nth-child(2){position:sticky!important;left:0!important;z-index:5!important;min-width:80px}
@@ -562,42 +562,42 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
   .et tbody tr.hol-row .td-nm{background:#FFFBF0!important}
   .et tbody tr.al-row .td-nm{background:#F0FDF7!important}
 
-  /* 洹쇳깭�꾪솴 �꾩껜�꾪솴��: 吏곸썝 �� 怨좎젙 */
+  /* 域뱀눛源�옙袁れ넺 占쎄쑴猿쒙옙袁れ넺占쏙옙: 筌욊낯�� 占쏙옙 �⑥쥙�� */
   .ov-t td.ec{position:sticky;left:0;z-index:2;background:#FAFAFA;min-width:70px}
 
-  /* 湲됱뿬 移대뱶 */
+  /* 疫뀀맩肉� 燁삳�諭� */
   .pg2{grid-template-columns:1fr;gap:8px}
 
-  /* 湲됱뿬 �⑷퀎 洹몃━�� (�몃씪�� 6�� �� 3��) */
+  /* 疫뀀맩肉� 占썩뫕�� 域밸챶�곻옙占� (占쎈챶�わ옙占� 6占쏙옙 占쏙옙 3占쏙옙) */
   #pay-total{grid-template-columns:repeat(3,1fr)!important;gap:6px!important;padding:8px 10px!important}
 
-  /* 湲됱뿬 �ㅽ봽�덈뱶�쒗듃 */
+  /* 疫뀀맩肉� 占썬끋遊쏙옙�덈굡占쎌뮉�� */
   .xl-wrap{border-radius:8px}
   .xl-t{min-width:800px}
 
-  /* 罹섎┛�� */
+  /* 筌�꼶�쏉옙占� */
   .cgrid{gap:1px}
   .cdc{min-height:40px;padding:2px;border-radius:5px}
   .cdn{font-size:7px}.cwk{font-size:6px}.cti{font-size:6px}
   .cdh{font-size:8px;padding:3px 0}
 
-  /* �곗감 �뚯씠釉� */
+  /* 占쎄퀣媛� 占쎈슣�좈뇡占� */
   #leave-table{min-width:700px!important}
   #leave-table th,#leave-table td{padding:6px 4px!important;font-size:10px!important}
-  /* �곗감: �대쫫 �� 怨좎젙 */
+  /* 占쎄퀣媛�: 占쎈�已� 占쏙옙 �⑥쥙�� */
   #leave-table thead th:first-child{position:sticky!important;left:0!important;z-index:11!important;background:var(--navy)!important}
   #leave-table tbody td:first-child{position:sticky!important;left:0!important;z-index:3!important;background:#fff!important}
 
-  /* �ㅼ젙 */
+  /* 占썬끉�� */
   .set-g{grid-template-columns:1fr;gap:8px}
   .sr{flex-wrap:wrap}
   .ni{width:56px}
 
-  /* 吏곸썝愿�由� */
+  /* 筌욊낯�앮꽴占썹뵳占� */
   .emt{table-layout:auto}
   .emt th,.emt td{font-size:10px;padding:5px 3px}
   .ei2{padding:3px 4px;font-size:10px}
-  /* 吏곸썝愿�由�: �쒕옒洹맞텻o �④린怨�, �щ쾲+�대쫫 怨좎젙 */
+  /* 筌욊낯�앮꽴占썹뵳占�: 占쎌뮆�믤뉩留욏끇o 占썩몿由경�⑨옙, 占싼됱쓰+占쎈�已� �⑥쥙�� */
   .emt thead th:nth-child(1),.emt tbody td:nth-child(1){display:none!important}
   .emt thead th:nth-child(2),.emt tbody td:nth-child(2){display:none!important}
   .emt thead th:nth-child(3){position:sticky!important;left:0!important;z-index:3!important;background:var(--navy)!important;min-width:80px!important;width:80px!important}
@@ -605,7 +605,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
   .emt thead th:nth-child(4){position:sticky!important;left:80px!important;z-index:3!important;background:var(--navy)!important;min-width:60px!important;border-right:2px solid rgba(255,255,255,.2)!important}
   .emt tbody td:nth-child(4){position:sticky!important;left:80px!important;z-index:2!important;background:#fff!important;border-right:2px solid var(--bd)!important}
   .emt tbody tr:hover td:nth-child(3),.emt tbody tr:hover td:nth-child(4){background:#F8FAFF!important}
-  /* 吏곸썝愿�由�: 媛� �� 理쒖냼 �덈퉬 �뺣낫 */
+  /* 筌욊낯�앮꽴占썹뵳占�: 揶쏉옙 占쏙옙 筌ㅼ뮇�� 占쎈뜄�� 占쎈베�� */
   .emt th,.emt td{min-width:60px!important;white-space:nowrap!important}
   .emt thead th:nth-child(5){min-width:60px!important}
   .emt thead th:nth-child(6){min-width:56px!important}
@@ -615,28 +615,28 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
   .emt thead th:nth-child(14){min-width:130px!important}
   .ei2{min-width:50px!important}
 
-  /* 洹쇰Т�뺥깭 */
+  /* 域뱀눖龜占쎈벤源� */
   .shift-list-header,.shift-emp-row{grid-template-columns:28px 80px 1fr 56px 70px 50px 1fr 60px!important;font-size:10px!important;padding:6px 8px!important}
   #shift-modal>div:first-child{width:calc(100vw - 20px)!important;max-width:480px!important}
 
-  /* �덉쟾援먯쑁 */
+  /* 占쎈뜆�얏뤃癒�몓 */
   #sf-page-daily{flex-direction:column!important;gap:10px!important}
   #sf-sidebar{width:100%!important;flex-shrink:1!important}
   .sf-grid{grid-template-columns:1fr;gap:8px}
   .sf-drop-inner{padding:24px 12px;gap:8px}
   .sf-icon{font-size:32px}
 
-  /* �� �뺣낫 (�몃씪�� 2�� �� 1��) */
+  /* 占쏙옙 占쎈베�� (占쎈챶�わ옙占� 2占쏙옙 占쏙옙 1占쏙옙) */
   .mi-wrap{grid-template-columns:1fr!important;gap:12px!important;padding:12px!important}
 
-  /* 紐⑤떖 */
+  /* 筌뤴뫀�� */
   .law-modal{width:96%;padding:16px 14px;border-radius:14px}
   .tip-popup{width:94%;max-width:340px;padding:16px 14px;border-radius:14px}
 
-  /* �꾪꽣諛� */
+  /* 占쎄쑵苑ｈ쳸占� */
   .pf-bar{flex-wrap:wrap;gap:3px}
 
-  /* 怨듯넻 �몃씪�� �ㅽ��� �ㅻ쾭�쇱씠�� */
+  /* �⑤벏�� 占쎈챶�わ옙占� 占썬끋占쏙옙占� 占썬끇苡�옙�깆뵠占쏙옙 */
   [style*="display:flex"][style*="gap:6px"]{flex-wrap:wrap!important}
   [style*="display:grid"][style*="repeat(6"]{grid-template-columns:repeat(3,1fr)!important}
   [style*="display:grid"][style*="repeat(4"]{grid-template-columns:repeat(2,1fr)!important}
@@ -655,7 +655,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
   #leave-table{min-width:580px!important}
 }
 
-/* �먥븧 釉붾줉 2 (湲곗〈 index.html line 673-851) �� �쒕뵫�섏씠吏� #lo �ㅼ퐫�� �먥븧 */
+/* 占쎈�釉� �됰뗀以� 2 (疫꿸퀣�� index.html line 673-851) 占쏙옙 占쎌뮆逾ワ옙�륁뵠筌욑옙 #lo 占썬끉�ワ옙占� 占쎈�釉� */
 #landing-overlay{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;color:#0F172A;-webkit-font-smoothing:antialiased;line-height:1.65}
 #landing-overlay *,#landing-overlay *::before,#landing-overlay *::after{box-sizing:border-box;margin:0;padding:0}
 #landing-overlay{--lp-primary:#1F3864;--lp-primary-light:#3A5A9E;--lp-primary-dark:#152548;--lp-accent:#2563EB;--lp-bg:#FFFFFF;--lp-bg-soft:#F8FAFC;--lp-bg-muted:#F1F5F9;--lp-ink:#0F172A;--lp-ink-2:#475569;--lp-ink-3:#94A3B8;--lp-line:#E2E8F0;--lp-line-2:#CBD5E1;--lp-success:#10B981;--lp-warning:#F59E0B;--lp-shadow-sm:0 1px 2px rgba(15,23,42,.04);--lp-shadow:0 4px 12px rgba(15,23,42,.06);--lp-shadow-lg:0 20px 40px -12px rgba(15,23,42,.12)}
@@ -786,7 +786,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 #landing-overlay .price-period{font-size:11.5px;color:var(--lp-ink-3);margin-bottom:18px}
 #landing-overlay .price-features{list-style:none;display:flex;flex-direction:column;gap:7px;margin-bottom:20px;flex:1}
 #landing-overlay .price-features li{font-size:12.5px;color:var(--lp-ink-2);padding-left:18px;position:relative;line-height:1.45}
-#landing-overlay .price-features li::before{content:'��';position:absolute;left:0;color:var(--lp-success);font-weight:700}
+#landing-overlay .price-features li::before{content:'占쏙옙';position:absolute;left:0;color:var(--lp-success);font-weight:700}
 #landing-overlay .price-cta{padding:10px;border-radius:8px;border:1.5px solid var(--lp-line);font-size:13px;font-weight:600;color:var(--lp-ink-2);text-align:center;transition:all .2s;cursor:pointer;width:100%}
 #landing-overlay .price-cta:hover{border-color:var(--lp-primary);color:var(--lp-primary)}
 #landing-overlay .price-card.featured .price-cta{background:var(--lp-primary);color:#fff;border-color:var(--lp-primary)}
@@ -834,7 +834,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 #landing-overlay .reveal{opacity:0;transform:translateY(20px);transition:opacity .7s,transform .7s}
 #landing-overlay .reveal.in{opacity:1;transform:none}
 
-/* �먥븧 釉붾줉 3 (湲곗〈 index.html line 1166-1201) �� �몄쬆 �ㅻ쾭�덉씠 �먥븧 */
+/* 占쎈�釉� �됰뗀以� 3 (疫꿸퀣�� index.html line 1166-1201) 占쏙옙 占쎈챷弛� 占썬끇苡�옙�됱뵠 占쎈�釉� */
 .auth-input{
   width:100%;padding:13px 15px;border-radius:12px;
   background:rgba(255,255,255,.07);
@@ -870,7 +870,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
   background-repeat:no-repeat;background-position:right 14px center;
 }
 
-/* �먥븧 釉붾줉 4 (湲곗〈 index.html line 1300-1355) �� 愿�由ъ옄 �ㅻ쾭�덉씠 �먥븧 */
+/* 占쎈�釉� �됰뗀以� 4 (疫꿸퀣�� index.html line 1300-1355) 占쏙옙 �울옙�귐딆쁽 占썬끇苡�옙�됱뵠 占쎈�釉� */
 .adm-sb-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:11px;cursor:pointer;font-size:13px;font-weight:500;color:rgba(240,244,255,.45);margin-bottom:2px;transition:all .15s;border:1px solid transparent}
 .adm-sb-item:hover{background:rgba(255,255,255,.05);color:rgba(240,244,255,.8)}
 .adm-sb-item.on{background:rgba(91,94,255,.18);color:#fff;font-weight:700;border-color:rgba(91,94,255,.3)}
@@ -883,7 +883,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .adm-del-btn:hover{background:rgba(239,68,68,.2);border-color:rgba(239,68,68,.4);color:#fff}
 .adm-stat{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:22px;transition:all .2s}
 .adm-stat:hover{background:rgba(255,255,255,.07);transform:translateY(-2px)}
-/* ���� 怨듯넻 �꾪꽣諛� ���� */
+/* 占쏙옙占쏙옙 �⑤벏�� 占쎄쑵苑ｈ쳸占� 占쏙옙占쏙옙 */
 .filter-bar{display:flex;align-items:center;gap:6px;padding:7px 12px;border-bottom:1px solid var(--bd);flex-wrap:wrap;background:var(--surf);}
 .filter-group{display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:3px;}
 .fb{padding:4px 10px;border-radius:6px;font-size:11px;border:none;cursor:pointer;background:transparent;color:var(--ink3);font-family:inherit;font-weight:500;}
@@ -895,7 +895,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .filter-search input{height:28px;border:1px solid var(--bd2);border-radius:6px;padding:0 8px 0 24px;font-size:12px;font-family:inherit;background:var(--card);color:var(--ink);width:130px;}
 .filter-search input:focus{outline:none;border-color:var(--navy2);}
 .filter-search .fs-icon{position:absolute;left:7px;top:50%;transform:translateY(-50%);font-size:11px;opacity:.4;pointer-events:none;}
-/* ���� 洹쇰Т�뺥깭 ���� */
+/* 占쏙옙占쏙옙 域뱀눖龜占쎈벤源� 占쏙옙占쏙옙 */
 .shift-ftab{padding:4px 10px;border-radius:100px;font-size:11px;border:1px solid var(--bd2);cursor:pointer;background:transparent;color:var(--ink3);font-family:inherit;}
 .shift-ftab.on{background:var(--navy);color:#fff;border-color:var(--navy);}
 .shift-list-header{display:grid;grid-template-columns:36px 100px 1fr 80px 100px 70px 1fr 80px;padding:7px 12px;background:var(--surf);border-bottom:1px solid var(--bd);font-size:11px;color:var(--ink3);font-weight:600;}
@@ -917,7 +917,7 @@ body{font-family:'Inter','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-s
 .shift-btn-primary{padding:7px 16px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;}
 .shift-btn-ghost{padding:7px 16px;background:transparent;color:var(--navy2);border:1px solid var(--navy2);border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;}
 .shift-unreg{font-size:11px;color:#e97d2b;background:#fff8f0;border:1px solid #e97d2b;border-radius:4px;padding:2px 7px;}
-/* ���� �ъ씠�쒕컮 �꾪꽣 踰꾪듉 ���� */
+/* 占쏙옙占쏙옙 占싼딆뵠占쎌뮆而� 占쎄쑵苑� 甕곌쑵�� 占쏙옙占쏙옙 */
 .sb-fb{padding:2px 7px;border-radius:5px;font-size:10px;border:1px solid var(--bd2);cursor:pointer;background:transparent;color:var(--ink3);font-family:inherit;}
 .sb-fb:hover{background:var(--surf);}
 .sb-fb.on{background:var(--navy);color:#fff;border-color:var(--navy);}
