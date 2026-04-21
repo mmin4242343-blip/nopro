@@ -893,6 +893,31 @@ function closeMobSb(){
   document.querySelector('.mob-sb-dim').classList.remove('on');
 }
 
+// ══ 데스크톱 사이드바 접기/펴기 ══
+function toggleSb(){
+  if(window.innerWidth <= 768) return; // 모바일에서는 무시 (햄버거 토글 사용)
+  const sb = document.querySelector('.sb');
+  if(!sb) return;
+  const nowCollapsed = !sb.classList.contains('collapsed');
+  sb.classList.toggle('collapsed', nowCollapsed);
+  try { localStorage.setItem('npm5_sb_collapsed', nowCollapsed ? '1' : '0'); } catch(e){}
+  const ic = sb.querySelector('.sb-toggle-ic');
+  if(ic) ic.textContent = nowCollapsed ? '▶' : '◀';
+}
+function initSbCollapsed(){
+  if(window.innerWidth <= 768) return; // 모바일 제외
+  try {
+    if(localStorage.getItem('npm5_sb_collapsed') === '1'){
+      const sb = document.querySelector('.sb');
+      if(sb){
+        sb.classList.add('collapsed');
+        const ic = sb.querySelector('.sb-toggle-ic');
+        if(ic) ic.textContent = '▶';
+      }
+    }
+  } catch(e){}
+}
+
 // 페이지
 // ══════════════════════════════════════
 const PAGES=['daily','monthly','payroll','leave','company','emps','shift','safety','folder','myinfo','settings'];
@@ -8176,6 +8201,7 @@ function enterApp(company){
   const badge=document.getElementById('company-name-badge');
   if(badge&&company){badge.textContent=company;badge.style.display='inline';}
   document.querySelector('.app').style.display='flex';
+  initSbCollapsed(); // 사이드바 접힘 상태 복원
   // 데이터 로드 후 전체 화면 갱신
   setTimeout(()=>{
     try{ sortEMPS(); }catch(e){} // 앱 진입 시 정렬
