@@ -97,6 +97,46 @@ const PH=(()=>{const all={};for(let y=2024;y<=2040;y++)Object.assign(all,_genPH(
   all['2024-04-10']='총선';
   return all;
 })();
+
+// ══ 공휴일 자동 동기화 (한국천문연구원 특일정보 API, 서버 프록시) ══
+// 기존 _genPH 폴백은 유지되며, API 성공 시 해당 연도 공휴일이 최신 데이터로 교체됨.
+// 대체공휴일·선거일·임시공휴일 등 누락분을 자동 반영.
+async function loadHolidaysForYear(year){
+  const cacheKey = `npm5_ph_${year}`;
+  const TTL = 7 * 24 * 60 * 60 * 1000; // 7일
+  try {
+    const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+    if (cached && cached.ts && (Date.now() - cached.ts < TTL) && cached.data){
+      _mergeHolidays(year, cached.data);
+      return true;
+    }
+  } catch {}
+  try {
+    const res = await fetch(`/api/holidays-fetch?year=${year}`, { credentials: 'include' });
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length > 0){
+      _mergeHolidays(year, data);
+      try { localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data })); } catch {}
+      return true;
+    }
+  } catch(e) { /* 네트워크 실패 시 폴백 유지 */ }
+  return false;
+}
+function _mergeHolidays(year, data){
+  const prefix = String(year) + '-';
+  Object.keys(PH).forEach(k => { if (k.startsWith(prefix)) delete PH[k]; });
+  Object.assign(PH, data);
+}
+function loadHolidaysAround(baseYear){
+  Promise.all([baseYear-1, baseYear, baseYear+1].map(y => loadHolidaysForYear(y))).then(updated => {
+    if (updated.some(Boolean)){
+      try { if (typeof renderTable === 'function') renderTable(); } catch {}
+      try { if (typeof renderMonthly === 'function') renderMonthly(); } catch {}
+    }
+  });
+}
+
 const pad=n=>String(n).padStart(2,'0');
 function phKey(y,m,d){return`${y}-${pad(m)}-${pad(d)}`;}
 function getPhName(y,m,d){return PH[phKey(y,m,d)]||null;}
@@ -8248,6 +8288,7 @@ function enterApp(company){
   if(badge&&company){badge.textContent=company;badge.style.display='inline';}
   document.querySelector('.app').style.display='flex';
   initSbCollapsed(); // 사이드바 접힘 상태 복원
+  loadHolidaysAround(new Date().getFullYear()); // 공휴일 최신화 (작년·올해·내년)
   // 데이터 로드 후 전체 화면 갱신
   setTimeout(()=>{
     try{ sortEMPS(); }catch(e){} // 앱 진입 시 정렬
