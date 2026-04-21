@@ -14,7 +14,7 @@ async function apiFetch(endpoint, method='POST', body=null){
   const text=await res.text();
   let data;
   try{data=JSON.parse(text);}catch(e){throw new Error('서버 응답 오류 (status:'+res.status+')');}
-  const isAuthEndpoint=endpoint.startsWith('/auth-login')||endpoint.startsWith('/auth-signup');
+  const isAuthEndpoint=endpoint.startsWith('/auth-login')||endpoint.startsWith('/auth-signup')||endpoint.startsWith('/auth-verify');
   if(res.status===401 && !isAuthEndpoint){authLogout();throw new Error('세션이 만료되었습니다');}
   if(res.status===429) throw new Error(data.error||'요청이 너무 많습니다. 잠시 후 다시 시도해주세요.');
   if(!res.ok) throw new Error(data.error||'서버 오류');
@@ -8125,6 +8125,7 @@ async function doAuthLogin(){
       await sbLoadAll(res.session.companyId);
       enterApp(res.session.company);
     }
+    if(typeof startAuthRefreshTimer==='function') startAuthRefreshTimer();
   } catch(e){
     errEl.textContent=e.message||'로그인 실패';
     errEl.style.display='block';
@@ -8158,6 +8159,7 @@ async function doAuthSignup(){
     await sbSaveAll(res.session.companyId);
     admSendNotify('signup', {company, name, email, phone, size});
     enterApp(company);
+    if(typeof startAuthRefreshTimer==='function') startAuthRefreshTimer();
   } catch(e){
     errEl.textContent=e.message||'회원가입 실패';
     errEl.style.display='block';
@@ -8202,6 +8204,7 @@ function admLogout(){
 }
 
 function authLogout(){
+  if(typeof stopAuthRefreshTimer==='function') stopAuthRefreshTimer();
   apiFetch('/auth-logout','POST').catch(()=>{});
   localStorage.removeItem('nopro_session');
   localStorage.removeItem('nopro_jwt'); // 레거시 토큰 정리
@@ -8477,6 +8480,7 @@ async function admDeleteUser(id){
       await sbLoadAll(data.session.companyId);
       enterApp(data.session.company||'');
     }
+    startAuthRefreshTimer();
   } catch(e){
     console.warn('initAuth 실패:', e.message);
     localStorage.removeItem('nopro_session');
@@ -8484,6 +8488,29 @@ async function admDeleteUser(id){
     showLanding();
   }
 })();
+
+// ── 주기적 토큰 갱신 (쿠키 수명 2h, 30분 전부터 서버가 Set-Cookie로 갱신) ──
+let _authRefreshTimer = null;
+function startAuthRefreshTimer(){
+  if(_authRefreshTimer) clearInterval(_authRefreshTimer);
+  _authRefreshTimer = setInterval(async ()=>{
+    try{
+      const res = await fetch('/api/auth-verify',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        credentials:'include'
+      });
+      if(!res.ok && res.status===401){
+        // 쿠키 만료 — 타이머 정지 후 로그아웃
+        stopAuthRefreshTimer();
+        authLogout();
+      }
+    }catch(e){ /* 네트워크 일시 장애는 무시 */ }
+  }, 20*60*1000); // 20분마다
+}
+function stopAuthRefreshTimer(){
+  if(_authRefreshTimer){ clearInterval(_authRefreshTimer); _authRefreshTimer=null; }
+}
 
 function showLanding(){
   document.getElementById('landing-overlay').style.display='block';
