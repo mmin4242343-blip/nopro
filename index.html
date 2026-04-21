@@ -5,96 +5,165 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>노무관리 Pro v5</title>
 <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/app.css?v=1">
+<link rel="stylesheet" href="/css/app.css?v=2">
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js" integrity="sha384-OUW9euuUyxyHcAhTqbhI+Iyb8LMssXt/cpz0yXhs9UWG2/R/uaWdakx/4cfww7Vb" crossorigin="anonymous"></script>
 </head>
 <body>
 
 
 
-<!-- ══ 랜딩페이지 ══ -->
+<!-- ══ 랜딩페이지 — flex.team inspired · Apple Monochrome ══ -->
 <div id="landing-overlay" style="position:fixed;inset:0;z-index:99997;display:block;overflow-y:auto;overflow-x:hidden;background:#fff;">
 
-<nav class="nav">
+<nav class="lp-nav">
   <div class="wrap nav-inner">
     <a class="logo" onclick="event.preventDefault();window.scrollTo({top:0,behavior:'smooth'})">nopro</a>
     <div class="nav-links">
-      <a onclick="document.getElementById('lp-showcase').scrollIntoView({behavior:'smooth'})">서비스 화면</a>
-      <a onclick="document.getElementById('lp-features').scrollIntoView({behavior:'smooth'})">기능</a>
-      <a onclick="document.getElementById('lp-safety').scrollIntoView({behavior:'smooth'})">안전관리</a>
-      <a onclick="document.getElementById('lp-how').scrollIntoView({behavior:'smooth'})">사용방법</a>
+      <a onclick="document.getElementById('lp-why').scrollIntoView({behavior:'smooth'})">왜 노프로</a>
+      <a onclick="document.getElementById('lp-features').scrollIntoView({behavior:'smooth'})">제품</a>
+      <a onclick="document.getElementById('lp-showcase').scrollIntoView({behavior:'smooth'})">화면</a>
       <a onclick="document.getElementById('lp-pricing').scrollIntoView({behavior:'smooth'})">요금제</a>
-      <a onclick="document.getElementById('lp-contact').scrollIntoView({behavior:'smooth'})">문의</a>
+      <a onclick="document.getElementById('lp-contact').scrollIntoView({behavior:'smooth'})">도입 문의</a>
     </div>
     <div class="nav-cta">
       <button class="btn btn-ghost" onclick="showAuthModal('login')">로그인</button>
-      <button class="btn btn-primary" onclick="showAuthModal()">무료로 시작하기 →</button>
+      <button class="btn btn-primary" onclick="showAuthModal()">무료로 시작하기</button>
     </div>
   </div>
 </nav>
 
+<!-- HERO -->
 <section class="hero">
   <div class="wrap hero-inner">
-    <span class="hero-tag reveal">소규모 사업장을 위한 근태·급여·안전관리 플랫폼</span>
-    <h1 class="reveal">복잡한 근태관리,<br><span class="highlight">노프로로 해결하세요</span></h1>
-    <p class="hero-sub reveal">앱도 엑셀도 아닌, 노프로의 완벽한 솔루션
+    <span class="hero-tag reveal">Human Relations, 공정처럼</span>
+    <h1 class="reveal">
+      복잡한 HR 업무를<br>
+      <span class="highlight">한 화면에서</span> 해결합니다
+    </h1>
+    <p class="hero-sub reveal">
+      노프로는 분산된 근태·급여·안전관리 업무를 표준 공정으로 묶는 웹 플랫폼입니다.<br>
+      현장 출퇴근부터 급여 정산 근거까지, 사람이 기억하던 일을 시스템이 대신합니다.
     </p>
-
-    <div class="intro-cards">
-      <div class="intro-card reveal">
-        <span class="intro-emoji">📱</span>
-        <p><strong>지문인식·앱 방식</strong>은 지각, 조기퇴근, 외출 등 예외 상황에 대응하지 못해 변수가 너무 많습니다.</p>
-      </div>
-      <div class="intro-card reveal">
-        <span class="intro-emoji">📊</span>
-        <p><strong>엑셀 수기 입력</strong>은 야간·연장수당 계산이 번거롭고, 수식 오류로 급여 실수가 잦습니다.</p>
-      </div>
-      <div class="intro-card highlight reveal">
-        <span class="intro-emoji">✅</span>
-        <p><strong>노프로</strong>는 관리자가 출퇴근만 입력하면 모든 수당을 자동 계산합니다. 3분이면 월급 정산 완료.</p>
-      </div>
-    </div>
-
     <div class="hero-ctas reveal">
-      <button class="btn btn-primary btn-lg" onclick="showAuthModal()">무료로 시작하기 →</button>
-      <button class="btn btn-outline btn-lg" onclick="document.getElementById('lp-showcase').scrollIntoView({behavior:'smooth'})">실제 화면 보기</button>
+      <button class="btn btn-primary btn-lg" onclick="showAuthModal()">무료로 시작하기</button>
+      <button class="btn btn-outline btn-lg" onclick="document.getElementById('lp-showcase').scrollIntoView({behavior:'smooth'})">제품 둘러보기</button>
     </div>
+    <p class="hero-note reveal">소규모 사업장 · 현장 중심 조직에 특화된 근태·노무 운영</p>
   </div>
 </section>
 
+<!-- STATS -->
 <section class="stats">
   <div class="wrap">
     <div class="stats-grid">
-      <div><div class="stat-num">100+</div><div class="stat-label">사용 중인 기업</div></div>
-      <div><div class="stat-num">29+</div><div class="stat-label">법적 검증 케이스</div></div>
-      <div><div class="stat-num">3분</div><div class="stat-label">월급 정산 완료</div></div>
-      <div><div class="stat-num">100%</div><div class="stat-label">법적 기준 준수</div></div>
+      <div class="reveal"><div class="stat-num">100+</div><div class="stat-label">사용 중인 기업</div></div>
+      <div class="reveal"><div class="stat-num">29</div><div class="stat-label">법적 검증 케이스</div></div>
+      <div class="reveal"><div class="stat-num">3분</div><div class="stat-label">월급 정산 완료</div></div>
+      <div class="reveal"><div class="stat-num">100%</div><div class="stat-label">법적 기준 준수</div></div>
     </div>
   </div>
 </section>
 
+<!-- WHY -->
+<section class="why" id="lp-why">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-label reveal">Why nopro</span>
+      <h2 class="section-title reveal">데이터가 흐를 때,<br>HR은 더 가벼워집니다</h2>
+      <p class="section-desc reveal">
+        엑셀·메신저·개인 기억에 흩어진 근태 업무를 웹 한 화면으로 이관합니다.<br>
+        사람은 예외만 처리하고, 시스템은 대량·고빈도 업무를 흡수합니다.
+      </p>
+    </div>
+    <div class="why-grid">
+      <div class="why-card reveal">
+        <div class="why-num">01</div>
+        <h3>지문인식·앱으로는<br>부족합니다</h3>
+        <p>지각, 조기퇴근, 외출 등 현장의 예외 상황에 대응하지 못합니다. 결국 수작업이 남습니다.</p>
+      </div>
+      <div class="why-card reveal">
+        <div class="why-num">02</div>
+        <h3>엑셀 수기 입력은<br>위험합니다</h3>
+        <p>야간·연장수당 계산 수식 오류로 급여 실수가 잦습니다. 법정 기준 맞추기 어렵습니다.</p>
+      </div>
+      <div class="why-card reveal highlight">
+        <div class="why-num">03</div>
+        <h3>노프로는 입력만으로<br>끝납니다</h3>
+        <p>관리자가 출퇴근만 입력하면 모든 수당이 자동 계산됩니다. 3분이면 월급 정산이 끝납니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES (Pillars) -->
+<section class="features" id="lp-features">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-label reveal">Product</span>
+      <h2 class="section-title reveal">세 가지 축으로<br>노무 업무를 굴립니다</h2>
+      <p class="section-desc reveal">근태 수집부터 급여 정산, 안전관리까지. 노프로가 운영의 실행층을 받습니다.</p>
+    </div>
+    <div class="pillars">
+      <article class="pillar reveal">
+        <span class="pillar-tag">현장 근태</span>
+        <h3>교대·야간·휴게까지<br>라인 단위로</h3>
+        <p>복잡한 근무 패턴도 규칙으로 고정합니다. 관리자는 승인과 예외 처리에만 집중합니다.</p>
+        <ul>
+          <li>다중 근무지 · 다중 조직</li>
+          <li>근무 스케줄 템플릿</li>
+          <li>주·야간 교대 자동 적용</li>
+          <li>모바일·키오스크 연계</li>
+        </ul>
+      </article>
+      <article class="pillar reveal">
+        <span class="pillar-tag">급여 정산</span>
+        <h3>근로기준법을<br>코드가 지킵니다</h3>
+        <p>근태 변경 즉시 급여에 반영됩니다. 29가지 법적 케이스를 모두 검증했습니다.</p>
+        <ul>
+          <li>야간·연장·휴일 수당 자동 계산</li>
+          <li>통상임금제·시급제·포괄임금제</li>
+          <li>주휴수당·연차수당 자동 반영</li>
+          <li>엑셀 급여대장 즉시 출력</li>
+        </ul>
+      </article>
+      <article class="pillar reveal">
+        <span class="pillar-tag">안전관리</span>
+        <h3>TBM 서명,<br>모바일 한 번으로</h3>
+        <p>안전교육 확인서를 종이로 출력하던 시대는 끝났습니다. 자동으로 기록이 남습니다.</p>
+        <ul>
+          <li>모바일 전자서명 · 링크 한 번에</li>
+          <li>감독관 점검 대비 자동 아카이빙</li>
+          <li>전자문서법 제4조 법적 효력</li>
+          <li>외국인 근로자 영어 모드 지원</li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- SHOWCASE -->
 <section class="showcase" id="lp-showcase">
   <div class="wrap">
     <div class="section-head">
-      <span class="section-label reveal">📱 서비스 화면</span>
+      <span class="section-label reveal">Interface</span>
       <h2 class="section-title reveal">실제 노프로 화면</h2>
       <p class="section-desc reveal">출퇴근 시간만 입력하면 야간·연장·휴일 수당이 자동 계산됩니다.</p>
     </div>
 
     <div class="showcase-tabs reveal">
-      <button class="showcase-tab active" data-tab="0">📝 출퇴근 기록</button>
-      <button class="showcase-tab" data-tab="1">📅 근태 현황</button>
-      <button class="showcase-tab" data-tab="2">🗓 근태 캘린더</button>
-      <button class="showcase-tab" data-tab="3">💰 급여 관리</button>
-      <button class="showcase-tab" data-tab="4">📋 급여 상세 명세</button>
-      <button class="showcase-tab" data-tab="5">⏰ 연차 관리</button>
-      <button class="showcase-tab" data-tab="6">🛡️ 안전교육</button>
+      <button class="showcase-tab active" data-tab="0">출퇴근 기록</button>
+      <button class="showcase-tab" data-tab="1">근태 현황</button>
+      <button class="showcase-tab" data-tab="2">근태 캘린더</button>
+      <button class="showcase-tab" data-tab="3">급여 관리</button>
+      <button class="showcase-tab" data-tab="4">급여 상세</button>
+      <button class="showcase-tab" data-tab="5">연차 관리</button>
+      <button class="showcase-tab" data-tab="6">안전교육</button>
     </div>
 
     <div class="showcase-frame reveal">
       <div class="showcase-bar">
         <div class="showcase-dots"><span></span><span></span><span></span></div>
-        <span>noprohr.netlify.app · 노무관리 Pro v5</span>
+        <span>noprohr.netlify.app</span>
       </div>
       <div class="showcase-body">
         <img id="showcaseImg" src="images/landing/1-clock.png" alt="출퇴근 기록 입력" loading="lazy">
@@ -102,164 +171,167 @@
     </div>
 
     <div class="showcase-caption reveal">
-      <div class="showcase-caption-emoji" id="capEmoji">📝</div>
       <h4 id="capTitle">출퇴근 기록 입력</h4>
       <p id="capDesc">출퇴근 시간만 입력하면 야간·연장·휴일 수당이 자동 계산됩니다.</p>
     </div>
   </div>
 </section>
 
-<section class="features" id="lp-features">
-  <div class="wrap">
-    <div class="section-head">
-      <span class="section-label reveal">⚡ 핵심 기능</span>
-      <h2 class="section-title reveal">필요한 기능만, 군더더기 없이</h2>
-      <p class="section-desc reveal">관리자가 출퇴근 시간을 입력하면, 나머지는 노프로가 알아서 합니다.</p>
-    </div>
-    <div class="features-grid">
-      <div class="feat-card reveal"><span class="feat-emoji">💰</span><h3 class="feat-title">급여 자동 계산</h3><p class="feat-desc">야간·연장·휴일 수당을 근로기준법 기준으로 자동 계산.</p></div>
-      <div class="feat-card reveal"><span class="feat-emoji">🕐</span><h3 class="feat-title">출퇴근 기록</h3><p class="feat-desc">관리자 직접 입력으로 모든 예외 상황까지 정확히 처리.</p></div>
-      <div class="feat-card reveal"><span class="feat-emoji">📅</span><h3 class="feat-title">연차 관리</h3><p class="feat-desc">입사일 기준 연차 자동 생성, 잔여 연차 실시간 확인.</p></div>
-      <div class="feat-card reveal"><span class="feat-emoji">📋</span><h3 class="feat-title">상세 명세표</h3><p class="feat-desc">직원별 급여 명세를 항목별 상세 조회.</p></div>
-      <div class="feat-card reveal"><span class="feat-emoji">⚖️</span><h3 class="feat-title">법적 기준 준수</h3><p class="feat-desc">근로기준법 제56조 기준 29가지 케이스 전부 검증.</p></div>
-      <div class="feat-card reveal"><span class="feat-emoji">☁️</span><h3 class="feat-title">클라우드 동기화</h3><p class="feat-desc">설치 없이 브라우저에서 바로. 어디서든 접근 가능.</p></div>
-      <div class="feat-card reveal"><span class="feat-emoji">📊</span><h3 class="feat-title">엑셀 출력</h3><p class="feat-desc">월별 급여 데이터를 엑셀로 즉시 출력.</p></div>
-      <div class="feat-card reveal"><span class="feat-emoji">🔒</span><h3 class="feat-title">데이터 보안</h3><p class="feat-desc">직원 급여 정보는 암호화 저장.</p></div>
-    </div>
-  </div>
-</section>
-
-<section class="safety" id="lp-safety">
-  <div class="wrap safety-inner">
-    <div class="section-head">
-      <div class="safety-badge-row reveal">
-        <span class="safety-badge"><span class="pulse"></span>NEW</span>
-        <span class="safety-badge free">🎁 베타 기간 무료</span>
-      </div>
-      <span class="section-label reveal" style="color:#059669">🛡️ 안전관리 전자서명</span>
-      <h2 class="section-title reveal">TBM 서명, 이제 <span style="color:#059669">모바일 한 번</span>으로</h2>
-      <p class="section-desc reveal">안전교육 확인서·TBM 일지를 종이로 출력하고 도장 찍던 시대는 끝.<br>직원이 모바일에서 서명하고, 감독관 점검용 자료는 자동 아카이빙됩니다.</p>
-    </div>
-    <div class="safety-content">
-      <div class="safety-left">
-        <div class="safety-list">
-          <div class="safety-item reveal"><div class="safety-check">✓</div><div class="safety-item-text"><div class="safety-item-title">모바일 서명 · QR·링크 한 번에 전송</div><div class="safety-item-desc">단톡방에 링크 붙이면 직원이 바로 서명. 외국인 근로자는 영어 모드 지원.</div></div></div>
-          <div class="safety-item reveal"><div class="safety-check">✓</div><div class="safety-item-text"><div class="safety-item-title">감독관 점검 대비 자동 아카이빙</div><div class="safety-item-desc">서명일시·서명자 모두 기록. 엑셀/PDF 일괄 다운로드로 제출 자료 즉시 준비.</div></div></div>
-          <div class="safety-item reveal"><div class="safety-check">✓</div><div class="safety-item-text"><div class="safety-item-title">전자문서법 제4조 법적 효력</div><div class="safety-item-desc">종이 서명과 동일한 효력. 산업안전보건법 제29조 교육기록 관리 활용 가능.</div></div></div>
-          <div class="safety-item reveal"><div class="safety-check">✓</div><div class="safety-item-text"><div class="safety-item-title">근태·교육 데이터 연동</div><div class="safety-item-desc">누가 언제 출근했고, 언제 교육받았는지 한 번에 파악. 이중 입력 불필요.</div></div></div>
-        </div>
-        <div class="safety-notice reveal"><strong>🎁 베타 혜택</strong> — 안전관리 전자서명 기능은 <strong>현재 무료</strong>로 제공되며, 정식 출시 후 유료 전환될 예정입니다. 지금 가입하면 기존 플랜 가격 그대로 연장 혜택을 받으실 수 있습니다.</div>
-      </div>
-      <div class="safety-img reveal">
-        <img src="images/landing/7-safety.png" alt="안전교육 일지" loading="lazy">
-      </div>
-    </div>
-  </div>
-</section>
-
+<!-- HOW -->
 <section class="how" id="lp-how">
   <div class="wrap">
     <div class="section-head">
-      <span class="section-label reveal">📖 사용방법</span>
-      <h2 class="section-title reveal">3단계로 바로 시작하세요</h2>
+      <span class="section-label reveal">Onboarding</span>
+      <h2 class="section-title reveal">도입은 짧게,<br>운영은 길게</h2>
       <p class="section-desc reveal">회원가입부터 첫 급여 정산까지 5분이면 충분합니다.</p>
     </div>
     <div class="how-grid">
-      <div class="how-step reveal"><div class="how-num">1</div><h3 class="how-title">회원가입</h3><p class="how-desc">이메일과 회사 정보로 30초 만에 가입 완료.</p></div>
-      <div class="how-step reveal"><div class="how-num">2</div><h3 class="how-title">직원 등록</h3><p class="how-desc">시급제·통상임금제·포괄임금제 모두 지원. 엑셀 일괄 등록도 가능.</p></div>
-      <div class="how-step reveal"><div class="how-num">3</div><h3 class="how-title">급여 정산</h3><p class="how-desc">출퇴근 시간 입력하면 수당이 자동 계산됩니다.</p></div>
+      <div class="how-step reveal">
+        <div class="how-num">01</div>
+        <h3>회원가입</h3>
+        <p>이메일과 회사 정보로 30초 만에 가입이 완료됩니다.</p>
+      </div>
+      <div class="how-step reveal">
+        <div class="how-num">02</div>
+        <h3>직원 등록</h3>
+        <p>시급제·통상임금제·포괄임금제 모두 지원. 엑셀 일괄 등록도 가능합니다.</p>
+      </div>
+      <div class="how-step reveal">
+        <div class="how-num">03</div>
+        <h3>급여 정산</h3>
+        <p>출퇴근 시간만 입력하면 수당이 자동 계산됩니다. 월말 업무가 3분으로 줄어듭니다.</p>
+      </div>
     </div>
   </div>
 </section>
 
+<!-- COMPARE -->
 <section class="compare">
   <div class="wrap">
     <div class="section-head">
-      <span class="section-label reveal">🔍 비교</span>
-      <h2 class="section-title reveal">왜 노프로인가요?</h2>
+      <span class="section-label reveal">Comparison</span>
+      <h2 class="section-title reveal">왜 노프로인가요</h2>
       <p class="section-desc reveal">지문인식 앱과 엑셀 사이, 딱 필요한 것만 갖춘 솔루션입니다.</p>
     </div>
     <div class="compare-table reveal">
       <table>
-        <thead><tr><th>기능 비교</th><th class="hot">✦ 노프로</th><th>지문인식 앱</th><th>엑셀 수기</th></tr></thead>
+        <thead><tr><th>기능</th><th class="hot">노프로</th><th>지문인식 앱</th><th>엑셀 수기</th></tr></thead>
         <tbody>
-          <tr><td>야간·연장·휴일 자동 계산</td><td class="on hot">✓ 완전 자동</td><td class="mid">△ 일부</td><td class="off">✕ 수동</td></tr>
-          <tr><td>예외 상황 처리</td><td class="on hot">✓ 완벽</td><td class="off">✕ 불가</td><td class="mid">△ 번거로움</td></tr>
-          <tr><td>설치 없이 사용</td><td class="on hot">✓ 브라우저</td><td class="off">✕ 설치 필요</td><td class="on">✓ 가능</td></tr>
-          <tr><td>안전관리 전자서명</td><td class="on hot">✓ 지원 (무료)</td><td class="off">✕ 불가</td><td class="off">✕ 불가</td></tr>
-          <tr><td>엑셀 출력</td><td class="on hot">✓ 즉시</td><td class="mid">△ 제한적</td><td class="on">✓ 가능</td></tr>
-          <tr><td>월 비용</td><td class="on hot">✓ 5만원~</td><td class="off">✕ 수십만원~</td><td class="on">✓ 무료</td></tr>
+          <tr><td>야간·연장·휴일 자동 계산</td><td class="on hot">완전 자동</td><td class="mid">일부</td><td class="off">수동</td></tr>
+          <tr><td>예외 상황 처리</td><td class="on hot">완벽 대응</td><td class="off">불가</td><td class="mid">번거로움</td></tr>
+          <tr><td>설치 없이 사용</td><td class="on hot">브라우저</td><td class="off">설치 필요</td><td class="on">가능</td></tr>
+          <tr><td>안전관리 전자서명</td><td class="on hot">지원 (무료)</td><td class="off">불가</td><td class="off">불가</td></tr>
+          <tr><td>엑셀 출력</td><td class="on hot">즉시</td><td class="mid">제한적</td><td class="on">가능</td></tr>
+          <tr><td>월 비용</td><td class="on hot">₩50,000~</td><td class="off">수십만원~</td><td class="on">무료</td></tr>
         </tbody>
       </table>
     </div>
   </div>
 </section>
 
+<!-- PRICING -->
 <section class="pricing" id="lp-pricing">
   <div class="wrap">
     <div class="section-head">
-      <span class="section-label reveal">💳 요금제</span>
+      <span class="section-label reveal">Pricing</span>
       <h2 class="section-title reveal">투명한 요금제</h2>
       <p class="section-desc reveal">숨겨진 비용 없이, 직원 수에 맞게 선택하세요.</p>
     </div>
     <div class="pricing-grid">
       <div class="price-card reveal">
-        <div class="price-tier">Starter</div><div class="price-size">직원 10인 이하</div>
-        <div class="price-amount"><span class="num">₩50,000</span></div><div class="price-period">/ 월 · VAT 별도</div>
-        <ul class="price-features"><li>급여 자동 계산</li><li>출퇴근 기록</li><li>연차 관리</li><li>안전관리 전자서명 (무료)</li><li>엑셀 출력</li></ul>
+        <div class="price-tier">Starter</div>
+        <div class="price-size">직원 10인 이하</div>
+        <div class="price-amount"><span class="num">₩50,000</span></div>
+        <div class="price-period">/ 월 · VAT 별도</div>
+        <ul class="price-features">
+          <li>급여 자동 계산</li>
+          <li>출퇴근 기록</li>
+          <li>연차 관리</li>
+          <li>안전관리 전자서명</li>
+          <li>엑셀 출력</li>
+        </ul>
         <button class="price-cta" onclick="showAuthModal()">시작하기</button>
       </div>
       <div class="price-card reveal">
-        <div class="price-tier">Basic</div><div class="price-size">직원 30인 이하</div>
-        <div class="price-amount"><span class="num">₩100,000</span></div><div class="price-period">/ 월 · VAT 별도</div>
-        <ul class="price-features"><li>Starter 모든 기능</li><li>3가지 급여 방식</li><li>상세 명세표</li><li>안전관리 전자서명 (무료)</li><li>이메일 지원</li></ul>
+        <div class="price-tier">Basic</div>
+        <div class="price-size">직원 30인 이하</div>
+        <div class="price-amount"><span class="num">₩100,000</span></div>
+        <div class="price-period">/ 월 · VAT 별도</div>
+        <ul class="price-features">
+          <li>Starter 모든 기능</li>
+          <li>3가지 급여 방식</li>
+          <li>상세 명세표</li>
+          <li>이메일 지원</li>
+        </ul>
         <button class="price-cta" onclick="showAuthModal()">시작하기</button>
       </div>
       <div class="price-card featured reveal">
         <div class="price-badge">가장 인기</div>
-        <div class="price-tier">Growth</div><div class="price-size">직원 50인 이하</div>
-        <div class="price-amount"><span class="num">₩150,000</span></div><div class="price-period">/ 월 · VAT 별도</div>
-        <ul class="price-features"><li>Basic 모든 기능</li><li>상세 급여 명세</li><li>다중 사업장 관리</li><li>안전관리 전자서명 (무료)</li><li>우선 지원</li></ul>
-        <button class="price-cta" onclick="showAuthModal()">시작하기 →</button>
-      </div>
-      <div class="price-card reveal">
-        <div class="price-tier">Scale</div><div class="price-size">직원 80인 이하</div>
-        <div class="price-amount"><span class="num">₩200,000</span></div><div class="price-period">/ 월 · VAT 별도</div>
-        <ul class="price-features"><li>Growth 모든 기능</li><li>전담 매니저</li><li>커스텀 설정</li><li>안전관리 전자서명 (무료)</li><li>우선 지원</li></ul>
+        <div class="price-tier">Growth</div>
+        <div class="price-size">직원 50인 이하</div>
+        <div class="price-amount"><span class="num">₩150,000</span></div>
+        <div class="price-period">/ 월 · VAT 별도</div>
+        <ul class="price-features">
+          <li>Basic 모든 기능</li>
+          <li>상세 급여 명세</li>
+          <li>다중 사업장 관리</li>
+          <li>우선 지원</li>
+        </ul>
         <button class="price-cta" onclick="showAuthModal()">시작하기</button>
       </div>
       <div class="price-card reveal">
-        <div class="price-tier">Pro</div><div class="price-size">직원 100인 이하</div>
-        <div class="price-amount"><span class="num">₩250,000</span></div><div class="price-period">/ 월 · VAT 별도</div>
-        <ul class="price-features"><li>Scale 모든 기능</li><li>전용 온보딩</li><li>우선 기술 지원</li><li>안전관리 전자서명 (무료)</li><li>맞춤 보고서</li></ul>
+        <div class="price-tier">Scale</div>
+        <div class="price-size">직원 80인 이하</div>
+        <div class="price-amount"><span class="num">₩200,000</span></div>
+        <div class="price-period">/ 월 · VAT 별도</div>
+        <ul class="price-features">
+          <li>Growth 모든 기능</li>
+          <li>전담 매니저</li>
+          <li>커스텀 설정</li>
+          <li>우선 지원</li>
+        </ul>
+        <button class="price-cta" onclick="showAuthModal()">시작하기</button>
+      </div>
+      <div class="price-card reveal">
+        <div class="price-tier">Pro</div>
+        <div class="price-size">직원 100인 이하</div>
+        <div class="price-amount"><span class="num">₩250,000</span></div>
+        <div class="price-period">/ 월 · VAT 별도</div>
+        <ul class="price-features">
+          <li>Scale 모든 기능</li>
+          <li>전용 온보딩</li>
+          <li>우선 기술 지원</li>
+          <li>맞춤 보고서</li>
+        </ul>
         <button class="price-cta" onclick="showAuthModal()">시작하기</button>
       </div>
     </div>
     <div class="price-enterprise reveal">
       <div class="pe-left">
-        <div class="pe-info"><div class="price-tier">Enterprise</div><div class="price-size">직원 100인 이상</div></div>
+        <div class="pe-info">
+          <div class="price-tier">Enterprise</div>
+          <div class="price-size">직원 100인 이상</div>
+        </div>
         <div class="pe-price">별도 문의</div>
         <div class="pe-desc">지사·현장 다중 관리, 전용 온보딩, 맞춤 기능 개발까지. 직접 상담해드립니다.</div>
       </div>
-      <button class="btn btn-primary" onclick="document.getElementById('lp-contact').scrollIntoView({behavior:'smooth'})">상담 요청 →</button>
+      <button class="btn btn-primary" onclick="document.getElementById('lp-contact').scrollIntoView({behavior:'smooth'})">상담 요청</button>
     </div>
-    <div class="pricing-note reveal">
-      <span class="icon">🎁</span>
-      <div><strong>안전관리 전자서명 기능</strong>은 현재 모든 플랜에서 <strong>무료</strong>로 제공됩니다. 추후 유료 전환 시 기존 가입자에게 사전 안내드리며, 특별 할인 혜택을 드립니다.</div>
-    </div>
+    <p class="pricing-note reveal">모든 플랜은 안전관리 전자서명 기능을 무료로 포함합니다.</p>
   </div>
 </section>
 
+<!-- FAQ -->
 <section class="faq">
   <div class="wrap">
     <div class="section-head">
-      <span class="section-label reveal">💬 자주 묻는 질문</span>
-      <h2 class="section-title reveal">궁금한 점을 해소해 드립니다</h2>
+      <span class="section-label reveal">FAQ</span>
+      <h2 class="section-title reveal">자주 묻는 질문</h2>
     </div>
     <div class="faq-list">
       <div class="faq-item reveal"><button class="faq-q">야간·연장·휴일 수당이 자동으로 계산되나요?<span class="faq-toggle">+</span></button><div class="faq-a">네. 출퇴근 시간만 입력하면 근로기준법 제56조 기준으로 자동 계산됩니다. 29가지 케이스를 모두 검증했습니다.</div></div>
       <div class="faq-item reveal"><button class="faq-q">지문인식 앱과 다른 점이 뭔가요?<span class="faq-toggle">+</span></button><div class="faq-a">노프로는 관리자가 직접 입력하기 때문에 모든 예외 상황(지각·조퇴·외출)까지 정확히 처리할 수 있습니다.</div></div>
-      <div class="faq-item reveal"><button class="faq-q">설치 없이 바로 사용할 수 있나요?<span class="faq-toggle">+</span></button><div class="faq-a">네. 별도 설치 없이 브라우저에서 바로 사용할 수 있습니다. 어디서든 접근 가능해요.</div></div>
+      <div class="faq-item reveal"><button class="faq-q">설치 없이 바로 사용할 수 있나요?<span class="faq-toggle">+</span></button><div class="faq-a">네. 별도 설치 없이 브라우저에서 바로 사용할 수 있습니다. 어디서든 접근 가능합니다.</div></div>
       <div class="faq-item reveal"><button class="faq-q">안전관리 전자서명은 정말 무료인가요?<span class="faq-toggle">+</span></button><div class="faq-a">네, 현재 베타 기간 동안 모든 플랜에서 무료로 제공됩니다. 정식 출시 후 유료 전환 예정이며, 그 전에 가입하신 고객께는 특별 혜택을 안내드립니다.</div></div>
       <div class="faq-item reveal"><button class="faq-q">5인 미만 사업장도 사용 가능한가요?<span class="faq-toggle">+</span></button><div class="faq-a">네. 가산수당 의무 적용이 다르기 때문에 사업장 설정에서 5인 이상/미만 옵션을 선택할 수 있고, 그에 맞게 급여가 자동 계산됩니다.</div></div>
       <div class="faq-item reveal"><button class="faq-q">외국인 근로자도 쓸 수 있나요?<span class="faq-toggle">+</span></button><div class="faq-a">네. 안전교육 서명 페이지는 한국어/영어 토글을 지원합니다. 관리자는 내외국인 필터로 서명 현황을 따로 확인할 수 있습니다.</div></div>
@@ -267,16 +339,17 @@
   </div>
 </section>
 
+<!-- CTA -->
 <section class="lp-cta" id="lp-contact">
   <div class="wrap cta-inner">
-    <h2>복잡한 급여 계산, 노프로가 대신합니다</h2>
+    <h2>지금 운영 중인 표를<br>노프로로 옮겨보세요</h2>
     <p>설치 없이 브라우저에서 바로. 5분이면 첫 급여 정산까지 완료됩니다.</p>
-    <button class="btn btn-primary btn-lg" onclick="showAuthModal()">무료로 시작하기 →</button>
+    <button class="btn btn-primary btn-lg" onclick="showAuthModal()">무료로 시작하기</button>
     <div class="cta-contact">
-      <span>📧 <a href="mailto:sangmin275@naver.com">sangmin275@naver.com</a></span>
-      <span>|</span>
-      <span>📞 <a href="tel:01023494208">010-2349-4208</a></span>
-      <span>|</span>
+      <a href="mailto:sangmin275@naver.com">sangmin275@naver.com</a>
+      <span class="sep">·</span>
+      <a href="tel:01023494208">010-2349-4208</a>
+      <span class="sep">·</span>
       <span>평일 09:00 – 18:00</span>
     </div>
   </div>
@@ -285,39 +358,68 @@
 <footer class="lp-footer">
   <div class="wrap">
     <div class="footer-grid">
-      <div class="foot-about"><span class="logo">🏢 노프로</span><p class="foot-tag">소규모 사업장을 위한 노무 관리 플랫폼. 근태·급여·안전관리까지 한 번에.</p></div>
-      <div class="foot-col"><h4>서비스</h4><ul><li><a onclick="document.getElementById('lp-features').scrollIntoView({behavior:'smooth'})">기능 소개</a></li><li><a onclick="document.getElementById('lp-safety').scrollIntoView({behavior:'smooth'})">안전관리</a></li><li><a onclick="document.getElementById('lp-how').scrollIntoView({behavior:'smooth'})">사용방법</a></li></ul></div>
-      <div class="foot-col"><h4>바로가기</h4><ul><li><a onclick="document.getElementById('lp-pricing').scrollIntoView({behavior:'smooth'})">요금제</a></li><li><a onclick="document.getElementById('lp-contact').scrollIntoView({behavior:'smooth'})">문의</a></li><li><a onclick="event.preventDefault()">개인정보처리방침</a></li><li><a onclick="event.preventDefault()">이용약관</a></li></ul></div>
-      <div class="foot-col"><h4>고객센터</h4><ul><li><a href="tel:01023494208">010-2349-4208</a></li><li><a href="mailto:sangmin275@naver.com">sangmin275@naver.com</a></li><li>평일 09:00 – 18:00</li></ul></div>
+      <div class="foot-about">
+        <span class="logo">nopro</span>
+        <p class="foot-tag">소규모 사업장을 위한 노무 관리 플랫폼.<br>근태·급여·안전관리까지 한 번에.</p>
+      </div>
+      <div class="foot-col">
+        <h4>Product</h4>
+        <ul>
+          <li><a onclick="document.getElementById('lp-features').scrollIntoView({behavior:'smooth'})">제품 소개</a></li>
+          <li><a onclick="document.getElementById('lp-showcase').scrollIntoView({behavior:'smooth'})">화면 보기</a></li>
+          <li><a onclick="document.getElementById('lp-how').scrollIntoView({behavior:'smooth'})">사용방법</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h4>Company</h4>
+        <ul>
+          <li><a onclick="document.getElementById('lp-pricing').scrollIntoView({behavior:'smooth'})">요금제</a></li>
+          <li><a onclick="document.getElementById('lp-contact').scrollIntoView({behavior:'smooth'})">문의</a></li>
+          <li><a onclick="event.preventDefault()">개인정보처리방침</a></li>
+          <li><a onclick="event.preventDefault()">이용약관</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h4>Contact</h4>
+        <ul>
+          <li><a href="tel:01023494208">010-2349-4208</a></li>
+          <li><a href="mailto:sangmin275@naver.com">sangmin275@naver.com</a></li>
+          <li>평일 09:00 – 18:00</li>
+        </ul>
+      </div>
     </div>
-    <div class="foot-bottom">© 2025-2026 노프로. All rights reserved.</div>
+    <div class="foot-bottom">© 2025-2026 nopro. All rights reserved.</div>
   </div>
 </footer>
 
 <script>
 (function(){
-  const capData = [{"emoji":"📝","title":"출퇴근 기록 입력","desc":"출퇴근 시간만 입력하면 야간·연장·휴일 수당이 자동 계산됩니다.","img":"images/landing/1-clock.png"},{"emoji":"📅","title":"근태 현황","desc":"월별 전체 직원 근무시간을 한 눈에. 엑셀 내보내기 지원.","img":"images/landing/2-attendance.png"},{"emoji":"🗓","title":"근태 캘린더","desc":"개인별 월 캘린더로 야간·연장·휴일을 한눈에 확인.","img":"images/landing/3-calendar.png"},{"emoji":"💰","title":"급여 관리","desc":"직원별 급여 카드로 기본급·수당·공제를 한눈에.","img":"images/landing/4-payroll.png"},{"emoji":"📋","title":"급여 상세 명세","desc":"전체 직원 급여 테이블. 주휴·연차·야간수당까지 세부 항목 표시.","img":"images/landing/5-payslip.png"},{"emoji":"⏰","title":"연차 관리","desc":"입사일 기준 자동 계산 + 연차수당까지 자동 산출.","img":"images/landing/6-leave.png"},{"emoji":"🛡️","title":"안전교육 일지","desc":"TBM 전자서명 · 실시간 현황 · 엑셀/PDF 저장.","img":"images/landing/7-safety.png"}];
+  const capData = [
+    {"title":"출퇴근 기록 입력","desc":"출퇴근 시간만 입력하면 야간·연장·휴일 수당이 자동 계산됩니다.","img":"images/landing/1-clock.png"},
+    {"title":"근태 현황","desc":"월별 전체 직원 근무시간을 한 눈에. 엑셀 내보내기 지원.","img":"images/landing/2-attendance.png"},
+    {"title":"근태 캘린더","desc":"개인별 월 캘린더로 야간·연장·휴일을 한눈에 확인.","img":"images/landing/3-calendar.png"},
+    {"title":"급여 관리","desc":"직원별 급여 카드로 기본급·수당·공제를 한눈에.","img":"images/landing/4-payroll.png"},
+    {"title":"급여 상세 명세","desc":"전체 직원 급여 테이블. 주휴·연차·야간수당까지 세부 항목 표시.","img":"images/landing/5-payslip.png"},
+    {"title":"연차 관리","desc":"입사일 기준 자동 계산 + 연차수당까지 자동 산출.","img":"images/landing/6-leave.png"},
+    {"title":"안전교육 일지","desc":"TBM 전자서명 · 실시간 현황 · 엑셀/PDF 저장.","img":"images/landing/7-safety.png"}
+  ];
   const lo = document.getElementById('landing-overlay');
   if(!lo) return;
-  // FAQ 토글
   lo.querySelectorAll('.faq-q').forEach(btn=>{
     btn.addEventListener('click',()=>btn.parentElement.classList.toggle('open'));
   });
-  // Showcase 탭
   lo.querySelectorAll('.showcase-tab').forEach(tab=>{
     tab.addEventListener('click',()=>{
       lo.querySelectorAll('.showcase-tab').forEach(t=>t.classList.remove('active'));
       tab.classList.add('active');
       const idx = +tab.dataset.tab;
       const d = capData[idx];
-      lo.querySelector('#capEmoji').textContent = d.emoji;
       lo.querySelector('#capTitle').textContent = d.title;
       lo.querySelector('#capDesc').textContent = d.desc;
       const img = lo.querySelector('#showcaseImg');
       img.src = d.img; img.alt = d.title;
     });
   });
-  // Reveal 애니메이션
   const io = new IntersectionObserver((entries)=>{
     entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target);} });
   },{threshold:.1, rootMargin:'0px 0px -40px 0px'});
