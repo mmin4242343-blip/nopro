@@ -1,5 +1,6 @@
 // ══ API 설정 ══
 const API_BASE = '/api';
+const AUTH_REFRESH_INTERVAL_MS = 20 * 60 * 1000; // 쿠키 수명 2h 대비 20분마다 /auth-verify 호출해 슬라이딩 갱신
 
 // API 호출 헬퍼 (httpOnly 쿠키 기반 인증)
 async function apiFetch(endpoint, method='POST', body=null){
@@ -8125,7 +8126,7 @@ async function doAuthLogin(){
       await sbLoadAll(res.session.companyId);
       enterApp(res.session.company);
     }
-    if(typeof startAuthRefreshTimer==='function') startAuthRefreshTimer();
+    startAuthRefreshTimer();
   } catch(e){
     errEl.textContent=e.message||'로그인 실패';
     errEl.style.display='block';
@@ -8159,7 +8160,7 @@ async function doAuthSignup(){
     await sbSaveAll(res.session.companyId);
     admSendNotify('signup', {company, name, email, phone, size});
     enterApp(company);
-    if(typeof startAuthRefreshTimer==='function') startAuthRefreshTimer();
+    startAuthRefreshTimer();
   } catch(e){
     errEl.textContent=e.message||'회원가입 실패';
     errEl.style.display='block';
@@ -8204,7 +8205,7 @@ function admLogout(){
 }
 
 function authLogout(){
-  if(typeof stopAuthRefreshTimer==='function') stopAuthRefreshTimer();
+  stopAuthRefreshTimer();
   apiFetch('/auth-logout','POST').catch(()=>{});
   localStorage.removeItem('nopro_session');
   localStorage.removeItem('nopro_jwt'); // 레거시 토큰 정리
@@ -8506,7 +8507,7 @@ function startAuthRefreshTimer(){
         authLogout();
       }
     }catch(e){ /* 네트워크 일시 장애는 무시 */ }
-  }, 20*60*1000); // 20분마다
+  }, AUTH_REFRESH_INTERVAL_MS);
 }
 function stopAuthRefreshTimer(){
   if(_authRefreshTimer){ clearInterval(_authRefreshTimer); _authRefreshTimer=null; }
