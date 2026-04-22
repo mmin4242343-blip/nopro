@@ -688,7 +688,7 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
    기존 app.css의 랜딩 스코프(#landing-overlay)를 통째로 교체
 ═══════════════════════════════════════════════════════════════════ */
 
-@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css');
+/* pretendard @import는 파일 최상단(라인 2)에서 한 번만 하면 됨 — 중복 제거 */
 
 #landing-overlay{
   font-family:'Pretendard Variable','Pretendard',-apple-system,BlinkMacSystemFont,'SF Pro KR','Apple SD Gothic Neo',sans-serif;
