@@ -25,7 +25,7 @@ export const handler = async (event) => {
     try { body = JSON.parse(event.body); } catch { return err(400, '잘못된 요청 형식입니다', event); }
 
     // 단일 저장 또는 bulk 저장
-    const ALLOWED_KEYS = ['emps','pol','bk','tbk','rec','bonus','allow','tax','leave_settings','leave_overrides','folders','safety'];
+    const ALLOWED_KEYS = ['emps','pol','bk','tbk','rec','bonus','allow','tax','leave_settings','leave_overrides','folders','safety','pol_snapshots'];
     const items = body.items || [{ key: body.key, value: body.value }];
 
     for (const item of items) {

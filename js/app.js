@@ -274,10 +274,72 @@ function setTaxRec(eid,y,m,field,val){
   localStorage.setItem('npm5_tax',JSON.stringify(TAX_REC));
 }
 
+// ═══ 월별 정책 스냅샷 헬퍼 ═══
+// "YYYY-MM" 키. 해당 월 계산 시 스냅샷이 있으면 그걸 사용, 없으면 현재 POL 사용.
+function _polKey(y, m){ return y + '-' + String(m).padStart(2,'0'); }
+
+function getPolForMonth(y, m){
+  const snap = POL_SNAPSHOTS[_polKey(y, m)];
+  return snap || POL;
+}
+
+// REC에서 데이터가 있는 모든 (y,m) 집합을 반환
+function _monthsWithData(){
+  const set = new Set();
+  try {
+    Object.keys(REC||{}).forEach(k=>{
+      // rk 형식: "empId_YYYY-MM-DD"
+      const m = String(k).match(/_(\d{4})-(\d{1,2})-\d{1,2}$/);
+      if(m){ set.add(_polKey(parseInt(m[1]), parseInt(m[2]))); }
+    });
+  } catch(e){}
+  return set;
+}
+
+// 주어진 POL을 "스냅샷 없는 과거 달(현재월 제외)"에 복사. 이미 스냅샷 있는 달은 건드리지 않음.
+// 현재월·미래월은 라이브 POL을 그대로 사용해 변경이 즉시 반영됨.
+function freezePastMonthsPol(polToSave){
+  try {
+    const src = polToSave || POL;
+    const now = new Date();
+    const curKey = _polKey(now.getFullYear(), now.getMonth()+1);
+    const months = _monthsWithData();
+    let changed = false;
+    months.forEach(key => {
+      if(key >= curKey) return; // 현재월·미래는 라이브 POL 사용
+      if(!POL_SNAPSHOTS[key]){
+        POL_SNAPSHOTS[key] = JSON.parse(JSON.stringify(src));
+        changed = true;
+      }
+    });
+    if(changed){
+      localStorage.setItem('npm5_pol_snapshots', JSON.stringify(POL_SNAPSHOTS));
+    }
+    return changed;
+  } catch(e){ console.warn('freezePastMonthsPol 실패:', e); return false; }
+}
+
+// POL 변경 자동 감지. saveLS 진입 시 호출.
+// 이전에 기억해둔 POL과 현재 POL을 비교, 다르면 "변경 직전 상태"를 과거 달에 복사.
+let _prevPolForSnapshot = null;
+function syncPolSnapshot(){
+  try {
+    if(!_prevPolForSnapshot){
+      _prevPolForSnapshot = JSON.parse(JSON.stringify(POL));
+      return;
+    }
+    if(JSON.stringify(POL) === JSON.stringify(_prevPolForSnapshot)) return;
+    freezePastMonthsPol(_prevPolForSnapshot);
+    _prevPolForSnapshot = JSON.parse(JSON.stringify(POL));
+  } catch(e){ console.warn('syncPolSnapshot 실패:', e); }
+}
+
 // 서버에 아직 전송 안 된 로컬 변경이 있는지 추적 (beforeunload 경고용)
 let _hasUnsavedChanges = false;
 
 function saveLS(){
+  // POL 변경 자동 감지 → 직전 상태를 과거 달에 복사 (변경 이후 과거 조회 시 옛 설정 사용 보장)
+  try { syncPolSnapshot(); } catch(e){}
   try{
     localStorage.setItem(LS.E,JSON.stringify(EMPS));
     localStorage.setItem(LS.P,JSON.stringify(POL));
@@ -443,6 +505,8 @@ const DEF_POL={
 
 let EMPS=load(LS.E,null)||[];
 let POL=Object.assign({...DEF_POL},load(LS.P,{}));
+// 월별 정책 스냅샷: "YYYY-MM" → POL 복사본. 과거 달 계산 시 그 달 스냅샷 사용.
+let POL_SNAPSHOTS = JSON.parse(localStorage.getItem('npm5_pol_snapshots')||'{}');
 // 기본 수당항목 보장 (localStorage에 빈 배열 저장돼있어도 기본값 복원)
 const DEF_ALLOW_IDS = ['ability','position','career','transport','car','meal','deduct'];
 const FIXED_ALLOWS = ['능력수당','직급수당','경력수당','교통비','차량유지비(비과세)','식대(비과세)','기타공제(가불및선지급)'];
@@ -8912,6 +8976,7 @@ async function sbSaveAll(companyId) {
     {key:'tax', value:JSON.parse(localStorage.getItem('npm5_tax')||'{}')},
     {key:'leave_settings', value:JSON.parse(localStorage.getItem('npm5_leave_settings')||'{}')},
     {key:'leave_overrides', value:JSON.parse(localStorage.getItem('npm5_leave_overrides')||'{}')},
+    {key:'pol_snapshots', value:POL_SNAPSHOTS||{}},
   ];
   // 대형 키: 각각 별도 저장 (타임아웃 방지 + old_value 감사로그 저장)
   const largeItems = [
@@ -9079,6 +9144,16 @@ async function sbLoadAll(companyId) {
   if(map.leave_overrides)localStorage.setItem('npm5_leave_overrides', JSON.stringify(map.leave_overrides));
   if(map.folders)        localStorage.setItem('npm5_folders', JSON.stringify(map.folders));
   if(map.safety)         { SAFETY_REC = map.safety; localStorage.setItem('npm5_safety', JSON.stringify(SAFETY_REC)); }
+  if(map.pol_snapshots)  { POL_SNAPSHOTS = map.pol_snapshots; localStorage.setItem('npm5_pol_snapshots', JSON.stringify(POL_SNAPSHOTS)); }
+
+  // 최초 1회: POL_SNAPSHOTS가 비어있고 REC 데이터가 있으면 현재 POL을 과거 달에 복사해 시작점 확보
+  try {
+    if(Object.keys(POL_SNAPSHOTS).length === 0 && Object.keys(REC||{}).length > 0){
+      freezePastMonthsPol();
+    }
+  } catch(e){}
+  // 서버에서 POL 로드 후 변경 감지 기준값 업데이트 (로드 후 즉시 변경으로 오인 방지)
+  _prevPolForSnapshot = JSON.parse(JSON.stringify(POL));
 
   // 서버 로드 완료 시점 스냅샷 (폴링 머지 기준값)
   if(typeof _takeSyncedSnapshot === 'function') _takeSyncedSnapshot();

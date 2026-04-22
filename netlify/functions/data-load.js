@@ -16,7 +16,7 @@ export const handler = async (event) => {
     const key = body.key;
 
     // data-save와 동일한 키 화이트리스트 적용
-    const ALLOWED_KEYS = ['emps','pol','bk','tbk','rec','bonus','allow','tax','leave_settings','leave_overrides','folders','safety'];
+    const ALLOWED_KEYS = ['emps','pol','bk','tbk','rec','bonus','allow','tax','leave_settings','leave_overrides','folders','safety','pol_snapshots'];
     if (key && !ALLOWED_KEYS.includes(key)) {
       return err(400, '허용되지 않은 데이터 키입니다', event);
     }
