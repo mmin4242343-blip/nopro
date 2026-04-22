@@ -351,13 +351,21 @@ function confirmPayMonth(y, m){
     return true;
   });
   const summaries = {};
+  const failed = [];
   activeEmps.forEach(e=>{
     // monthSummary는 이미 래핑돼 있어 POL 스냅샷 적용됨. 저장값 체크도 내부에 있지만
     // 저장 시에는 _bypassPayStore 플래그로 항상 신선 계산.
     _bypassPayStore = true;
     try { summaries[e.id] = monthSummary(e.id, y, m); }
+    catch(ex){ console.error('월 확정 계산 실패 (empId='+e.id+'):', ex); failed.push(e.name||e.id); }
     finally { _bypassPayStore = false; }
   });
+  if(failed.length){
+    if(typeof showSyncToast==='function'){
+      showSyncToast(`⚠️ 일부 직원 계산 실패 — 확정 중단\n${failed.slice(0,3).join(', ')}${failed.length>3?' 외 '+(failed.length-3)+'명':''}`,'error',5000);
+    }
+    return;
+  }
   let sess = null; try { sess = JSON.parse(localStorage.getItem('nopro_session')||'null'); } catch(ex){}
   PAY_SNAPSHOTS[key] = {
     confirmed: true,
@@ -8531,17 +8539,28 @@ function _xlDebouncedRefresh(){
   if(_xlRefreshTimer) clearTimeout(_xlRefreshTimer);
   _xlRefreshTimer=setTimeout(()=>renderXlPreview(),800);
 }
+// 확정된 달에는 xl뷰 쓰기도 차단 (readonly 속성이 없어도 최종 방어선)
+function _xlLockedGuard(){
+  if(typeof isPayMonthConfirmed==='function' && isPayMonthConfirmed(pY, pM)){
+    if(typeof showSyncToast==='function') showSyncToast('⚠️ 확정된 달입니다. "확정 해제" 후 입력하세요','warn',3500);
+    return true;
+  }
+  return false;
+}
 function xlSaveAllow(inp){
+  if(_xlLockedGuard()){ _xlDebouncedRefresh(); return; }
   const eid=+inp.dataset.eid, aid=inp.dataset.aid;
   setMonthAllowance(eid,pY,pM,aid,+inp.value||0);
   _xlDebouncedRefresh();
 }
 function xlSaveBonus(inp){
+  if(_xlLockedGuard()){ _xlDebouncedRefresh(); return; }
   const eid=+inp.dataset.eid;
   setMonthBonus(eid,pY,pM,+inp.value||0);
   _xlDebouncedRefresh();
 }
 function xlSaveTax(inp){
+  if(_xlLockedGuard()){ _xlDebouncedRefresh(); return; }
   const eid=+inp.dataset.eid, field=inp.dataset.tax;
   setTaxRec(eid,pY,pM,field,+inp.value||'');
   _xlDebouncedRefresh();
@@ -9104,7 +9123,8 @@ function clearLocalData(){
   const keys = [
     'npm5_emps','npm5_rec','npm5_pol','npm5_bk','npm5_tbk',
     'npm5_bonus','npm5_allow','npm5_tax','npm5_leave_settings',
-    'npm5_leave_overrides','npm5_folders','npm5_safety'
+    'npm5_leave_overrides','npm5_folders','npm5_safety',
+    'npm5_pol_snapshots','npm5_pay_snapshots'
   ];
   keys.forEach(k => localStorage.removeItem(k));
   EMPS = [];
@@ -9115,6 +9135,9 @@ function clearLocalData(){
   BONUS_REC = {};
   ALLOWANCE_REC = {};
   SAFETY_REC = {};
+  if(typeof TAX_REC !== 'undefined') TAX_REC = {};
+  if(typeof POL_SNAPSHOTS !== 'undefined') POL_SNAPSHOTS = {};
+  if(typeof PAY_SNAPSHOTS !== 'undefined') PAY_SNAPSHOTS = {};
 }
 
 // ── 전체 저장 (서버 프록시) ──
@@ -9244,6 +9267,23 @@ async function pollForUpdates(){
       DEF_BK = v;
       localStorage.setItem('npm5_bk', JSON.stringify(DEF_BK));
     });
+    // 월별 POL/PAY 스냅샷: 다른 기기에서 확정/해제·정책변경한 내용 반영
+    if(server.pol_snapshots !== undefined){
+      const sv = JSON.stringify(server.pol_snapshots);
+      if(sv !== JSON.stringify(POL_SNAPSHOTS||{})){
+        POL_SNAPSHOTS = server.pol_snapshots || {};
+        localStorage.setItem('npm5_pol_snapshots', sv);
+        changed = true;
+      }
+    }
+    if(server.pay_snapshots !== undefined){
+      const sv = JSON.stringify(server.pay_snapshots);
+      if(sv !== JSON.stringify(PAY_SNAPSHOTS||{})){
+        PAY_SNAPSHOTS = server.pay_snapshots || {};
+        localStorage.setItem('npm5_pay_snapshots', sv);
+        changed = true;
+      }
+    }
 
     if(!changed) return;
     _takeSyncedSnapshot();
@@ -9293,7 +9333,7 @@ async function sbLoadAll(companyId) {
   if(map.rec)            { REC = map.rec; localStorage.setItem('npm5_rec', JSON.stringify(REC)); }
   if(map.bonus)          { BONUS_REC = map.bonus; localStorage.setItem('npm5_bonus', JSON.stringify(BONUS_REC)); }
   if(map.allow)          { ALLOWANCE_REC = map.allow; localStorage.setItem('npm5_allow', JSON.stringify(ALLOWANCE_REC)); }
-  if(map.tax)            localStorage.setItem('npm5_tax', JSON.stringify(map.tax));
+  if(map.tax)            { TAX_REC = map.tax; localStorage.setItem('npm5_tax', JSON.stringify(map.tax)); }
   if(map.leave_settings) localStorage.setItem('npm5_leave_settings', JSON.stringify(map.leave_settings));
   if(map.leave_overrides)localStorage.setItem('npm5_leave_overrides', JSON.stringify(map.leave_overrides));
   if(map.folders)        localStorage.setItem('npm5_folders', JSON.stringify(map.folders));
