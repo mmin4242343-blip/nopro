@@ -333,6 +333,56 @@ document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'hidden') _flushSaveOnUnload();
 });
 
+// 탭/창 복귀 시 서버 최신값 자동 반영 (동시 접속 반영 — 옵션 A)
+// 내 편집 중 값이 덮어쓰이지 않도록: blur → pending flush → sbLoadAll 순서
+async function reloadOnFocus(){
+  if(document.hidden) return;
+  const now = Date.now();
+  if(now - (reloadOnFocus._lastAt||0) < 3000) return; // 중복 방지 (focus+visibilitychange 동시 발화)
+  const _sess = (()=>{ try { return JSON.parse(localStorage.getItem('nopro_session')||'null'); } catch(e){ return null; }})();
+  if(!_sess || !_sess.companyId) return;
+  reloadOnFocus._lastAt = now;
+  try {
+    const ae = document.activeElement;
+    if(ae && typeof ae.blur === 'function' && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA')){
+      ae.blur();
+    }
+    if(saveLS._timer && typeof flushPendingSave === 'function'){
+      await flushPendingSave();
+    }
+    await sbLoadAll(_sess.companyId);
+    // sbLoadAll이 메모리에 반영하지 않는 연차 override/settings도 동기화
+    try { if(typeof loadLeaveOverrides === 'function') leaveOverrides = loadLeaveOverrides(); } catch(e){}
+    try { leaveSettings = JSON.parse(localStorage.getItem('npm5_leave_settings')||'{}'); } catch(e){}
+    const active = document.querySelector('.pg.on');
+    if(!active) return;
+    const p = active.id.replace('pg-','');
+    if(p==='daily' && typeof renderTable==='function') renderTable();
+    else if(p==='monthly' && typeof renderMonthly==='function') renderMonthly();
+    else if(p==='payroll' && typeof renderPayroll==='function') renderPayroll();
+    else if(p==='emps' && typeof renderEmps==='function') renderEmps();
+    else if(p==='leave' && typeof renderLeave==='function') renderLeave();
+    else if(p==='company' && typeof renderCompany==='function') renderCompany();
+    else if(p==='shift' && typeof renderShiftList==='function') renderShiftList();
+    else if(p==='safety' && typeof renderSafety==='function') renderSafety();
+    else if(p==='folder' && typeof renderFolder==='function') renderFolder();
+    else if(p==='settings'){
+      if(typeof renderDefBk==='function') renderDefBk();
+      if(typeof renderAllowanceList==='function') renderAllowanceList();
+    }
+    if(typeof renderSb==='function'){
+      const sbInp = document.getElementById('sb-search-inp');
+      renderSb(sbInp?.value||'');
+    }
+  } catch(e){
+    console.warn('focus 재로드 실패:', e);
+  }
+}
+window.addEventListener('focus', reloadOnFocus);
+document.addEventListener('visibilitychange', ()=>{
+  if(!document.hidden) reloadOnFocus();
+});
+
 // ══════════════════════════════════════
 // 상태
 // ══════════════════════════════════════
@@ -1250,6 +1300,11 @@ function setFilter(tab, key, val, btn){
 let _searchRenderT;
 function setSearch(tab, val){
   F[tab].search = val.toLowerCase();
+  // 급여관리 카드뷰: 재계산 없이 DOM 숨기기/보이기만 (즉시)
+  if(tab==='payroll' && pvMode==='card'){
+    fastSearchPayroll();
+    return;
+  }
   clearTimeout(_searchRenderT);
   _searchRenderT = setTimeout(()=>{
     if(tab==='daily')   renderTable();
@@ -2141,9 +2196,36 @@ function setPvMode(m){
   });
   if(!isCard)renderXlPreview();
 }
+// 급여관리 카드뷰 — 검색 시 재계산 생략, DOM 필터 + 캐시 합산
+const _payrollSummaryCache = new Map();
+function fastSearchPayroll(){
+  const search = F.payroll.search || '';
+  const grid = document.getElementById('pay-grid');
+  if(!grid) return;
+  const cards = grid.querySelectorAll('.pc');
+  const gt = {base:0,nt:0,ot:0,hol:0,al:0,bonus:0,allow:0,ded:0,total:0};
+  cards.forEach(card=>{
+    const name = card.dataset.empName || '';
+    const visible = !search || name.includes(search);
+    card.style.display = visible ? '' : 'none';
+    if(!visible) return;
+    const s = _payrollSummaryCache.get(+card.dataset.empId);
+    if(!s) return;
+    gt.base+=s.tBase; gt.nt+=s.tNightPay; gt.ot+=s.tOtDayPay+s.tOtNightPay;
+    gt.hol+=(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0);
+    gt.al+=s.annualPay; gt.bonus+=s.bonus; gt.allow+=s.totalAllowance; gt.ded+=s.deduction; gt.total+=s.total;
+  });
+  const el = document.getElementById('pay-total');
+  if(el){
+    el.innerHTML = [['기본급',gt.base],['야간수당',gt.nt],['연장수당',gt.ot],['휴일수당',gt.hol],['상여·수당',gt.bonus+gt.allow],['전체 합계',gt.total]]
+      .map(([l,v],i)=>`<div class="sc ${i===5?'ok':''}"><div class="sc-l">${l}</div><div class="sc-v" style="font-size:15px;${i===5?'color:var(--green)':''}">${Math.round(v/10000)}<span class="sc-u">만원</span></div></div>`).join('');
+  }
+}
+
 function renderPayroll(){
   renderFilterBar('payroll-filter-bar','payroll');
   document.getElementById('pv-title').textContent=`${pY}년 ${pM}월 급여 요약`;
+  _payrollSummaryCache.clear();
   let gt={base:0,nt:0,ot:0,hol:0,al:0,bonus:0,allow:0,ded:0,total:0};
   // 해당 월에 재직 중인 직원만
   const payMonthEnd=new Date(pY,pM,0);
@@ -2154,9 +2236,10 @@ function renderPayroll(){
   }), 'payroll', payMonthEnd);
   document.getElementById('pay-grid').innerHTML=activePayEmps.map(emp=>{
     const s=monthSummary(emp.id,pY,pM);
+    _payrollSummaryCache.set(emp.id, s);
     const rate=getEmpRate(emp);
     gt.base+=s.tBase;gt.nt+=s.tNightPay;gt.ot+=s.tOtDayPay+s.tOtNightPay;gt.hol+=(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0);gt.al+=s.annualPay;gt.bonus+=s.bonus;gt.allow+=s.totalAllowance;gt.ded+=s.deduction;gt.total+=s.total;
-    return`<div class="pc">
+    return`<div class="pc" data-emp-id="${emp.id}" data-emp-name="${esc((emp.name||'').toLowerCase())}">
       <div class="pch">
         <div class="av" style="width:32px;height:32px;font-size:12px;background:${safeColor(emp.color,'#DBEAFE')};color:${safeColor(emp.tc,'#1E3A5F')}">${esc(emp.name)[0]}</div>
         <div>
@@ -2230,6 +2313,7 @@ function renderPayroll(){
     [['기본급',gt.base],['야간수당',gt.nt],['연장수당',gt.ot],['휴일수당',gt.hol],['상여·수당',gt.bonus+gt.allow],['전체 합계',gt.total]]
     .map(([l,v],i)=>`<div class="sc ${i===5?'ok':''}"><div class="sc-l">${l}</div><div class="sc-v" style="font-size:15px;${i===5?'color:var(--green)':''}">${Math.round(v/10000)}<span class="sc-u">만원</span></div></div>`).join('');
   if(pvMode==='xl')renderXlPreview();
+  else if(F.payroll.search) fastSearchPayroll();
 }
 
 function renderXlPreview(){
