@@ -1247,12 +1247,16 @@ function setFilter(tab, key, val, btn){
   if(tab==='emps')    renderEmps();
 }
 
+let _searchRenderT;
 function setSearch(tab, val){
   F[tab].search = val.toLowerCase();
-  if(tab==='daily')   renderTable();
-  if(tab==='payroll') renderPayroll();
-  if(tab==='leave')   renderLeave();
-  if(tab==='emps')    renderEmps();
+  clearTimeout(_searchRenderT);
+  _searchRenderT = setTimeout(()=>{
+    if(tab==='daily')   renderTable();
+    if(tab==='payroll') renderPayroll();
+    if(tab==='leave')   renderLeave();
+    if(tab==='emps')    renderEmps();
+  }, 200);
 }
 
 function applyCommonFilter(emps, tab, refDate){
