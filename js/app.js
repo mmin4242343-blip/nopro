@@ -6505,10 +6505,13 @@ function calcLeaveByFiscal(emp, year) {
       if (workMonth <= ov.untilMonth) return sum; // 엑셀이 이미 반영
       return sum + mv.count;
     }, 0);
-    const postUsed = countUsedLeave(emp.id, year, ov.untilMonth + 1);
     const tTotal = ov.baselineTotal + postAccrued;
-    const tRemain = ov.baselineRemain + postAccrued - postUsed;
-    return { total: r2(tTotal), accrued: r2(tTotal), used: r2(tTotal - tRemain), remain: r2(tRemain), monthly };
+    // 수동 used가 있으면 우선. 없으면 엑셀 사용분(baselineTotal-baselineRemain) + 이후 REC 사용분.
+    const tUsed = (ov.used !== undefined && ov.used !== null)
+      ? ov.used
+      : (ov.baselineTotal - ov.baselineRemain) + countUsedLeave(emp.id, year, ov.untilMonth + 1);
+    const tRemain = tTotal - tUsed;
+    return { total: r2(tTotal), accrued: r2(tTotal), used: r2(tUsed), remain: r2(tRemain), monthly };
   }
   // 2) 수동 used override (Excel 없이 사용자가 직접 수정한 값)
   if (ov && ov.used !== undefined && ov.used !== null) {
@@ -6603,10 +6606,12 @@ function calcLeaveByJoinDate(emp, year) {
       if (workMonth <= ov.untilMonth) return sum;
       return sum + mv.count;
     }, 0);
-    const postUsed = countUsedLeave(emp.id, year, ov.untilMonth + 1);
     const tTotal = ov.baselineTotal + postAccrued;
-    const tRemain = ov.baselineRemain + postAccrued - postUsed;
-    return { total: r2(tTotal), accrued: r2(tTotal), used: r2(tTotal - tRemain), remain: r2(tRemain), monthly };
+    const tUsed = (ov.used !== undefined && ov.used !== null)
+      ? ov.used
+      : (ov.baselineTotal - ov.baselineRemain) + countUsedLeave(emp.id, year, ov.untilMonth + 1);
+    const tRemain = tTotal - tUsed;
+    return { total: r2(tTotal), accrued: r2(tTotal), used: r2(tUsed), remain: r2(tRemain), monthly };
   }
   // 2) 수동 used override
   if (ov && ov.used !== undefined && ov.used !== null) {
@@ -6823,13 +6828,17 @@ function overrideLeaveTotal(empId, year, val) {
 
 function overrideLeaveUsed(empId, year, val) {
   if (!leaveOverrides[empId]) leaveOverrides[empId] = {};
+  if (!leaveOverrides[empId][year]) leaveOverrides[empId][year] = {};
   if (val === null) {
-    // 자동계산으로 복귀: 해당 연도 override 전체 제거 (엑셀 baseline 포함)
-    delete leaveOverrides[empId][year];
-    if (Object.keys(leaveOverrides[empId]).length === 0) delete leaveOverrides[empId];
+    // 수동 used만 제거. 엑셀 baseline(baselineTotal/baselineRemain/untilMonth)은 보존.
+    delete leaveOverrides[empId][year].used;
+    if (Object.keys(leaveOverrides[empId][year]).length === 0) {
+      delete leaveOverrides[empId][year];
+      if (Object.keys(leaveOverrides[empId]).length === 0) delete leaveOverrides[empId];
+    }
   } else {
-    // 수동 used 설정: 엑셀 baseline과 상호 배타로 교체
-    leaveOverrides[empId][year] = { used: val };
+    // 수동 used 설정. 엑셀 baseline이 있으면 그 위에 덮어씀 (객체 교체 X).
+    leaveOverrides[empId][year].used = val;
   }
   localStorage.setItem('npm5_leave_overrides', JSON.stringify(leaveOverrides));
   saveLS(); // Supabase DB 동기화
