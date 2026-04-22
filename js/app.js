@@ -2910,8 +2910,11 @@ function renderEmps(){
           <input class="ei2" value="${esc(e.rrnFront||'')}" maxlength="6" placeholder="앞6자리"
             oninput="updRrn(${e.id},'rrnFront',this.value)" id="rrn-front-${e.id}" style="text-align:center;letter-spacing:1px" autocomplete="off">
           <span style="color:var(--ink3);font-size:12px">-</span>
-          <input class="ei2" value="${esc(e.rrnBack||'')}" maxlength="7" placeholder="뒷7자리"
+          <input class="ei2" type="password" value="${esc(e.rrnBack||'')}" maxlength="7" placeholder="뒷7자리"
             oninput="updRrn(${e.id},'rrnBack',this.value)" id="rrn-back-${e.id}" style="text-align:center;letter-spacing:2px" autocomplete="off">
+          <button type="button" onclick="toggleRrnVis(${e.id})" id="rrn-eye-${e.id}"
+            title="주민번호 뒷자리 보기/숨기기"
+            style="background:none;border:none;cursor:pointer;font-size:13px;padding:2px 4px;opacity:.7">👁</button>
         </div>
       </td>
       <td>
@@ -2998,6 +3001,20 @@ function initColResize(){
       document.addEventListener('mouseup',onUp);
     });
   });
+}
+
+// 주민번호 뒷자리 보기/숨기기 토글. 렌더마다 기본은 숨김(password).
+function toggleRrnVis(id){
+  const inp = document.getElementById('rrn-back-'+id);
+  const btn = document.getElementById('rrn-eye-'+id);
+  if(!inp) return;
+  if(inp.type === 'password'){
+    inp.type = 'text';
+    if(btn) btn.textContent = '🙈';
+  } else {
+    inp.type = 'password';
+    if(btn) btn.textContent = '👁';
+  }
 }
 
 function updRrn(id,field,val){
