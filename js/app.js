@@ -840,6 +840,13 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate){
 }
 
 function monthSummary(eid,y,m){
+  // 해당 월의 정책 스냅샷이 있으면 임시로 POL을 교체. 계산 끝나면 finally에서 복원.
+  // 과거 달 조회 시 "그 달의 설정"으로 계산되도록 함.
+  const _origPOL = POL;
+  const _monthPOL = (typeof getPolForMonth==='function') ? getPolForMonth(y, m) : POL;
+  const _polSwapped = _monthPOL !== _origPOL;
+  if(_polSwapped) POL = _monthPOL;
+  try {
   const emp=EMPS.find(e=>e.id===eid);
   if(!emp)return{wdays:0,adays:0,aldays:0,twkH:0,tNightH:0,tOtDayH:0,tOtNightH:0,tHolDayH:0,tHolNightH:0,tHolDayOtH:0,tHolNightOtH:0,tBase:0,tNightPay:0,tOtDayPay:0,tOtNightPay:0,tHolDayPay:0,tHolNightPay:0,tHolDayOtPay:0,tHolNightOtPay:0,annualPay:0,wkly:0,bonus:0,allowances:{},totalAllowance:0,deduction:0,total:0};
   // 입사일 이전 월이면 빈 결과
@@ -1043,6 +1050,9 @@ function monthSummary(eid,y,m){
     tExtraWorkH:rh(tFixExtraH),tExtraWorkPay,tHolPayNew,tTotalBonus,
     tMonthlyHolStdPay,tMonthlyHolOtPay,
     annualPay,wkly,bonus,allowances,totalAllowance,deduction,dedShortH:dedShortMins/60,total};
+  } finally {
+    if(_polSwapped) POL = _origPOL;
+  }
 }
 
 
@@ -1514,6 +1524,12 @@ function filterEmpsByPay(emps){
   return applyCommonFilter(emps, 'payroll');
 }
 function renderTable(){
+  // 과거 날짜 조회 시 그 달의 정책 스냅샷 사용
+  const _origPOL = POL;
+  const _monthPOL = (typeof getPolForMonth==='function') ? getPolForMonth(cY, cM) : POL;
+  const _polSwapped = _monthPOL !== _origPOL;
+  if(_polSwapped) POL = _monthPOL;
+  try {
   renderFilterBar('daily-filter-bar','daily');
   const bks=getActiveBk(cY,cM,cD);
   const dayDate=new Date(cY,cM-1,cD);
@@ -1753,6 +1769,9 @@ function renderTable(){
       </td>
     </tr>`;
   }).join('');
+  } finally {
+    if(_polSwapped) POL = _origPOL;
+  }
 }
 
 // ══ Tab 키 네비게이션 ══
@@ -2143,6 +2162,12 @@ function setMvFilter(f){
   renderMonthly();
 }
 function renderMonthly(){
+  // 과거 달 조회 시 그 달 정책 스냅샷 사용 (renderCal/renderOv 내부 calcSession에 전파)
+  const _origPOL = POL;
+  const _monthPOL = (typeof getPolForMonth==='function') ? getPolForMonth(vY, vM) : POL;
+  const _polSwapped = _monthPOL !== _origPOL;
+  if(_polSwapped) POL = _monthPOL;
+  try {
   document.getElementById('mv-title').textContent=`${vY}년 ${vM}월 근태 현황`;
   // 소속 필터 동적 생성
   const mvDeptDiv = document.getElementById('mv-dept-filter');
@@ -2177,6 +2202,9 @@ function renderMonthly(){
     <button onclick="vEid=${e.id};renderMonthly()"
       style="padding:2px 8px;font-size:10px;border:1px solid ${e.id===vEid?'var(--navy2)':'var(--bd2)'};border-radius:12px;background:${e.id===vEid?'var(--nbg)':'var(--card)'};color:${e.id===vEid?'var(--navy2)':'var(--ink2)'};cursor:pointer;font-family:inherit;font-weight:${e.id===vEid?'700':'500'}">${esc(e.name)}</button>`).join('');
   document.getElementById('mv-body').innerHTML=vMode==='cal'?renderCal():renderOv();
+  } finally {
+    if(_polSwapped) POL = _origPOL;
+  }
 }
 function renderCal(){
   const emp=EMPS.find(e=>e.id===vEid);if(!emp)return'';
@@ -2353,6 +2381,12 @@ function fastSearchPayroll(){
 }
 
 function renderPayroll(){
+  // 과거 달 조회 시 그 달 정책 스냅샷 사용
+  const _origPOL = POL;
+  const _monthPOL = (typeof getPolForMonth==='function') ? getPolForMonth(pY, pM) : POL;
+  const _polSwapped = _monthPOL !== _origPOL;
+  if(_polSwapped) POL = _monthPOL;
+  try {
   renderFilterBar('payroll-filter-bar','payroll');
   document.getElementById('pv-title').textContent=`${pY}년 ${pM}월 급여 요약`;
   _payrollSummaryCache.clear();
@@ -2448,6 +2482,9 @@ function renderPayroll(){
     .map(([l,v],i)=>`<div class="sc ${i===5?'ok':''}"><div class="sc-l">${l}</div><div class="sc-v" style="font-size:15px;${i===5?'color:var(--green)':''}">${Math.round(v/10000)}<span class="sc-u">만원</span></div></div>`).join('');
   if(pvMode==='xl')renderXlPreview();
   else if(F.payroll.search) fastSearchPayroll();
+  } finally {
+    if(_polSwapped) POL = _origPOL;
+  }
 }
 
 function renderXlPreview(){
