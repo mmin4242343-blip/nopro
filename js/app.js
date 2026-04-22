@@ -339,6 +339,9 @@ function getPayMonthMeta(y, m){
 
 // 지정 월 급여 확정: 현재 재직 중인 모든 직원의 monthSummary를 저장
 function confirmPayMonth(y, m){
+  // 버그 1 방지: POL 변경 직후 확정 시 미처 찍히지 못한 이전 POL을 과거 달에 먼저 복사.
+  // 이렇게 해야 과거 달 계산은 변경 전 설정으로, 현재월 이상은 새 설정으로 확정됨.
+  try { if(typeof syncPolSnapshot === 'function') syncPolSnapshot(); } catch(e){}
   const key = _polKey(y, m);
   const monthEnd = new Date(y, m, 0);
   const monthStart = new Date(y, m-1, 1);
@@ -2501,6 +2504,8 @@ function renderPayroll(){
   document.getElementById('pv-title').textContent=`${pY}년 ${pM}월 급여 요약`;
   _renderPayConfirmBar();
   _payrollSummaryCache.clear();
+  // 확정된 달은 입력칸을 잠가 "입력해도 안 먹히는" 현상 방지
+  const _monthLocked = (typeof isPayMonthConfirmed==='function') && isPayMonthConfirmed(pY, pM);
   let gt={base:0,nt:0,ot:0,hol:0,al:0,bonus:0,allow:0,ded:0,total:0};
   // 해당 월에 재직 중인 직원만
   const payMonthEnd=new Date(pY,pM,0);
@@ -2547,9 +2552,9 @@ function renderPayroll(){
         <div class="pr">
           <span class="prl">상여금</span>
           <span style="display:flex;align-items:center;gap:5px">
-            <input type="number" value="${s.bonus}" placeholder="0"
+            <input type="number" value="${s.bonus}" placeholder="0" ${_monthLocked?'readonly title="확정된 달 — 입력하려면 확정 해제 먼저"':''}
               class="pay-card-inp" data-eid="${emp.id}" data-card-field="bonus"
-              style="width:90px;padding:3px 6px;font-size:12px;border:1px solid var(--bd2);border-radius:5px;text-align:right;font-family:inherit;font-weight:600;color:var(--purple)"
+              style="width:90px;padding:3px 6px;font-size:12px;border:1px solid ${_monthLocked?'var(--bd2)':'var(--bd2)'};border-radius:5px;text-align:right;font-family:inherit;font-weight:600;color:var(--purple)${_monthLocked?';background:var(--surf);cursor:not-allowed;opacity:.65':''}"
               onblur="setMonthBonus(${emp.id},pY,pM,+this.value);clearTimeout(window._cardRefT);window._cardRefT=setTimeout(()=>renderPayroll(),500)"
               onkeydown="if(event.key==='Enter'){event.preventDefault();payCardNav(this);}">
             <span style="font-size:10px;color:var(--ink3)">원</span>
@@ -2568,9 +2573,9 @@ function renderPayroll(){
             ${isDeduct?'🔴 ':''}${a.name}${!isDirect&&rawV?'<span style="font-size:8px;color:var(--ink3);margin-left:3px">자동</span>':''}
           </span>
           <span style="display:flex;align-items:center;gap:4px">
-            <input type="number" value="${rawV||''}" placeholder="0" min="0"
+            <input type="number" value="${rawV||''}" placeholder="0" min="0" ${_monthLocked?'readonly title="확정된 달 — 입력하려면 확정 해제 먼저"':''}
               class="pay-card-inp" data-eid="${emp.id}" data-card-field="allow-${a.id}"
-              style="width:80px;padding:3px 6px;font-size:12px;border:1px solid ${isDeduct?'#FECDD3':'var(--bd2)'};border-radius:5px;text-align:right;font-family:inherit;font-weight:600;color:${isDeduct?'var(--rose)':'var(--amber)'}"
+              style="width:80px;padding:3px 6px;font-size:12px;border:1px solid ${isDeduct?'#FECDD3':'var(--bd2)'};border-radius:5px;text-align:right;font-family:inherit;font-weight:600;color:${isDeduct?'var(--rose)':'var(--amber)'}${_monthLocked?';background:var(--surf);cursor:not-allowed;opacity:.65':''}"
               onblur="setMonthAllowance(${emp.id},pY,pM,'${a.id}',+this.value);clearTimeout(window._cardRefT);window._cardRefT=setTimeout(()=>renderPayroll(),500)"
               onkeydown="if(event.key==='Enter'){event.preventDefault();payCardNav(this);}">
             <span style="font-size:10px;color:${isDeduct?'var(--rose)':'var(--ink3)'}">${isDeduct?'(공제)':'원'}</span>
