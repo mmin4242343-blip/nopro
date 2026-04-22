@@ -1727,6 +1727,18 @@ function xlTableKeyNav(e){
     sel.addRange(range);
   }
 }
+// time-inp(출퇴근 시간) 입력에 Enter/Tab/화살표 키 위임 바인딩.
+// 각 input에 onkeydown 직접 지정하지 않고 document 레벨에서 처리.
+document.addEventListener('keydown', function(e){
+  const el = e.target;
+  if(!el || !el.classList || !el.classList.contains('time-inp')) return;
+  if(el.disabled) return;
+  const eid = parseInt(el.dataset.eid);
+  const field = el.dataset.field;
+  if(!eid || !field) return;
+  timeKeyNav(e, el, eid, field);
+});
+
 function timeKeyNav(e, el, eid, field) {
   if (e.key === 'Tab' || e.key === 'Enter') {
     e.preventDefault();
@@ -2234,6 +2246,22 @@ function setPvMode(m){
   });
   if(!isCard)renderXlPreview();
 }
+// 급여관리 카드뷰 — 상여금/수당 입력에서 Enter 시 저장 + 다음 카드 같은 필드로 포커스 이동
+function payCardNav(el){
+  const field = el.dataset.cardField;
+  if(!field) return;
+  const all = Array.from(document.querySelectorAll('#pay-grid input.pay-card-inp[data-card-field="'+field+'"]'));
+  const idx = all.indexOf(el);
+  const nextEid = idx >= 0 && idx < all.length - 1 ? all[idx+1].dataset.eid : null;
+  el.blur(); // 기존 onblur 로직 발동 → 저장 + 500ms 뒤 renderPayroll
+  if(!nextEid) return;
+  // renderPayroll(500ms) 완료 후 다시 쿼리해서 포커스
+  setTimeout(()=>{
+    const next = document.querySelector('#pay-grid input.pay-card-inp[data-card-field="'+field+'"][data-eid="'+nextEid+'"]');
+    if(next){ next.focus(); next.select(); }
+  }, 600);
+}
+
 // 급여관리 카드뷰 — 검색 시 재계산 생략, DOM 필터 + 캐시 합산
 const _payrollSummaryCache = new Map();
 function fastSearchPayroll(){
@@ -2311,8 +2339,10 @@ function renderPayroll(){
           <span class="prl">상여금</span>
           <span style="display:flex;align-items:center;gap:5px">
             <input type="number" value="${s.bonus}" placeholder="0"
+              class="pay-card-inp" data-eid="${emp.id}" data-card-field="bonus"
               style="width:90px;padding:3px 6px;font-size:12px;border:1px solid var(--bd2);border-radius:5px;text-align:right;font-family:inherit;font-weight:600;color:var(--purple)"
-              onblur="setMonthBonus(${emp.id},pY,pM,+this.value);clearTimeout(window._cardRefT);window._cardRefT=setTimeout(()=>renderPayroll(),500)">
+              onblur="setMonthBonus(${emp.id},pY,pM,+this.value);clearTimeout(window._cardRefT);window._cardRefT=setTimeout(()=>renderPayroll(),500)"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();payCardNav(this);}">
             <span style="font-size:10px;color:var(--ink3)">원</span>
           </span>
         </div>
@@ -2330,8 +2360,10 @@ function renderPayroll(){
           </span>
           <span style="display:flex;align-items:center;gap:4px">
             <input type="number" value="${rawV||''}" placeholder="0" min="0"
+              class="pay-card-inp" data-eid="${emp.id}" data-card-field="allow-${a.id}"
               style="width:80px;padding:3px 6px;font-size:12px;border:1px solid ${isDeduct?'#FECDD3':'var(--bd2)'};border-radius:5px;text-align:right;font-family:inherit;font-weight:600;color:${isDeduct?'var(--rose)':'var(--amber)'}"
-              onblur="setMonthAllowance(${emp.id},pY,pM,'${a.id}',+this.value);clearTimeout(window._cardRefT);window._cardRefT=setTimeout(()=>renderPayroll(),500)">
+              onblur="setMonthAllowance(${emp.id},pY,pM,'${a.id}',+this.value);clearTimeout(window._cardRefT);window._cardRefT=setTimeout(()=>renderPayroll(),500)"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();payCardNav(this);}">
             <span style="font-size:10px;color:${isDeduct?'var(--rose)':'var(--ink3)'}">${isDeduct?'(공제)':'원'}</span>
             ${!isDeduct?`<label style="display:flex;align-items:center;gap:2px;cursor:pointer;white-space:nowrap" title="통상임금 포함 시 가산수당(야간/연장/휴일) 계산에 반영">
               <input type="checkbox" ${isOrd?'checked':''} style="accent-color:var(--navy2)"
