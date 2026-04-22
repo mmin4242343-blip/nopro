@@ -8333,6 +8333,7 @@ async function doAuthLogin(){
     } else {
       await sbLoadAll(res.session.companyId);
       enterApp(res.session.company);
+      if(typeof startAutoPoll === 'function') startAutoPoll();
     }
     startAuthRefreshTimer();
   } catch(e){
@@ -8368,6 +8369,7 @@ async function doAuthSignup(){
     await sbSaveAll(res.session.companyId);
     admSendNotify('signup', {company, name, email, phone, size});
     enterApp(company);
+    if(typeof startAutoPoll === 'function') startAutoPoll();
     startAuthRefreshTimer();
   } catch(e){
     errEl.textContent=e.message||'회원가입 실패';
@@ -8416,6 +8418,7 @@ function admLogout(){
 
 function authLogout(){
   stopAuthRefreshTimer();
+  if(typeof stopAutoPoll === 'function') stopAutoPoll();
   apiFetch('/auth-logout','POST').catch(()=>{});
   localStorage.removeItem('nopro_session');
   localStorage.removeItem('nopro_jwt'); // 레거시 토큰 정리
@@ -8690,6 +8693,7 @@ async function admDeleteUser(id){
     } else {
       await sbLoadAll(data.session.companyId);
       enterApp(data.session.company||'');
+      if(typeof startAutoPoll === 'function') startAutoPoll();
     }
     startAuthRefreshTimer();
   } catch(e){
@@ -8785,6 +8789,140 @@ async function sbSaveAll(companyId) {
   await Promise.all(largeItems.map(item=>
     apiFetch('/data-save','POST',{items:[item]}).catch(e=>console.warn('대형 키 저장 오류('+item.key+'):',e))
   ));
+  // 서버 동기화 완료 시점 스냅샷 (폴링 머지 기준값)
+  if(typeof _takeSyncedSnapshot === 'function') _takeSyncedSnapshot();
+}
+
+// ══════════════════════════════════════════════════════
+// 📡 자동 동기화 폴링 (방법 2: 30초마다 필드 단위 머지)
+// 목적: 동시 접속 시 서로 다른 필드 편집이 덮어써지지 않도록 함
+// ══════════════════════════════════════════════════════
+let _syncedSnapshot = null;
+let _pollTimerId = null;
+const POLL_INTERVAL_MS = 30000;
+
+function _deepCopy(x){ try { return JSON.parse(JSON.stringify(x||{})); } catch(e){ return {}; } }
+
+function _takeSyncedSnapshot(){
+  try {
+    _syncedSnapshot = {
+      emps: JSON.stringify(EMPS),
+      pol:  JSON.stringify(POL),
+      bk:   JSON.stringify(DEF_BK),
+      tbk:  _deepCopy(TBK),
+      rec:  _deepCopy(REC),
+      bonus: _deepCopy(BONUS_REC),
+      allow: _deepCopy(ALLOWANCE_REC),
+      leave_overrides: _deepCopy(typeof leaveOverrides!=='undefined'?leaveOverrides:{}),
+      safety: _deepCopy(typeof SAFETY_REC!=='undefined'?SAFETY_REC:{}),
+    };
+  } catch(e){ console.warn('스냅샷 실패:', e); }
+}
+
+// 서버 블롭과 로컬 블롭을 필드 단위로 머지.
+// 규칙: 서버값 우선 → 내가 편집 중인 필드(스냅샷과 다름)는 로컬 유지 →
+//       로컬에서 지운 필드는 서버값 무시.
+function _mergeByField(local, server, snapshot){
+  const L = local || {}; const S = server || {}; const snap = snapshot || {};
+  const merged = {};
+  Object.keys(S).forEach(k => {
+    // 로컬에서 삭제된 필드는 서버에서 부활시키지 않음
+    if((k in snap) && !(k in L)) return;
+    merged[k] = S[k];
+  });
+  Object.keys(L).forEach(k => {
+    const dirty = JSON.stringify(L[k]) !== JSON.stringify(snap[k]);
+    if(dirty || !(k in S)) merged[k] = L[k];
+  });
+  return merged;
+}
+
+async function pollForUpdates(){
+  if(document.hidden) return;
+  const _sess = (()=>{ try { return JSON.parse(localStorage.getItem('nopro_session')||'null'); } catch(e){ return null; }})();
+  if(!_sess || !_sess.companyId) return;
+  try {
+    const server = await apiFetch('/data-load','POST',{});
+    if(!server) return;
+    let changed = false;
+    const snap = _syncedSnapshot || {};
+    // 키 기반 블롭 — 필드 단위 머지
+    const mergeKeyed = (name, getLocal, setLocal, lsKey)=>{
+      if(server[name] === undefined) return;
+      const local = getLocal();
+      const m = _mergeByField(local, server[name]||{}, snap[name]);
+      if(JSON.stringify(m) !== JSON.stringify(local)){
+        setLocal(m);
+        if(lsKey) localStorage.setItem(lsKey, JSON.stringify(m));
+        changed = true;
+      }
+    };
+    mergeKeyed('rec',   ()=>REC,           v=>{REC=v;},          'npm5_rec');
+    mergeKeyed('bonus', ()=>BONUS_REC,     v=>{BONUS_REC=v;},    'npm5_bonus');
+    mergeKeyed('allow', ()=>ALLOWANCE_REC, v=>{ALLOWANCE_REC=v;},'npm5_allow');
+    mergeKeyed('tbk',   ()=>TBK,           v=>{TBK=v;},          'npm5_tbk');
+    if(typeof leaveOverrides !== 'undefined'){
+      mergeKeyed('leave_overrides', ()=>leaveOverrides, v=>{leaveOverrides=v;}, 'npm5_leave_overrides');
+    }
+    if(typeof SAFETY_REC !== 'undefined'){
+      mergeKeyed('safety', ()=>SAFETY_REC, v=>{SAFETY_REC=v;}, 'npm5_safety');
+    }
+    // 비키 블롭 — 내 편집 없을 때만 교체 (스냅샷과 로컬이 같으면 미편집)
+    const replaceIfClean = (name, getStr, apply)=>{
+      if(server[name] === undefined) return;
+      const localStr = getStr();
+      const serverStr = JSON.stringify(server[name]);
+      if(localStr !== serverStr && localStr === snap[name]){
+        apply(server[name]);
+        changed = true;
+      }
+    };
+    replaceIfClean('emps', ()=>JSON.stringify(EMPS), v=>{
+      EMPS = v; if(typeof sortEMPS==='function') sortEMPS();
+      localStorage.setItem('npm5_emps', JSON.stringify(EMPS));
+    });
+    replaceIfClean('pol', ()=>JSON.stringify(POL), v=>{
+      POL = Object.assign({...(typeof DEF_POL!=='undefined'?DEF_POL:{})}, v);
+      localStorage.setItem('npm5_pol', JSON.stringify(POL));
+    });
+    replaceIfClean('bk', ()=>JSON.stringify(DEF_BK), v=>{
+      DEF_BK = v;
+      localStorage.setItem('npm5_bk', JSON.stringify(DEF_BK));
+    });
+
+    if(!changed) return;
+    _takeSyncedSnapshot();
+    // 편집 중인 input이 있으면 재렌더 생략 (타이핑 끊기 방지)
+    const ae = document.activeElement;
+    const editing = ae && (ae.tagName==='INPUT' || ae.tagName==='TEXTAREA' || ae.tagName==='SELECT');
+    if(editing) return;
+    const active = document.querySelector('.pg.on');
+    if(!active) return;
+    const p = active.id.replace('pg-','');
+    if(p==='daily' && typeof renderTable==='function') renderTable();
+    else if(p==='monthly' && typeof renderMonthly==='function') renderMonthly();
+    else if(p==='payroll' && typeof renderPayroll==='function') renderPayroll();
+    else if(p==='emps' && typeof renderEmps==='function') renderEmps();
+    else if(p==='leave' && typeof renderLeave==='function') renderLeave();
+    else if(p==='company' && typeof renderCompany==='function') renderCompany();
+    else if(p==='shift' && typeof renderShiftList==='function') renderShiftList();
+    else if(p==='safety' && typeof renderSafety==='function') renderSafety();
+    else if(p==='folder' && typeof renderFolder==='function') renderFolder();
+    if(typeof renderSb==='function'){
+      const sbInp = document.getElementById('sb-search-inp');
+      renderSb(sbInp?.value||'');
+    }
+  } catch(e){
+    console.warn('poll 실패:', e);
+  }
+}
+
+function startAutoPoll(){
+  if(_pollTimerId) return;
+  _pollTimerId = setInterval(pollForUpdates, POLL_INTERVAL_MS);
+}
+function stopAutoPoll(){
+  if(_pollTimerId){ clearInterval(_pollTimerId); _pollTimerId = null; }
 }
 
 // ── 전체 불러오기 (서버 프록시) ──
@@ -8806,6 +8944,8 @@ async function sbLoadAll(companyId) {
   if(map.folders)        localStorage.setItem('npm5_folders', JSON.stringify(map.folders));
   if(map.safety)         { SAFETY_REC = map.safety; localStorage.setItem('npm5_safety', JSON.stringify(SAFETY_REC)); }
 
+  // 서버 로드 완료 시점 스냅샷 (폴링 머지 기준값)
+  if(typeof _takeSyncedSnapshot === 'function') _takeSyncedSnapshot();
   return map;
 }
 
