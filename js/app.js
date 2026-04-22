@@ -26,7 +26,13 @@ async function apiFetch(endpoint, method='POST', body=null){
   let data;
   try{data=JSON.parse(text);}catch(e){throw new Error('서버 응답 오류 (status:'+res.status+')');}
   const isAuthEndpoint=endpoint.startsWith('/auth-login')||endpoint.startsWith('/auth-signup')||endpoint.startsWith('/auth-verify');
-  if(res.status===401 && !isAuthEndpoint){authLogout();throw new Error('세션이 만료되었습니다');}
+  if(res.status===401 && !isAuthEndpoint){
+    if(typeof showSyncToast==='function'){
+      showSyncToast('⚠️ 세션이 만료되었습니다. 다시 로그인해주세요.\n저장되지 않은 값은 로컬에 남아있을 수 있습니다.','error',5000);
+    }
+    authLogout();
+    throw new Error('세션이 만료되었습니다');
+  }
   if(res.status===429) throw new Error(data.error||'요청이 너무 많습니다. 잠시 후 다시 시도해주세요.');
   if(!res.ok) throw new Error(data.error||'서버 오류');
   return data;
@@ -268,6 +274,9 @@ function setTaxRec(eid,y,m,field,val){
   localStorage.setItem('npm5_tax',JSON.stringify(TAX_REC));
 }
 
+// 서버에 아직 전송 안 된 로컬 변경이 있는지 추적 (beforeunload 경고용)
+let _hasUnsavedChanges = false;
+
 function saveLS(){
   try{
     localStorage.setItem(LS.E,JSON.stringify(EMPS));
@@ -279,15 +288,23 @@ function saveLS(){
     localStorage.setItem(LS.AL,JSON.stringify(ALLOWANCE_REC));
     sfSave();
   }catch(e){console.warn(e);}
+  _hasUnsavedChanges = true;
   // Supabase 자동 동기화 (즉시 실행, debounce)
   try{
     const _sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
     if(_sess && _sess.companyId){
       // debounce: 연속 저장 방지 (500ms)
       if(saveLS._timer) clearTimeout(saveLS._timer);
-      saveLS._timer = setTimeout(()=>{
-        sbSaveAll(_sess.companyId)
-          .catch(e=>{console.warn('Supabase 저장 오류:',e);if(typeof showSyncToast==='function')showSyncToast('서버 저장 실패 — 로컬에는 저장됨','warn');});
+      saveLS._timer = setTimeout(async ()=>{
+        try {
+          await sbSaveAll(_sess.companyId);
+          _hasUnsavedChanges = false;
+        } catch(e) {
+          console.warn('Supabase 저장 오류:',e);
+          if(typeof showSyncToast==='function'){
+            showSyncToast('⚠️ 서버 저장 실패\n네트워크 상태를 확인해주세요. 로컬에는 저장됨.','error',5000);
+          }
+        }
       }, 500);
     }
   }catch(e){}
@@ -299,7 +316,9 @@ function flushPendingSave(){
     if(saveLS._timer){ clearTimeout(saveLS._timer); saveLS._timer=null; }
     const _sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
     if(_sess && _sess.companyId){
-      return sbSaveAll(_sess.companyId).catch(e=>console.warn('즉시 저장 실패:',e));
+      return sbSaveAll(_sess.companyId)
+        .then(()=>{ _hasUnsavedChanges = false; })
+        .catch(e=>console.warn('즉시 저장 실패:',e));
     }
   }catch(e){}
 }
@@ -331,6 +350,15 @@ window.addEventListener('pagehide', _flushSaveOnUnload);
 window.addEventListener('beforeunload', _flushSaveOnUnload);
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'hidden') _flushSaveOnUnload();
+});
+
+// 미저장 변경사항이 있으면 탭 닫기 전에 브라우저 네이티브 확인창 표시
+window.addEventListener('beforeunload', (e)=>{
+  if(_hasUnsavedChanges){
+    e.preventDefault();
+    e.returnValue = '변경사항이 아직 서버에 저장되지 않았습니다.';
+    return e.returnValue;
+  }
 });
 
 // 탭/창 복귀 시 서버 최신값 자동 반영 (동시 접속 반영 — 옵션 A)
@@ -4077,7 +4105,9 @@ function cancelLeave(id){
 function rmE(id){
   const emp=EMPS.find(e=>e.id===id);
   if(!emp)return;
-  if(!confirm(`"${emp.name||'이름없음'}" 직원을 삭제하시겠습니까?`))return;
+  const nm = emp.name || '이름없음';
+  if(!confirm(`"${nm}" 직원을 삭제하시겠습니까?\n\n이 직원의 출퇴근·급여·연차·수당 이력이 화면에서 사라집니다.\n\n※ 복구가 필요하면 관리자에게 문의 (감사 로그에 기록은 남습니다)`))return;
+  if(!confirm(`⚠️ 최종 확인\n\n"${nm}" 을(를) 정말 삭제할까요?`))return;
   EMPS=EMPS.filter(e=>e.id!==id);saveLS();renderEmps();renderSb();renderTable();
 }
 function rmAllEmps(){
@@ -4513,12 +4543,19 @@ function renameFolder(id){
 }
 
 function deleteFolder(id){
+  const folder=FOLDERS.find(f=>f.id===id);
+  if(!folder) return;
   const toDelete=[id];
   let changed=true;
   while(changed){
     changed=false;
     FOLDERS.forEach(f=>{if(!toDelete.includes(f.id)&&toDelete.includes(f.parentId)){toDelete.push(f.id);changed=true;}});
   }
+  const subCount=toDelete.length-1;
+  const fileCount=FOLDERS.filter(f=>toDelete.includes(f.id)).reduce((n,f)=>n+((f.files||[]).length),0);
+  const detail=(subCount||fileCount)?`\n\n하위 폴더 ${subCount}개, 파일 ${fileCount}개가 함께 삭제됩니다.`:'';
+  if(!confirm(`"${folder.name||'이름없음'}" 폴더를 삭제하시겠습니까?${detail}`)) return;
+  if(!confirm(`⚠️ 최종 확인\n\n폴더와 파일은 복구할 수 없습니다. 정말 삭제할까요?`)) return;
   // 삭제 대상 폴더의 파일들을 스토리지에서도 삭제
   const storagePaths=[];
   FOLDERS.filter(f=>toDelete.includes(f.id)).forEach(f=>{
@@ -4913,16 +4950,16 @@ function updateSyncInfo(){
   if(el) el.textContent=localStorage.getItem('npm5_last_sync')||'-';
 }
 
-function showSyncToast(msg, type='ok'){
-  const colors = {ok:'var(--teal)',warn:'var(--amber)',error:'var(--rose)'};
+function showSyncToast(msg, type='ok', duration=3000){
+  const colors = {ok:'var(--teal)',warn:'var(--amber)',error:'var(--rose)',info:'var(--navy2)'};
   const t=document.createElement('div');
   t.style.cssText=`position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
-    background:var(--card);border:1px solid ${colors[type]||'var(--bd)'};
+    background:var(--card);border:2px solid ${colors[type]||'var(--bd)'};
     color:var(--ink);padding:12px 22px;border-radius:12px;font-size:13px;font-weight:600;
-    z-index:99999;box-shadow:0 8px 24px rgba(0,0,0,.2);white-space:nowrap`;
+    z-index:99999;box-shadow:0 8px 24px rgba(0,0,0,.2);max-width:90vw;white-space:pre-wrap;text-align:center`;
   t.textContent=msg;
   document.body.appendChild(t);
-  setTimeout(()=>t.remove(), 3000);
+  setTimeout(()=>t.remove(), duration);
 }
 
 // ── Apps Script 코드 복사 버튼 ──
@@ -8716,9 +8753,12 @@ function startAuthRefreshTimer(){
         credentials:'include'
       });
       if(!res.ok && res.status===401){
-        // 쿠키 만료 — 타이머 정지 후 로그아웃
+        // 쿠키 만료 — 타이머 정지 후 로그아웃. 사용자에게 알림 후 시간 두고 로그아웃.
         stopAuthRefreshTimer();
-        authLogout();
+        if(typeof showSyncToast==='function'){
+          showSyncToast('⚠️ 세션이 만료되어 로그아웃됩니다.\n입력 중인 값이 있으면 잠시 기다린 뒤 복사해두세요.','error',5000);
+        }
+        setTimeout(()=>authLogout(), 4000);
       }
     }catch(e){ /* 네트워크 일시 장애는 무시 */ }
   }, AUTH_REFRESH_INTERVAL_MS);
@@ -9117,6 +9157,7 @@ function clearEmpShift(empId){
   if(!emp) return;
   const name = emp.name || '이름 없음';
   if(!confirm(`"${name}" 직원의 근무형태를 삭제하시겠습니까?\n\n상태가 "미등록"으로 변경되고 저장된 shiftName·출퇴근 시간·소정근로일·휴게시간 설정이 제거됩니다.`)) return;
+  if(!confirm(`⚠️ 최종 확인\n\n"${name}" 근무형태를 정말 삭제할까요?`)) return;
   saveEmpWithHistory(empId, {
     shiftName: '',
     workStart: '',
