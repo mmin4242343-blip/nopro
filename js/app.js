@@ -1215,6 +1215,16 @@ function setOutTime(eid,idx,field,raw){
   const k=rk(eid,cY,cM,cD);
   if(!REC[k]||!REC[k].outTimes)return;
   REC[k].outTimes[idx][field]=parseTimeInput(raw)||'';
+  // 역순(종료≤시작) 입력은 실근무가 과다 계산될 수 있어 경고
+  const ot = REC[k].outTimes[idx];
+  if(ot.s && ot.e){
+    const s=pT(ot.s), e=pT(ot.e);
+    if(s!==null && e!==null && e<=s){
+      if(typeof showSyncToast==='function'){
+        showSyncToast('⚠️ 외출 시간이 올바르지 않습니다 (종료 ≤ 시작)\n이 외출은 0분으로 처리됩니다','warn',4000);
+      }
+    }
+  }
   saveLS();renderTable();
 }
 function delOutTime(eid,idx){
@@ -2901,7 +2911,7 @@ function renderEmps(){
             oninput="updRrn(${e.id},'rrnFront',this.value)" id="rrn-front-${e.id}" style="text-align:center;letter-spacing:1px" autocomplete="off">
           <span style="color:var(--ink3);font-size:12px">-</span>
           <input class="ei2" value="${esc(e.rrnBack||'')}" maxlength="7" placeholder="뒷7자리"
-            oninput="updRrn(${e.id},'rrnBack',this.value)" style="text-align:center;letter-spacing:2px" autocomplete="off">
+            oninput="updRrn(${e.id},'rrnBack',this.value)" id="rrn-back-${e.id}" style="text-align:center;letter-spacing:2px" autocomplete="off">
         </div>
       </td>
       <td>
@@ -3003,6 +3013,16 @@ function updRrn(id,field,val){
   } else {
     e[field]=val.replace(/[^0-9]/g,'');
   }
+  // 입력 완성도 시각 피드백: 부분 입력 시 호박색 테두리, 완성/빈 상태면 기본
+  const paint = (sel, expectedLen, actualLen)=>{
+    const inp = document.querySelector(sel);
+    if(!inp) return;
+    const partial = actualLen>0 && actualLen<expectedLen;
+    inp.style.borderColor = partial ? 'var(--amber)' : '';
+    inp.title = partial ? `${expectedLen}자리를 모두 입력해주세요 (현재 ${actualLen}자리)` : '';
+  };
+  paint('#rrn-front-'+id, 6, (e.rrnFront||'').length);
+  paint('#rrn-back-'+id, 7, (e.rrnBack||'').length);
   // 앞자리 6자리 이상이면 나이 즉시 계산
   const age=rrn2age(e.rrnFront,e.rrnBack);
   if(age!==''){
@@ -3062,7 +3082,22 @@ function sortEMPS(){
 function updE(id,f,v){
   const e=EMPS.find(x=>x.id===id);
   if(!e)return;
-  e[f]=f==='rate'?+v:v;
+  // 숫자 필드는 음수 방지 (실수 입력으로 음의 급여가 들어가는 것 차단)
+  if(f==='rate' || f==='monthly'){
+    const n = +v;
+    e[f] = isNaN(n) ? 0 : Math.max(0, n);
+  } else {
+    e[f] = v;
+  }
+  // 입사일/퇴사일 미래 날짜는 실수일 가능성 → 저장하되 경고
+  if((f==='join' || f==='leave') && v){
+    const d = new Date(v);
+    if(!isNaN(d) && d > new Date()){
+      if(typeof showSyncToast==='function'){
+        showSyncToast(`⚠️ ${f==='join'?'입사일':'퇴사일'}이 미래 날짜입니다. 저장은 되지만 확인해주세요.`,'warn',4000);
+      }
+    }
+  }
   // shift(주야간) 변경 시 EMPS 배열 자체 재정렬
   if(f==='shift'||f==='leave'){
     sortEMPS();
@@ -4108,7 +4143,11 @@ function rmE(id){
   const nm = emp.name || '이름없음';
   if(!confirm(`"${nm}" 직원을 삭제하시겠습니까?\n\n이 직원의 출퇴근·급여·연차·수당 이력이 화면에서 사라집니다.\n\n※ 복구가 필요하면 관리자에게 문의 (감사 로그에 기록은 남습니다)`))return;
   if(!confirm(`⚠️ 최종 확인\n\n"${nm}" 을(를) 정말 삭제할까요?`))return;
-  EMPS=EMPS.filter(e=>e.id!==id);saveLS();renderEmps();renderSb();renderTable();
+  EMPS=EMPS.filter(e=>e.id!==id);
+  saveLS();
+  // 다른 기기에 30초 폴링을 기다리지 않고 즉시 반영
+  if(typeof flushPendingSave==='function') flushPendingSave();
+  renderEmps();renderSb();renderTable();
 }
 function rmAllEmps(){
   if(!EMPS.length){alert('삭제할 직원이 없습니다');return;}
@@ -4294,7 +4333,15 @@ function updNotes(){
   const el_hmo=document.getElementById('hol-monthly-ot-note');if(el_hmo){el_hmo.textContent=(holMOt??true)?'ON: ×200%':'OFF';el_hmo.style.color=c(holMOt??true);}
   const el_dm=document.getElementById('ded-monthly-note');if(el_dm){el_dm.textContent=(dedM??true)?'ON: 월급÷평일수':'OFF';el_dm.style.color=c(dedM??true);}
   const holDetail=document.getElementById('hol-monthly-detail');
-  if(holDetail) holDetail.style.opacity=(holM??true)?'1':'0.4';
+  if(holDetail){
+    const parentOn = (holM??true);
+    holDetail.style.opacity = parentOn ? '1' : '0.4';
+    holDetail.style.pointerEvents = parentOn ? '' : 'none';
+    // 부모가 OFF면 자식 토글을 실제로 disabled 처리 (클릭되는 척 방지)
+    holDetail.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+      cb.disabled = !parentOn;
+    });
+  }
   const el4=document.getElementById('night-info');if(el4)el4.innerHTML=`야간: <strong>${pad(ns)}:00~06:00</strong> / 월고정 ×0.5추가 / 시급제 ×1.5배`;
   const el5=document.getElementById('th-nt');if(el5)el5.textContent=`${pad(ns)}~06시`;
 }
