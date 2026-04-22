@@ -174,11 +174,15 @@ const fdow=(y,m)=>new Date(y,m-1,1).getDay();
 const rk=(id,y,m,d)=>`${id}_${y}-${pad(m)}-${pad(d)}`;
 const pT=t=>{if(!t||!t.includes(':'))return null;const[h,m]=t.split(':').map(Number);return h*60+m;};
 const rEnd=(s,e)=>e<=s?e+1440:e;
-const fmt$=n=>(Math.round(Math.round(n)/10)*10).toLocaleString('ko-KR');
-// 10원 단위 반올림 (일의 자리 반올림)
-const r10=n=>Math.round(n/10)*10;
-// 분→시간 변환: 소수점 셋째 자리에서 반올림 (10분=0.17, 20분=0.33, 40분=0.67)
-const m2h=m=>Math.round(m/60*100)/100;
+// FP 보정 epsilon: 부동소수점 표현 오차(예: 32.98 → 32.979999...)로 인해
+// 정확히 .5인 값이 .49999...로 저장되어 "내림"되는 문제 방지.
+// 1e-9은 1경분의 1 수준. 정상 계산값엔 영향 없고, FP drift 케이스만 올바르게 올림.
+const FP_EPS = 1e-9;
+const fmt$=n=>(Math.round(Math.round(n)/10 + FP_EPS)*10).toLocaleString('ko-KR');
+// 10원 단위 반올림 (일의 자리 반올림) — FP drift 보정
+const r10=n=>Math.round(n/10 + FP_EPS)*10;
+// 분→시간 변환: 소수점 셋째 자리에서 반올림 (10분=0.17, 20분=0.33, 40분=0.67) — FP 보정
+const m2h=m=>Math.round(m/60*100 + FP_EPS)/100;
 const fmtH=m=>{if(!m||m<=0)return '';const hrs=m2h(m);return hrs%1===0?`${hrs}h`:`${hrs.toFixed(2).replace(/0$/,'')}h`;};
 function parseTimeInput(raw){
   if(!raw||!raw.trim())return '';
@@ -1040,7 +1044,7 @@ function monthSummary(eid,y,m){
   // ── 누적 시간(hours) × 시급 → r10 한 번 (엑셀 방식) ──
   // 엑셀 수식과 정확히 일치시키려면 화면 표시 시간(각 구간 2자리 반올림 후 합산)을 그대로 사용.
   // rh 는 표시/계산 양쪽에서 동일하게 쓰이는 2자리 반올림.
-  const _rh = v=>Math.round(v*100)/100;
+  const _rh = v=>Math.round(v*100 + FP_EPS)/100;
   if(empPayMode==='fixed'){
     const _ntF=POL.ntFixed??true, _otF=POL.otFixed??true;
     tBase=r10(rate*sot);
@@ -1133,12 +1137,12 @@ function monthSummary(eid,y,m){
   // 결근차감: 통상시급(= 기본시급 + '통상' 체크된 수당만 반영) 기준으로 재계산
   // 근로기준법상 결근 1일=통상임금 1일분 공제
   if(empPayMode!=='monthly' && empPayMode!=='hourly'){
-    deduction = Math.round(ordRate * (adays * dailyStd + m2h(dedShortMins)) / 10) * 10;
+    deduction = Math.round(ordRate * (adays * dailyStd + m2h(dedShortMins)) / 10 + FP_EPS) * 10;
   }
   // 총급여 = 기본급 + 수당 + 주휴 + 연차 + 총가산수당 + 월급제휴일 + 상여 - 결근차감
   const total=r10((tBase+totalAllowance) + wkly + annualPay + tTotalBonus + tMonthlyHolStdPay + tMonthlyHolOtPay + bonus - deduction);
 
-  const rh=v=>Math.round(v*100)/100; // 시간 소수점 2자리
+  const rh=v=>Math.round(v*100 + FP_EPS)/100; // 시간 소수점 2자리 (FP 보정)
   return{wdays,adays,aldays,twkH:rh(twkH),tNightH:rh(tAllNightH),tOtDayH:rh(tAllOtDayH),tOtNightH:rh(tAllOtNightH),tHolDayH:rh(tHolDayH),tHolNightH:rh(tHolNightH),tHolDayOtH:rh(tHolDayOtH),tHolNightOtH:rh(tHolNightOtH),
     tBase,tNightPay,tOtDayPay,tOtNightPay,tHolDayPay,tHolNightPay,tHolDayOtPay,tHolNightOtPay,
     tExtraWorkH:rh(tFixExtraH),tExtraWorkPay,tHolPayNew,tTotalBonus,
