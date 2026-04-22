@@ -1491,12 +1491,12 @@ noprohr.netlify.app/tbm_sign.html
       <div class="set-b">
         <div class="sr">
           <div><div class="sl">기본급 방식</div>
-            <div class="ss"><strong>통상임금제</strong>: 시급×기준시간(209h) 고정<br><strong>시급제</strong>: 실근무시간 합산<br><strong>월급제</strong>: 월급 고정+휴일수당<br><strong>포괄임금제</strong>: 월급 고정 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:13px;padding:0 2px" onclick="showTip('포괄임금제','월급이 고정된 사무직·관리직에 적용합니다.\n야간/연장/휴일 가산수당 별도 산출 없음\n\n✅ 일일 근태에서 출퇴근 시간 입력 불필요\n[출근] [연차] [결근] 버튼만 선택\n\n⚠️ 5인 이상 사업장에서 실제 연장근로가\n많은 경우 법적 분쟁 가능성 있음')">💡</button></span></div>
+            <div class="ss"><strong>통상임금제</strong>: 시급×기준시간(209h) 고정<br><strong>시급제</strong>: 실근무시간 합산<br><strong>포괄임금제</strong>: 월급 고정+휴일수당<br><strong>포괄임금제</strong>: 월급 고정 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:13px;padding:0 2px" onclick="showTip('포괄임금제','월급이 고정된 사무직·관리직에 적용합니다.\n야간/연장/휴일 가산수당 별도 산출 없음\n\n✅ 일일 근태에서 출퇴근 시간 입력 불필요\n[출근] [연차] [결근] 버튼만 선택\n\n⚠️ 5인 이상 사업장에서 실제 연장근로가\n많은 경우 법적 분쟁 가능성 있음')">💡</button></span></div>
           </div>
           <div class="rb-g" style="flex-direction:column;align-items:flex-end;gap:3px">
             <div class="rb on" id="rb-base-fixed" onclick="setBasePay('fixed')">통상임금제</div>
             <div class="rb" id="rb-base-hourly" onclick="setBasePay('hourly')">시급제</div>
-            <div class="rb" id="rb-base-monthly" onclick="setBasePay('monthly')">월급제</div>
+            <div class="rb" id="rb-base-monthly" onclick="setBasePay('monthly')">포괄임금제</div>
           </div>
         </div>
         <div class="sr" id="sr-sot">
@@ -1543,7 +1543,7 @@ noprohr.netlify.app/tbm_sign.html
         <div style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap">
           <button id="prem-tab-fixed" class="btn btn-sm btn-n" onclick="setPremTab('fixed')" style="font-size:10px;padding:4px 12px">📋 통상임금제</button>
           <button id="prem-tab-hourly" class="btn btn-sm" onclick="setPremTab('hourly')" style="font-size:10px;padding:4px 12px">⏱ 시급제</button>
-          <button id="prem-tab-monthly" class="btn btn-sm" onclick="setPremTab('monthly')" style="font-size:10px;padding:4px 12px">💼 월급제</button>
+          <button id="prem-tab-monthly" class="btn btn-sm" onclick="setPremTab('monthly')" style="font-size:10px;padding:4px 12px">💼 포괄임금제</button>
         </div>
 
         <!-- 공통: 야간 시작 시각 -->
@@ -1613,7 +1613,7 @@ noprohr.netlify.app/tbm_sign.html
         <div id="prem-panel-monthly" style="display:none">
           <div class="info" style="background:#F5F3FF;border-color:#DDD6FE;color:#5B21B6;margin-bottom:10px">
             💼 <strong>통상시급</strong> = 월급 ÷ 209h<br>
-            <span style="font-size:10px;font-weight:400;line-height:1.6">월급제는 월급이 고정 지급됩니다. 단, 휴일(주말·공휴일) 출근 시 통상시급을 기준으로 별도 가산수당이 발생합니다.<br>
+            <span style="font-size:10px;font-weight:400;line-height:1.6">포괄임금제는 월급이 고정 지급됩니다. 단, 휴일(주말·공휴일) 출근 시 통상시급을 기준으로 별도 가산수당이 발생합니다.<br>
             예) 월급 3,000,000원 → 통상시급 3,000,000÷209 ≈ 14,354원</span>
           </div>
           <div class="sr">
