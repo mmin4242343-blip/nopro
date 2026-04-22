@@ -319,6 +319,81 @@ function freezePastMonthsPol(polToSave){
   } catch(e){ console.warn('freezePastMonthsPol 실패:', e); return false; }
 }
 
+// ═══ 월 확정 급여 스냅샷 헬퍼 ═══
+// 확정된 달의 저장된 직원 요약을 반환. 없으면 null.
+function getStoredPayment(eid, y, m){
+  const key = _polKey(y, m);
+  const snap = PAY_SNAPSHOTS[key];
+  if(!snap || !snap.confirmed || !snap.summaries) return null;
+  return snap.summaries[eid] || null;
+}
+function isPayMonthConfirmed(y, m){
+  const snap = PAY_SNAPSHOTS[_polKey(y, m)];
+  return !!(snap && snap.confirmed);
+}
+function getPayMonthMeta(y, m){
+  const snap = PAY_SNAPSHOTS[_polKey(y, m)];
+  if(!snap || !snap.confirmed) return null;
+  return { confirmedAt: snap.confirmedAt, confirmedBy: snap.confirmedBy };
+}
+
+// 지정 월 급여 확정: 현재 재직 중인 모든 직원의 monthSummary를 저장
+function confirmPayMonth(y, m){
+  const key = _polKey(y, m);
+  const monthEnd = new Date(y, m, 0);
+  const monthStart = new Date(y, m-1, 1);
+  const activeEmps = EMPS.filter(e=>{
+    if(e.join){const jd=new Date(e.join);if(jd>monthEnd)return false;}
+    if(e.leave){const ld=new Date(e.leave);if(ld<monthStart)return false;}
+    return true;
+  });
+  const summaries = {};
+  activeEmps.forEach(e=>{
+    // monthSummary는 이미 래핑돼 있어 POL 스냅샷 적용됨. 저장값 체크도 내부에 있지만
+    // 저장 시에는 _bypassPayStore 플래그로 항상 신선 계산.
+    _bypassPayStore = true;
+    try { summaries[e.id] = monthSummary(e.id, y, m); }
+    finally { _bypassPayStore = false; }
+  });
+  let sess = null; try { sess = JSON.parse(localStorage.getItem('nopro_session')||'null'); } catch(ex){}
+  PAY_SNAPSHOTS[key] = {
+    confirmed: true,
+    confirmedAt: new Date().toISOString(),
+    confirmedBy: sess?.email || sess?.company || 'unknown',
+    summaries
+  };
+  localStorage.setItem('npm5_pay_snapshots', JSON.stringify(PAY_SNAPSHOTS));
+  saveLS();
+  if(typeof showSyncToast==='function') showSyncToast(`${y}년 ${m}월 급여 확정 완료 (${Object.keys(summaries).length}명)`,'ok',3500);
+  if(typeof renderPayroll==='function') renderPayroll();
+}
+
+function unconfirmPayMonth(y, m){
+  const key = _polKey(y, m);
+  if(!PAY_SNAPSHOTS[key]) return;
+  if(!confirm(`${y}년 ${m}월 확정을 해제하시겠습니까?\n\n저장된 금액이 삭제되고, 현재 데이터 기반으로 다시 계산됩니다.`)) return;
+  delete PAY_SNAPSHOTS[key];
+  localStorage.setItem('npm5_pay_snapshots', JSON.stringify(PAY_SNAPSHOTS));
+  saveLS();
+  if(typeof showSyncToast==='function') showSyncToast(`${y}년 ${m}월 확정 해제됨`,'warn',3000);
+  if(typeof renderPayroll==='function') renderPayroll();
+}
+
+function recalcPayMonth(y, m){
+  const key = _polKey(y, m);
+  if(!PAY_SNAPSHOTS[key] || !PAY_SNAPSHOTS[key].confirmed){
+    // 확정 안 된 달: 그냥 확정 처리와 동일
+    confirmPayMonth(y, m);
+    return;
+  }
+  if(!confirm(`${y}년 ${m}월을 현재 데이터로 재계산하여 덮어쓸까요?\n\n기존에 확정된 금액은 사라집니다.`)) return;
+  delete PAY_SNAPSHOTS[key]; // 재계산을 위해 일시 제거
+  confirmPayMonth(y, m);
+}
+
+// monthSummary 래퍼에서 "저장값 우선" 로직을 건너뛰고 싶을 때 쓰는 플래그 (재계산 시 사용)
+let _bypassPayStore = false;
+
 // POL 변경 자동 감지. saveLS 진입 시 호출.
 // 이전에 기억해둔 POL과 현재 POL을 비교, 다르면 "변경 직전 상태"를 과거 달에 복사.
 let _prevPolForSnapshot = null;
@@ -507,6 +582,9 @@ let EMPS=load(LS.E,null)||[];
 let POL=Object.assign({...DEF_POL},load(LS.P,{}));
 // 월별 정책 스냅샷: "YYYY-MM" → POL 복사본. 과거 달 계산 시 그 달 스냅샷 사용.
 let POL_SNAPSHOTS = JSON.parse(localStorage.getItem('npm5_pol_snapshots')||'{}');
+// 월 확정 급여 스냅샷: "YYYY-MM" → { confirmed, confirmedAt, confirmedBy, summaries:{empId: monthSummary 결과} }
+// 확정된 달은 monthSummary 대신 이 저장값을 그대로 사용 → 어떤 데이터 수정에도 금액 고정
+let PAY_SNAPSHOTS = JSON.parse(localStorage.getItem('npm5_pay_snapshots')||'{}');
 // 기본 수당항목 보장 (localStorage에 빈 배열 저장돼있어도 기본값 복원)
 const DEF_ALLOW_IDS = ['ability','position','career','transport','car','meal','deduct'];
 const FIXED_ALLOWS = ['능력수당','직급수당','경력수당','교통비','차량유지비(비과세)','식대(비과세)','기타공제(가불및선지급)'];
@@ -840,6 +918,11 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate){
 }
 
 function monthSummary(eid,y,m){
+  // 월 확정 저장값이 있으면 계산 건너뛰고 저장값 그대로 반환 (확정 해제 전까지 금액 고정)
+  if(!_bypassPayStore){
+    const stored = getStoredPayment(eid, y, m);
+    if(stored) return stored;
+  }
   // 해당 월의 정책 스냅샷이 있으면 임시로 POL을 교체. 계산 끝나면 finally에서 복원.
   // 과거 달 조회 시 "그 달의 설정"으로 계산되도록 함.
   const _origPOL = POL;
@@ -2338,6 +2421,33 @@ function setPvMode(m){
   });
   if(!isCard)renderXlPreview();
 }
+// 급여관리 상단 "월 확정" 바 렌더
+function _renderPayConfirmBar(){
+  const bar = document.getElementById('pay-confirm-bar');
+  if(!bar) return;
+  const confirmed = isPayMonthConfirmed(pY, pM);
+  if(confirmed){
+    const meta = getPayMonthMeta(pY, pM);
+    const dateStr = meta?.confirmedAt ? new Date(meta.confirmedAt).toLocaleString('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+    bar.innerHTML = `
+      <div style="background:var(--tbg);border:1.5px solid var(--teal);border-radius:10px;padding:8px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="font-size:12px;font-weight:700;color:var(--teal)">✔ ${pY}년 ${pM}월 확정됨</span>
+        <span style="font-size:11px;color:var(--ink3)">${esc(dateStr)} · ${esc(meta?.confirmedBy||'')}</span>
+        <span style="flex:1"></span>
+        <button class="btn btn-xs" onclick="recalcPayMonth(${pY},${pM})" style="background:var(--card);color:var(--navy2);border:1px solid var(--bd2)" title="현재 데이터 기반으로 다시 계산해 덮어씀">↻ 재계산</button>
+        <button class="btn btn-xs" onclick="unconfirmPayMonth(${pY},${pM})" style="background:var(--card);color:var(--rose);border:1px solid #FECDD3">확정 해제</button>
+      </div>`;
+  } else {
+    bar.innerHTML = `
+      <div style="background:var(--surf);border:1.5px dashed var(--bd2);border-radius:10px;padding:8px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="font-size:12px;font-weight:700;color:var(--ink3)">● ${pY}년 ${pM}월 미확정</span>
+        <span style="font-size:11px;color:var(--ink3)">현재 데이터로 실시간 계산 중 · 설정/데이터 수정 시 금액 변동</span>
+        <span style="flex:1"></span>
+        <button class="btn btn-xs" onclick="confirmPayMonth(${pY},${pM})" style="background:var(--navy2);color:#fff;border:none;font-weight:700">💾 이 달 급여 확정</button>
+      </div>`;
+  }
+}
+
 // 급여관리 카드뷰 — 상여금/수당 입력에서 Enter 시 저장 + 다음 카드 같은 필드로 포커스 이동
 function payCardNav(el){
   const field = el.dataset.cardField;
@@ -2389,6 +2499,7 @@ function renderPayroll(){
   try {
   renderFilterBar('payroll-filter-bar','payroll');
   document.getElementById('pv-title').textContent=`${pY}년 ${pM}월 급여 요약`;
+  _renderPayConfirmBar();
   _payrollSummaryCache.clear();
   let gt={base:0,nt:0,ot:0,hol:0,al:0,bonus:0,allow:0,ded:0,total:0};
   // 해당 월에 재직 중인 직원만
@@ -9014,6 +9125,7 @@ async function sbSaveAll(companyId) {
     {key:'leave_settings', value:JSON.parse(localStorage.getItem('npm5_leave_settings')||'{}')},
     {key:'leave_overrides', value:JSON.parse(localStorage.getItem('npm5_leave_overrides')||'{}')},
     {key:'pol_snapshots', value:POL_SNAPSHOTS||{}},
+    {key:'pay_snapshots', value:PAY_SNAPSHOTS||{}},
   ];
   // 대형 키: 각각 별도 저장 (타임아웃 방지 + old_value 감사로그 저장)
   const largeItems = [
@@ -9182,6 +9294,7 @@ async function sbLoadAll(companyId) {
   if(map.folders)        localStorage.setItem('npm5_folders', JSON.stringify(map.folders));
   if(map.safety)         { SAFETY_REC = map.safety; localStorage.setItem('npm5_safety', JSON.stringify(SAFETY_REC)); }
   if(map.pol_snapshots)  { POL_SNAPSHOTS = map.pol_snapshots; localStorage.setItem('npm5_pol_snapshots', JSON.stringify(POL_SNAPSHOTS)); }
+  if(map.pay_snapshots)  { PAY_SNAPSHOTS = map.pay_snapshots; localStorage.setItem('npm5_pay_snapshots', JSON.stringify(PAY_SNAPSHOTS)); }
 
   // 최초 1회: POL_SNAPSHOTS가 비어있고 REC 데이터가 있으면 현재 POL을 과거 달에 복사해 시작점 확보
   try {
