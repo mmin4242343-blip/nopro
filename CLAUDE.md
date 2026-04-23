@@ -303,11 +303,12 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
 - 서버 응답에 키가 없으면 메모리·localStorage **그대로 유지**
 - 파셜 응답이 wipe를 유발할 수 없게 원천 차단
 
-#### 가드 2: `sbSaveAll` 빈값 덮어쓰기 차단
+#### 가드 2: `sbSaveAll` 빈값 덮어쓰기 차단 (우회 불가)
 - 저장 직전 `_syncedSnapshot`(마지막 로드·저장 완료 시점의 메모리 사본) 과 비교
 - 보호 대상: `emps`, `rec`, `bonus`, `allow`, `tax`, `tbk`, `safety`
 - 조건: `현재 비어있음 AND 직전 스냅샷에 데이터 있음` → 저장 스킵 + 사용자 토스트 경고
-- 의도적 전체 삭제는 `window._allowEmptyXxxSave = true` 플래그로 1회 우회 (예: `rmAllEmps`가 자동 세팅 후 2초 뒤 해제)
+- **우회 경로 없음** — 어떤 플래그/조건으로도 가드를 통과할 수 없음
+- `rmAllEmps`(전직원 일괄 삭제) 기능은 2026-04-23 사고 이후 비활성화. 개별 삭제로만 가능.
 
 #### 가드 3: `pollForUpdates` 서버 wipe 전파 차단
 - 30초 폴링이 "서버가 비었으니 로컬도 비워라" 하는 경로 봉쇄
@@ -316,9 +317,10 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
 
 **개발 시 지켜야 할 규칙**:
 1. **새 data_key 추가 시**: `sbLoadAll`에 `if('key' in map) { ... }` 패턴 사용. `else { X = []; }` 또는 `if(map.x)` 패턴 금지.
-2. **새로운 "전체 삭제" 기능 추가 시**: `window._allowEmptyXxxSave = true` 플래그 세팅 + 저장 후 2초 내 자동 해제.
-3. **`clearLocalData` 확장 시**: 전역 변수 리셋 + 반드시 `_syncedSnapshot = null` 도 동반 해야 함(다음 저장 시 가드가 "이전에 데이터 있었다"고 오인하지 않도록).
-4. **복구 절차**: 감사 로그 `old_value`에서 복원. `/api/audit-log?key=X&limit=1&offset=N` 페이징 후 `old` 크고 `new` 작은 시점의 `old_value` JSON.parse → `/api/data-save`로 재저장. `emps`는 rrnBack이 암호화된 상태라 이중 암호화 방지 위해 `rrnBack=''`로 비우고 저장 필요.
+2. **"전체 삭제" 기능 절대 추가 금지**: 2026-04-23 사고 재발 원천 차단. 필요 시 서버에서 직접 수동 처리.
+3. **`clearLocalData` 확장 시**: 전역 변수 리셋 + 반드시 `_syncedSnapshot = null` + `saveLS._timer` 취소 동반 필수.
+4. **서버 직접 저장(`/data-save`) 금지**: 반드시 `sbSaveAll()` 또는 `safeItemSave(key, value)` 래퍼 사용. `apiFetch('/data-save', ...)` 직접 호출은 **사용 금지** (가드 우회됨).
+5. **복구 절차**: 감사 로그 `old_value`에서 복원. `/api/audit-log?key=X&limit=1&offset=N` 페이징 후 `old` 크고 `new` 작은 시점의 `old_value` JSON.parse → `/api/data-save`로 재저장. `emps`는 rrnBack이 암호화된 상태라 이중 암호화 방지 위해 `rrnBack=''`로 비우고 저장 필요.
 
 ### 남은 보안 작업 (선택)
 - CSP `script-src 'unsafe-inline'` 제거: 인라인 이벤트 핸들러 336개를 addEventListener로 전환 필요 (대규모 리팩토링)

@@ -40,19 +40,35 @@ export const handler = async (event) => {
 
       const dataStr = JSON.stringify(value);
 
-      // 감사 로그용: 기존 값 조회 (대용량 키 제외)
+      // 감사 로그용 + 🛡️ 서버측 빈값 덮어쓰기 가드용: 기존 값 조회
       let oldValue = null;
-      if (!SKIP_OLD_VALUE_KEYS.includes(item.key)) {
+      try {
+        const { data: existing } = await supabase
+          .from('company_data')
+          .select('data_value')
+          .eq('company_id', companyId)
+          .eq('data_key', item.key)
+          .single();
+        if (existing) oldValue = existing.data_value;
+      } catch {
+        // 기존 값 조회 실패해도 저장은 진행
+      }
+
+      // 🛡️ 서버측 2차 방어: 빈값으로 기존 데이터 덮어쓰기 차단 (클라이언트 우회 대비)
+      // 보호 대상: emps/rec/bonus/allow/tax/tbk/safety
+      // 서버에 데이터가 있는데 들어오는 값이 빈 배열/객체이면 저장 거부
+      const PROTECTED = new Set(['emps','rec','bonus','allow','tax','tbk','safety']);
+      if (PROTECTED.has(item.key) && oldValue) {
+        let serverIsEmpty = false, clientIsEmpty = false;
         try {
-          const { data: existing } = await supabase
-            .from('company_data')
-            .select('data_value')
-            .eq('company_id', companyId)
-            .eq('data_key', item.key)
-            .single();
-          if (existing) oldValue = existing.data_value;
-        } catch {
-          // 기존 값 조회 실패해도 저장은 진행
+          const sv = JSON.parse(oldValue);
+          serverIsEmpty = Array.isArray(sv) ? sv.length === 0 : (sv && typeof sv==='object' && Object.keys(sv).length===0);
+        } catch {}
+        clientIsEmpty = Array.isArray(value) ? value.length === 0 : (value && typeof value==='object' && Object.keys(value).length===0);
+        if (!serverIsEmpty && clientIsEmpty) {
+          console.warn(`🛡️ 서버 가드: 빈값 덮어쓰기 차단 (company=${companyId}, key=${item.key}, by=${changedBy})`);
+          // 해당 키만 스킵하고 다음 아이템 계속 처리
+          continue;
         }
       }
 

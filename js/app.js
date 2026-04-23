@@ -436,9 +436,8 @@ async function safeItemSave(key, value){
     if(s==null) return false;
     try { const p = typeof s==='string'?JSON.parse(s):s; return Array.isArray(p)?p.length>0:(typeof p==='object' && Object.keys(p).length>0); } catch(e){ return false; }
   };
-  const allowFlagName = '_allowEmpty'+key.charAt(0).toUpperCase()+key.slice(1)+'Save';
-  const allowed = window[allowFlagName] === true;
-  if(!allowed && isEmpty(value) && snapHas(snap[key])){
+  // 🛡️ 우회 경로 없음 — 빈값 덮어쓰기는 조건 없이 무조건 차단
+  if(isEmpty(value) && snapHas(snap[key])){
     console.warn('🛡️ safeItemSave: 빈값 덮어쓰기 차단 ('+key+')');
     if(typeof showSyncToast==='function') showSyncToast('⚠️ '+key+' 빈값 덮어쓰기 차단\n서버 데이터 보호','warn',4000);
     return {blocked:true};
@@ -520,14 +519,10 @@ function _flushSaveOnUnload(){
       if(s==null) return false;
       try { const p = typeof s==='string'?JSON.parse(s):s; return Array.isArray(p)?p.length>0:(typeof p==='object' && Object.keys(p).length>0); } catch(e){ return false; }
     };
-    const guardKeys = {
-      emps: !window._allowEmptyEmpsSave,
-      bonus: !window._allowEmptyBonusSave,
-      allow: !window._allowEmptyAllowSave,
-      tax: !window._allowEmptyTaxSave,
-    };
+    // 🛡️ 우회 경로 없음 — 빈값 덮어쓰기 조건 없이 무조건 차단
+    const guardKeys = new Set(['emps','bonus','allow','tax']);
     items = items.filter(it => {
-      if(!(it.key in guardKeys) || !guardKeys[it.key]) return true;
+      if(!guardKeys.has(it.key)) return true;
       if(isEmpty(it.value) && snapHas(snap[it.key])){
         console.warn('🛡️ beacon: 빈값 덮어쓰기 차단 ('+it.key+')');
         return false;
@@ -4469,14 +4464,10 @@ function rmE(id){
   renderEmps();renderSb();renderTable();
 }
 function rmAllEmps(){
-  if(!EMPS.length){alert('삭제할 직원이 없습니다');return;}
-  if(!confirm(`전체 ${EMPS.length}명을 모두 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`))return;
-  if(!confirm('정말로 전직원을 삭제하시겠습니까? (최종 확인)'))return;
-  // 의도적 전체 삭제 — sbSaveAll 빈값 가드 우회
-  window._allowEmptyEmpsSave = true;
-  EMPS=[];saveLS();renderEmps();renderSb();renderTable();
-  // 저장 1회 후 플래그 자동 해제
-  setTimeout(()=>{ window._allowEmptyEmpsSave = false; }, 2000);
+  // 🛡️ 2026-04-23 사고 이후 "전직원 일괄 삭제" 비활성화.
+  // 데이터 유실 방지 가드를 우회하는 유일한 경로였으므로 제거됨.
+  // 전직원 삭제가 필요하면 직원 한 명씩 개별 삭제하거나 관리자 문의.
+  alert('전직원 일괄 삭제 기능은 비활성화되었습니다.\n\n데이터 유실 방지를 위해 직원은 한 명씩 개별 삭제해주세요.\n필요 시 관리자에게 문의하세요.');
 }
 
 // ══════════════════════════════════════
@@ -9217,7 +9208,7 @@ async function sbSaveAll(companyId) {
   ];
 
   // 🛡️ 빈 데이터 덮어쓰기 방어: 직전 스냅샷에 데이터가 있었는데 지금 비어있으면 의도치 않은 wipe.
-  // 사용자가 명시적으로 전체 삭제한 경우에만 window._allowEmptyXxxSave=true로 우회 허용.
+  // 우회 경로 없음 — 어떤 플래그로도 이 가드를 통과할 수 없음.
   const snap = (typeof _syncedSnapshot!=='undefined' && _syncedSnapshot) || {};
   const _isEmpty = v => v==null || (Array.isArray(v)?v.length===0:(typeof v==='object' && Object.keys(v).length===0));
   const _snapHasData = (snapVal) => {
@@ -9229,18 +9220,10 @@ async function sbSaveAll(companyId) {
       return false;
     } catch(e){ return false; }
   };
-  const _guardKeys = {
-    emps: !window._allowEmptyEmpsSave,
-    rec: !window._allowEmptyRecSave,
-    bonus: !window._allowEmptyBonusSave,
-    allow: !window._allowEmptyAllowSave,
-    tax: !window._allowEmptyTaxSave,
-    tbk: !window._allowEmptyTbkSave,
-    safety: !window._allowEmptySafetySave,
-  };
+  const _guardKeys = new Set(['emps','rec','bonus','allow','tax','tbk','safety']);
   const _blocked = [];
   const _filter = (items) => items.filter(it => {
-    if(!(it.key in _guardKeys) || !_guardKeys[it.key]) return true;
+    if(!_guardKeys.has(it.key)) return true;
     if(_isEmpty(it.value) && _snapHasData(snap[it.key])){
       _blocked.push(it.key);
       console.warn('🛡️ 빈 값 덮어쓰기 차단:', it.key, '(이전 스냅샷에 데이터 있음)');
