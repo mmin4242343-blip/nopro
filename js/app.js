@@ -427,6 +427,25 @@ function syncPolSnapshot(){
 // 서버에 아직 전송 안 된 로컬 변경이 있는지 추적 (beforeunload 경고용)
 let _hasUnsavedChanges = false;
 
+// 🛡️ 단일 키 서버 저장 래퍼 — 직접 /data-save 호출 시 반드시 이 함수 사용.
+// sbSaveAll을 우회하는 경로에도 동일한 "빈값 덮어쓰기 차단" 가드 적용.
+async function safeItemSave(key, value){
+  const snap = (typeof _syncedSnapshot!=='undefined' && _syncedSnapshot) || {};
+  const isEmpty = v => v==null || (Array.isArray(v)?v.length===0:(typeof v==='object' && Object.keys(v).length===0));
+  const snapHas = s => {
+    if(s==null) return false;
+    try { const p = typeof s==='string'?JSON.parse(s):s; return Array.isArray(p)?p.length>0:(typeof p==='object' && Object.keys(p).length>0); } catch(e){ return false; }
+  };
+  const allowFlagName = '_allowEmpty'+key.charAt(0).toUpperCase()+key.slice(1)+'Save';
+  const allowed = window[allowFlagName] === true;
+  if(!allowed && isEmpty(value) && snapHas(snap[key])){
+    console.warn('🛡️ safeItemSave: 빈값 덮어쓰기 차단 ('+key+')');
+    if(typeof showSyncToast==='function') showSyncToast('⚠️ '+key+' 빈값 덮어쓰기 차단\n서버 데이터 보호','warn',4000);
+    return {blocked:true};
+  }
+  return apiFetch('/data-save','POST',{key,value});
+}
+
 function saveLS(){
   // POL 변경 자동 감지 → 직전 상태를 과거 달에 복사 (변경 이후 과거 조회 시 옛 설정 사용 보장)
   try { syncPolSnapshot(); } catch(e){}
@@ -484,7 +503,7 @@ function _flushSaveOnUnload(){
     const _sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
     if(!_sess || !_sess.companyId) return;
     if(typeof navigator === 'undefined' || !navigator.sendBeacon) return;
-    const items = [
+    let items = [
       {key:'emps', value:EMPS},
       {key:'pol', value:POL},
       {key:'bk', value:DEF_BK},
@@ -494,6 +513,28 @@ function _flushSaveOnUnload(){
       {key:'leave_settings', value:JSON.parse(localStorage.getItem('npm5_leave_settings')||'{}')},
       {key:'leave_overrides', value:JSON.parse(localStorage.getItem('npm5_leave_overrides')||'{}')},
     ];
+    // 🛡️ 가드: sbSaveAll과 동일한 빈값 덮어쓰기 방어 (beacon이 sbSaveAll 우회 못하도록)
+    const snap = (typeof _syncedSnapshot!=='undefined' && _syncedSnapshot) || {};
+    const isEmpty = v => v==null || (Array.isArray(v)?v.length===0:(typeof v==='object' && Object.keys(v).length===0));
+    const snapHas = s => {
+      if(s==null) return false;
+      try { const p = typeof s==='string'?JSON.parse(s):s; return Array.isArray(p)?p.length>0:(typeof p==='object' && Object.keys(p).length>0); } catch(e){ return false; }
+    };
+    const guardKeys = {
+      emps: !window._allowEmptyEmpsSave,
+      bonus: !window._allowEmptyBonusSave,
+      allow: !window._allowEmptyAllowSave,
+      tax: !window._allowEmptyTaxSave,
+    };
+    items = items.filter(it => {
+      if(!(it.key in guardKeys) || !guardKeys[it.key]) return true;
+      if(isEmpty(it.value) && snapHas(snap[it.key])){
+        console.warn('🛡️ beacon: 빈값 덮어쓰기 차단 ('+it.key+')');
+        return false;
+      }
+      return true;
+    });
+    if(!items.length) return;
     const blob = new Blob([JSON.stringify({items})], {type:'application/json'});
     navigator.sendBeacon((typeof API_BASE!=='undefined'?API_BASE:'')+'/data-save', blob);
   }catch(e){ console.warn('beacon 저장 실패:', e); }
@@ -5968,7 +6009,7 @@ async function sfTranslateTbm(){
     sfShowTranslation();
     // 서버에도 저장
     const safetyValue=(()=>{const s={};Object.entries(SAFETY_REC).forEach(([k,v])=>{s[k]=Array.isArray(v)?v.map(({data,...r})=>r):v;});return s;})();
-    apiFetch('/data-save','POST',{key:'safety',value:safetyValue}).catch(()=>{});
+    safeItemSave('safety',safetyValue).catch(()=>{});
   }catch(e){
     alert('번역에 실패했습니다. 인터넷 연결을 확인해주세요.');
   }finally{
@@ -6000,7 +6041,7 @@ async function sfGenLink(){
   // safety 데이터만 서버에 즉시 저장 (전체 저장보다 훨씬 빠름)
   const safetyValue=(()=>{const s={};Object.entries(SAFETY_REC).forEach(([k,v])=>{s[k]=Array.isArray(v)?v.map(({data,...r})=>r):v;});return s;})();
   try{
-    await apiFetch('/data-save','POST',{key:'safety',value:safetyValue});
+    await safeItemSave('safety',safetyValue);
   }catch(e){
     console.error('토큰 저장 실패:',e);
     if(urlEl)urlEl.textContent='저장 실패 — 다시 시도해주세요';
@@ -6019,7 +6060,7 @@ async function sfSaveDay2(){
   sfSave();
   // safety 키만 서버에 저장 (빠름)
   const safetyValue=(()=>{const s={};Object.entries(SAFETY_REC).forEach(([k,v])=>{s[k]=Array.isArray(v)?v.map(({data,...r})=>r):v;});return s;})();
-  try{await apiFetch('/data-save','POST',{key:'safety',value:safetyValue});}catch(e){console.warn('safety 서버 저장 실패:',e);}
+  try{await safeItemSave('safety',safetyValue);}catch(e){console.warn('safety 서버 저장 실패:',e);}
   const msg=document.getElementById('sf-sv-msg');
   if(msg){msg.style.display='inline';setTimeout(()=>msg.style.display='none',2500);}
 }
@@ -6365,7 +6406,7 @@ async function sf2HandleFiles(files){
     // 서버에 즉시 저장
     try{
       const safetyValue=(()=>{const s={};Object.entries(SAFETY_REC).forEach(([k,v])=>{s[k]=Array.isArray(v)?v.map(({data,...r})=>r):v;});return s;})();
-      await apiFetch('/data-save','POST',{key:'safety',value:safetyValue});
+      await safeItemSave('safety',safetyValue);
     }catch(e){console.warn('safety 서버 저장 실패:',e);}
   } else {
     if(typeof showSyncToast==='function') showSyncToast('업로드 실패 - Console(F12) 확인','warn');
@@ -6407,7 +6448,7 @@ function sf2RenderPhotos(){
         sfSave();sf2RenderPhotos();
         // 서버에도 삭제 상태 반영
         const safetyValue=(()=>{const s={};Object.entries(SAFETY_REC).forEach(([k,v])=>{s[k]=Array.isArray(v)?v.map(({data,...r})=>r):v;});return s;})();
-        apiFetch('/data-save','POST',{key:'safety',value:safetyValue}).catch(()=>{});
+        safeItemSave('safety',safetyValue).catch(()=>{});
       }
     });
     row.appendChild(zb);row.appendChild(db);c.appendChild(row);
@@ -7523,7 +7564,7 @@ function leaveUploadApply(){
   localStorage.setItem('npm5_leave_overrides',JSON.stringify(leaveOverrides));
   saveLS();
   // 서버에 즉시 저장 (leave_overrides)
-  apiFetch('/data-save','POST',{key:'leave_overrides',value:JSON.parse(localStorage.getItem('npm5_leave_overrides')||'{}')}).catch(()=>{});
+  safeItemSave('leave_overrides',JSON.parse(localStorage.getItem('npm5_leave_overrides')||'{}')).catch(()=>{});
   renderLeave();
   leaveUploadCancel();
   if(typeof showSyncToast==='function') showSyncToast(count+'명 연차 데이터 반영 완료','ok');
