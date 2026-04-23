@@ -4431,7 +4431,11 @@ function rmAllEmps(){
   if(!EMPS.length){alert('삭제할 직원이 없습니다');return;}
   if(!confirm(`전체 ${EMPS.length}명을 모두 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`))return;
   if(!confirm('정말로 전직원을 삭제하시겠습니까? (최종 확인)'))return;
+  // 의도적 전체 삭제 — sbSaveAll 빈값 가드 우회
+  window._allowEmptyEmpsSave = true;
   EMPS=[];saveLS();renderEmps();renderSb();renderTable();
+  // 저장 1회 후 플래그 자동 해제
+  setTimeout(()=>{ window._allowEmptyEmpsSave = false; }, 2000);
 }
 
 // ══════════════════════════════════════
@@ -9166,9 +9170,48 @@ async function sbSaveAll(companyId) {
     {key:'folders', value:FOLDERS.map(f=>({...f,files:(f.files||[]).map(({dataUrl,...r})=>r)}))},
     {key:'safety', value:(()=>{const s={};Object.entries(SAFETY_REC).forEach(([k,v])=>{s[k]=Array.isArray(v)?v.map(({data,...r})=>r):v;});return s;})()},
   ];
+
+  // 🛡️ 빈 데이터 덮어쓰기 방어: 직전 스냅샷에 데이터가 있었는데 지금 비어있으면 의도치 않은 wipe.
+  // 사용자가 명시적으로 전체 삭제한 경우에만 window._allowEmptyXxxSave=true로 우회 허용.
+  const snap = (typeof _syncedSnapshot!=='undefined' && _syncedSnapshot) || {};
+  const _isEmpty = v => v==null || (Array.isArray(v)?v.length===0:(typeof v==='object' && Object.keys(v).length===0));
+  const _snapHasData = (snapVal) => {
+    if(snapVal==null) return false;
+    try {
+      const p = typeof snapVal === 'string' ? JSON.parse(snapVal) : snapVal;
+      if(Array.isArray(p)) return p.length > 0;
+      if(typeof p === 'object') return Object.keys(p).length > 0;
+      return false;
+    } catch(e){ return false; }
+  };
+  const _guardKeys = {
+    emps: !window._allowEmptyEmpsSave,
+    rec: !window._allowEmptyRecSave,
+    bonus: !window._allowEmptyBonusSave,
+    allow: !window._allowEmptyAllowSave,
+    tax: !window._allowEmptyTaxSave,
+    tbk: !window._allowEmptyTbkSave,
+    safety: !window._allowEmptySafetySave,
+  };
+  const _blocked = [];
+  const _filter = (items) => items.filter(it => {
+    if(!(it.key in _guardKeys) || !_guardKeys[it.key]) return true;
+    if(_isEmpty(it.value) && _snapHasData(snap[it.key])){
+      _blocked.push(it.key);
+      console.warn('🛡️ 빈 값 덮어쓰기 차단:', it.key, '(이전 스냅샷에 데이터 있음)');
+      return false;
+    }
+    return true;
+  });
+  const safeSmall = _filter(smallItems);
+  const safeLarge = _filter(largeItems);
+  if(_blocked.length && typeof showSyncToast==='function'){
+    showSyncToast('⚠️ 빈 값 덮어쓰기 차단: '+_blocked.join(', ')+'\n서버 데이터 보호 (새로고침으로 재로드 권장)','warn',6000);
+  }
+
   // 소형 키 먼저 저장, 대형 키는 병렬로 개별 저장
-  await apiFetch('/data-save','POST',{items:smallItems});
-  await Promise.all(largeItems.map(item=>
+  if(safeSmall.length) await apiFetch('/data-save','POST',{items:safeSmall});
+  if(safeLarge.length) await Promise.all(safeLarge.map(item=>
     apiFetch('/data-save','POST',{items:[item]}).catch(e=>console.warn('대형 키 저장 오류('+item.key+'):',e))
   ));
   // 서버 동기화 완료 시점 스냅샷 (폴링 머지 기준값)
@@ -9239,10 +9282,31 @@ async function pollForUpdates(){
         changed = true;
       }
     };
-    mergeKeyed('rec',   ()=>REC,           v=>{REC=v;},          'npm5_rec');
-    mergeKeyed('bonus', ()=>BONUS_REC,     v=>{BONUS_REC=v;},    'npm5_bonus');
-    mergeKeyed('allow', ()=>ALLOWANCE_REC, v=>{ALLOWANCE_REC=v;},'npm5_allow');
-    mergeKeyed('tbk',   ()=>TBK,           v=>{TBK=v;},          'npm5_tbk');
+    // 🛡️ 서버가 비어있는데 로컬에 데이터가 있으면 서버 wipe 전파 방지 (로컬 보호)
+    const _serverHasData = n => {
+      const v = server[n];
+      if(v==null) return false;
+      if(Array.isArray(v)) return v.length > 0;
+      if(typeof v === 'object') return Object.keys(v).length > 0;
+      return false;
+    };
+    const _localHasData = v => {
+      if(v==null) return false;
+      if(Array.isArray(v)) return v.length > 0;
+      if(typeof v === 'object') return Object.keys(v).length > 0;
+      return false;
+    };
+    const _guardedMerge = (name, getLocal, setLocal, lsKey)=>{
+      if(!_serverHasData(name) && _localHasData(getLocal())){
+        console.warn('🛡️ poll: 서버 빈값 + 로컬 데이터 있음 → 로컬 보호('+name+')');
+        return;
+      }
+      mergeKeyed(name, getLocal, setLocal, lsKey);
+    };
+    _guardedMerge('rec',   ()=>REC,           v=>{REC=v;},          'npm5_rec');
+    _guardedMerge('bonus', ()=>BONUS_REC,     v=>{BONUS_REC=v;},    'npm5_bonus');
+    _guardedMerge('allow', ()=>ALLOWANCE_REC, v=>{ALLOWANCE_REC=v;},'npm5_allow');
+    _guardedMerge('tbk',   ()=>TBK,           v=>{TBK=v;},          'npm5_tbk');
     if(typeof leaveOverrides !== 'undefined'){
       mergeKeyed('leave_overrides', ()=>leaveOverrides, v=>{leaveOverrides=v;}, 'npm5_leave_overrides');
     }
@@ -9259,7 +9323,21 @@ async function pollForUpdates(){
         changed = true;
       }
     };
-    replaceIfClean('emps', ()=>JSON.stringify(EMPS), v=>{
+    // 🛡️ EMPS는 빈 배열로 전파 차단 (로컬에 데이터 있으면 서버 빈값 무시)
+    const _guardedReplace = (name, getStr, apply)=>{
+      if(!_serverHasData(name)){
+        // 서버가 비었는데 로컬이 비어있지 않으면 교체 스킵
+        try {
+          const localParsed = JSON.parse(getStr());
+          if(_localHasData(localParsed)){
+            console.warn('🛡️ poll: 서버 빈값 + 로컬 데이터 있음 → 로컬 보호('+name+')');
+            return;
+          }
+        } catch(e){}
+      }
+      replaceIfClean(name, getStr, apply);
+    };
+    _guardedReplace('emps', ()=>JSON.stringify(EMPS), v=>{
       EMPS = v; if(typeof sortEMPS==='function') sortEMPS();
       localStorage.setItem('npm5_emps', JSON.stringify(EMPS));
     });
@@ -9267,7 +9345,7 @@ async function pollForUpdates(){
       POL = Object.assign({...(typeof DEF_POL!=='undefined'?DEF_POL:{})}, v);
       localStorage.setItem('npm5_pol', JSON.stringify(POL));
     });
-    replaceIfClean('bk', ()=>JSON.stringify(DEF_BK), v=>{
+    _guardedReplace('bk', ()=>JSON.stringify(DEF_BK), v=>{
       DEF_BK = v;
       localStorage.setItem('npm5_bk', JSON.stringify(DEF_BK));
     });
@@ -9325,25 +9403,26 @@ function stopAutoPoll(){
 }
 
 // ── 전체 불러오기 (서버 프록시) ──
+// 규칙: 서버 응답에 키가 명시적으로 포함된 경우에만 메모리/localStorage 덮어씀.
+// 키가 누락된 경우(네트워크/파셜 응답)에는 기존 값 유지 → 연쇄 wipe 방지.
 async function sbLoadAll(companyId) {
   const map = await apiFetch('/data-load','POST',{});
 
-  if(map.emps)           { EMPS = map.emps; localStorage.setItem('npm5_emps', JSON.stringify(EMPS)); }
-  else { EMPS = []; }
+  if('emps' in map)            { EMPS = map.emps || []; localStorage.setItem('npm5_emps', JSON.stringify(EMPS)); }
   sortEMPS();
-  if(map.pol)            { POL = Object.assign({...DEF_POL}, map.pol); localStorage.setItem('npm5_pol', JSON.stringify(POL)); }
-  if(map.bk)             { DEF_BK = map.bk; localStorage.setItem('npm5_bk', JSON.stringify(DEF_BK)); }
-  if(map.tbk)            { TBK = map.tbk; localStorage.setItem('npm5_tbk', JSON.stringify(TBK)); }
-  if(map.rec)            { REC = map.rec; localStorage.setItem('npm5_rec', JSON.stringify(REC)); }
-  if(map.bonus)          { BONUS_REC = map.bonus; localStorage.setItem('npm5_bonus', JSON.stringify(BONUS_REC)); }
-  if(map.allow)          { ALLOWANCE_REC = map.allow; localStorage.setItem('npm5_allow', JSON.stringify(ALLOWANCE_REC)); }
-  if(map.tax)            { TAX_REC = map.tax; localStorage.setItem('npm5_tax', JSON.stringify(map.tax)); }
-  if(map.leave_settings) localStorage.setItem('npm5_leave_settings', JSON.stringify(map.leave_settings));
-  if(map.leave_overrides)localStorage.setItem('npm5_leave_overrides', JSON.stringify(map.leave_overrides));
-  if(map.folders)        localStorage.setItem('npm5_folders', JSON.stringify(map.folders));
-  if(map.safety)         { SAFETY_REC = map.safety; localStorage.setItem('npm5_safety', JSON.stringify(SAFETY_REC)); }
-  if(map.pol_snapshots)  { POL_SNAPSHOTS = map.pol_snapshots; localStorage.setItem('npm5_pol_snapshots', JSON.stringify(POL_SNAPSHOTS)); }
-  if(map.pay_snapshots)  { PAY_SNAPSHOTS = map.pay_snapshots; localStorage.setItem('npm5_pay_snapshots', JSON.stringify(PAY_SNAPSHOTS)); }
+  if('pol' in map && map.pol)  { POL = Object.assign({...DEF_POL}, map.pol); localStorage.setItem('npm5_pol', JSON.stringify(POL)); }
+  if('bk' in map)              { DEF_BK = map.bk || []; localStorage.setItem('npm5_bk', JSON.stringify(DEF_BK)); }
+  if('tbk' in map)             { TBK = map.tbk || {}; localStorage.setItem('npm5_tbk', JSON.stringify(TBK)); }
+  if('rec' in map)             { REC = map.rec || {}; localStorage.setItem('npm5_rec', JSON.stringify(REC)); }
+  if('bonus' in map)           { BONUS_REC = map.bonus || {}; localStorage.setItem('npm5_bonus', JSON.stringify(BONUS_REC)); }
+  if('allow' in map)           { ALLOWANCE_REC = map.allow || {}; localStorage.setItem('npm5_allow', JSON.stringify(ALLOWANCE_REC)); }
+  if('tax' in map)             { TAX_REC = map.tax || {}; localStorage.setItem('npm5_tax', JSON.stringify(TAX_REC)); }
+  if('leave_settings' in map)  localStorage.setItem('npm5_leave_settings', JSON.stringify(map.leave_settings||{}));
+  if('leave_overrides' in map) localStorage.setItem('npm5_leave_overrides', JSON.stringify(map.leave_overrides||{}));
+  if('folders' in map)         localStorage.setItem('npm5_folders', JSON.stringify(map.folders||[]));
+  if('safety' in map)          { SAFETY_REC = map.safety || {}; localStorage.setItem('npm5_safety', JSON.stringify(SAFETY_REC)); }
+  if('pol_snapshots' in map)   { POL_SNAPSHOTS = map.pol_snapshots || {}; localStorage.setItem('npm5_pol_snapshots', JSON.stringify(POL_SNAPSHOTS)); }
+  if('pay_snapshots' in map)   { PAY_SNAPSHOTS = map.pay_snapshots || {}; localStorage.setItem('npm5_pay_snapshots', JSON.stringify(PAY_SNAPSHOTS)); }
 
   // 최초 1회: POL_SNAPSHOTS가 비어있고 REC 데이터가 있으면 현재 POL을 과거 달에 복사해 시작점 확보
   try {
