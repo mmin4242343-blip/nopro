@@ -1785,7 +1785,7 @@ function renderTable(){
               <input type="checkbox" ${rec.customBk?'checked':''} onchange="setR(${emp.id},'customBk',this.checked)">개별휴게
             </label>
             <button class="out-btn ${(rec.outTimes&&rec.outTimes.length>0)?'active':''}" onclick="addOutTime(${emp.id})">+ 외출</button>
-            <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" onchange="setR(${emp.id},'note',this.value)">
+            <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" oninput="setR(${emp.id},'note',this.value)">
           </div>
           ${pohalOutUI}
           ${pohalBkUI}
@@ -1852,7 +1852,7 @@ function renderTable(){
               <input type="checkbox" ${rec.customBk?'checked':''} onchange="setR(${emp.id},'customBk',this.checked)">개별휴게
             </label>
             <button class="out-btn ${(rec.outTimes&&rec.outTimes.length>0)?'active':''}" onclick="addOutTime(${emp.id})">+ 외출</button>
-            <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" onchange="setR(${emp.id},'note',this.value)">
+            <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" oninput="setR(${emp.id},'note',this.value)">
           </div>
           ${monthlyOutUI}
           ${monthlyBkUI}
@@ -1909,7 +1909,7 @@ function renderTable(){
             <input type="checkbox" ${rec.customBk?'checked':''} onchange="setR(${emp.id},'customBk',this.checked)">개별휴게
           </label>
           <button class="out-btn ${(rec.outTimes&&rec.outTimes.length>0)?'active':''}" onclick="addOutTime(${emp.id})">+ 외출</button>
-          <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" onchange="setR(${emp.id},'note',this.value)">
+          <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" oninput="setR(${emp.id},'note',this.value)">
         </div>
         ${outUI}
         ${customBkUI}
