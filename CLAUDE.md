@@ -287,40 +287,64 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
 - 이미지 로드 실패 시 onerror 핸들러 추가
 - 안전교육 드래그앤드롭 중복 리스너 방지 + 사진 삭제 시 서버 반영
 
-### 데이터 유실 방지 3중 가드 (2026-04-23 도입)
+### 데이터 유실 방지 4중 가드 (2026-04-23 도입, 같은 날 확장)
 
-**사고 이력**: 2026-04-23 단일 `sbSaveAll()` 호출이 EMPS·REC·BONUS·ALLOW·TAX 5개 키를 동시에 빈값으로 덮어쓴 사고 발생. 복구는 감사 로그 `old_value`로 수행(EMPS 30명, REC 2117건, BONUS 4건, ALLOW 57건, TAX 1건).
+**사고 이력**:
+- **1차 wipe (01:40 UTC)**: 단일 `sbSaveAll()` 호출이 EMPS·REC·BONUS·ALLOW·TAX 5개 키를 동시에 빈값으로 덮어씀. 근본 원인: `sbLoadAll`의 `else { EMPS = []; }` 분기가 서버 파셜 응답 시 메모리 리셋 → 후속 saveLS가 빈값을 서버에 저장.
+- **2차 wipe (02:58 UTC, 1차 가드 배포 후 재발)**: 하드 새로고침 직후 초기 로드 구간에 save가 트리거되었고, `_syncedSnapshot=null` 상태에서 클라 가드가 "스냅샷 없음 = 데이터 없음"으로 오인해 빈값 저장을 허용. 서버 가드는 `oldValue` 존재 시에만 검사하던 로직 결함으로 함께 실패.
+- 복구는 두 사고 모두 감사 로그 `old_value` 역추적으로 수행 성공 (최종 상태: EMPS 145명, REC 2117건, BONUS 4건, ALLOW 57건, TAX 1건).
 
-**근본 원인 (3중 버그 조합)**:
-1. `sbLoadAll`의 `else { EMPS = []; }` 분기 — 서버 파셜 응답 시 메모리 리셋
-2. `authLogout` 경쟁 조건 — logout API 응답 전에 대기 중이던 `saveLS._timer`가 여전히 유효한 쿠키로 빈 데이터 저장 가능
-3. `sbSaveAll` 방어 부재 — 이상 징후 감지 없이 무조건 현재 메모리 상태로 덮어씀
-
-**재발 방지 3중 가드** (커밋 `faedc4f`):
+**최종 방어선 (4중 가드)** — 커밋 `faedc4f` → `ccbbfaa` → `d01bd4a` → `7cc5eba` → `513bc7d` → `30607d5`:
 
 #### 가드 1: `sbLoadAll` 단언적 교체 제거
-- `if(map.emps)` → `if('emps' in map)` 패턴으로 변경
-- 서버 응답에 키가 없으면 메모리·localStorage **그대로 유지**
-- 파셜 응답이 wipe를 유발할 수 없게 원천 차단
+- `if('key' in map)` 패턴만 사용. 서버 응답에 키가 없으면 메모리·localStorage **그대로 유지**.
+- `else { X = []; }` 또는 `if(map.x)` 분기 **영구 금지**.
 
-#### 가드 2: `sbSaveAll` 빈값 덮어쓰기 차단 (우회 불가)
-- 저장 직전 `_syncedSnapshot`(마지막 로드·저장 완료 시점의 메모리 사본) 과 비교
+#### 가드 2: `sbSaveAll` / `safeItemSave` / `_flushSaveOnUnload` 빈값 차단 (우회 불가)
 - 보호 대상: `emps`, `rec`, `bonus`, `allow`, `tax`, `tbk`, `safety`
-- 조건: `현재 비어있음 AND 직전 스냅샷에 데이터 있음` → 저장 스킵 + 사용자 토스트 경고
-- **우회 경로 없음** — 어떤 플래그/조건으로도 가드를 통과할 수 없음
-- `rmAllEmps`(전직원 일괄 삭제) 기능은 2026-04-23 사고 이후 비활성화. 개별 삭제로만 가능.
+- 조건 1 (**초기 로드 전**): `_syncedSnapshot === null` → 빈값 저장 **무조건 차단** (console만, 토스트 X)
+- 조건 2 (**덮어쓰기 시도**): 스냅샷에 데이터 있음 + 현재 빈값 → 차단 + 사용자 토스트
+- **우회 플래그 없음.** `rmAllEmps` 같은 "전체 삭제" 기능은 **완전 비활성화**(alert만 표시).
+- 직접 `apiFetch('/data-save', ...)` 호출 금지 → `safeItemSave(key, value)` 또는 `sbSaveAll()` 사용.
 
 #### 가드 3: `pollForUpdates` 서버 wipe 전파 차단
-- 30초 폴링이 "서버가 비었으니 로컬도 비워라" 하는 경로 봉쇄
-- `_guardedMerge` / `_guardedReplace` 래퍼: 서버 값이 비었고 로컬에 데이터 있으면 해당 키 동기화 스킵
-- 트레이드오프: 다른 기기에서 진짜로 전체 삭제한 경우 최대 30초 반영 지연
+- `_guardedMerge` / `_guardedReplace` 래퍼: 서버 값이 비었고 로컬에 데이터 있으면 해당 키 동기화 스킵 → 다른 기기/서버의 빈값이 로컬을 덮어쓸 수 없음.
+
+#### 가드 4 (서버측): `data-save.js` 빈값 저장 무조건 거부
+- `PROTECTED = new Set(['emps','rec','bonus','allow','tax','tbk','safety'])` 키는 빈 배열/객체이면 **`oldValue` 존재 여부 불문 `continue`로 스킵** (upsert도 감사 로그 insert도 안 함).
+- 클라이언트 코드가 어떤 식으로 해킹/버그돼도 **빈값은 서버 DB에 도달 불가**.
+
+#### clearLocalData / 로그아웃 경쟁 조건 방어
+- `clearLocalData()`는 로컬 전역 리셋 시 **반드시** `_syncedSnapshot = null` + `clearTimeout(saveLS._timer)` 동반.
+- logout 중 대기 타이머가 유효 쿠키로 빈값 저장하던 race window 봉쇄.
+
+### 알려진 부수 이슈
+
+#### `/data-load` 504 Gateway Timeout (2026-04-23 확인)
+**원인**: 데이터가 커질수록 응답 시간 증가 → Netlify 함수 10초 타임아웃 초과.
+- emps 145명 × AES-256-GCM 복호화 + rec 355KB JSON.parse/stringify + 전체 payload 400~500KB
+- 30초 폴링이 매번 전체 덤프를 요청해 부하 가중
+
+**영향**: 없음 (읽기 실패만 발생, 메모리·서버 데이터 무영향).
+
+**완화책** (커밋 `30607d5` 적용):
+- `POLL_INTERVAL_MS`: 30s → 120s 로 상향
+- 504 발생 시 지수 백오프: 2분 → 4 → 8 → 최대 10분
+- 성공 시 백오프 리셋
+- 장기 과제: lightweight "changed-since" 체크 엔드포인트로 전환, 또는 rec/tbk 폴링 제외
+
+#### `refreshAllAges` 자동 저장 제거 (커밋 `30607d5`)
+- 나이 재계산 시 값이 **실제로 변경됐을 때만** `saveLS()` 호출.
+- 이전: init 시점마다 자동 저장 → 부하 가중 + 불필요한 504 발생.
+- 나이는 사용자 편집 시 자연스럽게 저장되므로 자동 저장 불필요.
 
 **개발 시 지켜야 할 규칙**:
-1. **새 data_key 추가 시**: `sbLoadAll`에 `if('key' in map) { ... }` 패턴 사용. `else { X = []; }` 또는 `if(map.x)` 패턴 금지.
-2. **"전체 삭제" 기능 절대 추가 금지**: 2026-04-23 사고 재발 원천 차단. 필요 시 서버에서 직접 수동 처리.
-3. **`clearLocalData` 확장 시**: 전역 변수 리셋 + 반드시 `_syncedSnapshot = null` + `saveLS._timer` 취소 동반 필수.
-4. **서버 직접 저장(`/data-save`) 금지**: 반드시 `sbSaveAll()` 또는 `safeItemSave(key, value)` 래퍼 사용. `apiFetch('/data-save', ...)` 직접 호출은 **사용 금지** (가드 우회됨).
-5. **복구 절차**: 감사 로그 `old_value`에서 복원. `/api/audit-log?key=X&limit=1&offset=N` 페이징 후 `old` 크고 `new` 작은 시점의 `old_value` JSON.parse → `/api/data-save`로 재저장. `emps`는 rrnBack이 암호화된 상태라 이중 암호화 방지 위해 `rrnBack=''`로 비우고 저장 필요.
+1. **새 data_key 추가 시**: `sbLoadAll`에 `if('key' in map) { ... }` 패턴 사용. 다른 패턴 영구 금지.
+2. **"전체 삭제" 기능 절대 추가 금지**.
+3. **`clearLocalData` 확장 시**: `_syncedSnapshot = null` + `saveLS._timer` 취소 동반 필수.
+4. **서버 직접 저장(`/data-save`) 금지**: `sbSaveAll()` 또는 `safeItemSave(key, value)` 만 사용.
+5. **init 시점 자동 저장 로직 추가 금지**: 504 재발 원인. 변경 감지 후 조건부 저장만 허용.
+6. **복구 절차**: 감사 로그 `old_value`에서 복원. `/api/audit-log?key=X&limit=1&offset=N` 페이징으로 `old` 크고 `new` 작은 시점 찾기 → `old_value` JSON.parse → `/api/data-save` 재저장. `emps`의 경우 `rrnBack`이 암호화된 상태라 이중 암호화 방지 위해 `rrnBack=''`로 비우고 저장 필요(rrnBack 재입력 별도 요구).
 
 ### 남은 보안 작업 (선택)
 - CSP `script-src 'unsafe-inline'` 제거: 인라인 이벤트 핸들러 336개를 addEventListener로 전환 필요 (대규모 리팩토링)

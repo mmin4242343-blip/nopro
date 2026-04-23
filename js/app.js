@@ -9276,7 +9276,11 @@ async function sbSaveAll(companyId) {
 // ══════════════════════════════════════════════════════
 let _syncedSnapshot = null;
 let _pollTimerId = null;
-const POLL_INTERVAL_MS = 30000;
+// 폴링 간격: 데이터가 커질수록 /data-load 응답 시간이 길어져 504 빈도 증가.
+// 2분 기본, 504 발생 시 지수 백오프로 최대 10분까지 늘림 (_pollBackoffMs).
+const POLL_INTERVAL_MS = 120000;
+const POLL_BACKOFF_MAX = 600000;
+let _pollBackoffMs = 0;
 
 function _deepCopy(x){ try { return JSON.parse(JSON.stringify(x||{})); } catch(e){ return {}; } }
 
@@ -9441,8 +9445,21 @@ async function pollForUpdates(){
       const sbInp = document.getElementById('sb-search-inp');
       renderSb(sbInp?.value||'');
     }
+    // 성공 시 백오프 리셋
+    _pollBackoffMs = 0;
   } catch(e){
-    console.warn('poll 실패:', e);
+    // 504/500 등: 지수 백오프 (2분 → 4 → 8 → 최대 10분)
+    const msg = String(e && e.message || e);
+    const isTimeout = msg.includes('504') || msg.includes('timeout') || msg.includes('Gateway');
+    if(isTimeout){
+      _pollBackoffMs = Math.min((_pollBackoffMs||POLL_INTERVAL_MS) * 2, POLL_BACKOFF_MAX);
+      console.warn('poll 504/timeout — 백오프:', Math.round(_pollBackoffMs/1000)+'초 후 재시도');
+      // setInterval 대신 setTimeout으로 재스케줄
+      if(_pollTimerId){ clearInterval(_pollTimerId); _pollTimerId = null; }
+      _pollTimerId = setTimeout(()=>{ _pollTimerId = null; startAutoPoll(); }, _pollBackoffMs);
+    } else {
+      console.warn('poll 실패:', e);
+    }
   }
 }
 
@@ -9451,7 +9468,12 @@ function startAutoPoll(){
   _pollTimerId = setInterval(pollForUpdates, POLL_INTERVAL_MS);
 }
 function stopAutoPoll(){
-  if(_pollTimerId){ clearInterval(_pollTimerId); _pollTimerId = null; }
+  if(_pollTimerId){
+    // setInterval/setTimeout 둘 다 clearInterval/clearTimeout 가능 (내부 ID 공유)
+    clearInterval(_pollTimerId); clearTimeout(_pollTimerId);
+    _pollTimerId = null;
+  }
+  _pollBackoffMs = 0;
 }
 
 // ── 전체 불러오기 (서버 프록시) ──
