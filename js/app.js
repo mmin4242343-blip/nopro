@@ -430,17 +430,25 @@ let _hasUnsavedChanges = false;
 // 🛡️ 단일 키 서버 저장 래퍼 — 직접 /data-save 호출 시 반드시 이 함수 사용.
 // sbSaveAll을 우회하는 경로에도 동일한 "빈값 덮어쓰기 차단" 가드 적용.
 async function safeItemSave(key, value){
-  const snap = (typeof _syncedSnapshot!=='undefined' && _syncedSnapshot) || {};
+  const snap = (typeof _syncedSnapshot!=='undefined' && _syncedSnapshot) || null;
   const isEmpty = v => v==null || (Array.isArray(v)?v.length===0:(typeof v==='object' && Object.keys(v).length===0));
   const snapHas = s => {
     if(s==null) return false;
     try { const p = typeof s==='string'?JSON.parse(s):s; return Array.isArray(p)?p.length>0:(typeof p==='object' && Object.keys(p).length>0); } catch(e){ return false; }
   };
-  // 🛡️ 우회 경로 없음 — 빈값 덮어쓰기는 조건 없이 무조건 차단
-  if(isEmpty(value) && snapHas(snap[key])){
-    console.warn('🛡️ safeItemSave: 빈값 덮어쓰기 차단 ('+key+')');
-    if(typeof showSyncToast==='function') showSyncToast('⚠️ '+key+' 빈값 덮어쓰기 차단\n서버 데이터 보호','warn',4000);
-    return {blocked:true};
+  const PROTECTED = new Set(['emps','rec','bonus','allow','tax','tbk','safety']);
+  // 🛡️ 우회 경로 없음 — 빈값 저장은 무조건 차단
+  if(PROTECTED.has(key) && isEmpty(value)){
+    if(snap === null){
+      console.warn('🛡️ safeItemSave: 초기 로드 전 빈값 저장 차단 ('+key+')');
+      if(typeof showSyncToast==='function') showSyncToast('⚠️ '+key+' 빈값 저장 차단 (로드 미완)','warn',4000);
+      return {blocked:true};
+    }
+    if(snapHas(snap[key])){
+      console.warn('🛡️ safeItemSave: 빈값 덮어쓰기 차단 ('+key+')');
+      if(typeof showSyncToast==='function') showSyncToast('⚠️ '+key+' 빈값 덮어쓰기 차단\n서버 데이터 보호','warn',4000);
+      return {blocked:true};
+    }
   }
   return apiFetch('/data-save','POST',{key,value});
 }
@@ -519,13 +527,20 @@ function _flushSaveOnUnload(){
       if(s==null) return false;
       try { const p = typeof s==='string'?JSON.parse(s):s; return Array.isArray(p)?p.length>0:(typeof p==='object' && Object.keys(p).length>0); } catch(e){ return false; }
     };
-    // 🛡️ 우회 경로 없음 — 빈값 덮어쓰기 조건 없이 무조건 차단
+    // 🛡️ 우회 경로 없음 — 빈값 저장 조건 없이 무조건 차단
     const guardKeys = new Set(['emps','bonus','allow','tax']);
+    const snapNull = (typeof _syncedSnapshot==='undefined' || _syncedSnapshot === null);
     items = items.filter(it => {
       if(!guardKeys.has(it.key)) return true;
-      if(isEmpty(it.value) && snapHas(snap[it.key])){
-        console.warn('🛡️ beacon: 빈값 덮어쓰기 차단 ('+it.key+')');
-        return false;
+      if(isEmpty(it.value)){
+        if(snapNull){
+          console.warn('🛡️ beacon: 초기 로드 전 빈값 저장 차단 ('+it.key+')');
+          return false;
+        }
+        if(snapHas(snap[it.key])){
+          console.warn('🛡️ beacon: 빈값 덮어쓰기 차단 ('+it.key+')');
+          return false;
+        }
       }
       return true;
     });
@@ -9207,9 +9222,9 @@ async function sbSaveAll(companyId) {
     {key:'safety', value:(()=>{const s={};Object.entries(SAFETY_REC).forEach(([k,v])=>{s[k]=Array.isArray(v)?v.map(({data,...r})=>r):v;});return s;})()},
   ];
 
-  // 🛡️ 빈 데이터 덮어쓰기 방어: 직전 스냅샷에 데이터가 있었는데 지금 비어있으면 의도치 않은 wipe.
-  // 우회 경로 없음 — 어떤 플래그로도 이 가드를 통과할 수 없음.
-  const snap = (typeof _syncedSnapshot!=='undefined' && _syncedSnapshot) || {};
+  // 🛡️ 빈 데이터 덮어쓰기 방어: 어떤 경로로도 빈값으로 보호 키를 덮어쓰지 못함.
+  // 우회 경로 없음. 스냅샷이 없는 초기 로드 구간도 동일하게 차단.
+  const snap = (typeof _syncedSnapshot!=='undefined' && _syncedSnapshot) || null;
   const _isEmpty = v => v==null || (Array.isArray(v)?v.length===0:(typeof v==='object' && Object.keys(v).length===0));
   const _snapHasData = (snapVal) => {
     if(snapVal==null) return false;
@@ -9224,10 +9239,20 @@ async function sbSaveAll(companyId) {
   const _blocked = [];
   const _filter = (items) => items.filter(it => {
     if(!_guardKeys.has(it.key)) return true;
-    if(_isEmpty(it.value) && _snapHasData(snap[it.key])){
-      _blocked.push(it.key);
-      console.warn('🛡️ 빈 값 덮어쓰기 차단:', it.key, '(이전 스냅샷에 데이터 있음)');
-      return false;
+    if(_isEmpty(it.value)){
+      // 🛡️ 스냅샷이 아직 없으면(sbLoadAll 미완): 빈값 저장 절대 금지.
+      //    "서버에 데이터가 있는지 모른다" = 안전측으로 차단.
+      if(snap === null){
+        _blocked.push(it.key);
+        console.warn('🛡️ 초기 로드 전 빈값 저장 차단:', it.key, '(스냅샷 없음 → 데이터 안전 우선)');
+        return false;
+      }
+      // 스냅샷에 데이터가 있었는데 지금 비어있으면 차단.
+      if(_snapHasData(snap[it.key])){
+        _blocked.push(it.key);
+        console.warn('🛡️ 빈 값 덮어쓰기 차단:', it.key, '(이전 스냅샷에 데이터 있음)');
+        return false;
+      }
     }
     return true;
   });

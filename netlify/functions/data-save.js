@@ -54,21 +54,17 @@ export const handler = async (event) => {
         // 기존 값 조회 실패해도 저장은 진행
       }
 
-      // 🛡️ 서버측 2차 방어: 빈값으로 기존 데이터 덮어쓰기 차단 (클라이언트 우회 대비)
-      // 보호 대상: emps/rec/bonus/allow/tax/tbk/safety
-      // 서버에 데이터가 있는데 들어오는 값이 빈 배열/객체이면 저장 거부
+      // 🛡️ 서버측 2차 방어: 빈값 저장 절대 금지 (보호 대상 키)
+      // - 서버에 데이터 있음 & 클라가 빈값 → 차단 (원본 wipe 방지)
+      // - 서버 빈값 & 클라 빈값 → 차단 (연쇄 빈값 저장 방지, 로그 오염만 유발)
+      // - 서버 없음(신규 생성) & 클라 빈값 → 차단 (의미 없는 빈 레코드 생성 방지)
+      // 즉, 보호 키는 빈값이면 무조건 거부.
       const PROTECTED = new Set(['emps','rec','bonus','allow','tax','tbk','safety']);
-      if (PROTECTED.has(item.key) && oldValue) {
-        let serverIsEmpty = false, clientIsEmpty = false;
-        try {
-          const sv = JSON.parse(oldValue);
-          serverIsEmpty = Array.isArray(sv) ? sv.length === 0 : (sv && typeof sv==='object' && Object.keys(sv).length===0);
-        } catch {}
-        clientIsEmpty = Array.isArray(value) ? value.length === 0 : (value && typeof value==='object' && Object.keys(value).length===0);
-        if (!serverIsEmpty && clientIsEmpty) {
-          console.warn(`🛡️ 서버 가드: 빈값 덮어쓰기 차단 (company=${companyId}, key=${item.key}, by=${changedBy})`);
-          // 해당 키만 스킵하고 다음 아이템 계속 처리
-          continue;
+      if (PROTECTED.has(item.key)) {
+        const clientIsEmpty = Array.isArray(value) ? value.length === 0 : (value && typeof value==='object' && Object.keys(value).length===0);
+        if (clientIsEmpty) {
+          console.warn(`🛡️ 서버 가드: 빈값 저장 차단 (company=${companyId}, key=${item.key}, by=${changedBy}, oldExists=${!!oldValue})`);
+          continue;  // 해당 키만 스킵, 다른 아이템은 계속 처리
         }
       }
 
