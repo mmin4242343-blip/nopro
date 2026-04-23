@@ -9146,6 +9146,10 @@ function clearLocalData(){
   if(typeof TAX_REC !== 'undefined') TAX_REC = {};
   if(typeof POL_SNAPSHOTS !== 'undefined') POL_SNAPSHOTS = {};
   if(typeof PAY_SNAPSHOTS !== 'undefined') PAY_SNAPSHOTS = {};
+  // 🛡️ 스냅샷도 초기화 — 재로그인 직후 가드가 "이전에 데이터 있었다"로 오판 방지
+  if(typeof _syncedSnapshot !== 'undefined') _syncedSnapshot = null;
+  // 🛡️ 대기 중인 saveLS 타이머도 취소 — logout race로 빈값 저장되는 경로 차단
+  if(typeof saveLS !== 'undefined' && saveLS._timer){ clearTimeout(saveLS._timer); saveLS._timer = null; }
 }
 
 // ── 전체 저장 (서버 프록시) ──

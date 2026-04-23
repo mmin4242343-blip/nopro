@@ -287,10 +287,44 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
 - 이미지 로드 실패 시 onerror 핸들러 추가
 - 안전교육 드래그앤드롭 중복 리스너 방지 + 사진 삭제 시 서버 반영
 
+### 데이터 유실 방지 3중 가드 (2026-04-23 도입)
+
+**사고 이력**: 2026-04-23 단일 `sbSaveAll()` 호출이 EMPS·REC·BONUS·ALLOW·TAX 5개 키를 동시에 빈값으로 덮어쓴 사고 발생. 복구는 감사 로그 `old_value`로 수행(EMPS 30명, REC 2117건, BONUS 4건, ALLOW 57건, TAX 1건).
+
+**근본 원인 (3중 버그 조합)**:
+1. `sbLoadAll`의 `else { EMPS = []; }` 분기 — 서버 파셜 응답 시 메모리 리셋
+2. `authLogout` 경쟁 조건 — logout API 응답 전에 대기 중이던 `saveLS._timer`가 여전히 유효한 쿠키로 빈 데이터 저장 가능
+3. `sbSaveAll` 방어 부재 — 이상 징후 감지 없이 무조건 현재 메모리 상태로 덮어씀
+
+**재발 방지 3중 가드** (커밋 `faedc4f`):
+
+#### 가드 1: `sbLoadAll` 단언적 교체 제거
+- `if(map.emps)` → `if('emps' in map)` 패턴으로 변경
+- 서버 응답에 키가 없으면 메모리·localStorage **그대로 유지**
+- 파셜 응답이 wipe를 유발할 수 없게 원천 차단
+
+#### 가드 2: `sbSaveAll` 빈값 덮어쓰기 차단
+- 저장 직전 `_syncedSnapshot`(마지막 로드·저장 완료 시점의 메모리 사본) 과 비교
+- 보호 대상: `emps`, `rec`, `bonus`, `allow`, `tax`, `tbk`, `safety`
+- 조건: `현재 비어있음 AND 직전 스냅샷에 데이터 있음` → 저장 스킵 + 사용자 토스트 경고
+- 의도적 전체 삭제는 `window._allowEmptyXxxSave = true` 플래그로 1회 우회 (예: `rmAllEmps`가 자동 세팅 후 2초 뒤 해제)
+
+#### 가드 3: `pollForUpdates` 서버 wipe 전파 차단
+- 30초 폴링이 "서버가 비었으니 로컬도 비워라" 하는 경로 봉쇄
+- `_guardedMerge` / `_guardedReplace` 래퍼: 서버 값이 비었고 로컬에 데이터 있으면 해당 키 동기화 스킵
+- 트레이드오프: 다른 기기에서 진짜로 전체 삭제한 경우 최대 30초 반영 지연
+
+**개발 시 지켜야 할 규칙**:
+1. **새 data_key 추가 시**: `sbLoadAll`에 `if('key' in map) { ... }` 패턴 사용. `else { X = []; }` 또는 `if(map.x)` 패턴 금지.
+2. **새로운 "전체 삭제" 기능 추가 시**: `window._allowEmptyXxxSave = true` 플래그 세팅 + 저장 후 2초 내 자동 해제.
+3. **`clearLocalData` 확장 시**: 전역 변수 리셋 + 반드시 `_syncedSnapshot = null` 도 동반 해야 함(다음 저장 시 가드가 "이전에 데이터 있었다"고 오인하지 않도록).
+4. **복구 절차**: 감사 로그 `old_value`에서 복원. `/api/audit-log?key=X&limit=1&offset=N` 페이징 후 `old` 크고 `new` 작은 시점의 `old_value` JSON.parse → `/api/data-save`로 재저장. `emps`는 rrnBack이 암호화된 상태라 이중 암호화 방지 위해 `rrnBack=''`로 비우고 저장 필요.
+
 ### 남은 보안 작업 (선택)
 - CSP `script-src 'unsafe-inline'` 제거: 인라인 이벤트 핸들러 336개를 addEventListener로 전환 필요 (대규모 리팩토링)
 - CSP `style-src 'unsafe-inline'` 제거: 인라인 스타일 분리 필요
 - httpOnly 쿠키 전환으로 토큰 탈취는 이미 방지되어 있으므로 긴급도 낮음
+- `encryptEmps` 이중 암호화 방지: `e.rrnBack.startsWith('ENC:')` 체크 추가 시 감사 로그 직접 복원 가능 (현재는 rrnBack 스트립 필요)
 
 ## 코딩 컨벤션
 
@@ -436,3 +470,9 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
 11. httpOnly 쿠키 기반 인증이므로, 프론트엔드에서 JWT를 직접 다루지 말 것 (localStorage에 토큰 저장 금지)
 12. API 호출 시 `credentials: 'include'` 필수 (쿠키 자동 전송), Authorization 헤더 사용하지 않음
 13. Supabase Storage 버킷명: `nopro-files` (파일 업로드/삭제/URL 발급에 사용)
+14. **⚠️ 데이터 유실 방지 가드 절대 우회 금지** (2026-04-23 사고 이후 도입)
+    - `sbLoadAll`은 반드시 `if('key' in map)` 패턴만 사용. `else { X = []; }` 분기 절대 추가 금지.
+    - `sbSaveAll`의 빈값 가드는 수정·제거 금지. 필요 시 `window._allowEmptyXxxSave` 플래그로 명시적 우회.
+    - `pollForUpdates`의 `_guardedMerge`/`_guardedReplace` 래퍼 제거 금지.
+    - `clearLocalData`를 authLogout 외 다른 곳에서 호출 시 반드시 `_syncedSnapshot = null` 동반.
+    - 상세 규칙은 "데이터 유실 방지 3중 가드" 섹션 참조.
