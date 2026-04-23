@@ -6400,6 +6400,9 @@ async function sf2HandleFiles(files){
       }catch(e2){
         console.warn('[사진] 서버 업로드 실패 (로컬 저장됨):', e2.message);
       }
+      // async 중 SAFETY_REC이 폴링 머지로 재할당됐을 수 있어 재확인
+      if(typeof SAFETY_REC!=='object'||!SAFETY_REC) SAFETY_REC={};
+      if(!Array.isArray(SAFETY_REC[key])) SAFETY_REC[key]=[];
       SAFETY_REC[key].push(entry);
       success++;
     }catch(e){
@@ -6450,6 +6453,9 @@ function sf2RenderPhotos(){
         setTimeout(()=>{if(delReady){delReady=false;db.textContent='🗑 삭제';db.style.background='var(--rbg)';db.style.color='var(--rose)';}},2500);
       } else {
         if(p.storagePath) deleteFileFromStorage(p.storagePath);
+        // async 중 SAFETY_REC이 재할당됐을 수 있어 재확인
+        if(typeof SAFETY_REC!=='object'||!SAFETY_REC) SAFETY_REC={};
+        if(!Array.isArray(SAFETY_REC[key])) SAFETY_REC[key]=[];
         SAFETY_REC[key]=SAFETY_REC[key].filter(ph=>ph.id!==p.id);
         if(SAFETY_REC[key].length===0)delete SAFETY_REC[key];
         sfSave();sf2RenderPhotos();
