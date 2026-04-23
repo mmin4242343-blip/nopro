@@ -441,12 +441,10 @@ async function safeItemSave(key, value){
   if(PROTECTED.has(key) && isEmpty(value)){
     if(snap === null){
       console.warn('🛡️ safeItemSave: 초기 로드 전 빈값 저장 차단 ('+key+')');
-      if(typeof showSyncToast==='function') showSyncToast('⚠️ '+key+' 빈값 저장 차단 (로드 미완)','warn',4000);
       return {blocked:true};
     }
     if(snapHas(snap[key])){
       console.warn('🛡️ safeItemSave: 빈값 덮어쓰기 차단 ('+key+')');
-      if(typeof showSyncToast==='function') showSyncToast('⚠️ '+key+' 빈값 덮어쓰기 차단\n서버 데이터 보호','warn',4000);
       return {blocked:true};
     }
   }
@@ -3364,12 +3362,15 @@ function updRrn(id,field,val){
 
 // 매일 자정에 전체 직원 나이 재계산
 function refreshAllAges(){
+  let changed = false;
   EMPS.forEach(e=>{
     if(!e.rrnFront||e.rrnFront.length<6)return;
     const age=rrn2age(e.rrnFront,e.rrnBack);
-    if(age!=='')e.age=age;
+    if(age!==''&&e.age!==age){ e.age=age; changed=true; }
   });
-  saveLS();
+  // 🛡️ 나이 변경이 실제로 있을 때만 저장 (init 504 방지).
+  // 나이는 사용자 편집 시 자연스럽게 saveLS로 저장되므로 자동 저장 불필요.
+  if(changed) saveLS();
   // 다음 자정에 다시 실행
   const now=new Date();
   const msToMidnight=(new Date(now.getFullYear(),now.getMonth(),now.getDate()+1)-now)+1000;
@@ -9236,20 +9237,18 @@ async function sbSaveAll(companyId) {
     } catch(e){ return false; }
   };
   const _guardKeys = new Set(['emps','rec','bonus','allow','tax','tbk','safety']);
-  const _blocked = [];
+  const _blockedOverwrite = [];  // 실제 덮어쓰기 시도 (사용자 토스트)
   const _filter = (items) => items.filter(it => {
     if(!_guardKeys.has(it.key)) return true;
     if(_isEmpty(it.value)){
-      // 🛡️ 스냅샷이 아직 없으면(sbLoadAll 미완): 빈값 저장 절대 금지.
-      //    "서버에 데이터가 있는지 모른다" = 안전측으로 차단.
+      // 🛡️ 스냅샷이 아직 없으면(sbLoadAll 미완): 빈값 저장 절대 금지. 콘솔만 로그.
       if(snap === null){
-        _blocked.push(it.key);
         console.warn('🛡️ 초기 로드 전 빈값 저장 차단:', it.key, '(스냅샷 없음 → 데이터 안전 우선)');
         return false;
       }
-      // 스냅샷에 데이터가 있었는데 지금 비어있으면 차단.
+      // 스냅샷에 데이터가 있었는데 지금 비어있으면 차단. 사용자에게도 알림.
       if(_snapHasData(snap[it.key])){
-        _blocked.push(it.key);
+        _blockedOverwrite.push(it.key);
         console.warn('🛡️ 빈 값 덮어쓰기 차단:', it.key, '(이전 스냅샷에 데이터 있음)');
         return false;
       }
@@ -9258,8 +9257,8 @@ async function sbSaveAll(companyId) {
   });
   const safeSmall = _filter(smallItems);
   const safeLarge = _filter(largeItems);
-  if(_blocked.length && typeof showSyncToast==='function'){
-    showSyncToast('⚠️ 빈 값 덮어쓰기 차단: '+_blocked.join(', ')+'\n서버 데이터 보호 (새로고침으로 재로드 권장)','warn',6000);
+  if(_blockedOverwrite.length && typeof showSyncToast==='function'){
+    showSyncToast('⚠️ 빈 값 덮어쓰기 차단: '+_blockedOverwrite.join(', ')+'\n서버 데이터 보호 (새로고침으로 재로드 권장)','warn',6000);
   }
 
   // 소형 키 먼저 저장, 대형 키는 병렬로 개별 저장
