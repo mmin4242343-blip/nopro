@@ -153,7 +153,7 @@ UNIQUE(company_id, data_key)    -- atomic upsert용 유니크 제약
 - `tax` — 세금 기록
 - `leave_settings` — 연차 설정
 - `leave_overrides` — 직원별 연차 오버라이드
-- `bk_snapshots` — 월별 기본 휴게세트 스냅샷 (DEF_BK 변경 시 변경 직전 값을 과거 달에 freeze)
+- `bk_snapshots` — **일별** 기본 휴게세트 스냅샷 (DEF_BK 변경 시 변경 직전 값을 과거 일자에 freeze, 키 형식 `YYYY-MM-DD`. 호환을 위해 옛 월 키 `YYYY-MM`도 fallback 인식). DEF_BK 각 엔트리는 `shift` 필드(`'all'|'day'|'night'`)로 적용 직원 분류 가능 — `getActiveBk(y,m,d,emp)`가 emp.shift에 맞춰 필터링.
 
 ### `audit_log` 테이블
 ```

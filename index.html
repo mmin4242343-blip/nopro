@@ -612,7 +612,10 @@
   <div class="nt" id="nt-settings" onclick="gp('settings')">급여 설정 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:12px;padding:0 2px;opacity:.7" onclick="showTip('급여 설정','급여 계산에 필요한 기본 설정을 합니다.\n\n• 급여 방식 선택 (통상임금제·시간급·월정액제·고정급제)\n• 야간/연장/휴일 가산수당 ON/OFF\n• 주말·공휴일 기준 설정\n• 휴게시간 기본값 설정')">💡</button></span></div>
   <div class="nsp"></div>
   
-<button onclick="authLogout()" style="margin-right:8px;padding:6px 14px;border-radius:8px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);color:#F87171;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.background='rgba(239,68,68,.18)'" onmouseout="this.style.background='rgba(239,68,68,.08)'">로그아웃</button><button class="nxa" onclick="exportFile()">HTML 저장</button>
+<div id="sync-indicator" title="저장 상태" style="display:flex;align-items:center;gap:5px;margin-right:10px;padding:4px 10px;border-radius:8px;background:rgba(255,255,255,.06);font-size:10.5px;color:rgba(255,255,255,.85);font-weight:600;cursor:default;user-select:none">
+  <span id="sync-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22C55E;box-shadow:0 0 6px rgba(34,197,94,.6);transition:background .2s,box-shadow .2s"></span>
+  <span id="sync-text">저장됨</span>
+</div><button onclick="authLogout()" style="margin-right:8px;padding:6px 14px;border-radius:8px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);color:#F87171;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.background='rgba(239,68,68,.18)'" onmouseout="this.style.background='rgba(239,68,68,.08)'">로그아웃</button><button class="nxa" onclick="exportFile()">HTML 저장</button>
 </div>
 <div class="body">
 <div class="mob-sb-dim" onclick="toggleMobSb()"></div>

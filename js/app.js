@@ -434,25 +434,48 @@ function syncPolSnapshot(){
   } catch(e){ console.warn('syncPolSnapshot 실패:', e); }
 }
 
-// ═══ 월별 기본 휴게세트 스냅샷 헬퍼 (POL_SNAPSHOTS와 동일 패턴) ═══
-// "YYYY-MM" 키. 해당 월 계산 시 스냅샷 있으면 그걸, 없으면 현재 DEF_BK.
-// 변경 직전 값을 과거 달에 freeze해서 "한 번 저장된 데이터는 새 값으로 덮이지 않음" 보장.
-function getBkForMonth(y, m){
-  const snap = (typeof BK_SNAPSHOTS!=='undefined') ? BK_SNAPSHOTS[_polKey(y, m)] : null;
-  return snap || DEF_BK;
+// ═══ 일별 기본 휴게세트 스냅샷 헬퍼 ═══
+// 키 형식: "YYYY-MM-DD". 해당 일 계산 시 스냅샷 있으면 그걸, 없으면 라이브 DEF_BK.
+// 변경 직전 값을 과거 일에 freeze → 한 번 저장된 데이터는 새 값으로 절대 덮이지 않음.
+// 호환성: 기존 월별("YYYY-MM") 키도 fallback으로 인식.
+function _dayKey(y, m, d){ return y + '-' + String(m).padStart(2,'0') + '-' + String(d).padStart(2,'0'); }
+
+// REC에서 데이터가 있는 모든 일자(YYYY-MM-DD) 집합 반환
+function _daysWithRec(){
+  const set = new Set();
+  try {
+    Object.keys(REC||{}).forEach(k=>{
+      // rk 형식: "empId_YYYY-MM-DD" (zero-padded)
+      const m = String(k).match(/_(\d{4}-\d{2}-\d{2})$/);
+      if(m){ set.add(m[1]); }
+    });
+  } catch(e){}
+  return set;
 }
-function freezePastMonthsBk(bkToSave){
+
+function getBkForDay(y, m, d){
+  if(typeof BK_SNAPSHOTS === 'undefined') return DEF_BK;
+  // 일별 스냅샷 우선
+  const dKey = _dayKey(y, m, d);
+  if(BK_SNAPSHOTS[dKey]) return BK_SNAPSHOTS[dKey];
+  // 호환: 마이그레이션 전 월별 스냅샷이 있으면 그걸 사용
+  const mKey = _polKey(y, m);
+  if(BK_SNAPSHOTS[mKey]) return BK_SNAPSHOTS[mKey];
+  return DEF_BK;
+}
+
+function freezePastDaysBk(bkToSave){
   try {
     if(typeof BK_SNAPSHOTS === 'undefined') return false;
     const src = bkToSave || DEF_BK;
     if(!Array.isArray(src) || src.length === 0) return false; // 빈값은 freeze 안 함
     const now = new Date();
-    const curKey = _polKey(now.getFullYear(), now.getMonth()+1);
-    const months = _monthsWithData();
+    const todayKey = _dayKey(now.getFullYear(), now.getMonth()+1, now.getDate());
+    const days = _daysWithRec();
     let changed = false;
-    months.forEach(key => {
-      if(key >= curKey) return; // 현재월·미래는 라이브 DEF_BK 사용
-      if(!BK_SNAPSHOTS[key]){
+    days.forEach(key => {
+      if(key >= todayKey) return; // 오늘·미래 일자는 라이브 DEF_BK 사용
+      if(!BK_SNAPSHOTS[key]){     // 🛡️ 이미 freeze된 일자는 절대 덮어쓰지 않음
         BK_SNAPSHOTS[key] = JSON.parse(JSON.stringify(src));
         changed = true;
       }
@@ -461,8 +484,9 @@ function freezePastMonthsBk(bkToSave){
       localStorage.setItem('npm5_bk_snapshots', JSON.stringify(BK_SNAPSHOTS));
     }
     return changed;
-  } catch(e){ console.warn('freezePastMonthsBk 실패:', e); return false; }
+  } catch(e){ console.warn('freezePastDaysBk 실패:', e); return false; }
 }
+
 let _prevBkForSnapshot = null;
 function syncBkSnapshot(){
   try {
@@ -472,8 +496,8 @@ function syncBkSnapshot(){
       return;
     }
     if(JSON.stringify(DEF_BK) === JSON.stringify(_prevBkForSnapshot)) return;
-    // 변경 감지: 이전 값(=과거 달이 사용했던 값)을 과거 달에 freeze
-    freezePastMonthsBk(_prevBkForSnapshot);
+    // 변경 감지: 이전 값(=과거 일이 사용했던 값)을 과거 일에 freeze
+    freezePastDaysBk(_prevBkForSnapshot);
     _prevBkForSnapshot = JSON.parse(JSON.stringify(DEF_BK));
   } catch(e){ console.warn('syncBkSnapshot 실패:', e); }
 }
@@ -505,10 +529,27 @@ async function safeItemSave(key, value){
   return apiFetch('/data-save','POST',{key,value});
 }
 
+// ── 저장 상태 인디케이터 ──
+// 'saved' = 🟢 저장됨, 'saving' = 🟡 저장 중, 'unsaved' = 🔴 미저장(서버 실패 또는 대기)
+function setSyncStatus(state, msg){
+  const dot = document.getElementById('sync-dot');
+  const text = document.getElementById('sync-text');
+  if(!dot || !text) return;
+  const conf = {
+    saved:   {color:'#22C55E', glow:'rgba(34,197,94,.6)',  label:'저장됨'},
+    saving:  {color:'#EAB308', glow:'rgba(234,179,8,.6)',  label:'저장 중...'},
+    unsaved: {color:'#EF4444', glow:'rgba(239,68,68,.7)',  label:'미저장'}
+  }[state] || {color:'#9CA3AF', glow:'rgba(156,163,175,.4)', label:state};
+  dot.style.background = conf.color;
+  dot.style.boxShadow = '0 0 6px ' + conf.glow;
+  text.textContent = msg || conf.label;
+}
+
 function saveLS(){
   // POL/DEF_BK 변경 자동 감지 → 직전 상태를 과거 달에 복사 (변경 이후 과거 조회 시 옛 설정 사용 보장)
   try { syncPolSnapshot(); } catch(e){}
   try { if(typeof syncBkSnapshot === 'function') syncBkSnapshot(); } catch(e){}
+  setSyncStatus('saving');
   try{
     localStorage.setItem(LS.E,JSON.stringify(EMPS));
     localStorage.setItem(LS.P,JSON.stringify(POL));
@@ -530,8 +571,10 @@ function saveLS(){
         try {
           await sbSaveAll(_sess.companyId);
           _hasUnsavedChanges = false;
+          setSyncStatus('saved');
         } catch(e) {
           console.warn('Supabase 저장 오류:',e);
+          setSyncStatus('unsaved', '미저장(재시도 대기)');
           if(typeof showSyncToast==='function'){
             showSyncToast('⚠️ 서버 저장 실패\n네트워크 상태를 확인해주세요. 로컬에는 저장됨.','error',5000);
           }
@@ -815,12 +858,20 @@ function getOrdinaryRate(emp,y,m){
 // ══════════════════════════════════════
 // 계산 엔진
 // ══════════════════════════════════════
-function getActiveBk(y,m,d){
-  const k=`${y}-${pad(m)}-${pad(d)}`;
-  // 우선순위: 일별 임시(TBK) > 월별 스냅샷(BK_SNAPSHOTS) > 라이브 DEF_BK
-  if(TBK[k]) return TBK[k];
-  if(typeof getBkForMonth === 'function') return getBkForMonth(y, m);
-  return DEF_BK;
+function getActiveBk(y,m,d,emp){
+  const dayKey=`${y}-${pad(m)}-${pad(d)}`;
+  // 우선순위: 일별 임시(TBK) > 일별 스냅샷(BK_SNAPSHOTS[YYYY-MM-DD]) > 월별 스냅샷(호환) > 라이브 DEF_BK
+  let bks;
+  if(TBK[dayKey]) bks = TBK[dayKey];
+  else if(typeof getBkForDay === 'function') bks = getBkForDay(y, m, d);
+  else bks = DEF_BK;
+  // 직원이 지정된 경우 shift 필터 적용 — 'all' 또는 같은 shift만 통과 (필드 없으면 'all'로 간주)
+  if(!emp || !Array.isArray(bks)) return bks;
+  const empShift = emp.shift || 'day';
+  return bks.filter(b => {
+    const bs = b.shift || 'all';
+    return bs === 'all' || bs === empShift;
+  });
 }
 function calcBkDeduct(sMin,eMin,bks){
   let t=0;
@@ -1117,7 +1168,7 @@ function monthSummary(eid,y,m){
       continue;
     }
     const autoH=isAutoHol(y,m,d,emp);
-    const bks=getActiveBk(y,m,d);
+    const bks=getActiveBk(y,m,d,emp);
     const msBks = rec.customBk ? (rec.customBkList||[]) : bks;
     const c=rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,msBks,rec.outTimes||[],empPayMode,ordRate):null;
     if(!c)continue;
@@ -1219,7 +1270,7 @@ function monthSummary(eid,y,m){
         if(isRegistered&&(!rec||rec.absent)){hasAbsent=true;continue;}
         if(!rec||rec.absent) continue; // 미등록은 그냥 skip
         if(rec.annual||rec.halfAnnual) continue; // 연차는 개근 인정
-        const bks=getActiveBk(y,m,d);
+        const bks=getActiveBk(y,m,d,emp);
         const _whActiveBks = rec.customBk ? (rec.customBkList||[]) : bks;
         const c=rec.start&&rec.end
           ?calcSession(rec.start,rec.end,rate,isAutoHol(y,m,d,emp),_whActiveBks,rec.outTimes||[],empPayMode,ordRate)
@@ -1546,7 +1597,7 @@ function _updateDailyRowCells(eid){
   const emp=EMPS.find(e=>e.id===eid);
   if(!emp) return;
   const autoH=isAutoHol(cY,cM,cD,emp);
-  const bks=getActiveBk(cY,cM,cD);
+  const bks=getActiveBk(cY,cM,cD,emp);
   const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
   try{
     const c=calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,cY,cM));
@@ -1740,7 +1791,6 @@ function renderTable(){
   if(_polSwapped) POL = _monthPOL;
   try {
   renderFilterBar('daily-filter-bar','daily');
-  const bks=getActiveBk(cY,cM,cD);
   const dayDate=new Date(cY,cM-1,cD);
   const activeDayEmps = applyCommonFilter(EMPS.filter(emp=>{
     if(emp.join){const jd=new Date(emp.join);if(jd>dayDate)return false;}
@@ -1759,7 +1809,9 @@ function renderTable(){
     const al=calcAnnualLeave(emp);
     const empPayMode=getEmpPayMode(emp);
     const isPohalEmp=empPayMode==='pohal';
-    // 개별휴게 ON이면 개인 휴게시간 사용, 아니면 전체 휴게시간
+    // 직원 shift에 따라 다른 휴게세트 적용 (주간/야간 분리)
+    const bks=getActiveBk(cY,cM,cD,emp);
+    // 개별휴게 ON이면 개인 휴게시간 사용, 아니면 shift별 휴게시간
     const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
     let c=null;
     if(rec.annual){
@@ -2091,7 +2143,7 @@ function updateRowCalc(eid){
   const emp = EMPS.find(e=>e.id===eid);
   if(!emp) return;
   const autoH = isAutoHol(cY, cM, cD);
-  const bks = getActiveBk(cY, cM, cD);
+  const bks = getActiveBk(cY, cM, cD, emp);
   const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
   const c = calcSession(rec.start, rec.end, getEmpRate(emp), autoH, activeBks, rec.outTimes||[], getEmpPayMode(emp), getOrdinaryRate(emp,cY,cM));
   if(!c) return;
@@ -2464,7 +2516,7 @@ function renderCal(){
     const rate=getEmpRate(emp);
     const isAl=rec&&rec.annual;
     const isHalf=rec&&rec.halfAnnual;
-    const _calBks=getActiveBk(vY,vM,d);
+    const _calBks=getActiveBk(vY,vM,d,emp);
     const _calActiveBks = rec && rec.customBk ? (rec.customBkList||[]) : _calBks;
     const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,_calActiveBks,rec.outTimes||[],calEmpMode,getOrdinaryRate(emp,vY,vM)):null;
     const isSel=vY===cY&&vM===cM&&d===cD;
@@ -2516,7 +2568,7 @@ function renderOv(){
       const rec=REC[rk(emp.id,vY,vM,d)];
       const autoH=isAutoHol(vY,vM,d);
       const isAl=rec&&rec.annual;
-      const _ovBks=getActiveBk(vY,vM,d);
+      const _ovBks=getActiveBk(vY,vM,d,emp);
       const _ovActiveBks = rec && rec.customBk ? (rec.customBkList||[]) : _ovBks;
       const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,_ovActiveBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM)):null;
       const ph=getPhName(vY,vM,d);
@@ -4805,16 +4857,34 @@ function renderDefBk(){
   const MINS=[0,5,10,15,20,25,30,35,40,45,50,55];
   const mkHO=s=>Array.from({length:24},(_,h)=>`<option value="${h}"${h==s?' selected':''}>${pad(h)}</option>`).join('');
   const mkMO=s=>MINS.map(m=>`<option value="${m}"${m==s?' selected':''}>${pad(m)}</option>`).join('');
+  // shift 드롭다운: 'all'(전체) | 'day'(주간) | 'night'(야간) — 기존 데이터에 shift 필드 없으면 'all'로 처리
+  const mkShiftO=s=>{
+    const cur = s || 'all';
+    return `<option value="all"${cur==='all'?' selected':''}>전체</option>`+
+           `<option value="day"${cur==='day'?' selected':''}>주간</option>`+
+           `<option value="night"${cur==='night'?' selected':''}>야간</option>`;
+  };
+  const shiftLabel = {all:'전체', day:'주간', night:'야간'};
+  const shiftBg = {all:'#F5F5F7', day:'#FEF3C7', night:'#E0E7FF'};
   document.getElementById('def-bk').innerHTML=DEF_BK.map((b,i)=>{
-    const[sh,sm]=b.start.split(':').map(Number);const[eh,em]=b.end.split(':').map(Number);
-    return`<div style="display:flex;align-items:center;gap:5px;padding:5px 8px;background:var(--surf);border:1px solid var(--bd);border-radius:7px">
+    const[sh,sm]=(b.start||'12:00').split(':').map(Number);const[eh,em]=(b.end||'13:00').split(':').map(Number);
+    const sft = b.shift || 'all';
+    return`<div style="display:flex;align-items:center;gap:5px;padding:5px 8px;background:${shiftBg[sft]||'var(--surf)'};border:1px solid var(--bd);border-radius:7px">
       <span class="bk-lbl">세트${i+1}</span>
+      <select class="bs" style="font-weight:600;min-width:54px" onchange="updDefBkShift(${i},this.value)" title="이 세트가 적용될 직원 분류">${mkShiftO(sft)}</select>
       <select class="bs" onchange="updDefBkH(${i},'start',this.value)">${mkHO(sh)}</select>:
       <select class="bs" onchange="updDefBkM(${i},'start',this.value)">${mkMO(sm)}</select>~
       <select class="bs" onchange="updDefBkH(${i},'end',this.value)">${mkHO(eh)}</select>:
       <select class="bs" onchange="updDefBkM(${i},'end',this.value)">${mkMO(em)}</select>
       <button class="bk-del" onclick="delDefBk(${i})">×</button>
     </div>`;}).join('');
+}
+function updDefBkShift(i, v){
+  if(!DEF_BK[i]) return;
+  const allowed = ['all','day','night'];
+  DEF_BK[i].shift = allowed.includes(v) ? v : 'all';
+  saveLS();
+  renderDefBk();
 }
 function updDefBkH(i,f,v){
   const mn=DEF_BK[i][f].split(':')[1];
@@ -4826,7 +4896,7 @@ function updDefBkM(i,f,v){
   const newVal=`${hr}:${pad(+v)}`;
   DEF_BK[i][f]=newVal;saveLS();
 }
-function addDefBk(){DEF_BK.push({id:bkNid++,start:'12:00',end:'13:00'});saveLS();renderDefBk();}
+function addDefBk(){DEF_BK.push({id:bkNid++,shift:'all',start:'12:00',end:'13:00'});saveLS();renderDefBk();}
 // 🛡️ 마지막 1개 세트는 삭제 차단 — DEF_BK가 빈 배열이 되면 모든 직원 휴게시간이 0으로 계산됨
 function delDefBk(i){
   if(!Array.isArray(DEF_BK)) return;
@@ -5884,7 +5954,6 @@ function exportDailyExcel(){
   R++;
 
   // 직원 필터링 (renderTable과 동일)
-  const bks=getActiveBk(cY,cM,cD);
   const dayDate2=new Date(cY,cM-1,cD);
   const activeDayEmps = applyCommonFilter(EMPS.filter(emp=>{
     if(emp.join){const jd=new Date(emp.join);if(jd>dayDate2)return false;}
@@ -5900,6 +5969,8 @@ function exportDailyExcel(){
     const autoH=isAutoHol(cY,cM,cD,emp);
     const rate=getEmpRate(emp);
     const empPayMode=getEmpPayMode(emp);
+    // 직원 shift별 휴게세트
+    const bks=getActiveBk(cY,cM,cD,emp);
     const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
 
     let c=null;
@@ -7995,7 +8066,7 @@ function exportMonthlyExcel(){
           else if(rec.annual){val='연차';cellBg='C8E6C9';fg=C.green;}
           else if(rec.halfAnnual){val='반차';cellBg='B3E5FC';fg='01579B';}
           else if(rec.start&&rec.end){
-            const _s1Bks=getActiveBk(vY,vM,d);
+            const _s1Bks=getActiveBk(vY,vM,d,emp);
             const _s1ActiveBks = rec.customBk ? (rec.customBkList||[]) : _s1Bks;
             const c2=calcSession(rec.start,rec.end,getEmpRate(emp),autoH,_s1ActiveBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM));
             // m2h가 이미 2자리 반올림 처리. toFixed로 추가 절삭하지 않음 → UI(6.83) ≡ 엑셀(6.83)
@@ -8116,7 +8187,7 @@ function exportMonthlyExcel(){
 
       const rec=REC[rk(emp.id,vY,vM,d)];
       if(rec){
-        const bks=getActiveBk(vY,vM,d);
+        const bks=getActiveBk(vY,vM,d,emp);
         const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
         const c2=rec.start&&rec.end?calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM)):null;
         const note=rec.absent?'결근':rec.annual?'연차':rec.halfAnnual?'반차':'';
@@ -9628,10 +9699,10 @@ async function sbLoadAll(companyId) {
       freezePastMonthsPol();
     }
   } catch(e){}
-  // 동일하게 BK_SNAPSHOTS도 시드: 비어있고 REC 있으면 현재 DEF_BK를 과거 달에 freeze
+  // 동일하게 BK_SNAPSHOTS도 시드: 비어있고 REC 있으면 현재 DEF_BK를 과거 일자에 freeze
   try {
     if(typeof BK_SNAPSHOTS!=='undefined' && Object.keys(BK_SNAPSHOTS).length === 0 && Object.keys(REC||{}).length > 0){
-      freezePastMonthsBk();
+      freezePastDaysBk();
     }
   } catch(e){}
   // BK 변경 감지 기준값 업데이트 (로드 직후 변경 오인 방지)
