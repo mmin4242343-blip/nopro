@@ -233,6 +233,11 @@ button,div,span{letter-spacing:-.01em}
 .tch{font-size:7.5px;padding:1.5px 6px;border-radius:980px;display:inline-block;margin-top:1px;font-weight:500;background:var(--surf);color:var(--ink);border:.5px solid var(--bd)}
 .ph-name{font-size:8.5px;color:var(--rose);font-weight:500;margin-top:1px;letter-spacing:-.01em}
 
+/* 근태현황 필터 버튼 활성 상태 — 어떤 필터가 눌렸는지 시각적으로 표시 */
+.mvf-btn,.mvf-sub{background:transparent;color:var(--ink3);border:1px solid var(--bd2);transition:all .15s}
+.mvf-btn.on,.mvf-sub.on{background:var(--navy);color:#fff;border-color:var(--navy);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.mvf-btn:hover:not(.on),.mvf-sub:hover:not(.on){background:var(--surf);color:var(--ink);border-color:var(--bd)}
+
 /* 전체현황표 — 좌우 여백은 부모 .pg.on이 제공 */
 .ov-scroll-top{overflow-x:auto;overflow-y:hidden;height:14px;border:.5px solid var(--bd);border-bottom:none;border-radius:var(--radius) var(--radius) 0 0;background:var(--card);display:none;-webkit-overflow-scrolling:touch}
 .ov-scroll-top.on{display:block}
