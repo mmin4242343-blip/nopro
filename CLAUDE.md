@@ -301,7 +301,7 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
 - `else { X = []; }` 또는 `if(map.x)` 분기 **영구 금지**.
 
 #### 가드 2: `sbSaveAll` / `safeItemSave` / `_flushSaveOnUnload` 빈값 차단 (우회 불가)
-- 보호 대상: `emps`, `rec`, `bonus`, `allow`, `tax`, `tbk`, `safety`
+- 보호 대상: `emps`, `rec`, `bonus`, `allow`, `tax`, `tbk`, `safety`, `bk`
 - 조건 1 (**초기 로드 전**): `_syncedSnapshot === null` → 빈값 저장 **무조건 차단** (console만, 토스트 X)
 - 조건 2 (**덮어쓰기 시도**): 스냅샷에 데이터 있음 + 현재 빈값 → 차단 + 사용자 토스트
 - **우회 플래그 없음.** `rmAllEmps` 같은 "전체 삭제" 기능은 **완전 비활성화**(alert만 표시).
@@ -311,7 +311,7 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
 - `_guardedMerge` / `_guardedReplace` 래퍼: 서버 값이 비었고 로컬에 데이터 있으면 해당 키 동기화 스킵 → 다른 기기/서버의 빈값이 로컬을 덮어쓸 수 없음.
 
 #### 가드 4 (서버측): `data-save.js` 빈값 저장 무조건 거부
-- `PROTECTED = new Set(['emps','rec','bonus','allow','tax','tbk','safety'])` 키는 빈 배열/객체이면 **`oldValue` 존재 여부 불문 `continue`로 스킵** (upsert도 감사 로그 insert도 안 함).
+- `PROTECTED = new Set(['emps','rec','bonus','allow','tax','tbk','safety','bk'])` 키는 빈 배열/객체이면 **`oldValue` 존재 여부 불문 `continue`로 스킵** (upsert도 감사 로그 insert도 안 함).
 - 클라이언트 코드가 어떤 식으로 해킹/버그돼도 **빈값은 서버 DB에 도달 불가**.
 
 #### clearLocalData / 로그아웃 경쟁 조건 방어

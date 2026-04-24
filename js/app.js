@@ -446,7 +446,7 @@ async function safeItemSave(key, value){
     if(s==null) return false;
     try { const p = typeof s==='string'?JSON.parse(s):s; return Array.isArray(p)?p.length>0:(typeof p==='object' && Object.keys(p).length>0); } catch(e){ return false; }
   };
-  const PROTECTED = new Set(['emps','rec','bonus','allow','tax','tbk','safety']);
+  const PROTECTED = new Set(['emps','rec','bonus','allow','tax','tbk','safety','bk']);
   // 🛡️ 우회 경로 없음 — 빈값 저장은 무조건 차단
   if(PROTECTED.has(key) && isEmpty(value)){
     if(snap === null){
@@ -4761,7 +4761,7 @@ function renderDefBk(){
       <select class="bs" onchange="updDefBkM(${i},'start',this.value)">${mkMO(sm)}</select>~
       <select class="bs" onchange="updDefBkH(${i},'end',this.value)">${mkHO(eh)}</select>:
       <select class="bs" onchange="updDefBkM(${i},'end',this.value)">${mkMO(em)}</select>
-      <button class="bk-del" onclick="DEF_BK.splice(${i},1);saveLS();renderDefBk()">×</button>
+      <button class="bk-del" onclick="delDefBk(${i})">×</button>
     </div>`;}).join('');
 }
 function updDefBkH(i,f,v){
@@ -4775,6 +4775,17 @@ function updDefBkM(i,f,v){
   DEF_BK[i][f]=newVal;saveLS();
 }
 function addDefBk(){DEF_BK.push({id:bkNid++,start:'12:00',end:'13:00'});saveLS();renderDefBk();}
+// 🛡️ 마지막 1개 세트는 삭제 차단 — DEF_BK가 빈 배열이 되면 모든 직원 휴게시간이 0으로 계산됨
+function delDefBk(i){
+  if(!Array.isArray(DEF_BK)) return;
+  if(DEF_BK.length <= 1){
+    alert('기본 휴게세트는 최소 1개가 필요합니다.\n전부 삭제하려면 시간을 0으로 설정하세요.');
+    return;
+  }
+  DEF_BK.splice(i,1);
+  saveLS();
+  renderDefBk();
+}
 // ── 정책설정 카드 수정/완료 ──
 
 // askChangeDate 완료 후 버튼 복원
@@ -9283,7 +9294,7 @@ async function sbSaveAll(companyId) {
       return false;
     } catch(e){ return false; }
   };
-  const _guardKeys = new Set(['emps','rec','bonus','allow','tax','tbk','safety']);
+  const _guardKeys = new Set(['emps','rec','bonus','allow','tax','tbk','safety','bk']);
   const _blockedOverwrite = [];  // 실제 덮어쓰기 시도 (사용자 토스트)
   const _filter = (items) => items.filter(it => {
     if(!_guardKeys.has(it.key)) return true;

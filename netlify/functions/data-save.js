@@ -59,7 +59,7 @@ export const handler = async (event) => {
       // - 서버 빈값 & 클라 빈값 → 차단 (연쇄 빈값 저장 방지, 로그 오염만 유발)
       // - 서버 없음(신규 생성) & 클라 빈값 → 차단 (의미 없는 빈 레코드 생성 방지)
       // 즉, 보호 키는 빈값이면 무조건 거부.
-      const PROTECTED = new Set(['emps','rec','bonus','allow','tax','tbk','safety']);
+      const PROTECTED = new Set(['emps','rec','bonus','allow','tax','tbk','safety','bk']);
       if (PROTECTED.has(item.key)) {
         const clientIsEmpty = Array.isArray(value) ? value.length === 0 : (value && typeof value==='object' && Object.keys(value).length===0);
         if (clientIsEmpty) {
