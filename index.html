@@ -766,7 +766,8 @@
       <div style="width:1px;height:14px;background:var(--bd);margin:0 4px"></div>
       <button class="btn btn-sm" id="mv-cal" onclick="setMvMode('cal')" style="background:var(--nbg);color:var(--navy2);border-color:var(--navy2)">캘린더</button>
       <button class="btn btn-sm" id="mv-ov" onclick="setMvMode('ov')">전체 현황표</button>
-      <button class="btn btn-sm btn-t" onclick="exportMonthlyExcel()">⬇ 엑셀 내보내기</button>
+      <button class="btn btn-sm btn-t" onclick="exportMonthlyExcel()" title="필터링된 전체 인원 + 직원별 시트">⬇ 엑셀 내보내기</button>
+      <button class="btn btn-sm" onclick="exportMonthlyExcelOne(vEid)" title="현재 선택된 직원만 다운로드" style="background:var(--nbg);color:var(--navy2);border-color:var(--navy2)">⬇ 이 직원만</button>
     </div>
   </div>
   <div id="mv-body"></div>

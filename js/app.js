@@ -8119,11 +8119,16 @@ function exportMonthlyExcel(){
     XLSX.utils.book_append_sheet(wb,ws,`전체현황`);
   }
 
-  // ── 시트2~N: 직원별 캘린더 ──
+  // ── 시트2~N: 직원별 캘린더 (전체현황표 시트와 동일한 필터 적용) ──
   const calEmps=EMPS.filter(e=>{
     if(!e.join||new Date(e.join)>new Date(vY,vM,0)) return false;
     if(e.leave&&new Date(e.leave)<new Date(vY,vM-1,1)) return false;
     if(mvFilter!=='all'){const ep=e.payMode||'fixed';if(mvFilter==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}else{if(ep!==mvFilter)return false;}}
+    if(MF.shift!=='all'&&(e.shift||'day')!==MF.shift) return false;
+    const isFor=e.nation==='foreign'||e.foreigner===true;
+    if(MF.nation==='korean'&&isFor) return false;
+    if(MF.nation==='foreign'&&!isFor) return false;
+    if(MF.dept!=='all'&&(e.dept||'').trim()!==MF.dept) return false;
     return true;
   });
 
@@ -8256,6 +8261,142 @@ function exportMonthlyExcel(){
   });
 
   XLSX.writeFile(wb,`월별현황_${monthStr}.xlsx`);
+}
+
+// ══════════════════════════════════════════════════════
+// 📄 개인별 월간 근태 엑셀 (선택된 직원 1명만)
+// ══════════════════════════════════════════════════════
+function exportMonthlyExcelOne(empId){
+  const emp = EMPS.find(e=>e.id===empId);
+  if(!emp){ alert('직원을 먼저 선택해주세요.'); return; }
+  const monthStart = new Date(vY, vM-1, 1);
+  const monthEnd = new Date(vY, vM, 0);
+  if(emp.join && new Date(emp.join) > monthEnd){ alert('해당 월에 재직 중이 아닌 직원입니다.'); return; }
+  if(emp.leave && new Date(emp.leave) < monthStart){ alert('해당 월 이전에 퇴사한 직원입니다.'); return; }
+
+  const wb = XLSX.utils.book_new();
+  const days = dim(vY, vM);
+  const dowKo = ['일','월','화','수','목','금','토'];
+  const monthStr = `${vY}년 ${vM}월`;
+  const C = XLS.C; const S = XLS.S;
+
+  const ws={}; let R=0;
+  const s=monthSummary(emp.id,vY,vM);
+
+  // 타이틀
+  xlsWrite(ws,XLSX.utils.encode_cell({r:0,c:0}),`${emp.name}`, {
+    font:{bold:true,sz:18,color:{rgb:C.navy},name:'맑은 고딕'},
+    fill:{fgColor:{rgb:'EFF6FF'}}, alignment:{horizontal:'left',vertical:'center'},
+  });
+  xlsMerge(ws,0,0,0,4);
+  xlsWrite(ws,XLSX.utils.encode_cell({r:1,c:0}),`${monthStr} 근태 현황  ·  ${emp.role||''}${emp.dept?' · '+emp.dept:''}  ·  입사 ${emp.join||''}${emp.leave?' · 퇴사 '+emp.leave:''}`, {
+    font:{sz:9,color:{rgb:C.gray2},name:'맑은 고딕'},
+    fill:{fgColor:{rgb:'EFF6FF'}}, alignment:{horizontal:'left',vertical:'center'},
+  });
+  xlsMerge(ws,1,0,1,10);
+  R=2;
+
+  // 요약 카드
+  const cards=[
+    ['출근일',s.wdays,'일',C.green,C.green4],
+    ['결근일',s.adays,'일',C.rose,C.rose4],
+    ['연차',+s.aldays.toFixed(1),'일',C.orange2,C.orange4],
+    ['총근무',+s.twkH.toFixed(2),'h',C.navy,C.blue4],
+    ['야간',+(s.tNightH||0).toFixed(2),'h',C.purple2,C.purple4],
+    ['연장',+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),'h',C.blue,C.blue3],
+  ];
+  cards.forEach((card,i)=>{
+    const col=i*2;
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:col}),card[0],{
+      font:{bold:true,sz:9,color:{rgb:card[3]},name:'맑은 고딕'},
+      fill:{fgColor:{rgb:card[4]}},alignment:{horizontal:'center',vertical:'center'},
+      border:XLS.B.thin(card[3]),
+    });
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:col+1}),`${card[1]}${card[2]}`,{
+      font:{bold:true,sz:12,color:{rgb:card[3]},name:'맑은 고딕'},
+      fill:{fgColor:{rgb:card[4]}},alignment:{horizontal:'center',vertical:'center'},
+      border:XLS.B.thin(card[3]),
+    });
+    xlsMerge(ws,R,col,R,col+1);
+  });
+  ws['!rows']=[{hpt:28},{hpt:16},{hpt:28}];
+  R++; R++;
+
+  // 테이블 헤더
+  const tHdrs=['날짜','요일','출근','퇴근','휴게(h)','실근무(h)','야간(h)','연장(h)','휴일(h)','연차/결근','비고'];
+  const tBgs=[C.navy,C.navy,C.navy2,C.navy2,'2D6A4F',C.teal2,C.purple2,C.blue,C.orange2,'2E7D32',C.gray];
+  tHdrs.forEach((h,ci)=>{
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),h,S.mainHdr(tBgs[ci],'FFFFFF','center'));
+  });
+  ws['!rows'].push({hpt:8},{hpt:26});
+  R++;
+
+  const empLeaveDate = emp.leave ? new Date(emp.leave) : null;
+  let totalBk = 0;
+  for(let d=1;d<=days;d++){
+    const autoH=isAutoHol(vY,vM,d);
+    const dow=new Date(vY,vM-1,d).getDay();
+    const isSun=dow===0, isSat=dow===6;
+    const phName=getPhName&&getPhName(vY,vM,d)||'';
+    let rowBg=xlsRowBg(d-1);
+    if(autoH||isSun) rowBg='FFEBEE';
+    else if(isSat) rowBg='EFF6FF';
+    const dateStr=`${vM}/${d}`;
+    const dowLabel=dowKo[dow];
+    const dowColor=isSun?C.rose:isSat?C.blue:C.navy;
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),dateStr,S.cell(C.navy,rowBg,false,'center'));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),phName||dowLabel,S.cell(autoH?C.rose:dowColor,rowBg,autoH||isSun||isSat,'center'));
+    if(empLeaveDate && empLeaveDate<=new Date(vY,vM-1,d)){
+      [2,3,4,5,6,7,8,9,10].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty('F5F5F5')));
+      ws['!rows'].push({hpt:18}); R++; continue;
+    }
+    const rec=REC[rk(emp.id,vY,vM,d)];
+    if(rec){
+      const bks=getActiveBk(vY,vM,d,emp);
+      const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
+      const c2=rec.start&&rec.end?calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM)):null;
+      const note=rec.absent?'결근':rec.annual?'연차':rec.halfAnnual?'반차':'';
+      const noteBg=rec.absent?C.rose3:rec.annual?C.green3:rec.halfAnnual?C.blue3:rowBg;
+      const noteFg=rec.absent?C.rose:rec.annual?C.green:rec.halfAnnual?C.blue:C.gray;
+      const bkH = c2 && c2.bkMins ? +m2h(c2.bkMins).toFixed(2) : 0;
+      if(c2 && c2.bkMins) totalBk += c2.bkMins;
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),rec.start||'',S.cell(C.navy,rec.start?C.teal4:rowBg,!!rec.start,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),rec.end||'',S.cell(C.navy,rec.end?C.teal4:rowBg,!!rec.end,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),bkH,S.numDec('2D6A4F',bkH>0?'E8F5E9':rowBg,bkH>0));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),c2?+m2h(c2.work).toFixed(2):0,S.numDec(c2?.work>=480?C.green:C.navy,c2?.work>=480?C.green4:rowBg,c2?.work>=480));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),c2&&c2.nightM>0?+m2h(c2.nightM).toFixed(2):0,S.numDec(C.purple2,c2?.nightM>0?C.purple4:rowBg));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),c2&&c2.ot>0?+m2h(c2.ot).toFixed(2):0,S.numDec(C.blue,c2?.ot>0?C.blue4:rowBg));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),autoH&&c2?+m2h(c2.work).toFixed(2):0,S.numDec(C.orange2,autoH&&c2?C.orange4:rowBg));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),note,S.accent(noteFg,noteBg,!!note));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
+    } else {
+      [2,3,4,5,6,7,8,9,10].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty(rowBg)));
+    }
+    ws['!rows'].push({hpt:18});
+    R++;
+  }
+
+  // 합계행
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),'합 계',S.mainHdr(C.teal,'FFFFFF','center'));
+  xlsMerge(ws,R,0,R,3);
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),'',S.mainHdr(C.teal));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),'',S.mainHdr(C.teal));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),'',S.mainHdr(C.teal));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),+m2h(totalBk).toFixed(2),XLS.S.total('FFFFFF','2D6A4F'));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),+s.twkH.toFixed(2),XLS.S.total('FFFFFF',C.teal));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),+(s.tNightH||0).toFixed(2),XLS.S.total('FFFFFF',C.purple));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),XLS.S.total('FFFFFF',C.blue));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),+((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0)).toFixed(2),XLS.S.total('FFFFFF',C.orange2));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),+s.aldays.toFixed(1),XLS.S.total('FFFFFF',C.green));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),'',S.mainHdr(C.gray));
+  ws['!rows'].push({hpt:24});
+  ws['!cols']=[{wch:7},{wch:6},{wch:7},{wch:7},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},{wch:8},{wch:16}];
+  xlsRange(ws,0,0,R,10);
+
+  XLSX.utils.book_append_sheet(wb,ws,(emp.name||'직원').slice(0,8));
+  // 파일명: 안전 문자만
+  const safeName = (emp.name||'직원').replace(/[\\\/:*?"<>|]/g,'_');
+  XLSX.writeFile(wb,`${safeName}_${monthStr}.xlsx`);
 }
 
 // ══════════════════════════════════════════════════════
