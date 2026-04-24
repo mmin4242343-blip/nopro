@@ -2359,6 +2359,10 @@ function renderMonthly(){
     <button onclick="vEid=${e.id};renderMonthly()"
       style="padding:2px 8px;font-size:10px;border:1px solid ${e.id===vEid?'var(--navy2)':'var(--bd2)'};border-radius:12px;background:${e.id===vEid?'var(--nbg)':'var(--card)'};color:${e.id===vEid?'var(--navy2)':'var(--ink2)'};cursor:pointer;font-family:inherit;font-weight:${e.id===vEid?'700':'500'}">${esc(e.name)}</button>`).join('');
   document.getElementById('mv-body').innerHTML=vMode==='cal'?renderCal():renderOv();
+  if(vMode!=='cal' && typeof setupOvScrollSync==='function'){
+    // innerHTML 설정 직후 레이아웃이 아직 없을 수 있으므로 다음 프레임에서 측정
+    requestAnimationFrame(setupOvScrollSync);
+  }
   } finally {
     if(_polSwapped) POL = _origPOL;
   }
@@ -2475,7 +2479,39 @@ function renderOv(){
     tr+=`<td class="sm">${s.wdays}일</td><td class="sm" style="background:var(--gbg);color:var(--green)">${s.aldays}일</td><td class="sm">${s.twkH.toFixed(2)}h</td><td class="sm">${Math.round(s.total/10000)}만</td>`;
     return`<tr>${tr}</tr>`;
   }).join('');
-  return`<div class="ov-w"><table class="ov-t"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  return`<div class="ov-scroll-top" id="ov-scroll-top"><div class="ov-scroll-spacer" id="ov-scroll-spacer"></div></div>
+<div class="ov-w" id="ov-w"><table class="ov-t"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+// 전체현황표 상단 스크롤바 ↔ 본 테이블 가로 스크롤 양방향 동기화
+function setupOvScrollSync(){
+  const top = document.getElementById('ov-scroll-top');
+  const w = document.getElementById('ov-w');
+  const spacer = document.getElementById('ov-scroll-spacer');
+  if(!top || !w || !spacer) return;
+  const t = w.querySelector('.ov-t');
+  if(!t) return;
+  const apply = () => {
+    const tw = t.scrollWidth, ww = w.clientWidth;
+    if(tw > ww + 1){
+      top.classList.add('on');
+      w.classList.add('has-top');
+      spacer.style.width = tw + 'px';
+    } else {
+      top.classList.remove('on');
+      w.classList.remove('has-top');
+    }
+  };
+  apply();
+  let syncing = false;
+  top.onscroll = () => { if(syncing) return; syncing = true; w.scrollLeft = top.scrollLeft; requestAnimationFrame(()=>{ syncing = false; }); };
+  w.onscroll = () => { if(syncing) return; syncing = true; top.scrollLeft = w.scrollLeft; requestAnimationFrame(()=>{ syncing = false; }); };
+  // 폰트/이미지 로드 후 너비 다시 계산
+  requestAnimationFrame(apply);
+  if(!window._ovScrollResizeBound){
+    window._ovScrollResizeBound = true;
+    window.addEventListener('resize', () => { try{ setupOvScrollSync(); }catch(e){} }, {passive:true});
+  }
 }
 function jumpDay(y,m,d){cY=y;cM=m;cD=d;vY=y;vM=m;updDbar();renderBks();renderTable();gp('daily');}
 
