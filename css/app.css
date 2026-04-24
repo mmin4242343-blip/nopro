@@ -101,10 +101,11 @@ button,div,span{letter-spacing:-.01em}
 .er{font-size:10px;color:var(--ink3);letter-spacing:-.01em}
 .main{flex:1;overflow-y:auto;background:var(--surf);height:100%}
 .pg{padding:0;display:none}
-.pg.on{display:block;animation:fadeIn .3s var(--ease);min-height:100%}
+/* 사이드바 제거 이후 전 페이지 공통 좌우 여백 — 가장자리에 붙는 것 방지 */
+.pg.on{display:block;animation:fadeIn .3s var(--ease);min-height:100%;padding:0 28px 20px}
 
-/* 페이지 헤더 */
-.ph{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;padding:28px 28px 0}
+/* 페이지 헤더 — 좌우 패딩은 부모(.pg.on)에서 제공, 여기선 top만 유지 */
+.ph{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;padding:28px 0 0}
 .sticky-hd{position:sticky;top:0;z-index:50;background:rgba(245,245,247,.85);backdrop-filter:saturate(180%) blur(20px);border-bottom:.5px solid var(--bd)}
 .sticky-hd .ph{margin-bottom:0;border-bottom:none}
 .pt{font-size:24px;font-weight:600;color:var(--ink);letter-spacing:-.03em}
@@ -232,8 +233,7 @@ button,div,span{letter-spacing:-.01em}
 .tch{font-size:7.5px;padding:1.5px 6px;border-radius:980px;display:inline-block;margin-top:1px;font-weight:500;background:var(--surf);color:var(--ink);border:.5px solid var(--bd)}
 .ph-name{font-size:8.5px;color:var(--rose);font-weight:500;margin-top:1px;letter-spacing:-.01em}
 
-/* 전체현황표 */
-#mv-body{padding:0 28px 20px}
+/* 전체현황표 — 좌우 여백은 부모 .pg.on이 제공 */
 .ov-scroll-top{overflow-x:auto;overflow-y:hidden;height:14px;border:.5px solid var(--bd);border-bottom:none;border-radius:var(--radius) var(--radius) 0 0;background:var(--card);display:none;-webkit-overflow-scrolling:touch}
 .ov-scroll-top.on{display:block}
 .ov-scroll-spacer{height:1px}
@@ -629,7 +629,6 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
   .td-nm{position:sticky!important;left:0!important;z-index:3!important;background:#fff!important}
   .et tbody tr:hover .td-nm{background:var(--surf)!important}
   .et tbody tr.ab-row .td-nm,.et tbody tr.hol-row .td-nm,.et tbody tr.al-row .td-nm{background:#FAFAFA!important}
-  #mv-body{padding:0 0 12px}
   .ov-t td.ec{position:sticky;left:0;z-index:2;background:var(--surf);min-width:70px}
   .pg2{grid-template-columns:1fr;gap:10px}
   #pay-total{grid-template-columns:repeat(3,1fr)!important;gap:8px!important;padding:10px 12px!important}
