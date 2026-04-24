@@ -2492,15 +2492,10 @@ function setupOvScrollSync(){
   const t = w.querySelector('.ov-t');
   if(!t) return;
   const apply = () => {
-    const tw = t.scrollWidth, ww = w.clientWidth;
-    if(tw > ww + 1){
-      top.classList.add('on');
-      w.classList.add('has-top');
-      spacer.style.width = tw + 'px';
-    } else {
-      top.classList.remove('on');
-      w.classList.remove('has-top');
-    }
+    // 항상 상단 스크롤바 표시 (가로 길이가 화면에 들어와도 시각적 일관성 유지)
+    top.classList.add('on');
+    w.classList.add('has-top');
+    spacer.style.width = t.scrollWidth + 'px';
   };
   apply();
   let syncing = false;
