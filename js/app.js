@@ -2771,10 +2771,11 @@ function renderPayroll(){
         <div class="pr">
           <span class="prl">상여금</span>
           <span style="display:flex;align-items:center;gap:5px">
-            <input type="number" value="${s.bonus}" placeholder="0" ${_monthLocked?'readonly title="확정된 달 — 입력하려면 확정 해제 먼저"':''}
+            <input type="text" inputmode="numeric" value="${s.bonus?Number(s.bonus).toLocaleString():''}" placeholder="0" ${_monthLocked?'readonly title="확정된 달 — 입력하려면 확정 해제 먼저"':''}
               class="pay-card-inp" data-eid="${emp.id}" data-card-field="bonus"
               style="width:90px;padding:3px 6px;font-size:12px;border:1px solid ${_monthLocked?'var(--bd2)':'var(--bd2)'};border-radius:5px;text-align:right;font-family:inherit;font-weight:600;color:var(--purple)${_monthLocked?';background:var(--surf);cursor:not-allowed;opacity:.65':''}"
-              onblur="setMonthBonus(${emp.id},pY,pM,+this.value);clearTimeout(window._cardRefT);window._cardRefT=setTimeout(()=>renderPayroll(),500)"
+              oninput="formatNumInput(this)"
+              onblur="setMonthBonus(${emp.id},pY,pM,+this.value.replace(/,/g,'')||0);clearTimeout(window._cardRefT);window._cardRefT=setTimeout(()=>renderPayroll(),500)"
               onkeydown="if(event.key==='Enter'){event.preventDefault();payCardNav(this);}">
             <span style="font-size:10px;color:var(--ink3)">원</span>
           </span>
@@ -2792,10 +2793,11 @@ function renderPayroll(){
             ${isDeduct?'🔴 ':''}${a.name}${!isDirect&&rawV?'<span style="font-size:8px;color:var(--ink3);margin-left:3px">자동</span>':''}
           </span>
           <span style="display:flex;align-items:center;gap:4px">
-            <input type="number" value="${rawV||''}" placeholder="0" min="0" ${_monthLocked?'readonly title="확정된 달 — 입력하려면 확정 해제 먼저"':''}
+            <input type="text" inputmode="numeric" value="${rawV?Number(rawV).toLocaleString():''}" placeholder="0" ${_monthLocked?'readonly title="확정된 달 — 입력하려면 확정 해제 먼저"':''}
               class="pay-card-inp" data-eid="${emp.id}" data-card-field="allow-${a.id}"
               style="width:80px;padding:3px 6px;font-size:12px;border:1px solid ${isDeduct?'#FECDD3':'var(--bd2)'};border-radius:5px;text-align:right;font-family:inherit;font-weight:600;color:${isDeduct?'var(--rose)':'var(--amber)'}${_monthLocked?';background:var(--surf);cursor:not-allowed;opacity:.65':''}"
-              onblur="setMonthAllowance(${emp.id},pY,pM,'${a.id}',+this.value);clearTimeout(window._cardRefT);window._cardRefT=setTimeout(()=>renderPayroll(),500)"
+              oninput="formatNumInput(this)"
+              onblur="setMonthAllowance(${emp.id},pY,pM,'${a.id}',+this.value.replace(/,/g,'')||0);clearTimeout(window._cardRefT);window._cardRefT=setTimeout(()=>renderPayroll(),500)"
               onkeydown="if(event.key==='Enter'){event.preventDefault();payCardNav(this);}">
             <span style="font-size:10px;color:${isDeduct?'var(--rose)':'var(--ink3)'}">${isDeduct?'(공제)':'원'}</span>
             ${!isDeduct?`<label style="display:flex;align-items:center;gap:2px;cursor:pointer;white-space:nowrap" title="통상임금 포함 시 가산수당(야간/연장/휴일) 계산에 반영">
@@ -2895,9 +2897,10 @@ function renderXlPreview(){
     const allowCells = allowList.map(a=>{
       const rawV = getMonthAllowance(emp.id,pY,pM,a.id);
       return `<td style="padding:2px 4px">
-        <input type="number" value="${rawV!==0?rawV:''}" placeholder="0"
+        <input type="text" inputmode="numeric" data-xl-inp="1" value="${rawV!==0?Number(rawV).toLocaleString():''}" placeholder="0"
           style="width:100%;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#1565C0;font-weight:600;outline:none;padding:2px 4px;"
           data-eid="${emp.id}" data-aid="${a.id}"
+          oninput="formatNumInput(this)"
           onblur="xlSaveAllow(this)"
           onfocus="this.style.background='#EFF6FF';this.style.outline='2px solid #1565C0'"
           onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
@@ -2906,9 +2909,10 @@ function renderXlPreview(){
     const deductCells = deductAllow.map(a=>{
       const rawV = a.id==='deduct' ? (getMonthAllowance(emp.id,pY,pM,a.id)||0) : getMonthAllowance(emp.id,pY,pM,a.id);
       return `<td style="padding:2px 4px;background:#FFF1F2">
-        <input type="number" value="${rawV!==0?rawV:''}" placeholder="0"
+        <input type="text" inputmode="numeric" data-xl-inp="1" value="${rawV!==0?Number(rawV).toLocaleString():''}" placeholder="0"
           style="width:100%;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:var(--rose);font-weight:700;outline:none;padding:2px 4px;"
           data-eid="${emp.id}" data-aid="${a.id}"
+          oninput="formatNumInput(this)"
           onblur="xlSaveAllow(this)"
           onfocus="this.style.background='#FFF1F2';this.style.outline='2px solid var(--rose)'"
           onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
@@ -2966,9 +2970,10 @@ function renderXlPreview(){
       <td class="num" style="${s.deduction>0?'color:#A32D2D;font-weight:700':''}">${s.deduction>0?'-'+fmt$(s.deduction):''}</td>
       <td class="num" style="font-weight:700;color:#065F46;background:#ECFDF5">${(s.tTotalBonus||0)>0?fmt$(s.tTotalBonus):''}</td>
       <td style="padding:2px 4px;background:#FEF3C7">
-        <input type="number" value="${s.bonus||''}" placeholder="0"
+        <input type="text" inputmode="numeric" data-xl-inp="1" value="${s.bonus?Number(s.bonus).toLocaleString():''}" placeholder="0"
           style="width:100%;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#92400E;font-weight:700;outline:none;padding:2px 4px;"
           data-eid="${emp.id}" data-field="bonus"
+          oninput="formatNumInput(this)"
           onblur="xlSaveBonus(this)"
           onfocus="this.style.background='#FEF3C7';this.style.outline='2px solid #F59E0B'"
           onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
@@ -2976,41 +2981,46 @@ function renderXlPreview(){
       <td class="num" style="font-weight:700;background:#EFF6FF">${fmt$(totalPay)}</td>
       ${deductCells}
       <td style="padding:2px 4px;background:#F5F3FF">
-        <input type="number" value="${+(tx.pension)||''}" placeholder="0"
+        <input type="text" inputmode="numeric" data-xl-inp="1" value="${+(tx.pension)?Number(+(tx.pension)).toLocaleString():''}" placeholder="0"
           style="width:68px;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#7C3AED;font-weight:600;outline:none;padding:2px 4px;"
           data-eid="${emp.id}" data-tax="pension"
+          oninput="formatNumInput(this)"
           onblur="xlSaveTax(this)"
           onfocus="this.style.outline='2px solid #7C3AED'"
           onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
       </td>
       <td style="padding:2px 4px;background:#F5F3FF">
-        <input type="number" value="${+(tx.health)||''}" placeholder="0"
+        <input type="text" inputmode="numeric" data-xl-inp="1" value="${+(tx.health)?Number(+(tx.health)).toLocaleString():''}" placeholder="0"
           style="width:68px;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#7C3AED;font-weight:600;outline:none;padding:2px 4px;"
           data-eid="${emp.id}" data-tax="health"
+          oninput="formatNumInput(this)"
           onblur="xlSaveTax(this)"
           onfocus="this.style.outline='2px solid #7C3AED'"
           onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
       </td>
       <td style="padding:2px 4px;background:#F5F3FF">
-        <input type="number" value="${+(tx.employment)||''}" placeholder="0"
+        <input type="text" inputmode="numeric" data-xl-inp="1" value="${+(tx.employment)?Number(+(tx.employment)).toLocaleString():''}" placeholder="0"
           style="width:68px;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#7C3AED;font-weight:600;outline:none;padding:2px 4px;"
           data-eid="${emp.id}" data-tax="employment"
+          oninput="formatNumInput(this)"
           onblur="xlSaveTax(this)"
           onfocus="this.style.outline='2px solid #7C3AED'"
           onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
       </td>
       <td style="padding:2px 4px">
-        <input type="number" value="${incomeTax||''}" placeholder="0"
+        <input type="text" inputmode="numeric" data-xl-inp="1" value="${incomeTax?Number(incomeTax).toLocaleString():''}" placeholder="0"
           style="width:68px;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#A32D2D;font-weight:600;outline:none;padding:2px 4px;"
           data-eid="${emp.id}" data-tax="incomeTax"
+          oninput="formatNumInput(this)"
           onblur="xlSaveTax(this)"
           onfocus="this.style.outline='2px solid #A32D2D'"
           onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
       </td>
       <td style="padding:2px 4px">
-        <input type="number" value="${localTax||''}" placeholder="0"
+        <input type="text" inputmode="numeric" data-xl-inp="1" value="${localTax?Number(localTax).toLocaleString():''}" placeholder="0"
           style="width:68px;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#A32D2D;font-weight:600;outline:none;padding:2px 4px;"
           data-eid="${emp.id}" data-tax="localTax"
+          oninput="formatNumInput(this)"
           onblur="xlSaveTax(this)"
           onfocus="this.style.outline='2px solid #A32D2D'"
           onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
@@ -8800,24 +8810,26 @@ function _xlLockedGuard(){
 function xlSaveAllow(inp){
   if(_xlLockedGuard()){ _xlDebouncedRefresh(); return; }
   const eid=+inp.dataset.eid, aid=inp.dataset.aid;
-  setMonthAllowance(eid,pY,pM,aid,+inp.value||0);
+  setMonthAllowance(eid,pY,pM,aid,+String(inp.value).replace(/,/g,'')||0);
   _xlDebouncedRefresh();
 }
 function xlSaveBonus(inp){
   if(_xlLockedGuard()){ _xlDebouncedRefresh(); return; }
   const eid=+inp.dataset.eid;
-  setMonthBonus(eid,pY,pM,+inp.value||0);
+  setMonthBonus(eid,pY,pM,+String(inp.value).replace(/,/g,'')||0);
   _xlDebouncedRefresh();
 }
 function xlSaveTax(inp){
   if(_xlLockedGuard()){ _xlDebouncedRefresh(); return; }
   const eid=+inp.dataset.eid, field=inp.dataset.tax;
-  setTaxRec(eid,pY,pM,field,+inp.value||'');
+  const raw = String(inp.value).replace(/,/g,'');
+  setTaxRec(eid,pY,pM,field,raw===''?'':(+raw||0));
   _xlDebouncedRefresh();
 }
 
 function xlInputNav(inp, shiftKey){
-  const allInputs = Array.from(document.querySelectorAll('#xl-table input[type="number"]'));
+  // type이 text로 변경되어 data-xl-inp 속성 기반으로 네비게이션
+  const allInputs = Array.from(document.querySelectorAll('#xl-table input[data-xl-inp]'));
   const idx = allInputs.indexOf(inp);
   if(idx < 0) return;
   const next = allInputs[shiftKey ? idx-1 : idx+1];
