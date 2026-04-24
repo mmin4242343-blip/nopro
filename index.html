@@ -1512,14 +1512,14 @@ noprohr.netlify.app/tbm_sign.html
         <div class="sr" id="sr-base-rate">
           <div><div class="sl">기본 시급 (전체)</div><div class="ss">직원 관리에서 개별 수정 가능</div></div>
           <div style="display:flex;align-items:center;gap:4px">
-            <input class="ni" type="number" id="inp-base-rate" value="11750" min="1" style="width:88px">
+            <input class="ni" type="text" inputmode="numeric" id="inp-base-rate" value="11,750" style="width:88px;text-align:right" oninput="formatNumInput(this)">
             <span style="font-size:11px;color:var(--ink3)">원</span>
           </div>
         </div>
         <div class="sr" id="sr-base-monthly" style="display:none">
           <div><div class="sl">기본 월급 (전체)</div><div class="ss">직원 관리에서 개별 수정 가능 · 통상시급=월급÷209h</div></div>
           <div style="display:flex;align-items:center;gap:4px">
-            <input class="ni" type="number" id="inp-base-monthly" value="2455750" min="1" style="width:100px" onchange="POL.baseMonthly=+this.value;saveLS()">
+            <input class="ni" type="text" inputmode="numeric" id="inp-base-monthly" value="2,455,750" style="width:100px;text-align:right" oninput="formatNumInput(this)" onchange="POL.baseMonthly=+this.value.replace(/,/g,'')||0;saveLS()">
             <span style="font-size:11px;color:var(--ink3)">원</span>
           </div>
         </div>

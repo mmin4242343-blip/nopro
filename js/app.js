@@ -5677,9 +5677,9 @@ function saveSettings(){
   POL.nt=POL.ntFixed; POL.ot=POL.otFixed; POL.hol=POL.holFixed;
   POL.juhyu=document.getElementById('tog-juhyu').checked;
   POL.sot=+document.getElementById('inp-sot').value;
-  const newBaseMonthly=+document.getElementById('inp-base-monthly')?.value||0;
+  const newBaseMonthly=+String(document.getElementById('inp-base-monthly')?.value||'').replace(/,/g,'')||0;
   if(newBaseMonthly&&newBaseMonthly!==POL.baseMonthly) POL.baseMonthly=newBaseMonthly;
-  const newBaseRate=+document.getElementById('inp-base-rate').value;
+  const newBaseRate=+String(document.getElementById('inp-base-rate').value).replace(/,/g,'')||0;
   if(newBaseRate && newBaseRate!==POL.baseRate){
     POL.baseRate=newBaseRate;
     saveLS();renderPayroll();
@@ -8877,7 +8877,8 @@ function init(){
   setPremTab('fixed');
   safe('tog-juhyu',el=>el.checked=POL.juhyu);
   safe('inp-sot',       el=>el.value=POL.sot);
-  safe('inp-base-rate', el=>el.value=POL.baseRate);
+  safe('inp-base-rate', el=>el.value=Number(POL.baseRate||0).toLocaleString());
+  safe('inp-base-monthly', el=>el.value=Number(POL.baseMonthly||0).toLocaleString());
   safe('inp-site-code', el=>el.value=POL.siteCode||'');
   initEmpNoSetting();
   safe('sel-ns',        el=>el.value=POL.nightStart);

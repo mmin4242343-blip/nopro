@@ -76,8 +76,11 @@ button,div,span{letter-spacing:-.01em}
 
 .body{display:flex;flex:1;overflow:hidden}
 
-/* 사이드바 */
-.sb{width:180px;background:var(--card);border-right:.5px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0;height:100%;overflow:hidden;position:relative;transition:width .3s var(--ease)}
+/* 사이드바 — 회의 의견(2026-04-24)으로 좌측 사이드바 비활성화.
+   기능은 직원관리 페이지로 일원화되어 여기서는 숨김. 코드는 추후 복원 가능하도록 유지. */
+.sb{display:none!important}
+.mob-ham,.mob-sb-dim{display:none!important}
+._sb_legacy_unused{width:180px;background:var(--card);border-right:.5px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0;height:100%;overflow:hidden;position:relative;transition:width .3s var(--ease)}
 .sb-toggle{position:absolute;top:12px;right:10px;width:22px;height:22px;border-radius:50%;border:.5px solid var(--bd);background:#fff;cursor:pointer;font-size:10px;color:var(--ink3);display:flex;align-items:center;justify-content:center;z-index:5;padding:0;transition:all .2s var(--ease);font-family:inherit;line-height:1;box-shadow:var(--shadow-sm)}
 .sb-toggle:hover{color:var(--ink);border-color:var(--ink2);background:var(--surf)}
 .sb.collapsed{width:44px}
