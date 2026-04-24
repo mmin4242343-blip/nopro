@@ -53,6 +53,19 @@ function esc(s){
   if(s==null) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
+// 숫자 입력 필드 콤마 자동 포맷팅 (시급/월급 등)
+// oninput에서 호출: 입력 값에서 숫자만 추출 → toLocaleString으로 콤마 삽입, 캐럿 위치 보정
+function formatNumInput(el){
+  try {
+    const caret = el.selectionStart;
+    const oldLen = el.value.length;
+    const raw = el.value.replace(/[^0-9]/g, '');
+    el.value = raw ? parseInt(raw,10).toLocaleString() : '';
+    const newLen = el.value.length;
+    const diff = newLen - oldLen;
+    el.setSelectionRange(caret + diff, caret + diff);
+  } catch(e){}
+}
 // CSS injection 방지: style 속성에 들어가는 색상값 검증
 function safeColor(c,fallback){
   if(!c) return fallback||'#DBEAFE';
@@ -3374,8 +3387,8 @@ function renderEmps(){
       </td>
       <td>
         ${(e.payMode||POL.basePayMode)==='monthly'
-          ?`<div style="display:flex;align-items:center;gap:2px"><input class="ei2" type="number" value="${e.monthly!==null&&e.monthly!==undefined?e.monthly:''}" onchange="updE(${e.id},'monthly',+this.value)" style="text-align:right" placeholder="${POL.baseMonthly}" autocomplete="off"><span style="font-size:9px;color:var(--ink3)">원/월</span></div>`
-          :`<div style="display:flex;align-items:center;gap:2px"><input class="ei2" type="number" value="${e.rate!==null&&e.rate!==undefined?e.rate:''}" onchange="updE(${e.id},'rate',+this.value)" style="text-align:right" placeholder="${POL.baseRate}" autocomplete="off"><span style="font-size:9px;color:var(--ink3)">원/h</span></div>`
+          ?`<div style="display:flex;align-items:center;gap:2px"><input class="ei2" type="text" inputmode="numeric" value="${e.monthly!==null&&e.monthly!==undefined?Number(e.monthly).toLocaleString():''}" oninput="formatNumInput(this)" onchange="updE(${e.id},'monthly',+this.value.replace(/,/g,'')||0)" style="text-align:right" placeholder="${Number(POL.baseMonthly||0).toLocaleString()}" autocomplete="off"><span style="font-size:9px;color:var(--ink3)">원/월</span></div>`
+          :`<div style="display:flex;align-items:center;gap:2px"><input class="ei2" type="text" inputmode="numeric" value="${e.rate!==null&&e.rate!==undefined?Number(e.rate).toLocaleString():''}" oninput="formatNumInput(this)" onchange="updE(${e.id},'rate',+this.value.replace(/,/g,'')||0)" style="text-align:right" placeholder="${Number(POL.baseRate||0).toLocaleString()}" autocomplete="off"><span style="font-size:9px;color:var(--ink3)">원/h</span></div>`
         }
       </td>
       <td><input class="ei2" type="date" value="${esc(e.join||'')}" onchange="updE(${e.id},'join',this.value)"></td>
@@ -8728,7 +8741,7 @@ function renderCompany() {
     { label:'재직 직원 수',       key:'activeCount',  fmt:v=>v==='-'?'-':`${v}명`,      cls:'var(--navy)' },
     { label:'입사 직원 수',       key:'newCount',     fmt:v=>v?`+${v}명`:'-',           cls:'var(--teal)' },
     { label:'퇴사 직원 수',       key:'leftCount',    fmt:v=>v?`${v}명`:'-',            cls:'var(--rose)' },
-    { label:'급여지급액(세전)',    key:'totalPay',     fmt:v=>v?`${Math.round(v/10000)}만원`:'-', cls:'var(--purple)' },
+    { label:'급여지급액(세전)',    key:'totalPay',     fmt:v=>v?`${Math.round(v/10000).toLocaleString()}만원`:'-', cls:'var(--purple)' },
     { label:'직원 총 근무일수',   key:'totalWorkDays',fmt:v=>v?`${v}일`:'-',            cls:'var(--ink2)' },
     { label:'평일 영업일수',      key:'weekDays',     fmt:v=>`${v}일`,                  cls:'var(--navy2)',  bg:'#EFF6FF' },
     { label:'휴일 출근일수',      key:'holWorkDays',  fmt:v=>v?`${v}일`:'-',            cls:'var(--amber)', bg:'#FFFBEB' },
