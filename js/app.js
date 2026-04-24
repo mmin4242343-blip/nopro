@@ -434,6 +434,50 @@ function syncPolSnapshot(){
   } catch(e){ console.warn('syncPolSnapshot 실패:', e); }
 }
 
+// ═══ 월별 기본 휴게세트 스냅샷 헬퍼 (POL_SNAPSHOTS와 동일 패턴) ═══
+// "YYYY-MM" 키. 해당 월 계산 시 스냅샷 있으면 그걸, 없으면 현재 DEF_BK.
+// 변경 직전 값을 과거 달에 freeze해서 "한 번 저장된 데이터는 새 값으로 덮이지 않음" 보장.
+function getBkForMonth(y, m){
+  const snap = (typeof BK_SNAPSHOTS!=='undefined') ? BK_SNAPSHOTS[_polKey(y, m)] : null;
+  return snap || DEF_BK;
+}
+function freezePastMonthsBk(bkToSave){
+  try {
+    if(typeof BK_SNAPSHOTS === 'undefined') return false;
+    const src = bkToSave || DEF_BK;
+    if(!Array.isArray(src) || src.length === 0) return false; // 빈값은 freeze 안 함
+    const now = new Date();
+    const curKey = _polKey(now.getFullYear(), now.getMonth()+1);
+    const months = _monthsWithData();
+    let changed = false;
+    months.forEach(key => {
+      if(key >= curKey) return; // 현재월·미래는 라이브 DEF_BK 사용
+      if(!BK_SNAPSHOTS[key]){
+        BK_SNAPSHOTS[key] = JSON.parse(JSON.stringify(src));
+        changed = true;
+      }
+    });
+    if(changed){
+      localStorage.setItem('npm5_bk_snapshots', JSON.stringify(BK_SNAPSHOTS));
+    }
+    return changed;
+  } catch(e){ console.warn('freezePastMonthsBk 실패:', e); return false; }
+}
+let _prevBkForSnapshot = null;
+function syncBkSnapshot(){
+  try {
+    if(typeof DEF_BK === 'undefined') return;
+    if(!_prevBkForSnapshot){
+      _prevBkForSnapshot = JSON.parse(JSON.stringify(DEF_BK));
+      return;
+    }
+    if(JSON.stringify(DEF_BK) === JSON.stringify(_prevBkForSnapshot)) return;
+    // 변경 감지: 이전 값(=과거 달이 사용했던 값)을 과거 달에 freeze
+    freezePastMonthsBk(_prevBkForSnapshot);
+    _prevBkForSnapshot = JSON.parse(JSON.stringify(DEF_BK));
+  } catch(e){ console.warn('syncBkSnapshot 실패:', e); }
+}
+
 // 서버에 아직 전송 안 된 로컬 변경이 있는지 추적 (beforeunload 경고용)
 let _hasUnsavedChanges = false;
 
@@ -462,8 +506,9 @@ async function safeItemSave(key, value){
 }
 
 function saveLS(){
-  // POL 변경 자동 감지 → 직전 상태를 과거 달에 복사 (변경 이후 과거 조회 시 옛 설정 사용 보장)
+  // POL/DEF_BK 변경 자동 감지 → 직전 상태를 과거 달에 복사 (변경 이후 과거 조회 시 옛 설정 사용 보장)
   try { syncPolSnapshot(); } catch(e){}
+  try { if(typeof syncBkSnapshot === 'function') syncBkSnapshot(); } catch(e){}
   try{
     localStorage.setItem(LS.E,JSON.stringify(EMPS));
     localStorage.setItem(LS.P,JSON.stringify(POL));
@@ -656,6 +701,7 @@ let EMPS=load(LS.E,null)||[];
 let POL=Object.assign({...DEF_POL},load(LS.P,{}));
 // 월별 정책 스냅샷: "YYYY-MM" → POL 복사본. 과거 달 계산 시 그 달 스냅샷 사용.
 let POL_SNAPSHOTS = JSON.parse(localStorage.getItem('npm5_pol_snapshots')||'{}');
+let BK_SNAPSHOTS = JSON.parse(localStorage.getItem('npm5_bk_snapshots')||'{}');
 // 월 확정 급여 스냅샷: "YYYY-MM" → { confirmed, confirmedAt, confirmedBy, summaries:{empId: monthSummary 결과} }
 // 확정된 달은 monthSummary 대신 이 저장값을 그대로 사용 → 어떤 데이터 수정에도 금액 고정
 let PAY_SNAPSHOTS = JSON.parse(localStorage.getItem('npm5_pay_snapshots')||'{}');
@@ -769,7 +815,13 @@ function getOrdinaryRate(emp,y,m){
 // ══════════════════════════════════════
 // 계산 엔진
 // ══════════════════════════════════════
-function getActiveBk(y,m,d){const k=`${y}-${pad(m)}-${pad(d)}`;return TBK[k]||DEF_BK;}
+function getActiveBk(y,m,d){
+  const k=`${y}-${pad(m)}-${pad(d)}`;
+  // 우선순위: 일별 임시(TBK) > 월별 스냅샷(BK_SNAPSHOTS) > 라이브 DEF_BK
+  if(TBK[k]) return TBK[k];
+  if(typeof getBkForMonth === 'function') return getBkForMonth(y, m);
+  return DEF_BK;
+}
 function calcBkDeduct(sMin,eMin,bks){
   let t=0;
   bks.forEach(b=>{
@@ -9238,7 +9290,7 @@ function clearLocalData(){
     'npm5_emps','npm5_rec','npm5_pol','npm5_bk','npm5_tbk',
     'npm5_bonus','npm5_allow','npm5_tax','npm5_leave_settings',
     'npm5_leave_overrides','npm5_folders','npm5_safety',
-    'npm5_pol_snapshots','npm5_pay_snapshots'
+    'npm5_pol_snapshots','npm5_pay_snapshots','npm5_bk_snapshots'
   ];
   keys.forEach(k => localStorage.removeItem(k));
   EMPS = [];
@@ -9252,6 +9304,7 @@ function clearLocalData(){
   if(typeof TAX_REC !== 'undefined') TAX_REC = {};
   if(typeof POL_SNAPSHOTS !== 'undefined') POL_SNAPSHOTS = {};
   if(typeof PAY_SNAPSHOTS !== 'undefined') PAY_SNAPSHOTS = {};
+  if(typeof BK_SNAPSHOTS !== 'undefined') BK_SNAPSHOTS = {};
   // 🛡️ 스냅샷도 초기화 — 재로그인 직후 가드가 "이전에 데이터 있었다"로 오판 방지
   if(typeof _syncedSnapshot !== 'undefined') _syncedSnapshot = null;
   // 🛡️ 대기 중인 saveLS 타이머도 취소 — logout race로 빈값 저장되는 경로 차단
@@ -9272,6 +9325,7 @@ async function sbSaveAll(companyId) {
     {key:'leave_overrides', value:JSON.parse(localStorage.getItem('npm5_leave_overrides')||'{}')},
     {key:'pol_snapshots', value:POL_SNAPSHOTS||{}},
     {key:'pay_snapshots', value:PAY_SNAPSHOTS||{}},
+    {key:'bk_snapshots', value:BK_SNAPSHOTS||{}},
   ];
   // 대형 키: 각각 별도 저장 (타임아웃 방지 + old_value 감사로그 저장)
   const largeItems = [
@@ -9480,6 +9534,17 @@ async function pollForUpdates(){
         changed = true;
       }
     }
+    // BK_SNAPSHOTS 머지: 다른 기기에서 freeze된 월별 휴게세트 동기화
+    // 🛡️ 새 값으로 덮여씌워지면 안 됨 — 서버 키와 로컬 키를 합치되, 동일 키는 로컬 우선
+    if(server.bk_snapshots !== undefined && typeof BK_SNAPSHOTS !== 'undefined'){
+      const merged = {...(server.bk_snapshots||{}), ...BK_SNAPSHOTS};
+      const mv = JSON.stringify(merged);
+      if(mv !== JSON.stringify(BK_SNAPSHOTS||{})){
+        BK_SNAPSHOTS = merged;
+        localStorage.setItem('npm5_bk_snapshots', mv);
+        changed = true;
+      }
+    }
 
     if(!changed) return;
     _takeSyncedSnapshot();
@@ -9555,6 +9620,7 @@ async function sbLoadAll(companyId) {
   if('safety' in map)          { SAFETY_REC = map.safety || {}; localStorage.setItem('npm5_safety', JSON.stringify(SAFETY_REC)); }
   if('pol_snapshots' in map)   { POL_SNAPSHOTS = map.pol_snapshots || {}; localStorage.setItem('npm5_pol_snapshots', JSON.stringify(POL_SNAPSHOTS)); }
   if('pay_snapshots' in map)   { PAY_SNAPSHOTS = map.pay_snapshots || {}; localStorage.setItem('npm5_pay_snapshots', JSON.stringify(PAY_SNAPSHOTS)); }
+  if('bk_snapshots' in map)    { BK_SNAPSHOTS = map.bk_snapshots || {}; localStorage.setItem('npm5_bk_snapshots', JSON.stringify(BK_SNAPSHOTS)); }
 
   // 최초 1회: POL_SNAPSHOTS가 비어있고 REC 데이터가 있으면 현재 POL을 과거 달에 복사해 시작점 확보
   try {
@@ -9562,6 +9628,14 @@ async function sbLoadAll(companyId) {
       freezePastMonthsPol();
     }
   } catch(e){}
+  // 동일하게 BK_SNAPSHOTS도 시드: 비어있고 REC 있으면 현재 DEF_BK를 과거 달에 freeze
+  try {
+    if(typeof BK_SNAPSHOTS!=='undefined' && Object.keys(BK_SNAPSHOTS).length === 0 && Object.keys(REC||{}).length > 0){
+      freezePastMonthsBk();
+    }
+  } catch(e){}
+  // BK 변경 감지 기준값 업데이트 (로드 직후 변경 오인 방지)
+  try { _prevBkForSnapshot = JSON.parse(JSON.stringify(DEF_BK)); } catch(e){}
   // 서버에서 POL 로드 후 변경 감지 기준값 업데이트 (로드 후 즉시 변경으로 오인 방지)
   _prevPolForSnapshot = JSON.parse(JSON.stringify(POL));
 

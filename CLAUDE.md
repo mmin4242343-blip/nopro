@@ -153,6 +153,7 @@ UNIQUE(company_id, data_key)    -- atomic upsert용 유니크 제약
 - `tax` — 세금 기록
 - `leave_settings` — 연차 설정
 - `leave_overrides` — 직원별 연차 오버라이드
+- `bk_snapshots` — 월별 기본 휴게세트 스냅샷 (DEF_BK 변경 시 변경 직전 값을 과거 달에 freeze)
 
 ### `audit_log` 테이블
 ```
