@@ -1,6 +1,10 @@
 // ══ API 설정 ══
 const API_BASE = '/api';
-const AUTH_REFRESH_INTERVAL_MS = 20 * 60 * 1000; // 쿠키 수명 2h 대비 20분마다 /auth-verify 호출해 슬라이딩 갱신
+const AUTH_REFRESH_INTERVAL_MS = 20 * 60 * 1000; // 쿠키 수명 7d 대비 20분마다 /auth-verify 호출해 슬라이딩 갱신 (안전망)
+// 활동 기반 자동 갱신: 일반 API 호출 성공 시 30분 쿨다운으로 백그라운드 verify 트리거.
+// setInterval은 탭 백그라운드 throttle/슬립 영향을 받지만 활동 기반은 클릭/저장 직후 즉시 실행됨.
+const AUTH_ACTIVITY_COOLDOWN_MS = 30 * 60 * 1000;
+let _lastActivityRefresh = Date.now();
 
 // 디버깅용: REC 쓰기 이력 추적 (콘솔에서 window.__recWrites 로 확인)
 // "입력한 적 없는 데이터가 들어있다" 증상 재현 시 원인 경로 추적용 — 최대 500건 순환
@@ -35,6 +39,12 @@ async function apiFetch(endpoint, method='POST', body=null){
   }
   if(res.status===429) throw new Error(data.error||'요청이 너무 많습니다. 잠시 후 다시 시도해주세요.');
   if(!res.ok) throw new Error(data.error||'서버 오류');
+  // 활동 기반 능동 갱신: 일반 API 호출 성공 후 쿨다운 경과 시 백그라운드로 verify 호출.
+  // 서버의 shouldRefresh가 만족되면 Set-Cookie로 쿠키가 7일로 리셋됨. 실패해도 무시(fire-and-forget).
+  if(!isAuthEndpoint && (Date.now() - _lastActivityRefresh) > AUTH_ACTIVITY_COOLDOWN_MS){
+    _lastActivityRefresh = Date.now();
+    fetch(API_BASE+'/auth-verify',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include'}).catch(()=>{});
+  }
   return data;
 }
 

@@ -96,5 +96,7 @@ export const handler = async (event) => {
 function shouldRefresh(decoded) {
   if (!decoded.exp) return false;
   const remaining = decoded.exp - Math.floor(Date.now() / 1000);
-  return remaining < 1800; // 만료 30분 전부터 갱신 (토큰 수명 2h 기준)
+  // 만료 3.5일 전부터 갱신 (토큰 수명 7d 기준 — 절반 이상 쓰이면 새 7일 발급)
+  // 활동 기반 갱신과 결합되면 일주일에 한 번이라도 쓰면 사실상 영구 로그인
+  return remaining < 3.5 * 24 * 3600;
 }
