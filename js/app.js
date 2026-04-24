@@ -5734,7 +5734,7 @@ function exportExcel(){
     const ws = {}; let R=0;
 
     // ── 타이틀 블록 ──
-    const payMode = isMonthly?'월급제':sheetName==='통상임금제'?'통상임금제':'시급제';
+    const payMode = isMonthly?'포괄임금제':sheetName==='통상임금제'?'통상임금제':'시급제';
     xlsWrite(ws,XLSX.utils.encode_cell({r:0,c:0}),`${month} 급여 명세서`,{
       font:{bold:true,sz:18,color:{rgb:C.navy},name:'맑은 고딕'},
       fill:{fgColor:{rgb:'EFF6FF'}},
@@ -5759,7 +5759,7 @@ function exportExcel(){
       '급여',
       '실근무(h)','소정근로외(h)','야간(h)','초과연장(h)','초과휴일(h)','결근일수','공제시간(h)',
       '소정근로외수당','야간수당','초과연장수당','초과휴일수당',
-      '월급제휴일수당','월급제휴일초과','결근차감','총가산수당',
+      '포괄임금제휴일수당','포괄임금제휴일초과','결근차감','총가산수당',
       '상여금','총급여',
       ...deductList.map(a=>a.name),
       '국민연금','건강보험','고용보험','소득세','주민세','공제합계','실지급액'
@@ -5776,7 +5776,7 @@ function exportExcel(){
       if(h==='소정근로외수당') return S.mainHdr('1565C0','FFFFFF','center');
       if(h==='야간수당') return S.mainHdr('0C447C','B5D4F4','center');
       if(h==='초과연장수당') return S.mainHdr('534AB7','EEEDFE','center');
-      if(h==='초과휴일수당'||h.includes('월급제')) return S.mainHdr('854F0B','FAC775','center');
+      if(h==='초과휴일수당'||h.includes('포괄임금제')) return S.mainHdr('854F0B','FAC775','center');
       if(h==='총가산수당') return S.mainHdr('065F46','D1FAE5','center');
       if(h==='상여금') return S.mainHdr(C.orange2,'FFFFFF','center');
       if(h==='총급여') return S.mainHdr('0D47A1','FFFFFF','center');
@@ -5940,7 +5940,7 @@ function exportExcel(){
 
   writePaySheet(getEmps('fixed'), '통상임금제', false);
   writePaySheet(getEmps('hourly'), '시급제', false);
-  writePaySheet(getEmps('monthly'), '월급제', true);
+  writePaySheet(getEmps('monthly'), '포괄임금제', true);
 
   XLSX.writeFile(wb, `급여명세_${pY}년${pM}월_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
