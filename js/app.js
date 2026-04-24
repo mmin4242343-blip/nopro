@@ -3420,7 +3420,7 @@ function renderEmps(){
         <div class="rb-g" style="justify-content:center">
           <div class="rb ${!e.payMode||e.payMode==='fixed'?'on':''}" onclick="updE(${e.id},'payMode','fixed');renderEmps()" style="font-size:9px;padding:3px 6px">통상임금제</div>
           <div class="rb ${e.payMode==='hourly'?'on':''}" onclick="updE(${e.id},'payMode','hourly');renderEmps()" style="font-size:9px;padding:3px 6px">시급제</div>
-          <div class="rb ${e.payMode==='monthly'?'on':''}" onclick="updE(${e.id},'payMode','monthly');renderEmps()" style="font-size:9px;padding:3px 6px">월급제</div>
+          <div class="rb ${e.payMode==='monthly'?'on':''}" onclick="updE(${e.id},'payMode','monthly');renderEmps()" style="font-size:9px;padding:3px 6px">포괄임금제</div>
         </div>
       </td>
       <td>
@@ -10352,13 +10352,13 @@ function renderMyInfo(){
             <div class="mi-section-hd">급여형태 분포</div>
             <div style="padding:14px 20px;">
               <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
-                <span style="font-size:10px;font-weight:700;color:#0F766E;background:#F0FDF4;padding:3px 9px;border-radius:20px;">소정근무 ${fixedCnt}명 (${fixPct}%)</span>
+                <span style="font-size:10px;font-weight:700;color:#0F766E;background:#F0FDF4;padding:3px 9px;border-radius:20px;">통상임금제 ${fixedCnt}명 (${fixPct}%)</span>
                 <span style="font-size:10px;font-weight:700;color:#D97706;background:#FFFBEB;padding:3px 9px;border-radius:20px;">시급제 ${hourlyCnt}명 (${hourPct}%)</span>
-                <span style="font-size:10px;font-weight:700;color:#7C3AED;background:#F5F3FF;padding:3px 9px;border-radius:20px;">월급제 ${monthlyCnt}명 (${monPct}%)</span>
+                <span style="font-size:10px;font-weight:700;color:#7C3AED;background:#F5F3FF;padding:3px 9px;border-radius:20px;">포괄임금제 ${monthlyCnt}명 (${monPct}%)</span>
               </div>
-              ${bar2('소정근무',fixedCnt,totalActive,'#0F766E','#0F766E',fixPct)}
+              ${bar2('통상임금제',fixedCnt,totalActive,'#0F766E','#0F766E',fixPct)}
               ${bar2('시급제',hourlyCnt,totalActive,'#D97706','#D97706',hourPct)}
-              ${bar2('월급제',monthlyCnt,totalActive,'#7C3AED','#7C3AED',monPct)}
+              ${bar2('포괄임금제',monthlyCnt,totalActive,'#7C3AED','#7C3AED',monPct)}
               <div style="height:6px;border-radius:100px;overflow:hidden;display:flex;margin-top:4px;">
                 <div style="width:${fixPct}%;background:#0F766E;"></div>
                 <div style="width:${hourPct}%;background:#D97706;"></div>
