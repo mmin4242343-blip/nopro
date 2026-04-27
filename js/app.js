@@ -9871,56 +9871,127 @@ let _conflictHandling = false;
 
 async function handleConflicts(conflicts){
   if(!conflicts || !conflicts.length) return;
-  if(_conflictHandling) return; // 동시 충돌 시 알림 한 번만
+  if(_conflictHandling) return; // 동시 충돌 진행 중이면 패스 (다음 디바운스에서 자연 처리)
   _conflictHandling = true;
   try {
-    console.warn('🛡️ 낙관적 잠금 충돌:', conflicts);
+    console.log('🔄 자동 머지 시작:', conflicts.map(c=>c.key));
 
-    // 1. 사용자의 현재 메모리(localStorage) 상태를 별도 백업 — 잃어버리지 않게
-    const backupTs = new Date().toISOString().replace(/[:.]/g,'-');
-    const backup = {};
-    conflicts.forEach(c=>{
-      try { backup[c.key] = localStorage.getItem('npm5_'+c.key); } catch(e){}
-    });
-    try { localStorage.setItem('_nopro_recovery_'+backupTs, JSON.stringify(backup)); } catch(e){}
+    const _sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
+    if(!_sess || !_sess.companyId) return;
 
-    // 2. 사용자에게 명확히 통보 (alert로 차단 — 무시하고 계속 입력 못 하게)
-    const keyLabels = {emps:'직원',rec:'출퇴근/연차',bonus:'상여금',allow:'수당',tax:'세금',
-      tbk:'임시휴게',safety:'안전교육',bk:'기본휴게',pol:'급여설정',leave_overrides:'연차',
-      leave_settings:'연차설정',folders:'폴더',pol_snapshots:'정책스냅샷',
-      pay_snapshots:'급여스냅샷',bk_snapshots:'휴게스냅샷'};
-    const keyList = conflicts.map(c=>keyLabels[c.key]||c.key).join(', ');
-    alert(
-      '⚠️ 데이터 충돌 감지\n\n' +
-      '다른 디바이스에서 먼저 변경된 내용이 있어\n' +
-      '방금 저장 시도가 거부되었습니다.\n' +
-      '(서버 데이터 보호)\n\n' +
-      '영향 항목: ' + keyList + '\n\n' +
-      '확인을 누르면 최신 서버 상태를 다시 불러옵니다.\n' +
-      '방금 입력하신 내용을 다시 한 번 확인해주세요.\n\n' +
-      '입력 직전 상태는 안전하게 백업되었습니다.\n' +
-      '(F12 → Application → Local Storage → _nopro_recovery_'+backupTs+')'
-    );
+    // 1. 서버 최신본 fetch (다른 디바이스 변경분 + 새 _versions)
+    const server = await apiFetch('/data-load','POST',{});
+    if(!server) return;
 
-    // 3. 서버 최신본으로 재로드 + 화면 다시 그림
-    try {
-      const _sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
-      if(_sess && _sess.companyId){
-        await sbLoadAll(_sess.companyId);
-        const active = document.querySelector('.pg.on');
-        if(active){
-          const p = active.id.replace('pg-','');
-          if(p==='daily' && typeof renderTable==='function') renderTable();
-          else if(p==='monthly' && typeof renderMonthly==='function') renderMonthly();
-          else if(p==='payroll' && typeof renderPayroll==='function') renderPayroll();
-          else if(p==='emps' && typeof renderEmps==='function') renderEmps();
-          else if(p==='leave' && typeof renderLeave==='function') renderLeave();
-          else if(p==='company' && typeof renderCompany==='function') renderCompany();
-          else if(p==='shift' && typeof renderShiftList==='function') renderShiftList();
-          else if(p==='safety' && typeof renderSafety==='function') renderSafety();
+    const snap = _syncedSnapshot || {};
+    const resaveItems = [];
+
+    // 2. 충돌 키 각각 _mergeByField로 머지 — 로컬 변경분 절대 보존, 서버 변경분 흡수
+    //    (배열 데이터인 emps는 id 기반 맵으로 변환 후 머지)
+    const _arrToMap = arr => Object.fromEntries((arr||[]).map(x => [String(x.id), x]));
+    const _mapToArr = m => Object.values(m);
+    const _parseSnap = s => {
+      if(s==null) return {};
+      try { return typeof s==='string' ? JSON.parse(s) : s; } catch(e){ return {}; }
+    };
+
+    for(const c of conflicts){
+      const k = c.key;
+      let merged;
+
+      if(k === 'emps'){
+        const snapArr = (typeof snap.emps==='string') ? (function(){try{return JSON.parse(snap.emps);}catch(e){return [];}})() : (snap.emps||[]);
+        merged = _mapToArr(_mergeByField(_arrToMap(EMPS), _arrToMap(server.emps||[]), _arrToMap(snapArr)));
+        EMPS = merged;
+        if(typeof sortEMPS==='function') sortEMPS();
+        localStorage.setItem('npm5_emps', JSON.stringify(EMPS));
+      } else if(k === 'rec'){
+        merged = _mergeByField(REC, server.rec||{}, _parseSnap(snap.rec));
+        REC = merged;
+        localStorage.setItem('npm5_rec', JSON.stringify(REC));
+      } else if(k === 'tbk'){
+        merged = _mergeByField(TBK, server.tbk||{}, _parseSnap(snap.tbk));
+        TBK = merged;
+        localStorage.setItem('npm5_tbk', JSON.stringify(TBK));
+      } else if(k === 'bonus'){
+        merged = _mergeByField(BONUS_REC, server.bonus||{}, _parseSnap(snap.bonus));
+        BONUS_REC = merged;
+        localStorage.setItem('npm5_bonus', JSON.stringify(BONUS_REC));
+      } else if(k === 'allow'){
+        merged = _mergeByField(ALLOWANCE_REC, server.allow||{}, _parseSnap(snap.allow));
+        ALLOWANCE_REC = merged;
+        localStorage.setItem('npm5_allow', JSON.stringify(ALLOWANCE_REC));
+      } else if(k === 'safety'){
+        merged = _mergeByField(typeof SAFETY_REC!=='undefined'?SAFETY_REC:{}, server.safety||{}, _parseSnap(snap.safety));
+        if(typeof SAFETY_REC!=='undefined') SAFETY_REC = merged;
+        localStorage.setItem('npm5_safety', JSON.stringify(merged));
+      } else if(k === 'leave_overrides'){
+        let lo = {}; try { lo = JSON.parse(localStorage.getItem('npm5_leave_overrides')||'{}'); } catch(e){}
+        merged = _mergeByField(lo, server.leave_overrides||{}, _parseSnap(snap.leave_overrides));
+        if(typeof leaveOverrides!=='undefined') leaveOverrides = merged;
+        localStorage.setItem('npm5_leave_overrides', JSON.stringify(merged));
+      } else {
+        // pol/bk/tax/leave_settings/folders/*_snapshots — 작은 설정류는 서버값 채택
+        // (이쪽은 동시 편집 가능성이 낮고, 머지가 모호함)
+        if(k in server){
+          merged = server[k];
+          const lsKey = 'npm5_'+k;
+          try { localStorage.setItem(lsKey, JSON.stringify(merged)); } catch(e){}
+          // 메모리 변수 갱신
+          if(k === 'pol' && typeof POL!=='undefined' && typeof DEF_POL!=='undefined') POL = Object.assign({...DEF_POL}, merged);
+          else if(k === 'bk' && typeof DEF_BK!=='undefined') DEF_BK = merged;
+          else if(k === 'tax' && typeof TAX_REC!=='undefined') TAX_REC = merged;
+          else if(k === 'pol_snapshots' && typeof POL_SNAPSHOTS!=='undefined') POL_SNAPSHOTS = merged;
+          else if(k === 'pay_snapshots' && typeof PAY_SNAPSHOTS!=='undefined') PAY_SNAPSHOTS = merged;
+          else if(k === 'bk_snapshots' && typeof BK_SNAPSHOTS!=='undefined') BK_SNAPSHOTS = merged;
         }
       }
-    } catch(e){ console.warn('충돌 후 재로드 실패:', e); }
+
+      // 충돌 해소된 키의 버전을 서버 최신값으로 갱신 (재저장이 통과하도록)
+      if(server._versions && server._versions[k]){
+        _serverVersions[k] = server._versions[k];
+      }
+      if(merged !== undefined) resaveItems.push({key:k, value:merged});
+    }
+
+    // 3. 머지된 결과를 다시 저장 (새 expectedUpdatedAt으로)
+    if(resaveItems.length){
+      const attachVer = it => ({...it, expectedUpdatedAt: _serverVersions[it.key] || null});
+      try {
+        const resp = await apiFetch('/data-save','POST',{items: resaveItems.map(attachVer)});
+        if(resp){
+          if(resp.versions) Object.assign(_serverVersions, resp.versions);
+          if(resp.conflicts && resp.conflicts.length){
+            // 재머지 후에도 충돌 — 매우 드문 케이스, 재귀 방지 위해 다음 사용자 동작에 맡김
+            console.warn('재머지 후 잔여 충돌 — 다음 저장에서 재시도:', resp.conflicts);
+          }
+        }
+      } catch(e){ console.warn('자동 머지 후 재저장 실패:', e); }
+    }
+
+    // 4. 스냅샷 갱신 — 다음 폴링/저장의 기준선이 됨
+    if(typeof _takeSyncedSnapshot==='function') _takeSyncedSnapshot();
+
+    // 5. 입력 중인 input/textarea가 있으면 화면 재렌더 생략 (타이핑 보존)
+    //    아니면 활성 페이지만 살짝 리렌더
+    const ae = document.activeElement;
+    const editing = ae && (ae.tagName==='INPUT' || ae.tagName==='TEXTAREA' || ae.tagName==='SELECT');
+    if(!editing){
+      const active = document.querySelector('.pg.on');
+      if(active){
+        const p = active.id.replace('pg-','');
+        if(p==='daily' && typeof renderTable==='function') renderTable();
+        else if(p==='monthly' && typeof renderMonthly==='function') renderMonthly();
+        else if(p==='payroll' && typeof renderPayroll==='function') renderPayroll();
+        else if(p==='emps' && typeof renderEmps==='function') renderEmps();
+        else if(p==='leave' && typeof renderLeave==='function') renderLeave();
+        else if(p==='company' && typeof renderCompany==='function') renderCompany();
+      }
+    }
+
+    console.log('🔄 자동 머지 완료:', conflicts.map(c=>c.key).join(', '));
+  } catch(e) {
+    console.warn('자동 머지 실패:', e);
   } finally {
     _conflictHandling = false;
   }
