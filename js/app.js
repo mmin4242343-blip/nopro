@@ -701,7 +701,6 @@ async function reloadOnFocus(){
     else if(p==='monthly' && typeof renderMonthly==='function') renderMonthly();
     else if(p==='payroll' && typeof renderPayroll==='function') renderPayroll();
     else if(p==='emps' && typeof renderEmps==='function') renderEmps();
-    else if(p==='dept' && typeof renderDept==='function') renderDept();
     else if(p==='leave' && typeof renderLeave==='function') renderLeave();
     else if(p==='company' && typeof renderCompany==='function') renderCompany();
     else if(p==='shift' && typeof renderShiftList==='function') renderShiftList();
@@ -1396,7 +1395,7 @@ function initSbCollapsed(){
 
 // 페이지
 // ══════════════════════════════════════
-const PAGES=['daily','monthly','payroll','leave','company','emps','dept','shift','safety','folder','myinfo','settings'];
+const PAGES=['daily','monthly','payroll','leave','company','emps','shift','safety','folder','myinfo','settings'];
 function gp(p){
   closeMobSb();
   if(p!=='safety'&&typeof sfStopPoll==='function')sfStopPoll();
@@ -1413,7 +1412,6 @@ function gp(p){
     renderPayroll();
   }
   if(p==='emps')renderEmps();
-  if(p==='dept')renderDept();
   if(p==='settings'){renderDefBk();renderAllowanceList();}
   if(p==='shift')renderShiftList();
   if(p==='safety')renderSafety();
@@ -1666,7 +1664,6 @@ const F = {
   payroll: { shift:'all', nation:'all', pay:'all', dept:'all', deptCat:'all', search:'' },
   leave:   { shift:'all', nation:'all', pay:'all', dept:'all', deptCat:'all', search:'' },
   emps:    { shift:'all', nation:'all', pay:'all', dept:'all', deptCat:'all', search:'' },
-  dept:    { shift:'all', nation:'all', pay:'all', dept:'all', deptCat:'all', search:'' },
 };
 // 부서 분류 옵션 (운반/시설/선별 + 미분류) — 사번 자동 생성에는 영향 없음
 const DEPT_CATS = ['운반','시설','선별'];
@@ -1685,7 +1682,6 @@ function setFilter(tab, key, val, btn){
   if(tab==='payroll') renderPayroll();
   if(tab==='leave')   renderLeave();
   if(tab==='emps')    renderEmps();
-  if(tab==='dept')    renderDept();
 }
 
 let _searchRenderT;
@@ -1702,7 +1698,6 @@ function setSearch(tab, val){
     if(tab==='payroll') renderPayroll();
     if(tab==='leave')   renderLeave();
     if(tab==='emps')    renderEmps();
-    if(tab==='dept')    renderDept();
   }, 200);
 }
 
@@ -3382,9 +3377,9 @@ function renderEmps(){
     const _curGroup = e.leave ? 'leave' : (e.shift||'day');
     let _groupHdr = '';
     if(_curGroup !== _prevGroup){
-      if(_curGroup==='day') _groupHdr=`<tr><td colspan="18" style="padding:5px 14px;background:linear-gradient(90deg,#FEF9C3,#FFF7ED);font-size:10px;font-weight:800;color:#D97706;letter-spacing:.5px;border-bottom:1px solid #FCD34D">☀️ 주간 근무자</td></tr>`;
-      else if(_curGroup==='night') _groupHdr=`<tr><td colspan="18" style="padding:5px 14px;background:linear-gradient(90deg,#EDE9FE,#F5F3FF);font-size:10px;font-weight:800;color:#7C3AED;letter-spacing:.5px;border-bottom:1px solid #DDD6FE">🌙 야간 근무자</td></tr>`;
-      else if(_curGroup==='leave') _groupHdr=`<tr><td colspan="18" style="padding:5px 14px;background:linear-gradient(90deg,#FEE2E2,#FFF1F2);font-size:10px;font-weight:800;color:#E11D48;letter-spacing:.5px;border-bottom:1px solid #FECDD3">🚪 퇴사자</td></tr>`;
+      if(_curGroup==='day') _groupHdr=`<tr><td colspan="19" style="padding:5px 14px;background:linear-gradient(90deg,#FEF9C3,#FFF7ED);font-size:10px;font-weight:800;color:#D97706;letter-spacing:.5px;border-bottom:1px solid #FCD34D">☀️ 주간 근무자</td></tr>`;
+      else if(_curGroup==='night') _groupHdr=`<tr><td colspan="19" style="padding:5px 14px;background:linear-gradient(90deg,#EDE9FE,#F5F3FF);font-size:10px;font-weight:800;color:#7C3AED;letter-spacing:.5px;border-bottom:1px solid #DDD6FE">🌙 야간 근무자</td></tr>`;
+      else if(_curGroup==='leave') _groupHdr=`<tr><td colspan="19" style="padding:5px 14px;background:linear-gradient(90deg,#FEE2E2,#FFF1F2);font-size:10px;font-weight:800;color:#E11D48;letter-spacing:.5px;border-bottom:1px solid #FECDD3">🚪 퇴사자</td></tr>`;
     }
     _prevGroup = _curGroup;
     return _groupHdr+`<tr draggable="true" data-eid="${e.id}"
@@ -3402,6 +3397,12 @@ function renderEmps(){
       </div></td>
       <td><input class="ei2" value="${esc(e.name)}" onchange="updE(${e.id},'name',this.value)" placeholder="이름" autocomplete="off"></td>
       <td><input class="ei2" value="${esc(e.role)}" onchange="updE(${e.id},'role',this.value)" autocomplete="off"></td>
+      <td><select class="ei2" onchange="updE(${e.id},'deptCat',this.value)" style="text-align:center;background:${e.deptCat?'#ECFDF5':'transparent'};color:${e.deptCat?'#047857':'var(--ink3)'};font-weight:${e.deptCat?'700':'500'};font-size:10px" title="부서 분류 (사번과 무관)">
+        <option value="" ${!e.deptCat?'selected':''}>미분류</option>
+        <option value="운반" ${e.deptCat==='운반'?'selected':''}>운반</option>
+        <option value="시설" ${e.deptCat==='시설'?'selected':''}>시설</option>
+        <option value="선별" ${e.deptCat==='선별'?'selected':''}>선별</option>
+      </select></td>
       <td><input class="ei2" value="${esc(e.grade||'')}" onchange="updE(${e.id},'grade',this.value)" placeholder="직급" autocomplete="off"></td>
       <td><input class="ei2" value="${esc(e.dept||'')}" onchange="updE(${e.id},'dept',this.value)" placeholder="인천본점" autocomplete="off"></td>
       <td>
@@ -3622,83 +3623,6 @@ function updE(id,f,v){
     sortEMPS();
   }
   saveLS();renderSb();renderTable();renderEmps();
-}
-
-// ══════════════════════════════════════
-// 부서 분류 (운반/시설/선별)
-// ══════════════════════════════════════
-function setDeptCat(empId, val){
-  const e=EMPS.find(x=>x.id===empId); if(!e) return;
-  e.deptCat = (e.deptCat===val) ? '' : val; // 같은 값 다시 누르면 해제
-  saveLS();
-  renderDept();
-  // 다른 탭 필터바도 갱신 (분류 변동 시 즉시 반영)
-  if(document.getElementById('emps-filter-bar')) renderFilterBar('emps-filter-bar','emps');
-}
-
-function renderDept(){
-  renderFilterBar('dept-filter-bar','dept');
-  let list = applyCommonFilter([...EMPS], 'dept');
-  // 그룹 정렬: 운반 → 시설 → 선별 → 미분류, 그룹 내에서는 주간 → 야간 → 퇴사자
-  const order = (e)=>{
-    const g = DEPT_CATS.indexOf(e.deptCat||'');
-    return (g===-1?DEPT_CATS.length:g)*10 + (e.leave?2:(e.shift==='night'?1:0));
-  };
-  list.sort((a,b)=>order(a)-order(b));
-
-  const groups = { '운반':[], '시설':[], '선별':[], '미분류':[] };
-  list.forEach(e=>{ const k=DEPT_CATS.includes(e.deptCat)?e.deptCat:'미분류'; groups[k].push(e); });
-
-  const groupColor = { '운반':'#0EA5E9', '시설':'#10B981', '선별':'#F59E0B', '미분류':'#94A3B8' };
-  const html = Object.keys(groups).map(g=>{
-    const arr = groups[g];
-    const c = groupColor[g];
-    return `
-      <div style="margin-bottom:18px;border:1px solid var(--bd2);border-radius:10px;overflow:hidden;background:var(--card)">
-        <div style="padding:10px 14px;background:linear-gradient(90deg,${c}22,${c}08);border-bottom:1px solid var(--bd2);display:flex;align-items:center;gap:8px">
-          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c}"></span>
-          <strong style="font-size:13px;color:var(--ink);letter-spacing:.3px">${g}</strong>
-          <span style="font-size:11px;color:var(--ink3);font-weight:500">${arr.length}명</span>
-        </div>
-        ${arr.length===0
-          ? `<div style="padding:18px;text-align:center;color:var(--ink3);font-size:11px">해당 분류 직원 없음</div>`
-          : `<div style="overflow-x:auto"><table class="tw" style="width:100%;font-size:11px">
-              <thead><tr>
-                <th style="width:48px">#</th>
-                <th style="width:80px">사번</th>
-                <th style="width:90px">이름</th>
-                <th style="width:80px">직종</th>
-                <th style="width:80px">소속</th>
-                <th style="width:64px">주야간</th>
-                <th style="width:64px">상태</th>
-                <th style="min-width:240px">부서 분류</th>
-              </tr></thead>
-              <tbody>${arr.map((e,i)=>{
-                const cur = e.deptCat||'';
-                const btns = DEPT_CATS.map(v=>{
-                  const on = cur===v;
-                  const bc = groupColor[v];
-                  return `<button onclick="setDeptCat(${e.id},'${v}')"
-                    style="padding:4px 12px;font-size:11px;border:1px solid ${on?bc:'var(--bd2)'};border-radius:6px;background:${on?bc:'transparent'};color:${on?'#fff':'var(--ink2)'};cursor:pointer;font-family:inherit;font-weight:${on?'700':'500'};margin-right:4px">${v}</button>`;
-                }).join('');
-                return `<tr style="${e.leave?'opacity:.55;':''}">
-                  <td style="text-align:center;color:var(--ink3)">${i+1}</td>
-                  <td style="text-align:center">${esc(e.empNo||'')}</td>
-                  <td style="font-weight:600">${esc(e.name||'')}</td>
-                  <td>${esc(e.role||'')}</td>
-                  <td>${esc(e.dept||'')}</td>
-                  <td style="text-align:center;color:${e.shift==='night'?'#7C3AED':'#D97706'}">${e.shift==='night'?'야간':'주간'}</td>
-                  <td style="text-align:center;color:${e.leave?'#E11D48':'#10B981'}">${e.leave?'퇴사':'재직'}</td>
-                  <td>${btns}</td>
-                </tr>`;
-              }).join('')}</tbody>
-            </table></div>`}
-      </div>`;
-  }).join('');
-
-  const summary = `재직 ${list.filter(e=>!e.leave).length}명 · 퇴사 ${list.filter(e=>e.leave).length}명 · 총 ${list.length}명`;
-  const body = document.getElementById('dept-body');
-  if(body) body.innerHTML = `<div style="padding:8px 0 4px;font-size:11px;color:var(--ink3)">${summary}</div>${html}`;
 }
 
 // ══════════════════════════════════════
@@ -8628,46 +8552,6 @@ function exportEmpsExcel(){
 }
 
 // ══════════════════════════════════════════════════════
-// 부서 분류 엑셀 (부서 페이지의 ⬇ 엑셀 내보내기)
-// ══════════════════════════════════════════════════════
-function exportDeptExcel(){
-  const wb = XLSX.utils.book_new();
-  const list = applyCommonFilter([...EMPS], 'dept');
-
-  // 분류별 시트 + 전체 시트
-  const groups = { '전체':list, '운반':[], '시설':[], '선별':[], '미분류':[] };
-  list.forEach(e=>{
-    const k = DEPT_CATS.includes(e.deptCat) ? e.deptCat : '미분류';
-    groups[k].push(e);
-  });
-
-  Object.keys(groups).forEach(g=>{
-    const arr = groups[g];
-    const aoa = [
-      ['사번','이름','직종','직급','소속','부서분류','주야간','내외국인','연락처','입사일','상태']
-    ];
-    arr.forEach(e=>{
-      aoa.push([
-        e.empNo||'', e.name||'', e.role||'', e.grade||'', e.dept||'',
-        e.deptCat||'미분류',
-        e.shift==='night'?'야간':'주간',
-        e.nation==='foreign'?'외국인':'내국인',
-        e.phone||'', e.join||'',
-        e.leave?`퇴사 ${e.leave}`:'재직'
-      ]);
-    });
-    aoa.push([]);
-    aoa.push([`총 ${arr.length}명 · 재직 ${arr.filter(e=>!e.leave).length}명 · 퇴사 ${arr.filter(e=>e.leave).length}명`]);
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols']=[{wch:9},{wch:10},{wch:10},{wch:8},{wch:11},{wch:9},{wch:7},{wch:8},{wch:14},{wch:12},{wch:12}];
-    XLSX.utils.book_append_sheet(wb, ws, g);
-  });
-
-  XLSX.writeFile(wb, `부서분류_${new Date().toISOString().slice(0,10)}.xlsx`);
-}
-
-
-// ══════════════════════════════════════════════════════
 // 📊 직원현황 엑셀 - 프리미엄
 // ══════════════════════════════════════════════════════
 let companyFilter = 'all';
@@ -9939,7 +9823,6 @@ async function pollForUpdates(){
     else if(p==='monthly' && typeof renderMonthly==='function') renderMonthly();
     else if(p==='payroll' && typeof renderPayroll==='function') renderPayroll();
     else if(p==='emps' && typeof renderEmps==='function') renderEmps();
-    else if(p==='dept' && typeof renderDept==='function') renderDept();
     else if(p==='leave' && typeof renderLeave==='function') renderLeave();
     else if(p==='company' && typeof renderCompany==='function') renderCompany();
     else if(p==='shift' && typeof renderShiftList==='function') renderShiftList();
