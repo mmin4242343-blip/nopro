@@ -1795,10 +1795,10 @@ function applyCommonFilter(emps, tab, refDate){
       if(f.deptCat==='none'){ if(ec) return false; }
       else if(ec!==f.deptCat) return false;
     }
-    // 🚫 급여관리 전용: 사무직 일시 숨김 토글이 ON이면 deptCat 빈값 직원 제외
-    // (다른 탭/엑셀에 영향 없음. 데이터 보존, 토글로 즉시 복구.)
+    // 🚫 급여관리 전용: 사무직 일시 숨김 토글
+    // 사무직 판별 — 명시적 증거 있을 때만 숨김 (안전한 기본: 분류 안 된 직원은 안 숨김)
     if(tab==='payroll' && typeof _payrollHideOffice!=='undefined' && _payrollHideOffice){
-      if(!(emp.deptCat && String(emp.deptCat).trim())) return false;
+      if(_isOfficeForHide(emp)) return false;
     }
     if(f.search && !(emp.name||'').toLowerCase().includes(f.search)) return false;
     return true;
@@ -1890,8 +1890,28 @@ function renderFilterBar(containerId, tab){
 let payFilter = 'all';
 
 // ══ 급여관리: 사무직 일시 숨김 (일회성 기능, localStorage 영속) ══
-// 켜진 상태에서 deptCat이 빈값인 직원(사무직)만 화면·엑셀에서 가림.
+// 켜진 상태에서 사무직만 화면·엑셀에서 가림.
 // 다른 데이터는 그대로 (REC/BONUS/ALLOW 모두 보존), 토글로 즉시 복구 가능.
+//
+// 사무직 판별 규칙 (안전 우선 — 명시적 증거 있을 때만 숨김):
+//   1. emp.deptCat이 '운반/시설/선별/물류' 등 비-사무 값이면 → 사무직 아님 (절대 안 숨김)
+//   2. emp.role(직종)에 '사무|관리|경영|매니저|총무|회계|인사' 키워드 → 사무직 (숨김)
+//   3. emp.deptCat에 '사무|관리|경영|총무|회계' 키워드 → 사무직 (숨김)
+//   4. 둘 다 매칭 안 됨 → 사무직 아님 (안전한 기본 — 분류 안 된 직원은 보호)
+function _isOfficeForHide(emp){
+  if(!emp) return false;
+  const role = (emp.role||'').trim();
+  const deptCat = (emp.deptCat||'').trim();
+  // (1) 명시적으로 비-사무 부서로 분류 → 사무직 아님
+  if(deptCat && !/사무|관리|경영|총무|회계|인사/.test(deptCat)) return false;
+  // (2) 직종이 사무 키워드 매칭 → 사무직
+  if(/사무|관리|경영|매니저|총무|회계|인사/.test(role)) return true;
+  // (3) 부서명이 사무 키워드 매칭 → 사무직
+  if(/사무|관리|경영|총무|회계/.test(deptCat)) return true;
+  // (4) 그 외 (직종도 부서도 명시 없음) → 안전하게 사무직 아님
+  return false;
+}
+
 let _payrollHideOffice = false;
 try { _payrollHideOffice = localStorage.getItem('npm5_payroll_hide_office') === '1'; } catch(e){}
 
@@ -2883,7 +2903,7 @@ function renderPayroll(){
         if(e.deletedAt) return false;
         if(e.join){const jd=parseEmpDate(e.join);if(jd>payMonthEnd2)return false;}
         if(e.leave){const ld=parseEmpDate(e.leave);if(ld<new Date(pY,pM-1,1))return false;}
-        return !(e.deptCat && String(e.deptCat).trim());
+        return _isOfficeForHide(e);  // 동일 헬퍼로 카운트 일치 보장
       }).length;
       _banner.style.display = 'flex';
       _banner.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;background:linear-gradient(90deg,#FEF3C7,#FFFBEB);border:1px solid #FCD34D;border-radius:10px;padding:10px 14px;margin:8px 14px;font-size:12px;color:#92400E;font-weight:600';
