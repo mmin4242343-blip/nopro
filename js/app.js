@@ -5781,7 +5781,7 @@ function exportExcel(){
 
     // ── 헤더 정의 (스프레드시트 동일) ──
     const allHdrs = [
-      '순번','근무지','직급','성명','급여유형','연차개수','근무일수','소정근로시간','입사일','시급',
+      '순번','근무지','직급','부서','성명','급여유형','연차개수','근무일수','소정근로시간','입사일','시급',
       '기본급','주휴수당','연차수당',
       ...allowList.map(a=>a.name),
       '급여',
@@ -5795,7 +5795,7 @@ function exportExcel(){
 
     // 헤더 색상 그룹
     const getHdrStyle = (h) => {
-      if(['순번','근무지','직급','성명','급여유형','연차개수','근무일수','소정근로시간','입사일','시급'].includes(h)) return S.mainHdr(C.navy,'FFFFFF','center');
+      if(['순번','근무지','직급','부서','성명','급여유형','연차개수','근무일수','소정근로시간','입사일','시급'].includes(h)) return S.mainHdr(C.navy,'FFFFFF','center');
       if(h==='기본급'||h==='급여') return S.mainHdr(C.navy,'FFFFFF','center');
       if(h==='주휴수당') return S.mainHdr(C.teal,'FFFFFF','center');
       if(h==='연차수당') return S.mainHdr(C.navy,'FFFFFF','center');
@@ -5853,7 +5853,8 @@ function exportExcel(){
       // 기본정보
       W(ci++,ei+1,S.cell(C.gray,bg,false,'center'));
       W(ci++,emp.dept||'',S.cell(C.gray,bg,false,'center'));
-      W(ci++,emp.role||'',S.cell(C.gray,bg,false,'center'));
+      W(ci++,emp.grade||'',S.cell(C.gray,bg,false,'center'));        // 직급 (직원관리의 grade 필드)
+      W(ci++,emp.deptCat||'사무',S.cell(C.teal,bg,!!emp.deptCat,'center')); // 부서 (deptCat: 사무/선별/시설/운반)
       W(ci++,emp.name,S.cell(C.navy,bg,true,'center'));
       W(ci++,getEmpPayModeLabel(emp).text,S.cell(C.blue,bg,false,'center'));
       W(ci++,annualTotal,S.num(C.gray,bg));
@@ -5927,18 +5928,19 @@ function exportExcel(){
 
     // ── 합계행 ──
     const C_=XLS.C; const ci2=allHdrs.length-1;
-    // 좌측 병합 타이틀
+    // 좌측 병합 타이틀 (순번/근무지/직급/부서 → 0..3)
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),'합 계',S.mainHdr(C_.navy));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),'',S.mainHdr(C_.navy));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),'',S.mainHdr(C_.navy));
-    xlsMerge(ws,R,0,R,2);
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),`${emps.length}명`,{
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),'',S.mainHdr(C_.navy));
+    xlsMerge(ws,R,0,R,3);
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),`${emps.length}명`,{
       font:{bold:true,sz:10,color:{rgb:'FFFFFF'},name:'맑은 고딕'},
       fill:{fgColor:{rgb:C_.navy}},alignment:{horizontal:'center',vertical:'center'},
       border:XLS.B.thin('1E3A5F'),
     });
-    // 빈 셀들
-    for(let c=4;c<ci2-1;c++) xlsWrite(ws,XLSX.utils.encode_cell({r:R,c}),'',(c===allHdrs.indexOf('총 급여'))?S.total('FFFFFF','0D47A1'):{fill:{fgColor:{rgb:C_.gray4}},border:XLS.B.thin()});
+    // 빈 셀들 (성명 다음부터)
+    for(let c=5;c<ci2-1;c++) xlsWrite(ws,XLSX.utils.encode_cell({r:R,c}),'',(c===allHdrs.indexOf('총 급여'))?S.total('FFFFFF','0D47A1'):{fill:{fgColor:{rgb:C_.gray4}},border:XLS.B.thin()});
     // 총급여 합계
     const totalIdx=allHdrs.indexOf('총 급여');
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:totalIdx}),Math.round(grandTotal),S.total('FFFFFF','0D47A1'));
@@ -5952,7 +5954,7 @@ function exportExcel(){
     R++;
 
     ws['!cols'] = allHdrs.map((h,i)=>({
-      wch: i===3?10:i===4?12:h.includes('급여')||h==='실지급액'?11:h.includes('수당')||h.includes('공제')?10:8
+      wch: i===3?7:i===4?10:i===5?12:h.includes('급여')||h==='실지급액'?11:h.includes('수당')||h.includes('공제')?10:8
     }));
     xlsRange(ws,0,0,R-1,allHdrs.length-1);
     XLSX.utils.book_append_sheet(wb,ws,sheetName);
