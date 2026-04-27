@@ -1777,13 +1777,14 @@ function makeFilterBar(tab){
       <button class="fb${f.pay==='hourly'?' on':''}" onclick="setFilter('${tab}','pay','hourly',this)">시급제</button>
       <button class="fb${f.pay==='monthly'?' on':''}" onclick="setFilter('${tab}','pay','monthly',this)">포괄임금제</button>
     </div>
-    <div class="filter-group" data-fg="deptCat" title="부서 분류">
-      <button class="fb${(f.deptCat||'all')==='all'?' on':''}" onclick="setFilter('${tab}','deptCat','all',this)">전체</button>
-      <button class="fb${f.deptCat==='none'?' on':''}" onclick="setFilter('${tab}','deptCat','none',this)" title="부서 미지정">사무</button>
-      <button class="fb${f.deptCat==='선별'?' on':''}" onclick="setFilter('${tab}','deptCat','선별',this)">선별</button>
-      <button class="fb${f.deptCat==='시설'?' on':''}" onclick="setFilter('${tab}','deptCat','시설',this)">시설</button>
-      <button class="fb${f.deptCat==='운반'?' on':''}" onclick="setFilter('${tab}','deptCat','운반',this)">운반</button>
-    </div>
+    ${(()=>{
+      // 부서 분류: 전체 / 사무(none) / 기본 3개(선별/시설/운반) / EMPS에 입력된 커스텀 부서 자동 추가
+      const customCats = [...new Set(EMPS.map(e=>(e.deptCat||'').trim()).filter(d=>d && !DEPT_CATS.includes(d)))].sort();
+      const all = [['all','전체'],['none','사무'],...DEPT_CATS.map(c=>[c,c]),...customCats.map(c=>[c,c])];
+      return `<div class="filter-group" data-fg="deptCat" title="부서 분류">`+
+        all.map(([v,l])=>`<button class="fb${(f.deptCat||'all')===v?' on':''}" onclick="setFilter('${tab}','deptCat','${v}',this)"${v==='none'?' title="부서 미지정"':''}>${esc(l)}</button>`).join('')+
+        `</div>`;
+    })()}
     ${(()=>{
       const depts=[...new Set(EMPS.map(e=>(e.dept||'').trim()).filter(d=>d))].sort();
       if(!depts.length) return '';
@@ -1811,12 +1812,19 @@ function renderFilterBar(containerId, tab){
   if(existing && document.activeElement === existing){
     // 검색 input에 포커스 중이면 버튼 상태만 업데이트하고 input은 보존
     const f = F[tab];
+    // 부서 분류 그룹은 EMPS의 커스텀 값 포함이라 동적 — 매 호출마다 재계산
+    const _customCats = [...new Set(EMPS.map(e=>(e.deptCat||'').trim()).filter(d=>d && !DEPT_CATS.includes(d)))].sort();
     el.querySelectorAll('.filter-group').forEach((grp, gi)=>{
       const key = ['shift','nation','pay','deptCat'][gi];
       if(!key) return;
       grp.querySelectorAll('.fb').forEach(b=>{
         b.classList.remove('on','on-night','on-foreign');
-        const vals = [['all','day','night'],['all','korean','foreign'],['all','fixed','hourly','monthly'],['all','none','선별','시설','운반']][gi];
+        const vals = [
+          ['all','day','night'],
+          ['all','korean','foreign'],
+          ['all','fixed','hourly','monthly'],
+          ['all','none', ...DEPT_CATS, ..._customCats]
+        ][gi];
         const idx = Array.from(grp.children).indexOf(b);
         const bVal = vals[idx];
         if(bVal === f[key]){
@@ -2496,6 +2504,18 @@ function renderMonthly(){
           ${v==='all'?'전체':v}
         </button>`).join('');
     } else { mvDeptDiv.style.display='none'; }
+  }
+  // 부서 분류(deptCat) 필터 동적 생성 — 기본 4개 + EMPS에 입력된 커스텀 부서 자동 포함
+  const mvDeptCatDiv = document.getElementById('mv-deptcat-filter');
+  if(mvDeptCatDiv){
+    const customCats = [...new Set(EMPS.map(e=>(e.deptCat||'').trim()).filter(d=>d && !DEPT_CATS.includes(d)))].sort();
+    const all = [['all','전체'],['none','사무'],...DEPT_CATS.map(c=>[c,c]),...customCats.map(c=>[c,c])];
+    mvDeptCatDiv.innerHTML = all.map(([v,l])=>`
+      <button class="mvf-sub btn btn-xs${MF.deptCat===v?' on':''}"
+        onclick="setMvSubFilter('deptCat','${v}',this)"
+        style="font-size:10px;background:${MF.deptCat===v?'var(--navy)':'transparent'};color:${MF.deptCat===v?'#fff':'var(--ink3)'};"${v==='none'?' title="부서 미지정"':''}>
+        ${esc(l)}
+      </button>`).join('');
   }
   const mvMonthEnd = new Date(vY, vM, 0); // 해당 월 마지막 날
   const mvMonthStart = new Date(vY, vM-1, 1);
@@ -3385,6 +3405,13 @@ function xlEdit(empId, field, rawText) {
 // ══════════════════════════════════════
 
 function renderEmps(){
+  // 부서 분류 자동완성용 datalist — 기본 3개 + EMPS에 입력된 커스텀 값 모두 포함
+  // 새 직원 등록 시 칸에 직접 새 부서명 입력하면 자동으로 다른 직원 자동완성·필터에도 반영됨
+  let dl = document.getElementById('dept-cat-options');
+  if(!dl){ dl = document.createElement('datalist'); dl.id = 'dept-cat-options'; document.body.appendChild(dl); }
+  const _customCats = [...new Set(EMPS.map(e=>(e.deptCat||'').trim()).filter(d=>d && !DEPT_CATS.includes(d)))].sort();
+  dl.innerHTML = [...DEPT_CATS, ..._customCats].map(c=>`<option value="${esc(c)}"></option>`).join('');
+
   renderFilterBar('emps-filter-bar','emps');
   let sorted=[...EMPS].sort((a,b)=>{
     // 퇴사자 맨 뒤
@@ -3423,12 +3450,7 @@ function renderEmps(){
       </div></td>
       <td><input class="ei2" value="${esc(e.name)}" onchange="updE(${e.id},'name',this.value)" placeholder="이름" autocomplete="off"></td>
       <td><input class="ei2" value="${esc(e.role)}" onchange="updE(${e.id},'role',this.value)" autocomplete="off"></td>
-      <td><select class="ei2" onchange="updE(${e.id},'deptCat',this.value)" style="text-align:center;background:${e.deptCat?'#ECFDF5':'transparent'};color:${e.deptCat?'#047857':'var(--ink2)'};font-weight:${e.deptCat?'700':'500'};font-size:10px" title="부서 분류 (사번과 무관)">
-        <option value="" ${!e.deptCat?'selected':''}>사무</option>
-        <option value="선별" ${e.deptCat==='선별'?'selected':''}>선별</option>
-        <option value="시설" ${e.deptCat==='시설'?'selected':''}>시설</option>
-        <option value="운반" ${e.deptCat==='운반'?'selected':''}>운반</option>
-      </select></td>
+      <td><input class="ei2" list="dept-cat-options" value="${esc(e.deptCat||'')}" placeholder="사무" onchange="updE(${e.id},'deptCat',this.value.trim())" style="text-align:center;background:${e.deptCat?'#ECFDF5':'transparent'};color:${e.deptCat?'#047857':'var(--ink2)'};font-weight:${e.deptCat?'700':'500'};font-size:10px" title="부서 분류 (목록 선택 또는 직접 입력 — 새 부서 입력 시 자동 추가)" autocomplete="off" /></td>
       <td><input class="ei2" value="${esc(e.grade||'')}" onchange="updE(${e.id},'grade',this.value)" placeholder="직급" autocomplete="off"></td>
       <td><input class="ei2" value="${esc(e.dept||'')}" onchange="updE(${e.id},'dept',this.value)" placeholder="인천본점" autocomplete="off"></td>
       <td>

@@ -762,13 +762,7 @@
         <button class="mvf-sub btn btn-xs" onclick="setMvSubFilter('nation','foreign',this)" style="font-size:10px">외국인</button>
       </div>
       <div id="mv-dept-filter" style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:3px"></div>
-      <div style="display:flex;gap:3px;background:rgba(14,165,233,.08);border-radius:8px;padding:3px" title="부서 분류 (사무/선별/시설/운반)">
-        <button class="mvf-sub btn btn-xs on" onclick="setMvSubFilter('deptCat','all',this)" style="font-size:10px">전체</button>
-        <button class="mvf-sub btn btn-xs" onclick="setMvSubFilter('deptCat','none',this)" style="font-size:10px" title="부서 미지정">사무</button>
-        <button class="mvf-sub btn btn-xs" onclick="setMvSubFilter('deptCat','선별',this)" style="font-size:10px">선별</button>
-        <button class="mvf-sub btn btn-xs" onclick="setMvSubFilter('deptCat','시설',this)" style="font-size:10px">시설</button>
-        <button class="mvf-sub btn btn-xs" onclick="setMvSubFilter('deptCat','운반',this)" style="font-size:10px">운반</button>
-      </div>
+      <div id="mv-deptcat-filter" style="display:flex;gap:3px;background:rgba(14,165,233,.08);border-radius:8px;padding:3px" title="부서 분류 (커스텀 부서 자동 포함)"></div>
       <div id="mv-tabs" style="display:flex;gap:3px;flex-wrap:wrap"></div>
       <div style="width:1px;height:14px;background:var(--bd);margin:0 4px"></div>
       <button class="btn btn-sm" id="mv-cal" onclick="setMvMode('cal')" style="background:var(--nbg);color:var(--navy2);border-color:var(--navy2)">캘린더</button>
