@@ -71,19 +71,22 @@ export const handler = async (event) => {
         }
       }
 
-      // 🛡️ 낙관적 잠금: 클라이언트가 모르는 서버 변경분이 있으면 거부 (stale-overwrite 방지)
-      // - expectedUpdatedAt: 클라가 마지막으로 본 서버 updated_at
-      // - 서버 updated_at이 그보다 새로우면 다른 디바이스가 먼저 저장한 것 → 클라의 옛 상태로 덮으면 안 됨
-      // - expectedUpdatedAt 미전송(레거시 클라/최초 저장): 체크 스킵 (점진적 마이그레이션 호환)
+      // 🛡️ 낙관적 잠금 (강화판): 옛 캐시된 클라이언트가 가드를 우회하지 못하게 함
+      // - expectedUpdatedAt 있고 serverUpdatedAt보다 옛것 → 정상 충돌 거부
+      // - PROTECTED 키에 expectedUpdatedAt 미전송 + 서버에 row 이미 존재 → 옛 클라이언트로 판단,
+      //   STALE-OVERWRITE 방지 위해 충돌 처리. 신규 row(serverUpdatedAt=null)는 통과시킴(첫 저장)
       const expectedUpdatedAt = item.expectedUpdatedAt || null;
-      if (expectedUpdatedAt && serverUpdatedAt && new Date(serverUpdatedAt) > new Date(expectedUpdatedAt)) {
+      const isStaleOverwrite = expectedUpdatedAt && serverUpdatedAt && new Date(serverUpdatedAt) > new Date(expectedUpdatedAt);
+      const isLegacyClientRisk = !expectedUpdatedAt && serverUpdatedAt && PROTECTED.has(item.key);
+      if (isStaleOverwrite || isLegacyClientRisk) {
         conflicts.push({
           key: item.key,
           expected: expectedUpdatedAt,
           actual: serverUpdatedAt,
+          reason: isLegacyClientRisk ? 'legacy-client-no-version' : 'stale-version',
         });
-        console.warn(`🛡️ 낙관적 잠금: 충돌 (company=${companyId}, key=${item.key}, by=${changedBy}, expected=${expectedUpdatedAt}, server=${serverUpdatedAt})`);
-        continue;  // 이 키만 스킵, 다른 아이템은 계속 처리
+        console.warn(`🛡️ 낙관적 잠금: ${isLegacyClientRisk?'레거시 클라이언트 차단':'충돌'} (company=${companyId}, key=${item.key}, by=${changedBy}, expected=${expectedUpdatedAt}, server=${serverUpdatedAt})`);
+        continue;
       }
 
       // atomic upsert (레이스 컨디션 방지)
