@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-28-4';
+const CLIENT_BUILD = '2026-04-28-5';
 let _buildMismatchWarned = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -4586,6 +4586,22 @@ function toggleEmpNoSetting(on){
   if(body)body.style.display=on?'block':'none';
   if(label){label.textContent=on?'ON':'OFF';label.style.color=on?'var(--navy)':'var(--ink3)';}
   saveLS();
+}
+
+// 🔢 사이트코드 즉시 저장 — 드롭다운 선택 시 자동 호출 (별도 저장 버튼 안 눌러도 됨)
+function setSiteCode(code){
+  const trimmed = (code||'').trim();
+  POL.siteCode = trimmed;
+  saveLS();
+  // 직원관리 보고 있으면 [생성] 버튼 표시 갱신
+  if(typeof renderEmps === 'function'){
+    const empsPg = document.getElementById('pg-emps');
+    if(empsPg && empsPg.classList.contains('on')) renderEmps();
+  }
+  if(typeof showSyncToast === 'function'){
+    if(trimmed.length === 5) showSyncToast('✅ 사이트코드 ' + trimmed + ' 저장됨', 'ok', 2000);
+    else if(trimmed) showSyncToast('⚠️ 사이트코드는 5자리여야 합니다 (현재 ' + trimmed.length + '자리)', 'warn', 3000);
+  }
 }
 function initEmpNoSetting(){
   const on=!!POL.empNoEnabled;

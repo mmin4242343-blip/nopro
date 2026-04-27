@@ -1797,7 +1797,7 @@ noprohr.netlify.app/tbm_sign.html
             <div><div class="sl">사이트코드 (앞 5자리)</div>
               <div class="ss">선별장유형(1) + 광역(2) + 세부(2)<br>예: 12013 = 자체/인천/남동구</div>
             </div>
-            <select class="ni" id="inp-site-code" style="width:140px;text-align:center;font-size:12px;font-weight:600;padding:4px 6px">
+            <select class="ni" id="inp-site-code" onchange="setSiteCode(this.value)" style="width:140px;text-align:center;font-size:12px;font-weight:600;padding:4px 6px">
               <option value="">선택</option>
               <option value="12013">12013 남동구</option>
               <option value="12034">12034 중구(인천)</option>
@@ -1858,7 +1858,7 @@ noprohr.netlify.app/tbm_sign.html
 </div>
 
 </div></div></div>
-<script src="/js/app.js?v=2026-04-28-4"></script>
+<script src="/js/app.js?v=2026-04-28-5"></script>
 <!-- 인라인 핸들러용 unsafe-inline은 추후 단계적 제거 예정 -->
 <script>
 // placeholder - app.js에서 모든 로직 처리

@@ -49,7 +49,7 @@ export const handler = async (event) => {
     map._versions = versions;
     // 🏷️ 빌드 버전 — 클라가 옛 캐시된 JS 사용 중이면 감지 후 새로고침 안내
     // 배포 시 SERVER_BUILD env var를 갱신하면 클라가 자동 인지
-    map._serverBuild = process.env.SERVER_BUILD || '2026-04-28-4';
+    map._serverBuild = process.env.SERVER_BUILD || '2026-04-28-5';
 
     return ok(map, event);
 
