@@ -4444,6 +4444,12 @@ function doAddEmp(empNo){
   EMPS.push({id:nid,name:'',role:'',dept:'',deptCat:'',empNo:empNo,rate:null,monthly:null,join:'',leave:'',age:'',phone:'',rrnFront:'',rrnBack:'',sot:209,payMode:null,shift:'day',gender:'male',nation:'local',color:colors[ci],tc:tcs[ci]});
   saveLS();renderEmps();renderSb();
 }
+// 고용형태(직접고용/아웃소싱) 판별 — 소속(dept) 텍스트에 키워드 포함되면 아웃소싱
+// 인원 현황 화면·엑셀에서 공통 사용. 사번 자동 생성과는 무관 (별도로 detectDeptCode 사용).
+function isOutsource(emp){
+  const dept=(emp&&emp.dept||'').trim();
+  return /아웃소싱|파견|도급|외주|위탁/.test(dept);
+}
 // 직원 정보 기반 구분코드 자동 판별
 function detectDeptCode(emp){
   const role=(emp.role||'').trim();
@@ -8670,6 +8676,96 @@ function exportCompanyExcel(){
   ws['!cols']=[{wch:11},{wch:12},{wch:12},...Array(12).fill({wch:6}),{wch:8},{wch:8},{wch:8},{wch:12}];
   xlsRange(ws,0,0,R-1,18);
   XLSX.utils.book_append_sheet(wb,ws,`${companyYear}년 직원현황`);
+
+  // ── 두 번째 시트: 월별 인원 현황 (직접고용/아웃소싱 분리) ──
+  const ws2={}; let R2=0;
+  xlsWrite(ws2,XLSX.utils.encode_cell({r:0,c:0}),`${companyYear}년 월별 인원 현황`,{
+    font:{bold:true,sz:18,color:{rgb:C.navy},name:'맑은 고딕'},
+    fill:{fgColor:{rgb:'EFF6FF'}},alignment:{horizontal:'left',vertical:'center'},
+  });
+  xlsMerge(ws2,0,0,0,13);
+  xlsWrite(ws2,XLSX.utils.encode_cell({r:1,c:0}),
+    `기준연도: ${companyYear}년  ·  고용형태: 소속(dept) 텍스트 기준 자동 분류  ·  출력일: ${new Date().toLocaleDateString('ko-KR')}`,{
+    font:{sz:9,color:{rgb:C.gray2},italic:true,name:'맑은 고딕'},
+    fill:{fgColor:{rgb:'EFF6FF'}},alignment:{horizontal:'left',vertical:'center'},
+  });
+  xlsMerge(ws2,1,0,1,13);
+  ws2['!rows']=[{hpt:30},{hpt:16}];
+  R2=2;
+
+  // 헤더: 구분 | 1월 ~ 12월 | 합계
+  xlsWrite(ws2,XLSX.utils.encode_cell({r:R2,c:0}),'구분',S.mainHdr(C.navy,'FFFFFF','center'));
+  for(let m=1;m<=12;m++) xlsWrite(ws2,XLSX.utils.encode_cell({r:R2,c:m}),m+'월',S.mainHdr(m<=6?C.teal2:C.teal,'FFFFFF','center'));
+  xlsWrite(ws2,XLSX.utils.encode_cell({r:R2,c:13}),'합계',S.mainHdr('0E4D2E','FFFFFF','center'));
+  ws2['!rows'].push({hpt:26});
+  R2++;
+
+  // 월별 데이터 계산 (renderCompany와 동일 로직)
+  const md = [];
+  for(let mi=0;mi<12;mi++){
+    const m=mi+1;
+    const monthStart=new Date(companyYear,mi,1);
+    const monthEnd  =new Date(companyYear,m,0);
+    const activeEmps=EMPS.filter(e=>{
+      if(!e.join) return false;
+      const jd=new Date(e.join);
+      if(jd>monthEnd) return false;
+      if(e.leave && new Date(e.leave)<monthStart) return false;
+      return true;
+    });
+    const directCount    = activeEmps.filter(e=>!isOutsource(e)).length;
+    const outsourceCount = activeEmps.filter(e=> isOutsource(e)).length;
+    const newCount  = EMPS.filter(e=>e.join  && new Date(e.join).getFullYear()===companyYear  && new Date(e.join).getMonth()+1===m).length;
+    const leftCount = EMPS.filter(e=>e.leave && new Date(e.leave).getFullYear()===companyYear && new Date(e.leave).getMonth()+1===m).length;
+    let totalPay=0, totalWorkDays=0;
+    activeEmps.forEach(e=>{ const s=monthSummary(e.id,companyYear,m); totalPay+=s.total; totalWorkDays+=s.wdays; });
+    let weekDays=0;
+    const dim2=dim(companyYear,m);
+    for(let d=1;d<=dim2;d++) if(!isAutoHol(companyYear,m,d)) weekDays++;
+    md.push({activeCount:activeEmps.length, directCount, outsourceCount, newCount, leftCount, totalPay, totalWorkDays, weekDays});
+  }
+  const sum = k => md.reduce((s,x)=>s+x[k],0);
+
+  // 행 정의 (화면과 동일 순서)
+  const sheetRows = [
+    { label:'재직 직원 수',         key:'activeCount',    fg:C.navy,    bg:'EEF2FF', sub:false, agg:'-' },
+    { label:'　ㄴ 직접고용',          key:'directCount',    fg:C.teal,    bg:'F0FDFA', sub:true,  agg:'-' },
+    { label:'　ㄴ 아웃소싱',          key:'outsourceCount', fg:C.purple2||'7C3AED', bg:'F5F3FF', sub:true, agg:'-' },
+    { label:'입사 직원 수',         key:'newCount',       fg:C.teal,    bg:'F0FDFA', agg:sum('newCount') },
+    { label:'퇴사 직원 수',         key:'leftCount',      fg:C.rose,    bg:'FEF2F2', agg:sum('leftCount') },
+    { label:'급여지급액(만원)',      key:'totalPayMan',    fg:C.purple2||'7C3AED', bg:'F5F3FF', agg:Math.round(sum('totalPay')/10000) },
+    { label:'직원 총 근무일수',     key:'totalWorkDays',  fg:C.gray2,   bg:'F8FAFC', agg:sum('totalWorkDays') },
+    { label:'평일 영업일수',        key:'weekDays',       fg:C.navy2,   bg:'EFF6FF', agg:sum('weekDays') },
+  ];
+
+  sheetRows.forEach((row,ri)=>{
+    const cellBg = ri%2 ? 'FFFFFF' : 'F8FAFC';
+    xlsWrite(ws2,XLSX.utils.encode_cell({r:R2,c:0}),row.label,{
+      font:{bold:!row.sub,sz:row.sub?10:11,color:{rgb:row.fg},name:'맑은 고딕'},
+      fill:{fgColor:{rgb:row.bg}},alignment:{horizontal:'left',vertical:'center'},
+      border:XLS.B.thin(),
+    });
+    for(let mi=0;mi<12;mi++){
+      const v = row.key==='totalPayMan' ? Math.round((md[mi].totalPay||0)/10000) : md[mi][row.key];
+      xlsWrite(ws2,XLSX.utils.encode_cell({r:R2,c:mi+1}), v||0,{
+        font:{sz:row.sub?10:11,color:{rgb:row.fg},name:'맑은 고딕'},
+        fill:{fgColor:{rgb:cellBg}},alignment:{horizontal:'center',vertical:'center'},
+        border:XLS.B.thin(),numFmt:'#,##0',
+      });
+    }
+    xlsWrite(ws2,XLSX.utils.encode_cell({r:R2,c:13}), row.agg==='-' ? '-' : row.agg,{
+      font:{bold:true,sz:row.sub?10:11,color:{rgb:'FFFFFF'},name:'맑은 고딕'},
+      fill:{fgColor:{rgb:'0E4D2E'}},alignment:{horizontal:'center',vertical:'center'},
+      border:XLS.B.thin(),numFmt:row.agg==='-'?undefined:'#,##0',
+    });
+    ws2['!rows'].push({hpt:row.sub?18:22});
+    R2++;
+  });
+
+  ws2['!cols']=[{wch:18},...Array(12).fill({wch:8}),{wch:10}];
+  xlsRange(ws2,0,0,R2-1,13);
+  XLSX.utils.book_append_sheet(wb,ws2,'월별 인원 현황');
+
   XLSX.writeFile(wb,`직원현황_${companyYear}년.xlsx`);
 }
 
@@ -8869,6 +8965,10 @@ function renderCompany() {
       return true;
     });
 
+    // 고용형태 분리: 소속(dept)에 아웃소싱 키워드 있으면 아웃소싱, 그 외(빈값 포함) 직접고용
+    const directCount    = activeEmps.filter(e => !isOutsource(e)).length;
+    const outsourceCount = activeEmps.filter(e =>  isOutsource(e)).length;
+
     // 입사/퇴사
     const newEmps  = EMPS.filter(emp => emp.join  && new Date(emp.join).getFullYear()===companyYear  && new Date(emp.join).getMonth()+1===m);
     const leftEmps = EMPS.filter(emp => emp.leave && new Date(emp.leave).getFullYear()===companyYear && new Date(emp.leave).getMonth()+1===m);
@@ -8899,13 +8999,16 @@ function renderCompany() {
       if (anyWorked) holWorkDays++;
     }
 
-    return { activeCount: activeEmps.length, newCount: newEmps.length,
-      leftCount: leftEmps.length, totalPay, totalWorkDays, weekDays, holWorkDays };
+    return { activeCount: activeEmps.length, directCount, outsourceCount,
+      newCount: newEmps.length, leftCount: leftEmps.length,
+      totalPay, totalWorkDays, weekDays, holWorkDays };
   });
 
-  // 합계
+  // 합계 (재직/직접/아웃소싱은 월별 스냅샷이라 연간 합산이 무의미 → '-')
   const totals = {
     activeCount: '-',
+    directCount: '-',
+    outsourceCount: '-',
     newCount:      monthData.reduce((s,d)=>s+d.newCount,0),
     leftCount:     monthData.reduce((s,d)=>s+d.leftCount,0),
     totalPay:      monthData.reduce((s,d)=>s+d.totalPay,0),
@@ -8915,13 +9018,15 @@ function renderCompany() {
   };
 
   const rows = [
-    { label:'재직 직원 수',       key:'activeCount',  fmt:v=>v==='-'?'-':`${v}명`,      cls:'var(--navy)' },
-    { label:'입사 직원 수',       key:'newCount',     fmt:v=>v?`+${v}명`:'-',           cls:'var(--teal)' },
-    { label:'퇴사 직원 수',       key:'leftCount',    fmt:v=>v?`${v}명`:'-',            cls:'var(--rose)' },
-    { label:'급여지급액(세전)',    key:'totalPay',     fmt:v=>v?`${Math.round(v/10000).toLocaleString()}만원`:'-', cls:'var(--purple)' },
-    { label:'직원 총 근무일수',   key:'totalWorkDays',fmt:v=>v?`${v}일`:'-',            cls:'var(--ink2)' },
-    { label:'평일 영업일수',      key:'weekDays',     fmt:v=>`${v}일`,                  cls:'var(--navy2)',  bg:'#EFF6FF' },
-    { label:'휴일 출근일수',      key:'holWorkDays',  fmt:v=>v?`${v}일`:'-',            cls:'var(--amber)', bg:'#FFFBEB' },
+    { label:'재직 직원 수',         key:'activeCount',    fmt:v=>v==='-'?'-':`${v}명`, cls:'var(--navy)' },
+    { label:'　ㄴ 직접고용',         key:'directCount',    fmt:v=>v==='-'?'-':(v?`${v}명`:'-'), cls:'var(--teal)',   sub:true },
+    { label:'　ㄴ 아웃소싱',         key:'outsourceCount', fmt:v=>v==='-'?'-':(v?`${v}명`:'-'), cls:'var(--purple)', sub:true },
+    { label:'입사 직원 수',         key:'newCount',       fmt:v=>v?`+${v}명`:'-',      cls:'var(--teal)' },
+    { label:'퇴사 직원 수',         key:'leftCount',      fmt:v=>v?`${v}명`:'-',       cls:'var(--rose)' },
+    { label:'급여지급액(세전)',      key:'totalPay',       fmt:v=>v?`${Math.round(v/10000).toLocaleString()}만원`:'-', cls:'var(--purple)' },
+    { label:'직원 총 근무일수',     key:'totalWorkDays',  fmt:v=>v?`${v}일`:'-',       cls:'var(--ink2)' },
+    { label:'평일 영업일수',        key:'weekDays',       fmt:v=>`${v}일`,             cls:'var(--navy2)', bg:'#EFF6FF' },
+    { label:'휴일 출근일수',        key:'holWorkDays',    fmt:v=>v?`${v}일`:'-',       cls:'var(--amber)', bg:'#FFFBEB' },
   ];
 
   body.innerHTML = `
@@ -8936,14 +9041,14 @@ function renderCompany() {
       </thead>
       <tbody>
         ${rows.map((row,ri)=>`
-        <tr style="border-bottom:1px solid var(--bd)">
-          <td style="padding:10px 14px;font-size:11px;font-weight:700;color:${row.cls};background:${row.bg||'var(--surf)'};position:sticky;left:0;z-index:1;border-right:2px solid var(--bd)">
+        <tr style="border-bottom:1px solid var(--bd)${row.sub?';background:rgba(0,0,0,.015)':''}">
+          <td style="padding:${row.sub?'7px 14px 7px 26px':'10px 14px'};font-size:${row.sub?'10px':'11px'};font-weight:${row.sub?'600':'700'};color:${row.cls};background:${row.bg||(row.sub?'rgba(0,0,0,.02)':'var(--surf)')};position:sticky;left:0;z-index:1;border-right:2px solid var(--bd)">
             ${row.key==='weekDays'?'📅 ':''}${row.key==='holWorkDays'?'🏖️ ':''}${row.label}
             ${row.key==='holWorkDays'?'<div style="font-size:9px;color:var(--ink3);font-weight:400;margin-top:1px">일일근태 입력 기준</div>':''}
             ${row.key==='weekDays'?'<div style="font-size:9px;color:var(--ink3);font-weight:400;margin-top:1px">토/일/공휴일 제외</div>':''}
           </td>
-          ${monthData.map(d=>`<td style="padding:8px 6px;font-size:11px;text-align:center;font-weight:600;color:${row.cls};background:${d[row.key]>0&&row.key==='holWorkDays'?'#FFFBEB':''}">${row.fmt(d[row.key])}</td>`).join('')}
-          <td style="padding:8px 6px;font-size:11px;text-align:center;font-weight:700;color:${row.cls};background:var(--gbg)">${row.fmt(totals[row.key])}</td>
+          ${monthData.map(d=>`<td style="padding:${row.sub?'6px 6px':'8px 6px'};font-size:${row.sub?'10px':'11px'};text-align:center;font-weight:${row.sub?'500':'600'};color:${row.cls};background:${d[row.key]>0&&row.key==='holWorkDays'?'#FFFBEB':''}">${row.fmt(d[row.key])}</td>`).join('')}
+          <td style="padding:${row.sub?'6px 6px':'8px 6px'};font-size:${row.sub?'10px':'11px'};text-align:center;font-weight:700;color:${row.cls};background:var(--gbg)">${row.fmt(totals[row.key])}</td>
         </tr>`).join('')}
       </tbody>
     </table>
