@@ -10238,18 +10238,31 @@ async function handleConflicts(conflicts){
         merged = _mergeByField(lo, server.leave_overrides||{}, _parseSnap(snap.leave_overrides));
         if(typeof leaveOverrides!=='undefined') leaveOverrides = merged;
         localStorage.setItem('npm5_leave_overrides', JSON.stringify(merged));
+      } else if(k === 'bk'){
+        // 🛡️ 휴게시간 — id 기반 배열 머지로 사용자 변경 보존 (덮어쓰기 X)
+        let snapArr = [];
+        try { snapArr = (typeof snap.bk === 'string') ? JSON.parse(snap.bk) : (snap.bk || []); } catch(e){}
+        merged = _mergeEmpsArrayByField(DEF_BK || [], server.bk || [], snapArr);
+        if(typeof DEF_BK!=='undefined') DEF_BK = merged;
+        try { localStorage.setItem('npm5_bk', JSON.stringify(merged)); } catch(e){}
+      } else if(k === 'pol'){
+        // 🛡️ 급여설정 — 필드 단위 머지 (사용자 수정 필드 우선 보존)
+        merged = _mergeByField(POL || {}, server.pol || {}, _parseSnap(snap.pol));
+        if(typeof POL!=='undefined' && typeof DEF_POL!=='undefined') POL = Object.assign({...DEF_POL}, merged);
+        try { localStorage.setItem('npm5_pol', JSON.stringify(merged)); } catch(e){}
+      } else if(k === 'tax'){
+        // 🛡️ 세금 — 필드 단위 머지
+        merged = _mergeByField(TAX_REC || {}, server.tax || {}, _parseSnap(snap.tax));
+        if(typeof TAX_REC!=='undefined') TAX_REC = merged;
+        try { localStorage.setItem('npm5_tax', JSON.stringify(merged)); } catch(e){}
       } else {
-        // pol/bk/tax/leave_settings/folders/*_snapshots — 작은 설정류는 서버값 채택
-        // (이쪽은 동시 편집 가능성이 낮고, 머지가 모호함)
+        // leave_settings/folders/*_snapshots — 단순 설정류는 서버값 채택
+        // (작고 동시 편집 가능성 낮음)
         if(k in server){
           merged = server[k];
           const lsKey = 'npm5_'+k;
           try { localStorage.setItem(lsKey, JSON.stringify(merged)); } catch(e){}
-          // 메모리 변수 갱신
-          if(k === 'pol' && typeof POL!=='undefined' && typeof DEF_POL!=='undefined') POL = Object.assign({...DEF_POL}, merged);
-          else if(k === 'bk' && typeof DEF_BK!=='undefined') DEF_BK = merged;
-          else if(k === 'tax' && typeof TAX_REC!=='undefined') TAX_REC = merged;
-          else if(k === 'pol_snapshots' && typeof POL_SNAPSHOTS!=='undefined') POL_SNAPSHOTS = merged;
+          if(k === 'pol_snapshots' && typeof POL_SNAPSHOTS!=='undefined') POL_SNAPSHOTS = merged;
           else if(k === 'pay_snapshots' && typeof PAY_SNAPSHOTS!=='undefined') PAY_SNAPSHOTS = merged;
           else if(k === 'bk_snapshots' && typeof BK_SNAPSHOTS!=='undefined') BK_SNAPSHOTS = merged;
         }
