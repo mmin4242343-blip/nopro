@@ -539,7 +539,19 @@ async function safeItemSave(key, value){
       return {blocked:true};
     }
   }
-  return apiFetch('/data-save','POST',{key,value});
+  // 🛡️ 낙관적 잠금: 마지막으로 본 서버 버전을 함께 보냄
+  const expectedUpdatedAt = (typeof _serverVersions!=='undefined' && _serverVersions) ? (_serverVersions[key]||null) : null;
+  const resp = await apiFetch('/data-save','POST',{key,value,expectedUpdatedAt});
+  // 응답 처리: 버전 갱신 + 충돌 발생 시 통보
+  if(resp){
+    if(resp.versions && typeof _serverVersions!=='undefined'){
+      Object.entries(resp.versions).forEach(([k,v])=>{ if(v) _serverVersions[k] = v; });
+    }
+    if(resp.conflicts && resp.conflicts.length && typeof handleConflicts==='function'){
+      handleConflicts(resp.conflicts);
+    }
+  }
+  return resp;
 }
 
 // ── 저장 상태 인디케이터 ──
@@ -654,7 +666,11 @@ function _flushSaveOnUnload(){
       return true;
     });
     if(!items.length) return;
-    const blob = new Blob([JSON.stringify({items})], {type:'application/json'});
+    // 🛡️ 낙관적 잠금: beacon으로 보내는 아이템에도 마지막 본 서버 버전 첨부
+    // sendBeacon은 응답 못 받으니 충돌 처리는 서버 측 거부에만 의존 — 다음 로드 때 자연스럽게 동기화됨
+    const sv = (typeof _serverVersions!=='undefined' && _serverVersions) || {};
+    const itemsWithVer = items.map(it => ({...it, expectedUpdatedAt: sv[it.key] || null}));
+    const blob = new Blob([JSON.stringify({items:itemsWithVer})], {type:'application/json'});
     navigator.sendBeacon((typeof API_BASE!=='undefined'?API_BASE:'')+'/data-save', blob);
   }catch(e){ console.warn('beacon 저장 실패:', e); }
 }
@@ -9704,6 +9720,8 @@ function clearLocalData(){
   if(typeof BK_SNAPSHOTS !== 'undefined') BK_SNAPSHOTS = {};
   // 🛡️ 스냅샷도 초기화 — 재로그인 직후 가드가 "이전에 데이터 있었다"로 오판 방지
   if(typeof _syncedSnapshot !== 'undefined') _syncedSnapshot = null;
+  // 🛡️ 낙관적 잠금 버전도 초기화 — 새 로그인 시 깨끗하게 다시 받음
+  if(typeof _serverVersions !== 'undefined') _serverVersions = {};
   // 🛡️ 대기 중인 saveLS 타이머도 취소 — logout race로 빈값 저장되는 경로 차단
   if(typeof saveLS !== 'undefined' && saveLS._timer){ clearTimeout(saveLS._timer); saveLS._timer = null; }
 }
@@ -9770,10 +9788,29 @@ async function sbSaveAll(companyId) {
     showSyncToast('⚠️ 빈 값 덮어쓰기 차단: '+_blockedOverwrite.join(', ')+'\n서버 데이터 보호 (새로고침으로 재로드 권장)','warn',6000);
   }
 
+  // 🛡️ 낙관적 잠금: 클라가 마지막으로 본 서버 버전을 함께 보냄 (서버가 stale-overwrite 거부)
+  const attachVersion = (item) => ({...item, expectedUpdatedAt: _serverVersions[item.key] || null});
+
+  // 응답 통합 처리 (성공한 키 버전 업데이트 + 충돌 발생 키 통보)
+  const _applyResp = (resp) => {
+    if(!resp) return;
+    if(resp.versions){
+      Object.entries(resp.versions).forEach(([k,v])=>{ if(v) _serverVersions[k] = v; });
+    }
+    if(resp.conflicts && resp.conflicts.length){
+      handleConflicts(resp.conflicts);
+    }
+  };
+
   // 소형 키 먼저 저장, 대형 키는 병렬로 개별 저장
-  if(safeSmall.length) await apiFetch('/data-save','POST',{items:safeSmall});
+  if(safeSmall.length){
+    const resp = await apiFetch('/data-save','POST',{items:safeSmall.map(attachVersion)});
+    _applyResp(resp);
+  }
   if(safeLarge.length) await Promise.all(safeLarge.map(item=>
-    apiFetch('/data-save','POST',{items:[item]}).catch(e=>console.warn('대형 키 저장 오류('+item.key+'):',e))
+    apiFetch('/data-save','POST',{items:[attachVersion(item)]})
+      .then(_applyResp)
+      .catch(e=>console.warn('대형 키 저장 오류('+item.key+'):',e))
   ));
   // 서버 동기화 완료 시점 스냅샷 (폴링 머지 기준값)
   if(typeof _takeSyncedSnapshot === 'function') _takeSyncedSnapshot();
@@ -9790,6 +9827,72 @@ let _pollTimerId = null;
 const POLL_INTERVAL_MS = 120000;
 const POLL_BACKOFF_MAX = 600000;
 let _pollBackoffMs = 0;
+
+// ══════════════════════════════════════════════════════
+// 🛡️ 낙관적 잠금: 서버 버전(updated_at) 추적
+// ══════════════════════════════════════════════════════
+// data_key → 마지막으로 본 서버 updated_at(ISO string).
+// 저장 시 클라가 본 버전을 함께 보내면, 서버가 이미 더 최신이면 거부.
+// → 다른 디바이스의 옛 상태가 새 데이터를 덮어쓰는 사고 방지.
+let _serverVersions = {};
+let _conflictHandling = false;
+
+async function handleConflicts(conflicts){
+  if(!conflicts || !conflicts.length) return;
+  if(_conflictHandling) return; // 동시 충돌 시 알림 한 번만
+  _conflictHandling = true;
+  try {
+    console.warn('🛡️ 낙관적 잠금 충돌:', conflicts);
+
+    // 1. 사용자의 현재 메모리(localStorage) 상태를 별도 백업 — 잃어버리지 않게
+    const backupTs = new Date().toISOString().replace(/[:.]/g,'-');
+    const backup = {};
+    conflicts.forEach(c=>{
+      try { backup[c.key] = localStorage.getItem('npm5_'+c.key); } catch(e){}
+    });
+    try { localStorage.setItem('_nopro_recovery_'+backupTs, JSON.stringify(backup)); } catch(e){}
+
+    // 2. 사용자에게 명확히 통보 (alert로 차단 — 무시하고 계속 입력 못 하게)
+    const keyLabels = {emps:'직원',rec:'출퇴근/연차',bonus:'상여금',allow:'수당',tax:'세금',
+      tbk:'임시휴게',safety:'안전교육',bk:'기본휴게',pol:'급여설정',leave_overrides:'연차',
+      leave_settings:'연차설정',folders:'폴더',pol_snapshots:'정책스냅샷',
+      pay_snapshots:'급여스냅샷',bk_snapshots:'휴게스냅샷'};
+    const keyList = conflicts.map(c=>keyLabels[c.key]||c.key).join(', ');
+    alert(
+      '⚠️ 데이터 충돌 감지\n\n' +
+      '다른 디바이스에서 먼저 변경된 내용이 있어\n' +
+      '방금 저장 시도가 거부되었습니다.\n' +
+      '(서버 데이터 보호)\n\n' +
+      '영향 항목: ' + keyList + '\n\n' +
+      '확인을 누르면 최신 서버 상태를 다시 불러옵니다.\n' +
+      '방금 입력하신 내용을 다시 한 번 확인해주세요.\n\n' +
+      '입력 직전 상태는 안전하게 백업되었습니다.\n' +
+      '(F12 → Application → Local Storage → _nopro_recovery_'+backupTs+')'
+    );
+
+    // 3. 서버 최신본으로 재로드 + 화면 다시 그림
+    try {
+      const _sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
+      if(_sess && _sess.companyId){
+        await sbLoadAll(_sess.companyId);
+        const active = document.querySelector('.pg.on');
+        if(active){
+          const p = active.id.replace('pg-','');
+          if(p==='daily' && typeof renderTable==='function') renderTable();
+          else if(p==='monthly' && typeof renderMonthly==='function') renderMonthly();
+          else if(p==='payroll' && typeof renderPayroll==='function') renderPayroll();
+          else if(p==='emps' && typeof renderEmps==='function') renderEmps();
+          else if(p==='leave' && typeof renderLeave==='function') renderLeave();
+          else if(p==='company' && typeof renderCompany==='function') renderCompany();
+          else if(p==='shift' && typeof renderShiftList==='function') renderShiftList();
+          else if(p==='safety' && typeof renderSafety==='function') renderSafety();
+        }
+      }
+    } catch(e){ console.warn('충돌 후 재로드 실패:', e); }
+  } finally {
+    _conflictHandling = false;
+  }
+}
 
 function _deepCopy(x){ try { return JSON.parse(JSON.stringify(x||{})); } catch(e){ return {}; } }
 
@@ -9834,6 +9937,10 @@ async function pollForUpdates(){
   try {
     const server = await apiFetch('/data-load','POST',{});
     if(!server) return;
+    // 🛡️ 낙관적 잠금용 서버 버전 갱신 (data-load 응답에 _versions 포함)
+    if(server._versions){
+      _serverVersions = {..._serverVersions, ...server._versions};
+    }
     let changed = false;
     const snap = _syncedSnapshot || {};
     // 키 기반 블롭 — 필드 단위 머지
@@ -10001,6 +10108,11 @@ function stopAutoPoll(){
 // 키가 누락된 경우(네트워크/파셜 응답)에는 기존 값 유지 → 연쇄 wipe 방지.
 async function sbLoadAll(companyId) {
   const map = await apiFetch('/data-load','POST',{});
+
+  // 🛡️ 낙관적 잠금: 서버 updated_at 캡처 (저장 시 충돌 검증용)
+  if(map && map._versions){
+    _serverVersions = {..._serverVersions, ...map._versions};
+  }
 
   if('emps' in map)            { EMPS = map.emps || []; localStorage.setItem('npm5_emps', JSON.stringify(EMPS)); }
   sortEMPS();

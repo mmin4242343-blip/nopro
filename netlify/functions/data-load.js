@@ -23,7 +23,7 @@ export const handler = async (event) => {
 
     let query = supabase
       .from('company_data')
-      .select('data_key, data_value')
+      .select('data_key, data_value, updated_at')
       .eq('company_id', companyId);
 
     if (key) {
@@ -34,14 +34,19 @@ export const handler = async (event) => {
     if (dbErr) return err(500, '서버 오류가 발생했습니다', event);
 
     const map = {};
+    const versions = {};  // 낙관적 잠금용: 각 키의 서버 updated_at
     (rows || []).forEach(r => {
       try { map[r.data_key] = JSON.parse(r.data_value); } catch (e) {}
+      versions[r.data_key] = r.updated_at;
     });
 
     // emps 데이터의 주민번호 뒷자리 복호화
     if (map.emps) {
       map.emps = decryptEmps(map.emps);
     }
+
+    // 클라이언트가 _versions로 인식 (data_key는 ALLOWED_KEYS에만 있으므로 충돌 없음)
+    map._versions = versions;
 
     return ok(map, event);
 
