@@ -605,6 +605,7 @@
   <div class="nt" id="nt-leave" onclick="gp('leave')">연차 관리</div>
   <div class="nt" id="nt-company" onclick="gp('company')">인원 현황 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:12px;padding:0 2px;opacity:.7" onclick="showTip('인원 현황','연도별 월별 직원 수, 입퇴사 현황, 급여 지급총액을 보여줍니다.\n\n[전체]: 회사 전체 월별 집계\n[개별]: 직원 한 명의 1~12월 급여 내역 추적')">💡</button></span></div>
   <div class="nt" id="nt-emps" onclick="gp('emps')">직원 관리</div>
+  <div class="nt" id="nt-dept" onclick="gp('dept')">부서</div>
   <div class="nt" id="nt-shift" onclick="gp('shift')">근무형태</div>
   <div class="nt" id="nt-safety" onclick="gp('safety')">안전교육 일지</div>
   <div class="nt" id="nt-folder" onclick="gp('folder')">📁 폴더 관리</div>
@@ -762,6 +763,13 @@
         <button class="mvf-sub btn btn-xs" onclick="setMvSubFilter('nation','foreign',this)" style="font-size:10px">외국인</button>
       </div>
       <div id="mv-dept-filter" style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:3px"></div>
+      <div style="display:flex;gap:3px;background:rgba(14,165,233,.08);border-radius:8px;padding:3px" title="부서 분류 (운반/시설/선별)">
+        <button class="mvf-sub btn btn-xs on" onclick="setMvSubFilter('deptCat','all',this)" style="font-size:10px">전체</button>
+        <button class="mvf-sub btn btn-xs" onclick="setMvSubFilter('deptCat','운반',this)" style="font-size:10px">운반</button>
+        <button class="mvf-sub btn btn-xs" onclick="setMvSubFilter('deptCat','시설',this)" style="font-size:10px">시설</button>
+        <button class="mvf-sub btn btn-xs" onclick="setMvSubFilter('deptCat','선별',this)" style="font-size:10px">선별</button>
+        <button class="mvf-sub btn btn-xs" onclick="setMvSubFilter('deptCat','none',this)" style="font-size:10px">미분류</button>
+      </div>
       <div id="mv-tabs" style="display:flex;gap:3px;flex-wrap:wrap"></div>
       <div style="width:1px;height:14px;background:var(--bd);margin:0 4px"></div>
       <button class="btn btn-sm" id="mv-cal" onclick="setMvMode('cal')" style="background:var(--nbg);color:var(--navy2);border-color:var(--navy2)">캘린더</button>
@@ -970,6 +978,21 @@
       <tbody id="emp-tbody"></tbody>
     </table>
   </div>
+</div>
+
+<!-- 부서 (운반/시설/선별 분류) -->
+<div class="pg" id="pg-dept">
+  <div class="ph">
+    <div>
+      <div class="pt">부서</div>
+      <div class="pt-s">직원을 운반 · 시설 · 선별로 분류 · 사번에는 영향 없음 · 같은 버튼 다시 누르면 분류 해제</div>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button class="btn btn-sm btn-t" onclick="exportDeptExcel()" title="부서 분류 명부 엑셀 다운로드">⬇ 엑셀 내보내기</button>
+    </div>
+  </div>
+  <div id="dept-filter-bar"></div>
+  <div id="dept-body" style="padding:6px 14px 30px"></div>
 </div>
 
 <!-- 연차 관리 -->
