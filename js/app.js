@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-28-5';
+const CLIENT_BUILD = '2026-04-28-6';
 let _buildMismatchWarned = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -10509,21 +10509,29 @@ async function pollForUpdates(){
     // 미저장 변경이 있는 키는 옛 버전 그대로 유지 → 다음 저장 시 충돌 감지로 stale-overwrite 차단.
     let changed = false;
     const snap = _syncedSnapshot || {};
-    // 키 기반 블롭 — 필드 단위 머지
+    // 🛡️ 폴링은 ADD-ONLY: 로컬에 없는 새 키만 흡수, 기존 키는 절대 안 건드림
+    // (사용자 데이터 보호 우선 — 다른 디바이스 변경분은 F5 시 동기화)
     const mergeKeyed = (name, getLocal, setLocal, lsKey)=>{
       if(server[name] === undefined) return;
       const local = getLocal();
       const localStr = JSON.stringify(local);
       const snapStr = (typeof snap[name]==='string') ? snap[name] : JSON.stringify(snap[name]||null);
-      const m = _mergeByField(local, server[name]||{}, snap[name]);
-      const merged = JSON.stringify(m);
-      if(merged !== localStr){
-        setLocal(m);
-        if(lsKey) localStorage.setItem(lsKey, JSON.stringify(m));
+      // ADD-ONLY 머지: 로컬에 없는 서버 키만 추가, 기존 키는 로컬 그대로
+      const merged = {...local};
+      const sv = server[name] || {};
+      let added = false;
+      Object.keys(sv).forEach(k => {
+        if(!(k in merged)){
+          merged[k] = sv[k];
+          added = true;
+        }
+      });
+      if(added){
+        setLocal(merged);
+        if(lsKey) localStorage.setItem(lsKey, JSON.stringify(merged));
         changed = true;
       }
-      // 🛡️ 낙관적 잠금 버전 갱신: 로컬에 미저장 변경이 없을 때만 (snap === local 즉 마지막 sync 이후 무변경)
-      // 미저장 변경 있는 상태(snap ≠ local)면 옛 버전 유지 → 다음 저장 시 충돌 감지
+      // 버전 갱신: 미저장 변경 없을 때만
       if(localStr === snapStr && server._versions && server._versions[name]){
         _serverVersions[name] = server._versions[name];
       }
@@ -10591,18 +10599,46 @@ async function pollForUpdates(){
       }
       replaceIfClean(name, getStr, apply);
     };
-    _guardedReplace('emps', ()=>JSON.stringify(EMPS), v=>{
-      EMPS = v; if(typeof sortEMPS==='function') sortEMPS();
-      localStorage.setItem('npm5_emps', JSON.stringify(EMPS));
-    });
-    replaceIfClean('pol', ()=>JSON.stringify(POL), v=>{
-      POL = Object.assign({...(typeof DEF_POL!=='undefined'?DEF_POL:{})}, v);
-      localStorage.setItem('npm5_pol', JSON.stringify(POL));
-    });
-    _guardedReplace('bk', ()=>JSON.stringify(DEF_BK), v=>{
-      DEF_BK = v;
-      localStorage.setItem('npm5_bk', JSON.stringify(DEF_BK));
-    });
+    // 🛡️ EMPS — ADD-ONLY: 새 직원만 흡수, 기존 직원은 절대 안 건드림
+    if(server.emps !== undefined && Array.isArray(server.emps)){
+      const localIds = new Set((EMPS||[]).map(e => String(e.id)));
+      const newEmps = server.emps.filter(s => !localIds.has(String(s.id)));
+      if(newEmps.length > 0){
+        EMPS = [...EMPS, ...newEmps];
+        if(typeof sortEMPS==='function') sortEMPS();
+        localStorage.setItem('npm5_emps', JSON.stringify(EMPS));
+        changed = true;
+        console.log('🔄 폴링: 새 직원 ' + newEmps.length + '명 흡수');
+      }
+      // 버전 갱신: 미저장 없을 때만
+      const localEmpsStr = JSON.stringify(EMPS);
+      const snapEmpsStr = snap.emps || '';
+      if(localEmpsStr === snapEmpsStr && server._versions && server._versions.emps){
+        _serverVersions.emps = server._versions.emps;
+      }
+    }
+    // 🛡️ POL — 폴링에서 변경 안 함. F5 시 sbLoadAll로만 동기화. 사용자 설정 보호.
+    if(server.pol !== undefined && server._versions && server._versions.pol){
+      const localStr = JSON.stringify(POL);
+      const snapStr = snap.pol || '';
+      if(localStr === snapStr) _serverVersions.pol = server._versions.pol;
+    }
+    // 🛡️ BK — ADD-ONLY: 새 휴게시간 항목만 흡수, 기존 항목은 절대 안 건드림
+    if(server.bk !== undefined && Array.isArray(server.bk)){
+      const localBkIds = new Set((DEF_BK||[]).map(b => String(b.id)));
+      const newBks = server.bk.filter(s => !localBkIds.has(String(s.id)));
+      if(newBks.length > 0){
+        DEF_BK = [...DEF_BK, ...newBks];
+        localStorage.setItem('npm5_bk', JSON.stringify(DEF_BK));
+        changed = true;
+        console.log('🔄 폴링: 새 휴게시간 ' + newBks.length + '개 흡수');
+      }
+      const localBkStr = JSON.stringify(DEF_BK);
+      const snapBkStr = snap.bk || '';
+      if(localBkStr === snapBkStr && server._versions && server._versions.bk){
+        _serverVersions.bk = server._versions.bk;
+      }
+    }
     // 월별 POL/PAY 스냅샷: 다른 기기에서 확정/해제·정책변경한 내용 반영
     if(server.pol_snapshots !== undefined){
       const sv = JSON.stringify(server.pol_snapshots);
