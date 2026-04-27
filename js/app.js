@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-28-3';
+const CLIENT_BUILD = '2026-04-28-4';
 let _buildMismatchWarned = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -3577,7 +3577,7 @@ function renderEmps(){
       <td style="text-align:center;font-size:11px;font-weight:700;color:#94A3B8;padding:0 4px">${rowNum}</td>
       <td><div style="display:flex;gap:2px;align-items:center">
         <input class="ei2" value="${esc(e.empNo||'')}" onchange="updE(${e.id},'empNo',this.value)" style="text-align:center;font-size:10px;flex:1" placeholder="사번" autocomplete="off">
-        ${!e.empNo&&POL.empNoEnabled&&(POL.siteCode||'').length===5?`<button onclick="showGenEmpNo(${e.id})" style="padding:2px 4px;font-size:8px;border:1px solid var(--navy2);border-radius:4px;background:var(--nbg);color:var(--navy2);cursor:pointer;white-space:nowrap;font-weight:700" title="사번 자동 생성">생성</button>`:''}
+        ${!e.empNo&&POL.empNoEnabled?`<button onclick="showGenEmpNo(${e.id})" style="padding:2px 4px;font-size:8px;border:1px solid var(--navy2);border-radius:4px;background:var(--nbg);color:var(--navy2);cursor:pointer;white-space:nowrap;font-weight:700" title="사번 자동 생성 (사이트코드 미설정 시 안내 표시)">생성</button>`:''}
       </div></td>
       <td><input class="ei2" value="${esc(e.name)}" onchange="updE(${e.id},'name',this.value)" placeholder="이름" autocomplete="off"></td>
       <td><input class="ei2" value="${esc(e.role)}" onchange="updE(${e.id},'role',this.value)" autocomplete="off"></td>
@@ -10391,11 +10391,18 @@ function _mergeByField(local, server, snapshot){
 //   - 로컬은 변경 안 했고 서버만 변경 → 서버 우선
 //   - 양쪽 다 변경(같은 필드) → 로컬 우선 (사용자 입력 절대 보존 원칙)
 //   - 로컬에 있는 필드는 절대 삭제 안 함 (보존성 ↑)
+// 🛡️ 직원 식별·중요 필드 — 서버가 잘못 비웠어도 로컬 값(비어있지 않으면) 보존
+const _PRESERVE_NONEMPTY_FIELDS = new Set([
+  'empNo','name','role','grade','dept','deptCat','phone',
+  'rrnFront','rrnBack','join','leave','age','rate','monthly','sot'
+]);
+
 function _mergeEmpFields(local, server, snap){
   const L = local || {}; const S = server || {}; const SNAP = snap || {};
   const merged = {};
   // 모든 필드 키 수집 (서버+로컬+스냅샷)
   const allKeys = new Set([...Object.keys(L), ...Object.keys(S), ...Object.keys(SNAP)]);
+  const _isEmptyVal = v => v == null || v === '' || (Array.isArray(v) && v.length===0);
   allKeys.forEach(k => {
     const inL = k in L, inS = k in S, inSnap = k in SNAP;
     const lv = L[k], sv = S[k], snapv = SNAP[k];
@@ -10404,7 +10411,13 @@ function _mergeEmpFields(local, server, snap){
       if(dirty){
         merged[k] = lv;        // 로컬 변경분 우선
       } else if(inS){
-        merged[k] = sv;        // 로컬 미변경, 서버값 채택
+        // 🛡️ 보호 필드: 로컬 비어있지 않은데 서버가 비었으면 로컬 보존
+        // (예: empNo가 어떤 race로 서버에서 빈값 응답해도 로컬 사번 안 잃음)
+        if(_PRESERVE_NONEMPTY_FIELDS.has(k) && !_isEmptyVal(lv) && _isEmptyVal(sv)){
+          merged[k] = lv;
+        } else {
+          merged[k] = sv;      // 일반 필드: 로컬 미변경이면 서버값 채택
+        }
       } else {
         merged[k] = lv;        // 서버에 없으면 로컬값 유지
       }
