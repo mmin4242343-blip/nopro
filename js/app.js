@@ -404,6 +404,7 @@ function confirmPayMonth(y, m){
   const monthEnd = new Date(y, m, 0);
   const monthStart = new Date(y, m-1, 1);
   const activeEmps = EMPS.filter(e=>{
+    if(e.deletedAt) return false; // 🗑️ 휴지통 제외
     if(e.join){const jd=parseEmpDate(e.join);if(jd>monthEnd)return false;}
     if(e.leave){const ld=parseEmpDate(e.leave);if(ld<monthStart)return false;}
     return true;
@@ -1770,6 +1771,8 @@ function setSearch(tab, val){
 function applyCommonFilter(emps, tab, refDate){
   const f = F[tab];
   return emps.filter(emp=>{
+    // 🗑️ 휴지통 직원은 모든 화면에서 자동 제외 (직원관리 휴지통 뷰에서는 별도 경로로 표시)
+    if(emp.deletedAt) return false;
     // 퇴사자 필터: 기준일 이전 퇴사자 제외. 단, 직원관리(emps) 탭에서는 퇴사자도 하단에 표시하기 위해 필터 스킵
     if(emp.leave && tab!=='emps'){
       const ld=parseEmpDate(emp.leave);
@@ -1791,6 +1794,11 @@ function applyCommonFilter(emps, tab, refDate){
       const ec=(emp.deptCat||'').trim();
       if(f.deptCat==='none'){ if(ec) return false; }
       else if(ec!==f.deptCat) return false;
+    }
+    // 🚫 급여관리 전용: 사무직 일시 숨김 토글이 ON이면 deptCat 빈값 직원 제외
+    // (다른 탭/엑셀에 영향 없음. 데이터 보존, 토글로 즉시 복구.)
+    if(tab==='payroll' && typeof _payrollHideOffice!=='undefined' && _payrollHideOffice){
+      if(!(emp.deptCat && String(emp.deptCat).trim())) return false;
     }
     if(f.search && !(emp.name||'').toLowerCase().includes(f.search)) return false;
     return true;
@@ -1880,6 +1888,42 @@ function renderFilterBar(containerId, tab){
 }
 
 let payFilter = 'all';
+
+// ══ 급여관리: 사무직 일시 숨김 (일회성 기능, localStorage 영속) ══
+// 켜진 상태에서 deptCat이 빈값인 직원(사무직)만 화면·엑셀에서 가림.
+// 다른 데이터는 그대로 (REC/BONUS/ALLOW 모두 보존), 토글로 즉시 복구 가능.
+let _payrollHideOffice = false;
+try { _payrollHideOffice = localStorage.getItem('npm5_payroll_hide_office') === '1'; } catch(e){}
+
+function togglePayrollHideOffice(){
+  _payrollHideOffice = !_payrollHideOffice;
+  try { localStorage.setItem('npm5_payroll_hide_office', _payrollHideOffice ? '1' : '0'); } catch(e){}
+  _updateHideOfficeUI();
+  if(typeof renderPayroll === 'function') renderPayroll();
+  if(typeof showSyncToast === 'function'){
+    if(_payrollHideOffice) showSyncToast('🚫 사무직 급여 일시 숨김\n토글 다시 누르거나 배너의 [표시 복구] 클릭으로 즉시 복원','ok',3000);
+    else showSyncToast('✅ 사무직 급여 표시 복구','ok',2000);
+  }
+}
+
+function _updateHideOfficeUI(){
+  const btn = document.getElementById('pv-hide-office');
+  if(btn){
+    if(_payrollHideOffice){
+      btn.textContent = '👁 사무직 표시';
+      btn.style.background = 'var(--abg, #FEF3C7)';
+      btn.style.color = '#92400E';
+      btn.style.borderColor = '#FCD34D';
+      btn.title = '클릭하여 사무직 급여 표시를 복구';
+    } else {
+      btn.textContent = '🚫 사무직 가리기';
+      btn.style.background = '';
+      btn.style.color = '';
+      btn.style.borderColor = '';
+      btn.title = '사무직(부서 미지정) 급여를 일시 숨김 (데이터 보존, 즉시 복구 가능)';
+    }
+  }
+}
 function setPayFilter(f){ payFilter=f; }
 function filterEmpsByPay(emps){
   return applyCommonFilter(emps, 'payroll');
@@ -2560,6 +2604,8 @@ function renderMonthly(){
   const mvMonthEnd = new Date(vY, vM, 0); // 해당 월 마지막 날
   const mvMonthStart = new Date(vY, vM-1, 1);
   const mvEmps = EMPS.filter(e=>{
+    // 🗑️ 휴지통 제외
+    if(e.deletedAt) return false;
     // 퇴사자: 해당 월 시작 전에 퇴사했으면 제외
     if(e.leave){const ld=parseEmpDate(e.leave);if(ld<mvMonthStart)return false;}
     if(mvFilter!=='all'){const ep=e.payMode||'fixed';if(mvFilter==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}else{if(ep!==mvFilter)return false;}}
@@ -2661,6 +2707,8 @@ function renderOv(){
   for(let d=1;d<=days;d++){const dow=(fdow(vY,vM)+d-1)%7;const ph=getPhName(vY,vM,d);const autoH=isAutoHol(vY,vM,d);th+=`<th style="${dow===0||autoH?'color:#FCA5A5':dow===6?'color:#93C5FD':''}" title="${ph||''}">${d}${ph?'🎌':''}<br><span style="font-weight:400;font-size:8px;opacity:.7">${DOW[dow]}</span></th>`;}
   th+=`<th style="background:#0E4D2E">근무일</th><th style="background:#0E4D2E">연차</th><th style="background:#0E4D2E">실근무</th><th style="background:#0E4D2E">월급여</th>`;
   const mvEmps = EMPS.filter(e=>{
+    // 🗑️ 휴지통 제외
+    if(e.deletedAt) return false;
     if(mvFilter!=='all'){const ep=e.payMode||'fixed';if(mvFilter==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}else{if(ep!==mvFilter)return false;}}
     if(MF.shift!=='all' && (e.shift||'day')!==MF.shift) return false;
     const isFor = e.nation==='foreign' || e.foreigner===true;
@@ -2825,6 +2873,29 @@ function renderPayroll(){
   document.getElementById('pv-title').textContent=`${pY}년 ${pM}월 급여 요약`;
   _renderPayConfirmBar();
   _payrollSummaryCache.clear();
+  // 🚫 사무직 숨김 배너: 토글 ON일 때 N명 숨김 표시 + 복구 버튼
+  _updateHideOfficeUI();
+  const _banner = document.getElementById('pay-office-hidden-banner');
+  if(_banner){
+    if(_payrollHideOffice){
+      const payMonthEnd2 = new Date(pY,pM,0);
+      const hiddenCount = EMPS.filter(e=>{
+        if(e.deletedAt) return false;
+        if(e.join){const jd=parseEmpDate(e.join);if(jd>payMonthEnd2)return false;}
+        if(e.leave){const ld=parseEmpDate(e.leave);if(ld<new Date(pY,pM-1,1))return false;}
+        return !(e.deptCat && String(e.deptCat).trim());
+      }).length;
+      _banner.style.display = 'flex';
+      _banner.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;background:linear-gradient(90deg,#FEF3C7,#FFFBEB);border:1px solid #FCD34D;border-radius:10px;padding:10px 14px;margin:8px 14px;font-size:12px;color:#92400E;font-weight:600';
+      _banner.innerHTML = `
+        <span>🚫 사무직 ${hiddenCount}명의 급여가 일시 숨김 상태입니다 (데이터는 그대로 보존)</span>
+        <button class="btn btn-sm" onclick="togglePayrollHideOffice()" style="background:#FFFFFF;color:#92400E;border:1px solid #FCD34D;font-weight:700;padding:5px 14px">👁 표시 복구</button>
+      `;
+    } else {
+      _banner.style.display = 'none';
+      _banner.innerHTML = '';
+    }
+  }
   // 확정된 달은 입력칸을 잠가 "입력해도 안 먹히는" 현상 방지
   const _monthLocked = (typeof isPayMonthConfirmed==='function') && isPayMonthConfirmed(pY, pM);
   let gt={base:0,nt:0,ot:0,hol:0,al:0,bonus:0,allow:0,ded:0,total:0};
@@ -8823,6 +8894,7 @@ function exportCompanyExcel(){
     const monthStart=new Date(companyYear,mi,1);
     const monthEnd  =new Date(companyYear,m,0);
     const activeEmps=EMPS.filter(e=>{
+      if(e.deletedAt) return false; // 🗑️ 휴지통 제외
       if(!e.join) return false;
       const jd=parseEmpDate(e.join);
       if(jd>monthEnd) return false;
@@ -9111,6 +9183,7 @@ function renderCompany() {
 
     // 재직 직원
     const activeEmps = EMPS.filter(emp => {
+      if (emp.deletedAt) return false; // 🗑️ 휴지통 제외
       if (!emp.join) return false;
       const jd = parseEmpDate(emp.join);
       if (jd > monthEnd) return false;
