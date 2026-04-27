@@ -1746,6 +1746,39 @@ noprohr.netlify.app/tbm_sign.html
       </div>
     </div>
 
+    <!-- 🔄 데이터 복구 (감사 로그 기반) -->
+    <div class="set-c" style="border-color:#FCD34D">
+      <div class="set-h" style="background:#F59E0B">🔄 데이터 복구 (시점 복원)</div>
+      <div class="set-b">
+        <div style="font-size:12px;color:var(--ink2);margin-bottom:12px;line-height:1.7">
+          서버에 자동 보관된 변경 이력에서 <strong>특정 시점</strong>으로 데이터를 되돌립니다.<br>
+          <span style="font-size:11px;color:var(--ink3)">실수로 삭제·덮어쓴 직원/출퇴근 기록 등을 복구할 때 사용. 복원 직전 상태도 자동 백업되어 다시 되돌릴 수 있음.</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+          <label style="font-size:11px;color:var(--ink2);font-weight:600">데이터 종류:</label>
+          <select id="recover-key-select" onchange="loadRecoveryHistory()" style="padding:5px 10px;font-size:12px;border:1px solid var(--bd2);border-radius:6px;background:#fff;font-family:inherit">
+            <option value="emps">직원 (emps)</option>
+            <option value="rec">출퇴근/연차 (rec)</option>
+            <option value="bonus">상여금 (bonus)</option>
+            <option value="allow">수당 (allow)</option>
+            <option value="tax">세금 (tax)</option>
+            <option value="tbk">임시휴게 (tbk)</option>
+            <option value="safety">안전교육 (safety)</option>
+            <option value="leave_overrides">연차 (leave_overrides)</option>
+            <option value="leave_settings">연차설정 (leave_settings)</option>
+            <option value="pol">급여설정 (pol)</option>
+            <option value="bk">기본휴게 (bk)</option>
+          </select>
+          <button class="btn btn-sm" onclick="loadRecoveryHistory()" style="font-size:11px">🔍 이력 불러오기</button>
+        </div>
+        <div id="recover-history-list" style="max-height:380px;overflow-y:auto;border:1px solid var(--bd);border-radius:8px;background:#FAFAFA;padding:6px"></div>
+        <div style="margin-top:10px;font-size:10px;color:var(--ink3);line-height:1.5">
+          ⚠️ 복원 후엔 모든 사용자가 <strong>Ctrl+F5</strong>로 새로고침해야 화면에 반영됩니다.<br>
+          복원 직전 상태는 자동으로 'restore-snapshot' 행으로 audit_log에 보관되어 다시 되돌릴 수 있습니다.
+        </div>
+      </div>
+    </div>
+
     <!-- 사번 자동 부여 -->
     <div class="set-c">
       <div class="set-h">🔢 사번 자동 부여</div>

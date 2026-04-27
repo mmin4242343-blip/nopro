@@ -5928,6 +5928,114 @@ function saveSettings(){
   setTimeout(()=>{btn.textContent='저장';btn.style.background='';},1600);
 }
 
+// ══════════════════════════════════════
+// 🔄 데이터 복구 — 감사 로그 기반 시점 복원
+// ══════════════════════════════════════
+
+// 1. 선택한 키의 최근 이력을 가져와 화면에 표시
+async function loadRecoveryHistory(){
+  const sel = document.getElementById('recover-key-select');
+  const list = document.getElementById('recover-history-list');
+  if(!sel || !list) return;
+  const key = sel.value;
+  list.innerHTML = '<div style="padding:14px;text-align:center;color:var(--ink3);font-size:12px">불러오는 중...</div>';
+
+  try {
+    const resp = await apiFetch('/audit-log?key='+encodeURIComponent(key)+'&limit=50','GET');
+    if(!resp || !resp.logs){
+      list.innerHTML = '<div style="padding:14px;text-align:center;color:var(--ink3);font-size:12px">이력 없음</div>';
+      return;
+    }
+    if(!resp.logs.length){
+      list.innerHTML = '<div style="padding:14px;text-align:center;color:var(--ink3);font-size:12px">'+esc(key)+' 키에 대한 변경 이력이 없습니다</div>';
+      return;
+    }
+
+    // 현재 저장된 사이즈 (참고용)
+    let curSize = 0;
+    try {
+      const lsKey = 'npm5_'+key;
+      curSize = (localStorage.getItem(lsKey)||'').length;
+    } catch(e){}
+
+    // 이력 행 렌더링
+    list.innerHTML = resp.logs.map(log => {
+      const oldSize = (log.old_value||'').length;
+      const newSize = (log.new_value||'').length;
+      const delta = newSize - oldSize;
+      const dt = new Date(log.changed_at);
+      const dtStr = dt.toLocaleString('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      const isLossEvent = oldSize > newSize && (oldSize - newSize) >= 1000; // 1KB 이상 손실
+      const actionLabel = log.action === 'restore' ? '🔄 복원됨' : log.action === 'restore-snapshot' ? '💾 복원 직전 백업' : log.action;
+      return `
+        <div style="border:1px solid ${isLossEvent?'#FECACA':'var(--bd)'};border-radius:8px;padding:9px 12px;margin-bottom:6px;background:${isLossEvent?'#FEF2F2':'#FFFFFF'};display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <div style="font-size:12px;font-weight:700;color:${isLossEvent?'#DC2626':'var(--navy)'};margin-bottom:3px">
+              ${dtStr} ${isLossEvent?'⚠️':''}
+            </div>
+            <div style="font-size:10px;color:var(--ink3);line-height:1.4">
+              ${esc(log.changed_by||'unknown')} · ${esc(actionLabel)}<br>
+              저장 전 ${oldSize.toLocaleString()}B → 저장 후 ${newSize.toLocaleString()}B
+              <span style="color:${delta>0?'#16A34A':delta<0?'#DC2626':'var(--ink3)'};font-weight:600;margin-left:4px">
+                ${delta>0?'+':''}${delta.toLocaleString()}B
+              </span>
+            </div>
+          </div>
+          <div style="display:flex;gap:4px">
+            ${log.old_value ? `<button class="btn btn-sm" onclick="doRestore(${log.id},'old_value','${esc(dtStr)}',${oldSize})" style="font-size:10px;padding:4px 10px;background:#FEF3C7;color:#92400E;border:1px solid #FCD34D;font-weight:700">⏪ 저장 전(${oldSize.toLocaleString()}B)</button>` : ''}
+            ${log.new_value ? `<button class="btn btn-sm" onclick="doRestore(${log.id},'new_value','${esc(dtStr)}',${newSize})" style="font-size:10px;padding:4px 10px;background:#DCFCE7;color:#166534;border:1px solid #86EFAC;font-weight:700">⏩ 저장 후(${newSize.toLocaleString()}B)</button>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // 헤더에 현재 사이즈 정보 추가
+    const header = document.createElement('div');
+    header.style.cssText = 'padding:8px 10px;margin-bottom:8px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;font-size:11px;color:var(--navy);font-weight:600';
+    header.innerHTML = '📊 현재 로컬 데이터 사이즈: <strong>' + curSize.toLocaleString() + 'B</strong> · 위 시점 중 하나를 선택하면 그 시점의 데이터로 복원됩니다';
+    list.insertBefore(header, list.firstChild);
+
+  } catch(e) {
+    console.error(e);
+    list.innerHTML = '<div style="padding:14px;text-align:center;color:#DC2626;font-size:12px">이력 조회 실패: '+esc(e.message||'알 수 없는 오류')+'</div>';
+  }
+}
+
+// 2. 특정 audit_log 행으로 복원 실행
+async function doRestore(auditId, useField, dtStr, sizeBytes){
+  const fieldLabel = useField === 'old_value' ? '저장 직전 상태(old_value)' : '저장 직후 상태(new_value)';
+  if(!confirm(
+    `🔄 데이터 복원 확인\n\n` +
+    `시점: ${dtStr}\n` +
+    `복원 데이터: ${fieldLabel}\n` +
+    `사이즈: ${sizeBytes.toLocaleString()} bytes\n\n` +
+    `현재 데이터를 위 시점으로 되돌립니다.\n` +
+    `복원 직전 상태는 audit_log에 자동 백업되어 다시 되돌릴 수 있습니다.\n\n` +
+    `계속하시겠습니까?`
+  )) return;
+
+  try {
+    const resp = await apiFetch('/audit-restore','POST',{auditId, useField});
+    if(!resp || !resp.success){
+      alert('복원 실패: ' + (resp && resp.error ? resp.error : '알 수 없는 오류'));
+      return;
+    }
+    alert(
+      `✅ 복원 완료\n\n` +
+      `데이터 종류: ${resp.data_key}\n` +
+      `복원 사이즈: ${(resp.restoredSize||0).toLocaleString()} bytes\n` +
+      `복원 시점: ${new Date(resp.restoredFromTimestamp).toLocaleString('ko-KR')}\n\n` +
+      `잠시 후 페이지가 새로고침됩니다.\n` +
+      `다른 사용자도 Ctrl+F5로 새로고침해야 화면에 반영됩니다.`
+    );
+    // 본인 화면 자동 새로고침
+    setTimeout(()=>{ location.reload(); }, 800);
+  } catch(e) {
+    console.error(e);
+    alert('복원 요청 실패: ' + (e.message || '알 수 없는 오류'));
+  }
+}
+
 // ── 데이터 백업 (JSON 다운로드) ──
 function exportBackup(){
   const sess=JSON.parse(localStorage.getItem('nopro_session')||'null');
