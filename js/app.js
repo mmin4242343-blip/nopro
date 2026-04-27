@@ -5960,9 +5960,11 @@ function exportExcel(){
     XLSX.utils.book_append_sheet(wb,ws,sheetName);
   }
 
-  // 3개 시트
+  // 3개 시트 — 화면 필터와 동일: 포괄임금제 시트는 monthly + pohal 둘 다 포함
   const getEmps = mode => applyCommonFilter(EMPS.filter(e=>{
-    if((e.payMode||'fixed')!==mode) return false;
+    const ep = e.payMode || 'fixed';
+    if(mode==='monthly'){ if(ep!=='monthly' && ep!=='pohal') return false; }
+    else { if(ep!==mode) return false; }
     if(e.join&&new Date(e.join)>new Date(pY,pM,0)) return false;
     if(e.leave&&new Date(e.leave)<new Date(pY,pM-1,1)) return false;
     return true;
