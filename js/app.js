@@ -3632,9 +3632,9 @@ function updE(id,f,v){
 const BULK_COLS = [
   { key:'empNo',   label:'사번',     type:'text',   w:64  },
   { key:'name',    label:'이름 *',   type:'text',   w:88  },
-  { key:'role',    label:'직종',     type:'text',   w:80  },
-  { key:'grade',   label:'직급',     type:'text',   w:72  },
-  { key:'dept',    label:'소속',     type:'text',   w:80  },
+  { key:'role',    label:'직종 *',   type:'text',   w:80  },
+  { key:'grade',   label:'직급 *',   type:'text',   w:72  },
+  { key:'dept',    label:'소속 *',   type:'text',   w:80  },
   { key:'rrnFront',label:'주민번호(앞)',type:'text', w:80  },
   { key:'rrnBack', label:'주민번호(뒤)',type:'text', w:80  },
   { key:'payMode', label:'급여방식', type:'select', w:88,
@@ -4087,9 +4087,33 @@ function closeBulkAdd(){
 }
 
 function confirmBulkAdd(){
-  const valid = bulkData.filter(r=>r.name&&r.name.trim());
-  if(valid.length===0){ alert('이름을 최소 1명 이상 입력하세요'); return; }
+  // 데이터가 한 글자라도 입력된 행만 대상 (완전 빈 행은 무시)
+  const filledRows = bulkData
+    .map((r,idx)=>({r,idx}))
+    .filter(({r})=>Object.values(r||{}).some(v=>v!==undefined&&v!==null&&String(v).trim()!==''));
+  if(filledRows.length===0){ alert('이름을 최소 1명 이상 입력하세요'); return; }
 
+  // 필수 필드 검증: 이름·직종·직급·소속
+  const REQUIRED = [
+    {key:'name',  label:'이름'},
+    {key:'role',  label:'직종'},
+    {key:'grade', label:'직급'},
+    {key:'dept',  label:'소속'},
+  ];
+  const incomplete = [];
+  filledRows.forEach(({r,idx})=>{
+    const missing = REQUIRED.filter(f=>!r[f.key]||!String(r[f.key]).trim()).map(f=>f.label);
+    if(missing.length>0){
+      const rowName = r.name && r.name.trim() ? r.name.trim() : '(이름 없음)';
+      incomplete.push(`${idx+1}행 [${rowName}]: ${missing.join(' · ')} 누락`);
+    }
+  });
+  if(incomplete.length>0){
+    alert(`아래 항목을 모두 입력한 뒤 저장하세요.\n\n[필수 항목] 이름 · 직종 · 직급 · 소속\n\n${incomplete.join('\n')}`);
+    return;
+  }
+
+  const valid = filledRows.map(({r})=>r); // 검증 통과한 행
   const colors=['#DBEAFE','#FEF3C7','#D1FAE5','#EDE9FE','#FCE7F3','#FFF7ED'];
   const tcs=['#1E3A5F','#78350F','#064E3B','#4C1D95','#831843','#7C2D12'];
   let maxId = EMPS.length>0 ? Math.max(...EMPS.map(e=>e.id)) : 0;
