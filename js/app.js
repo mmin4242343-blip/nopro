@@ -10226,20 +10226,33 @@ function _takeSyncedSnapshot(){
   } catch(e){ console.warn('스냅샷 실패:', e); }
 }
 
-// 서버 블롭과 로컬 블롭을 필드 단위로 머지.
-// 규칙: 서버값 우선 → 내가 편집 중인 필드(스냅샷과 다름)는 로컬 유지 →
-//       로컬에서 지운 필드는 서버값 무시.
+// 서버 블롭과 로컬 블롭을 필드 단위로 머지. 양쪽 삭제·추가·수정 모두 정확히 처리.
+// 핵심 규칙:
+//   - 로컬에서 삭제(snap에 있고 L에 없음) → 서버값 무시 (사용자 삭제 의도 보존)
+//   - 서버에서 삭제(snap에 있고 S에 없음) → 로컬값 제거 (다른 디바이스 삭제 전파)
+//     단, 로컬에서 dirty 수정 중이면 사용자 입력 보존 우선
+//   - 로컬 추가(snap에 없고 L에 있음) → 유지
+//   - 서버 추가(snap에 없고 S에 있음) → 흡수
+//   - 로컬 수정(L ≠ snap) → 로컬 우선
 function _mergeByField(local, server, snapshot){
   const L = local || {}; const S = server || {}; const snap = snapshot || {};
   const merged = {};
+  // 1단계: 서버값 채택 (단, 로컬에서 삭제한 키는 부활 X)
   Object.keys(S).forEach(k => {
-    // 로컬에서 삭제된 필드는 서버에서 부활시키지 않음
-    if((k in snap) && !(k in L)) return;
+    if((k in snap) && !(k in L)) return; // 로컬 삭제 → 부활 X
     merged[k] = S[k];
   });
+  // 2단계: 로컬 변경/신규 키 처리
   Object.keys(L).forEach(k => {
     const dirty = JSON.stringify(L[k]) !== JSON.stringify(snap[k]);
-    if(dirty || !(k in S)) merged[k] = L[k];
+    if(dirty){
+      // 로컬에서 수정 → 로컬 우선 (사용자 입력 보존, 서버 삭제도 무시)
+      merged[k] = L[k];
+    } else if(!(k in S) && !(k in snap)){
+      // 로컬에서 새로 추가 (서버·스냅샷에 없음) → 유지
+      merged[k] = L[k];
+    }
+    // (k in snap) && !(k in S) && !dirty → 서버 삭제 + 로컬 미수정 → 전파 (merged에 안 추가)
   });
   return merged;
 }
@@ -10282,7 +10295,7 @@ function _mergeEmpFields(local, server, snap){
 }
 
 // emp 배열을 id 기준으로 필드 단위 머지.
-// _mergeByField로 직원 단위 add/delete 처리하되, 같은 id 내부는 _mergeEmpFields로 필드 단위 머지.
+// 양쪽 삭제·추가·수정 정확히 처리 — 서버에서 삭제된 직원은 부활시키지 않음.
 function _mergeEmpsArrayByField(localArr, serverArr, snapArr){
   const toMap = arr => Object.fromEntries((arr||[]).map(x => [String(x.id), x]));
   const Lmap = toMap(localArr);
@@ -10296,13 +10309,22 @@ function _mergeEmpsArrayByField(localArr, serverArr, snapArr){
     const snapEmp = SNAPmap[id];
     if(!lEmp && !sEmp) return;
     if(!lEmp){
-      // 로컬에 없음 — 스냅샷에 있었으면 로컬에서 의도적 삭제 → 부활 X
-      if(snapEmp) return;
-      merged.push(sEmp);  // 서버가 새로 추가
+      // 로컬에 없음
+      if(snapEmp) return;       // 로컬 삭제 → 부활 X (사용자 삭제 의도 보존)
+      merged.push(sEmp);        // 서버가 새로 추가 → 흡수
       return;
     }
     if(!sEmp){
-      // 서버에 없음 — 로컬값 유지 (서버 측 삭제는 자동 전파 안 함, 데이터 보존 우선)
+      // 서버에 없음
+      if(snapEmp){
+        // 스냅샷에 있었는데 서버에 없음 = 다른 디바이스에서 삭제됨
+        // 로컬에서 dirty 수정 중이면 보존, 아니면 삭제 전파
+        const dirty = JSON.stringify(lEmp) !== JSON.stringify(snapEmp);
+        if(dirty) merged.push(lEmp);  // 사용자 수정 중 → 보존 (마음 바뀐 거면 다시 저장)
+        // 미수정 → 삭제 전파 (merged에 안 추가)
+        return;
+      }
+      // 스냅샷에도 없음 → 로컬 신규 → 유지
       merged.push(lEmp);
       return;
     }
