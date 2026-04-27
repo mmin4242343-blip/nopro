@@ -8850,56 +8850,93 @@ function exportCompanyExcel(){
 // 📋 연차관리 엑셀 - 프리미엄
 // ══════════════════════════════════════════════════════
 function exportLeaveExcel(){
-  const wb=XLSX.utils.book_new(); const ws={}; let R=0;
+  const wb=XLSX.utils.book_new();
   const C=XLS.C; const S=XLS.S;
 
-  xlsWrite(ws,XLSX.utils.encode_cell({r:0,c:0}),`${leaveYear}년 연차 관리 현황`,{
-    font:{bold:true,sz:18,color:{rgb:C.navy},name:'맑은 고딕'},
-    fill:{fgColor:{rgb:'EFF6FF'}},alignment:{horizontal:'left',vertical:'center'},
-  });
-  xlsMerge(ws,0,0,0,6);
-  xlsWrite(ws,XLSX.utils.encode_cell({r:1,c:0}),`기준연도: ${leaveYear}년  ·  출력일: ${new Date().toLocaleDateString('ko-KR')}`,{
-    font:{sz:9,color:{rgb:C.gray2},name:'맑은 고딕'},
-    fill:{fgColor:{rgb:'EFF6FF'}},alignment:{horizontal:'left',vertical:'center'},
-  });
-  xlsMerge(ws,1,0,1,8);
-  ws['!rows']=[{hpt:28},{hpt:16}];
-  R=2;
+  // 화면 필터 적용 (주야간/내외국인/급여방식/소속/부서분류/검색)
+  const filteredEmps = applyCommonFilter([...EMPS], 'leave');
 
-  const hdrs=['이름','직종','입사일','총연차','사용연차','잔여연차','연차형태','1일수당(원)','연차수당합계(원)'];
-  const hdrBgs=[C.navy,C.navy2,C.teal,C.blue,C.orange2,C.green,C.gray,C.purple2,C.teal];
-  hdrs.forEach((h,ci)=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),h,S.mainHdr(hdrBgs[ci],'FFFFFF','center')));
-  ws['!rows'].push({hpt:26});
-  R++;
+  // 직접고용 / 아웃소싱 분리 — emp.dept 텍스트의 '아웃소싱|파견|도급|외주|위탁' 키워드 기반
+  const directEmps     = filteredEmps.filter(e => !isOutsource(e));
+  const outsourcedEmps = filteredEmps.filter(e =>  isOutsource(e));
 
-  const leaveEmps=EMPS.filter(e=>{
-    if(payFilter!=='all'&&(e.payMode||'fixed')!==payFilter) return false;
-    return true;
-  });
+  // 단일 시트 작성 헬퍼
+  const writeSheet = (sheetName, emps) => {
+    const ws={}; let R=0;
 
-  leaveEmps.forEach((emp,ei)=>{
-    const lv=calcLeaveForYear(emp,leaveYear);
-    const payAmt=getLeavePayAmount(emp,leaveYear);
-    const type=leaveSettings['type_'+emp.id]==='promote'?'연차촉진':'연차수당';
-    const bg=xlsRowBg(ei);
-    const total=Math.round(lv.used*payAmt);
+    // 타이틀
+    xlsWrite(ws,XLSX.utils.encode_cell({r:0,c:0}),`${leaveYear}년 ${sheetName} 연차 관리 현황`,{
+      font:{bold:true,sz:18,color:{rgb:C.navy},name:'맑은 고딕'},
+      fill:{fgColor:{rgb:'EFF6FF'}},alignment:{horizontal:'left',vertical:'center'},
+    });
+    xlsMerge(ws,0,0,0,8);
+    // 부제: 기준연도 · 인원수 · 출력일
+    xlsWrite(ws,XLSX.utils.encode_cell({r:1,c:0}),
+      `기준연도: ${leaveYear}년  ·  ${sheetName} ${emps.length}명  ·  출력일: ${new Date().toLocaleDateString('ko-KR')}`,{
+      font:{sz:9,color:{rgb:C.gray2},name:'맑은 고딕'},
+      fill:{fgColor:{rgb:'EFF6FF'}},alignment:{horizontal:'left',vertical:'center'},
+    });
+    xlsMerge(ws,1,0,1,8);
+    ws['!rows']=[{hpt:28},{hpt:16}];
+    R=2;
 
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),emp.name,S.cell(C.navy,bg,true,'left'));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),emp.role||'',S.cell(C.gray,bg,false,'left'));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),emp.join||'',S.cell(C.gray,bg,false,'center'));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),lv.total,S.num(C.blue,C.blue4,true));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),lv.used,S.num(lv.used>0?C.orange2:C.gray,lv.used>0?C.orange4:bg,lv.used>0));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),lv.remain,S.num(lv.remain>5?C.green:lv.remain>0?C.orange2:C.rose,lv.remain>0?C.green4:C.rose4,true));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),type,S.accent(type==='연차촉진'?C.orange2:C.teal,type==='연차촉진'?C.orange4:C.teal4));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),Math.round(payAmt),S.num(C.navy,bg));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),total,S.total('FFFFFF',total>0?C.teal:C.gray));
-    ws['!rows'].push({hpt:20});
+    // 헤더
+    const hdrs=['이름','직종','입사일','총연차','사용연차','잔여연차','연차형태','1일수당(원)','연차수당합계(원)'];
+    const hdrBgs=[C.navy,C.navy2,C.teal,C.blue,C.orange2,C.green,C.gray,C.purple2,C.teal];
+    hdrs.forEach((h,ci)=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),h,S.mainHdr(hdrBgs[ci],'FFFFFF','center')));
+    ws['!rows'].push({hpt:26});
     R++;
-  });
 
-  ws['!cols']=[{wch:10},{wch:8},{wch:12},{wch:7},{wch:7},{wch:7},{wch:10},{wch:12},{wch:14}];
-  xlsRange(ws,0,0,R-1,8);
-  XLSX.utils.book_append_sheet(wb,ws,`${leaveYear}년 연차현황`);
+    // 데이터 (없으면 빈 안내 행)
+    if(emps.length === 0){
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),'해당 인원 없음',{
+        font:{sz:11,italic:true,color:{rgb:C.gray2},name:'맑은 고딕'},
+        fill:{fgColor:{rgb:'F8FAFC'}},alignment:{horizontal:'center',vertical:'center'},
+      });
+      xlsMerge(ws,R,0,R,8);
+      ws['!rows'].push({hpt:24});
+      R++;
+    } else {
+      let grandTotal = 0;
+      emps.forEach((emp,ei)=>{
+        const lv=calcLeaveForYear(emp,leaveYear);
+        const payAmt=getLeavePayAmount(emp,leaveYear);
+        const type=leaveSettings['type_'+emp.id]==='promote'?'연차촉진':'연차수당';
+        const bg=xlsRowBg(ei);
+        const total=Math.round(lv.used*payAmt);
+        grandTotal += total;
+
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),emp.name,S.cell(C.navy,bg,true,'left'));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),emp.role||'',S.cell(C.gray,bg,false,'left'));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),emp.join||'',S.cell(C.gray,bg,false,'center'));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),lv.total,S.num(C.blue,C.blue4,true));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),lv.used,S.num(lv.used>0?C.orange2:C.gray,lv.used>0?C.orange4:bg,lv.used>0));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),lv.remain,S.num(lv.remain>5?C.green:lv.remain>0?C.orange2:C.rose,lv.remain>0?C.green4:C.rose4,true));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),type,S.accent(type==='연차촉진'?C.orange2:C.teal,type==='연차촉진'?C.orange4:C.teal4));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),Math.round(payAmt),S.num(C.navy,bg));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),total,S.total('FFFFFF',total>0?C.teal:C.gray));
+        ws['!rows'].push({hpt:20});
+        R++;
+      });
+
+      // 합계 행
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),`${sheetName} 합계 (${emps.length}명)`,S.mainHdr(C.navy,'FFFFFF','left'));
+      xlsMerge(ws,R,0,R,7);
+      [1,2,3,4,5,6,7].forEach(c=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c}),'',S.mainHdr(C.navy)));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),grandTotal,S.total('FFFFFF','0D47A1'));
+      ws['!rows'].push({hpt:26});
+      R++;
+    }
+
+    ws['!cols']=[{wch:10},{wch:8},{wch:12},{wch:7},{wch:7},{wch:7},{wch:10},{wch:12},{wch:14}];
+    xlsRange(ws,0,0,R-1,8);
+    XLSX.utils.book_append_sheet(wb,ws,sheetName);
+  };
+
+  // 두 시트 작성
+  writeSheet('직접고용',  directEmps);
+  writeSheet('아웃소싱',  outsourcedEmps);
+
   XLSX.writeFile(wb,`연차관리_${leaveYear}년.xlsx`);
 }
 
