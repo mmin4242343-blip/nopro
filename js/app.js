@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-28-2';
+const CLIENT_BUILD = '2026-04-28-3';
 let _buildMismatchWarned = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -10357,6 +10357,12 @@ function _takeSyncedSnapshot(){
 //   - 로컬 수정(L ≠ snap) → 로컬 우선
 function _mergeByField(local, server, snapshot){
   const L = local || {}; const S = server || {}; const snap = snapshot || {};
+  // 🛡️ 안전장치: 서버가 빈 객체이고 로컬에 데이터 있음 → 머지 포기, 로컬 보존
+  // (서버 데이터 오류·race condition으로부터 로컬 데이터 보호)
+  if(Object.keys(S).length === 0 && Object.keys(L).length > 0){
+    console.warn('🛡️ 머지 보호: 서버 빈 객체 + 로컬 데이터 있음 → 로컬 그대로 보존');
+    return {...L};
+  }
   const merged = {};
   // 1단계: 서버값 채택 (단, 로컬에서 삭제한 키는 부활 X)
   Object.keys(S).forEach(k => {
@@ -10418,6 +10424,12 @@ function _mergeEmpFields(local, server, snap){
 // emp 배열을 id 기준으로 필드 단위 머지.
 // 양쪽 삭제·추가·수정 정확히 처리 — 서버에서 삭제된 직원은 부활시키지 않음.
 function _mergeEmpsArrayByField(localArr, serverArr, snapArr){
+  // 🛡️ 안전장치: 서버 배열이 비어있는데 로컬에 데이터 있음 → 머지 포기, 로컬 보존
+  // (서버 데이터 오류·race condition·잘못된 빈값 응답 등으로부터 로컬 데이터 보호)
+  if((!serverArr || serverArr.length === 0) && localArr && localArr.length > 0){
+    console.warn('🛡️ 머지 보호: 서버 빈 배열 + 로컬 데이터 있음 → 로컬 그대로 보존');
+    return [...localArr];
+  }
   const toMap = arr => Object.fromEntries((arr||[]).map(x => [String(x.id), x]));
   const Lmap = toMap(localArr);
   const Smap = toMap(serverArr);
