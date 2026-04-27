@@ -16,6 +16,24 @@
     Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
     Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; media-src 'self' data:; connect-src 'self' https://cdn.jsdelivr.net https://translate.googleapis.com https://rjddrkrbuwbplhwdlotb.supabase.co; img-src 'self' data: blob: https://rjddrkrbuwbplhwdlotb.supabase.co; frame-ancestors 'none'"
 
+# 🛡️ 캐시 무효화 — 옛 코드로 인한 데이터 사고 재발 방지
+# index.html은 항상 서버 검증 (새 ?v= 쿼리 발견 시 즉시 새 JS 로드)
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+# JS/CSS는 ?v= 쿼리로 cache-bust. 쿼리 다르면 새 파일.
+# 쿼리 같으면 1시간 캐시 (네트워크 부하 절감)
+[[headers]]
+  for = "/js/*"
+  [headers.values]
+    Cache-Control = "public, max-age=3600, must-revalidate"
+[[headers]]
+  for = "/css/*"
+  [headers.values]
+    Cache-Control = "public, max-age=3600, must-revalidate"
+
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
