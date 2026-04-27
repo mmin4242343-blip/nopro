@@ -1,5 +1,26 @@
 // ══ API 설정 ══
 const API_BASE = '/api';
+// 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
+// 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
+// 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
+const CLIENT_BUILD = '2026-04-28-1';
+let _buildMismatchWarned = false;
+function _checkServerBuild(serverBuild){
+  if(!serverBuild) return;
+  if(serverBuild === CLIENT_BUILD) return;
+  if(_buildMismatchWarned) return;
+  _buildMismatchWarned = true;
+  console.warn('🏷️ 빌드 버전 불일치:', {client:CLIENT_BUILD, server:serverBuild});
+  if(typeof showSyncToast==='function'){
+    showSyncToast(
+      '🆕 새 버전이 배포되었습니다\n\n'+
+      '안정성 향상을 위해 페이지를 새로고침해주세요.\n'+
+      'Windows: Ctrl+F5  ·  Mac: Cmd+Shift+R\n\n'+
+      `(현재 ${CLIENT_BUILD} → 최신 ${serverBuild})`,
+      'warn', 15000
+    );
+  }
+}
 const AUTH_REFRESH_INTERVAL_MS = 20 * 60 * 1000; // 쿠키 수명 7d 대비 20분마다 /auth-verify 호출해 슬라이딩 갱신 (안전망)
 // 활동 기반 자동 갱신: 일반 API 호출 성공 시 30분 쿨다운으로 백그라운드 verify 트리거.
 // setInterval은 탭 백그라운드 throttle/슬립 영향을 받지만 활동 기반은 클릭/저장 직후 즉시 실행됨.
@@ -555,7 +576,10 @@ async function safeItemSave(key, value){
   // 응답 처리: 버전 갱신 + 충돌 발생 시 통보
   if(resp){
     if(resp.versions && typeof _serverVersions!=='undefined'){
+      const savedKeys = Object.keys(resp.versions);
       Object.entries(resp.versions).forEach(([k,v])=>{ if(v) _serverVersions[k] = v; });
+      // 🔁 같은 브라우저 다른 탭에 알림
+      if(savedKeys.length && typeof _broadcastSaved==='function') _broadcastSaved(savedKeys);
     }
     if(resp.conflicts && resp.conflicts.length && typeof handleConflicts==='function'){
       handleConflicts(resp.conflicts);
@@ -594,7 +618,23 @@ function saveLS(){
     localStorage.setItem(LS.BN,JSON.stringify(BONUS_REC));
     localStorage.setItem(LS.AL,JSON.stringify(ALLOWANCE_REC));
     sfSave();
-  }catch(e){console.warn(e);}
+  }catch(e){
+    console.warn(e);
+    // 🛡️ localStorage 용량 초과 감지 — 사용자에게 명확히 알림 (기존 토스트 1회만)
+    const isQuota = e && (e.name==='QuotaExceededError' || e.code===22 || e.code===1014 || /quota|storage/i.test(String(e.message||'')));
+    if(isQuota && typeof showSyncToast==='function' && !window._quotaToastShown){
+      window._quotaToastShown = true;
+      showSyncToast(
+        '⚠️ 브라우저 저장공간 한도 초과 (약 5~10MB)\n\n'+
+        '데이터는 서버에 정상 저장되지만 이 컴퓨터 화면이 느려질 수 있습니다.\n'+
+        '안전교육 사진이 너무 많은 경우 일부 폴더에서 사진 일부만 보일 수 있습니다.\n\n'+
+        '대처: F12 → Application → Storage 에서 nopro 도메인 데이터 확인',
+        'error', 12000
+      );
+      // 1분 후 플래그 리셋 (필요 시 다시 알림)
+      setTimeout(()=>{ window._quotaToastShown = false; }, 60000);
+    }
+  }
   _hasUnsavedChanges = true;
   // Supabase 자동 동기화 (즉시 실행, debounce)
   try{
@@ -9864,7 +9904,10 @@ async function sbSaveAll(companyId) {
   const _applyResp = (resp) => {
     if(!resp) return;
     if(resp.versions){
+      const savedKeys = Object.keys(resp.versions);
       Object.entries(resp.versions).forEach(([k,v])=>{ if(v) _serverVersions[k] = v; });
+      // 🔁 다른 탭에 즉시 알림 (같은 브라우저 멀티탭 동기화)
+      if(savedKeys.length) _broadcastSaved(savedKeys);
     }
     if(resp.conflicts && resp.conflicts.length){
       handleConflicts(resp.conflicts);
@@ -9906,6 +9949,32 @@ let _pollBackoffMs = 0;
 let _serverVersions = {};
 let _conflictHandling = false;
 
+// ══════════════════════════════════════════════════════
+// 🔁 BroadcastChannel — 같은 브라우저의 다른 탭 간 즉시 동기화
+// 한 탭이 저장 성공하면 다른 탭에 알림 → 다른 탭은 즉시 polling 트리거
+// 같은 사용자가 멀티탭으로 작업할 때 이벤트 누락 차단
+// ══════════════════════════════════════════════════════
+let _bc = null;
+try {
+  if(typeof BroadcastChannel !== 'undefined'){
+    _bc = new BroadcastChannel('nopro-sync');
+    _bc.onmessage = (ev) => {
+      if(!ev || !ev.data) return;
+      // 다른 탭에서 저장됨 — 즉시 폴링으로 최신 상태 가져오기
+      // (메모리에 미저장 변경 있으면 replaceIfClean이 자동 보호)
+      if(ev.data.type === 'data-saved'){
+        if(typeof pollForUpdates === 'function'){
+          // 1초 후 polling — 서버 commit 완료 시간 확보
+          setTimeout(()=>{ try { pollForUpdates(); } catch(e){} }, 1000);
+        }
+      }
+    };
+  }
+} catch(e){ console.warn('BroadcastChannel 초기화 실패:', e); }
+function _broadcastSaved(keys){
+  try { if(_bc && keys && keys.length) _bc.postMessage({type:'data-saved', keys, ts:Date.now()}); } catch(e){}
+}
+
 async function handleConflicts(conflicts){
   if(!conflicts || !conflicts.length) return;
   if(_conflictHandling) return; // 동시 충돌 진행 중이면 패스 (다음 디바운스에서 자연 처리)
@@ -9938,7 +10007,8 @@ async function handleConflicts(conflicts){
 
       if(k === 'emps'){
         const snapArr = (typeof snap.emps==='string') ? (function(){try{return JSON.parse(snap.emps);}catch(e){return [];}})() : (snap.emps||[]);
-        merged = _mapToArr(_mergeByField(_arrToMap(EMPS), _arrToMap(server.emps||[]), _arrToMap(snapArr)));
+        // 🛡️ 필드 단위 머지 — 같은 직원의 이름·직급·전화 등을 동시 수정 시 모두 보존
+        merged = _mergeEmpsArrayByField(EMPS, server.emps||[], snapArr);
         EMPS = merged;
         if(typeof sortEMPS==='function') sortEMPS();
         localStorage.setItem('npm5_emps', JSON.stringify(EMPS));
@@ -10026,7 +10096,18 @@ async function handleConflicts(conflicts){
       }
     }
 
-    console.log('🔄 자동 머지 완료:', conflicts.map(c=>c.key).join(', '));
+    const keyLabels = {emps:'직원', rec:'출퇴근/연차', tbk:'임시휴게', bonus:'상여금', allow:'수당',
+      tax:'세금', safety:'안전교육', bk:'기본휴게', pol:'급여설정', leave_overrides:'연차',
+      leave_settings:'연차설정', folders:'폴더'};
+    const keyList = conflicts.map(c => keyLabels[c.key] || c.key).join(', ');
+    console.log('🔄 자동 머지 완료:', keyList);
+    // 사용자에게 가시화 — 작은 토스트, 본인 입력은 보존됐다는 안내
+    if(typeof showSyncToast === 'function'){
+      showSyncToast(
+        `🔄 다른 디바이스 변경 감지 — 자동 합쳐짐 (${keyList})\n본인 입력은 그대로 보존되었습니다.`,
+        'ok', 4000
+      );
+    }
   } catch(e) {
     console.warn('자동 머지 실패:', e);
   } finally {
@@ -10070,6 +10151,74 @@ function _mergeByField(local, server, snapshot){
   return merged;
 }
 
+// 🛡️ 직원 객체 필드 단위 머지 — 같은 직원의 다른 필드를 두 디바이스가 동시 수정해도
+// 둘 다 보존. (예: A가 이름 수정, B가 직급 수정 → 머지 결과에 둘 다 반영)
+// 규칙:
+//   - 로컬에서 변경된 필드(스냅샷과 다름) → 로컬 우선
+//   - 로컬은 변경 안 했고 서버만 변경 → 서버 우선
+//   - 양쪽 다 변경(같은 필드) → 로컬 우선 (사용자 입력 절대 보존 원칙)
+//   - 로컬에 있는 필드는 절대 삭제 안 함 (보존성 ↑)
+function _mergeEmpFields(local, server, snap){
+  const L = local || {}; const S = server || {}; const SNAP = snap || {};
+  const merged = {};
+  // 모든 필드 키 수집 (서버+로컬+스냅샷)
+  const allKeys = new Set([...Object.keys(L), ...Object.keys(S), ...Object.keys(SNAP)]);
+  allKeys.forEach(k => {
+    const inL = k in L, inS = k in S, inSnap = k in SNAP;
+    const lv = L[k], sv = S[k], snapv = SNAP[k];
+    if(inL){
+      const dirty = JSON.stringify(lv) !== JSON.stringify(snapv);
+      if(dirty){
+        merged[k] = lv;        // 로컬 변경분 우선
+      } else if(inS){
+        merged[k] = sv;        // 로컬 미변경, 서버값 채택
+      } else {
+        merged[k] = lv;        // 서버에 없으면 로컬값 유지
+      }
+    } else if(inS){
+      // 로컬에 없음
+      if(inSnap && JSON.stringify(snapv) === JSON.stringify(sv)){
+        // 스냅샷=서버라면 로컬에서 의도적으로 지운 것 → 부활 X
+        return;
+      }
+      merged[k] = sv;          // 서버에 새로 추가된 필드 → 흡수
+    }
+    // L,S 모두 없고 snap에만 있으면 → 양쪽 다 삭제 → merged에도 없음 ✓
+  });
+  return merged;
+}
+
+// emp 배열을 id 기준으로 필드 단위 머지.
+// _mergeByField로 직원 단위 add/delete 처리하되, 같은 id 내부는 _mergeEmpFields로 필드 단위 머지.
+function _mergeEmpsArrayByField(localArr, serverArr, snapArr){
+  const toMap = arr => Object.fromEntries((arr||[]).map(x => [String(x.id), x]));
+  const Lmap = toMap(localArr);
+  const Smap = toMap(serverArr);
+  const SNAPmap = toMap(snapArr);
+  const allIds = new Set([...Object.keys(Lmap), ...Object.keys(Smap), ...Object.keys(SNAPmap)]);
+  const merged = [];
+  allIds.forEach(id => {
+    const lEmp = Lmap[id];
+    const sEmp = Smap[id];
+    const snapEmp = SNAPmap[id];
+    if(!lEmp && !sEmp) return;
+    if(!lEmp){
+      // 로컬에 없음 — 스냅샷에 있었으면 로컬에서 의도적 삭제 → 부활 X
+      if(snapEmp) return;
+      merged.push(sEmp);  // 서버가 새로 추가
+      return;
+    }
+    if(!sEmp){
+      // 서버에 없음 — 로컬값 유지 (서버 측 삭제는 자동 전파 안 함, 데이터 보존 우선)
+      merged.push(lEmp);
+      return;
+    }
+    // 양쪽 다 존재 → 필드 단위 머지
+    merged.push(_mergeEmpFields(lEmp, sEmp, snapEmp));
+  });
+  return merged;
+}
+
 async function pollForUpdates(){
   if(document.hidden) return;
   const _sess = (()=>{ try { return JSON.parse(localStorage.getItem('nopro_session')||'null'); } catch(e){ return null; }})();
@@ -10077,6 +10226,8 @@ async function pollForUpdates(){
   try {
     const server = await apiFetch('/data-load','POST',{});
     if(!server) return;
+    // 🏷️ 빌드 버전 체크
+    if(server._serverBuild) _checkServerBuild(server._serverBuild);
     // ⚠️ 낙관적 잠금용 _serverVersions은 이 함수 안에서 "실제로 로컬이 서버와 동기화된 키"만 갱신.
     // 미저장 변경이 있는 키는 옛 버전 그대로 유지 → 다음 저장 시 충돌 감지로 stale-overwrite 차단.
     let changed = false;
@@ -10267,6 +10418,8 @@ async function sbLoadAll(companyId) {
   if(map && map._versions){
     _serverVersions = {..._serverVersions, ...map._versions};
   }
+  // 🏷️ 빌드 버전 비교 — 옛 캐시된 클라이언트 감지
+  if(map && map._serverBuild) _checkServerBuild(map._serverBuild);
 
   if('emps' in map)            { EMPS = map.emps || []; localStorage.setItem('npm5_emps', JSON.stringify(EMPS)); }
   sortEMPS();
