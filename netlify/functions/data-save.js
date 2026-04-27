@@ -72,9 +72,6 @@ export const handler = async (event) => {
       }
 
       // 🛡️ 낙관적 잠금 (강화판): 옛 캐시된 클라이언트가 가드를 우회하지 못하게 함
-      // - expectedUpdatedAt 있고 serverUpdatedAt보다 옛것 → 정상 충돌 거부
-      // - PROTECTED 키에 expectedUpdatedAt 미전송 + 서버에 row 이미 존재 → 옛 클라이언트로 판단,
-      //   STALE-OVERWRITE 방지 위해 충돌 처리. 신규 row(serverUpdatedAt=null)는 통과시킴(첫 저장)
       const expectedUpdatedAt = item.expectedUpdatedAt || null;
       const isStaleOverwrite = expectedUpdatedAt && serverUpdatedAt && new Date(serverUpdatedAt) > new Date(expectedUpdatedAt);
       const isLegacyClientRisk = !expectedUpdatedAt && serverUpdatedAt && PROTECTED.has(item.key);
@@ -87,6 +84,29 @@ export const handler = async (event) => {
         });
         console.warn(`🛡️ 낙관적 잠금: ${isLegacyClientRisk?'레거시 클라이언트 차단':'충돌'} (company=${companyId}, key=${item.key}, by=${changedBy}, expected=${expectedUpdatedAt}, server=${serverUpdatedAt})`);
         continue;
+      }
+
+      // 🛡️ 6중 가드: 사이즈 급감 자동 차단 (낙관적 잠금이 어떻게든 뚫려도 최종 방어선)
+      // PROTECTED 키가 30% 이상 줄어들면 stale-overwrite로 간주, 무조건 거부.
+      // 정상적인 사용 패턴에서 30% 감소는 거의 없음 (정당한 대량 삭제는 보통 단계적).
+      // 만약 정말 의도된 30%+ 삭제라면 → 문의 후 SHRINK_OK 플래그로 우회.
+      if (PROTECTED.has(item.key) && oldValue) {
+        const oldSize = oldValue.length;
+        const newSize = dataStr.length;
+        const SHRINK_THRESHOLD = 0.30; // 30% 이상 감소 시 차단
+        const MIN_LOSS_BYTES = 5000;   // 5KB 미만 차이는 무시 (신규/소규모 정상 동작)
+        const lostBytes = oldSize - newSize;
+        if (lostBytes > MIN_LOSS_BYTES && lostBytes / oldSize > SHRINK_THRESHOLD) {
+          conflicts.push({
+            key: item.key,
+            reason: 'size-drop-blocked',
+            oldSize,
+            newSize,
+            lostBytes,
+          });
+          console.error(`🚨 사이즈 급감 차단! (company=${companyId}, key=${item.key}, by=${changedBy}, ${oldSize}B → ${newSize}B, -${lostBytes}B = ${Math.round(lostBytes/oldSize*100)}% 감소). 데이터 손실 방지 위해 거부.`);
+          continue;
+        }
       }
 
       // atomic upsert (레이스 컨디션 방지)
