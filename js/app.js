@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-28-7';
+const CLIENT_BUILD = '2026-04-28-8';
 let _buildMismatchWarned = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -3576,14 +3576,14 @@ function renderEmps(){
       <td><span style="cursor:grab;color:var(--ink3);font-size:14px;padding:0 4px;">⠿</span></td>
       <td style="text-align:center;font-size:11px;font-weight:700;color:#94A3B8;padding:0 4px">${rowNum}</td>
       <td><div style="display:flex;gap:2px;align-items:center">
-        <input class="ei2" value="${esc(e.empNo||'')}" onchange="updE(${e.id},'empNo',this.value)" style="text-align:center;font-size:10px;flex:1" placeholder="사번" autocomplete="off">
+        <input class="ei2" value="${esc(e.empNo||'')}" oninput="updE(${e.id},'empNo',this.value)" style="text-align:center;font-size:10px;flex:1" placeholder="사번" autocomplete="off">
         ${!e.empNo&&POL.empNoEnabled?`<button onclick="showGenEmpNo(${e.id})" style="padding:2px 4px;font-size:8px;border:1px solid var(--navy2);border-radius:4px;background:var(--nbg);color:var(--navy2);cursor:pointer;white-space:nowrap;font-weight:700" title="사번 자동 생성 (사이트코드 미설정 시 안내 표시)">생성</button>`:''}
       </div></td>
-      <td><input class="ei2" value="${esc(e.name)}" onchange="updE(${e.id},'name',this.value)" placeholder="이름" autocomplete="off"></td>
-      <td><input class="ei2" value="${esc(e.role)}" onchange="updE(${e.id},'role',this.value)" autocomplete="off"></td>
-      <td><input class="ei2" list="dept-cat-options" value="${esc(e.deptCat||'')}" placeholder="사무" onchange="updE(${e.id},'deptCat',this.value.trim())" style="text-align:center;background:${e.deptCat?'#ECFDF5':'transparent'};color:${e.deptCat?'#047857':'var(--ink2)'};font-weight:${e.deptCat?'700':'500'};font-size:10px" title="부서 분류 (목록 선택 또는 직접 입력 — 새 부서 입력 시 자동 추가)" autocomplete="off" /></td>
-      <td><input class="ei2" value="${esc(e.grade||'')}" onchange="updE(${e.id},'grade',this.value)" placeholder="직급" autocomplete="off"></td>
-      <td><input class="ei2" value="${esc(e.dept||'')}" onchange="updE(${e.id},'dept',this.value)" placeholder="인천본점" autocomplete="off"></td>
+      <td><input class="ei2" value="${esc(e.name)}" oninput="updE(${e.id},'name',this.value)" placeholder="이름" autocomplete="off"></td>
+      <td><input class="ei2" value="${esc(e.role)}" oninput="updE(${e.id},'role',this.value)" autocomplete="off"></td>
+      <td><input class="ei2" list="dept-cat-options" value="${esc(e.deptCat||'')}" placeholder="사무" oninput="updE(${e.id},'deptCat',this.value.trim())" style="text-align:center;background:${e.deptCat?'#ECFDF5':'transparent'};color:${e.deptCat?'#047857':'var(--ink2)'};font-weight:${e.deptCat?'700':'500'};font-size:10px" title="부서 분류 (목록 선택 또는 직접 입력 — 입력 즉시 저장)" autocomplete="off" /></td>
+      <td><input class="ei2" value="${esc(e.grade||'')}" oninput="updE(${e.id},'grade',this.value)" placeholder="직급" autocomplete="off"></td>
+      <td><input class="ei2" value="${esc(e.dept||'')}" oninput="updE(${e.id},'dept',this.value)" placeholder="인천본점" autocomplete="off"></td>
       <td>
         <div style="display:flex;gap:3px;align-items:center">
           <input class="ei2" value="${esc(e.rrnFront||'')}" maxlength="6" placeholder="앞6자리"
@@ -3797,11 +3797,16 @@ function updE(id,f,v){
       }
     }
   }
-  // shift(주야간) 변경 시 EMPS 배열 자체 재정렬
+  // 🚀 구조 변경(주야간/퇴사) → 정렬·전체 재렌더 필요
   if(f==='shift'||f==='leave'){
     sortEMPS();
+    saveLS();renderSb();renderTable();renderEmps();
+    return;
   }
-  saveLS();renderSb();renderTable();renderEmps();
+  // 🚀 단순 텍스트·셀 편집 → 데이터만 저장 (재렌더 X — 타이핑 중 포커스 보존)
+  // oninput으로 매 키입력마다 호출되어도 입력 흐름 끊기지 않음.
+  // 다른 탭 전환·페이지 진입 시 자연스럽게 최신값 반영됨.
+  saveLS();
 }
 
 // ══════════════════════════════════════
