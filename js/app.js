@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-28-8';
+const CLIENT_BUILD = '2026-04-28-9';
 let _buildMismatchWarned = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -725,10 +725,27 @@ function _flushSaveOnUnload(){
     navigator.sendBeacon((typeof API_BASE!=='undefined'?API_BASE:'')+'/data-save', blob);
   }catch(e){ console.warn('beacon 저장 실패:', e); }
 }
-window.addEventListener('pagehide', _flushSaveOnUnload);
-window.addEventListener('beforeunload', _flushSaveOnUnload);
+
+// 🛡️ 페이지 떠나기 직전 활성 input/textarea blur 처리 — 미커밋 입력값을 onchange로 강제 저장
+// 사용자가 휴게시간·출퇴근시간·설정 칸 등 어떤 칸이든 타이핑 후 blur 안 하고 F5/탭닫기 해도
+// 이 함수가 활성 input을 blur시켜 onchange 발동 → updE 등이 메모리·localStorage에 반영됨.
+// 그 후 _flushSaveOnUnload가 sendBeacon으로 서버까지 도달 보장.
+function _blurActiveInputBeforeFlush(){
+  try {
+    const ae = document.activeElement;
+    if(ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)){
+      ae.blur();
+    }
+  } catch(e){}
+}
+function _safeUnloadFlush(){
+  _blurActiveInputBeforeFlush();
+  _flushSaveOnUnload();
+}
+window.addEventListener('pagehide', _safeUnloadFlush);
+window.addEventListener('beforeunload', _safeUnloadFlush);
 document.addEventListener('visibilitychange', () => {
-  if(document.visibilityState === 'hidden') _flushSaveOnUnload();
+  if(document.visibilityState === 'hidden') _safeUnloadFlush();
 });
 
 // 미저장 변경사항이 있으면 탭 닫기 전에 브라우저 네이티브 확인창 표시
