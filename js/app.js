@@ -195,6 +195,16 @@ const DOW=['일','월','화','수','목','금','토'];
 const dim=(y,m)=>new Date(y,m,0).getDate();
 const fdow=(y,m)=>new Date(y,m-1,1).getDay();
 const rk=(id,y,m,d)=>`${id}_${y}-${pad(m)}-${pad(d)}`;
+// 🛡️ 입사일/퇴사일 등 'YYYY-MM-DD' 문자열을 LOCAL 자정으로 파싱.
+// new Date('2026-04-20')은 UTC 자정으로 파싱되어 KST에선 09:00이 됨 → 같은 날짜 대비 9시간 늦어짐
+// → 입사 당일(예: 4/20 입사자가 4/20에 표시 안 됨) 누락 버그 발생.
+// 이 함수는 항상 로컬 자정으로 파싱하여 날짜 비교를 안전하게 만듦.
+function parseEmpDate(s){
+  if(!s) return null;
+  const m=String(s).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(!m) return new Date(s); // 비표준 형식은 기존 동작 유지
+  return new Date(+m[1], +m[2]-1, +m[3], 0, 0, 0, 0);
+}
 const pT=t=>{if(!t||!t.includes(':'))return null;const[h,m]=t.split(':').map(Number);return h*60+m;};
 const rEnd=(s,e)=>e<=s?e+1440:e;
 // FP 보정 epsilon: 부동소수점 표현 오차(예: 32.98 → 32.979999...)로 인해
@@ -373,8 +383,8 @@ function confirmPayMonth(y, m){
   const monthEnd = new Date(y, m, 0);
   const monthStart = new Date(y, m-1, 1);
   const activeEmps = EMPS.filter(e=>{
-    if(e.join){const jd=new Date(e.join);if(jd>monthEnd)return false;}
-    if(e.leave){const ld=new Date(e.leave);if(ld<monthStart)return false;}
+    if(e.join){const jd=parseEmpDate(e.join);if(jd>monthEnd)return false;}
+    if(e.leave){const ld=parseEmpDate(e.leave);if(ld<monthStart)return false;}
     return true;
   });
   const summaries = {};
@@ -1139,9 +1149,9 @@ function monthSummary(eid,y,m){
   const emp=EMPS.find(e=>e.id===eid);
   if(!emp)return{wdays:0,adays:0,aldays:0,twkH:0,tNightH:0,tOtDayH:0,tOtNightH:0,tHolDayH:0,tHolNightH:0,tHolDayOtH:0,tHolNightOtH:0,tBase:0,tNightPay:0,tOtDayPay:0,tOtNightPay:0,tHolDayPay:0,tHolNightPay:0,tHolDayOtPay:0,tHolNightOtPay:0,annualPay:0,wkly:0,bonus:0,allowances:{},totalAllowance:0,deduction:0,total:0};
   // 입사일 이전 월이면 빈 결과
-  if(emp.join){const jd=new Date(emp.join);if(jd>new Date(y,m,0))return{wdays:0,adays:0,aldays:0,twkH:0,tNightH:0,tOtDayH:0,tOtNightH:0,tHolDayH:0,tHolNightH:0,tHolDayOtH:0,tHolNightOtH:0,tBase:0,tNightPay:0,tOtDayPay:0,tOtNightPay:0,tHolDayPay:0,tHolNightPay:0,tHolDayOtPay:0,tHolNightOtPay:0,annualPay:0,wkly:0,bonus:0,allowances:{},totalAllowance:0,deduction:0,total:0};}
+  if(emp.join){const jd=parseEmpDate(emp.join);if(jd>new Date(y,m,0))return{wdays:0,adays:0,aldays:0,twkH:0,tNightH:0,tOtDayH:0,tOtNightH:0,tHolDayH:0,tHolNightH:0,tHolDayOtH:0,tHolNightOtH:0,tBase:0,tNightPay:0,tOtDayPay:0,tOtNightPay:0,tHolDayPay:0,tHolNightPay:0,tHolDayOtPay:0,tHolNightOtPay:0,annualPay:0,wkly:0,bonus:0,allowances:{},totalAllowance:0,deduction:0,total:0};}
   // 퇴사일 이후 월이면 빈 결과
-  if(emp.leave){const ld=new Date(emp.leave);if(ld<new Date(y,m-1,1))return{wdays:0,adays:0,aldays:0,twkH:0,tNightH:0,tOtDayH:0,tOtNightH:0,tHolDayH:0,tHolNightH:0,tHolDayOtH:0,tHolNightOtH:0,tBase:0,tNightPay:0,tOtDayPay:0,tOtNightPay:0,tHolDayPay:0,tHolNightPay:0,tHolDayOtPay:0,tHolNightOtPay:0,annualPay:0,wkly:0,bonus:0,allowances:{},totalAllowance:0,deduction:0,total:0};}
+  if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<new Date(y,m-1,1))return{wdays:0,adays:0,aldays:0,twkH:0,tNightH:0,tOtDayH:0,tOtNightH:0,tHolDayH:0,tHolNightH:0,tHolDayOtH:0,tHolNightOtH:0,tBase:0,tNightPay:0,tOtDayPay:0,tOtNightPay:0,tHolDayPay:0,tHolNightPay:0,tHolDayOtPay:0,tHolNightOtPay:0,annualPay:0,wkly:0,bonus:0,allowances:{},totalAllowance:0,deduction:0,total:0};}
   const days=dim(y,m);
   const sot=emp.sot||POL.sot||209;
   let wdays=0,adays=0,aldays=0,tBase=0,tNightPay=0,tOtDayPay=0,tOtNightPay=0,tHolDayPay=0,tHolNightPay=0,tHolDayOtPay=0,tHolNightOtPay=0,deduction=0,dedShortMins=0;
@@ -1162,7 +1172,7 @@ function monthSummary(eid,y,m){
   for(let d=1;d<=days;d++){
     // 퇴사일 이후 날짜는 근태/급여 집계 제외 (daily 필터와 동일 규칙: 퇴사일 당일까지 근무 인정)
     if(emp.leave){
-      const ld=new Date(emp.leave);
+      const ld=parseEmpDate(emp.leave);
       const curDate=new Date(y,m-1,d);
       if(ld<=curDate) continue;
     }
@@ -1288,7 +1298,7 @@ function monthSummary(eid,y,m){
         const d=mon+offset;
         if(d<1||d>daysInMonth) continue;
         // 퇴사일 이후 날짜는 주휴수당 판정 제외
-        if(emp.leave){const ld=new Date(emp.leave);if(ld<=new Date(y,m-1,d)) continue;}
+        if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<=new Date(y,m-1,d)) continue;}
         // 근무형태 등록된 경우만 소정근로일 체크
         if(isRegistered){
           const dowKo=DOW_KO[new Date(y,m-1,d).getDay()];
@@ -1722,7 +1732,7 @@ function applyCommonFilter(emps, tab, refDate){
   return emps.filter(emp=>{
     // 퇴사자 필터: 기준일 이전 퇴사자 제외. 단, 직원관리(emps) 탭에서는 퇴사자도 하단에 표시하기 위해 필터 스킵
     if(emp.leave && tab!=='emps'){
-      const ld=new Date(emp.leave);
+      const ld=parseEmpDate(emp.leave);
       const ref=refDate||new Date();
       if(ld<ref) return false;
     }
@@ -1836,8 +1846,8 @@ function renderTable(){
   renderFilterBar('daily-filter-bar','daily');
   const dayDate=new Date(cY,cM-1,cD);
   const activeDayEmps = applyCommonFilter(EMPS.filter(emp=>{
-    if(emp.join){const jd=new Date(emp.join);if(jd>dayDate)return false;}
-    if(emp.leave){const ld=new Date(emp.leave);if(ld<=dayDate)return false;}
+    if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate)return false;}
+    if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<=dayDate)return false;}
     return true;
   }), 'daily', dayDate);
   document.getElementById('daily-tbody').innerHTML=activeDayEmps.map(emp=>{
@@ -2271,8 +2281,8 @@ function activeDayEmpsForCopy(){
   const dayDate=new Date(cY,cM-1,cD);
   const search=(document.getElementById('sb-search-inp')?.value||'').trim();
   return EMPS.filter(emp=>{
-    if(emp.join){const jd=new Date(emp.join);if(jd>dayDate) return false;}
-    if(emp.leave){const ld=new Date(emp.leave);if(ld<=dayDate) return false;}
+    if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate) return false;}
+    if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<=dayDate) return false;}
     // 사이드바 필터 반영 (renderSb와 동일 로직)
     if(SBF.shift!=='all' && (emp.shift||'day')!==SBF.shift) return false;
     const isFor = emp.nation==='foreign' || emp.foreigner===true;
@@ -2491,7 +2501,7 @@ function renderMonthly(){
   const mvMonthStart = new Date(vY, vM-1, 1);
   const mvEmps = EMPS.filter(e=>{
     // 퇴사자: 해당 월 시작 전에 퇴사했으면 제외
-    if(e.leave){const ld=new Date(e.leave);if(ld<mvMonthStart)return false;}
+    if(e.leave){const ld=parseEmpDate(e.leave);if(ld<mvMonthStart)return false;}
     if(mvFilter!=='all'){const ep=e.payMode||'fixed';if(mvFilter==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}else{if(ep!==mvFilter)return false;}}
     if(MF.shift!=='all' && (e.shift||'day')!==MF.shift) return false;
     const isFor = e.nation==='foreign'||e.foreigner===true;
@@ -2545,7 +2555,7 @@ function renderCal(){
   ['일','월','화','수','목','금','토'].forEach((x,i)=>h+=`<div class="cdh ${i===0?'su':i===6?'sa':''}">${x}</div>`);
   const fd=fdow(vY,vM);for(let i=0;i<fd;i++)h+=`<div class="cdc em"></div>`;
   const calEmpMode=emp?getEmpPayMode(emp):POL.basePayMode;
-  const calLeaveDate = emp.leave ? new Date(emp.leave) : null;
+  const calLeaveDate = emp.leave ? parseEmpDate(emp.leave) : null;
   for(let d=1;d<=days;d++){
     const dow=(fd+d-1)%7,rec=REC[rk(vEid,vY,vM,d)];
     // 퇴사일 이후 날짜는 비활성 표시 (근무시간 미집계와 UI 일치)
@@ -2602,7 +2612,7 @@ function renderOv(){
   });
   const rows=mvEmps.map(emp=>{
     const rate=getEmpRate(emp);
-    const ovLeaveDate = emp.leave ? new Date(emp.leave) : null;
+    const ovLeaveDate = emp.leave ? parseEmpDate(emp.leave) : null;
     let tr=`<td class="ec"><div style="display:flex;align-items:center;gap:4px"><div class="av" style="width:19px;height:19px;font-size:9px;background:${safeColor(emp.color,'#DBEAFE')};color:${safeColor(emp.tc,'#1E3A5F')}">${esc(emp.name)[0]}</div>${esc(emp.name)}${emp.leave?'<span style="font-size:8px;color:var(--rose);margin-left:2px">퇴사</span>':''}</div></td>`;
     for(let d=1;d<=days;d++){
       // 퇴사일 이후 셀은 비활성 표시
@@ -2761,8 +2771,8 @@ function renderPayroll(){
   // 해당 월에 재직 중인 직원만
   const payMonthEnd=new Date(pY,pM,0);
   const activePayEmps = applyCommonFilter(EMPS.filter(emp=>{
-    if(emp.join){const jd=new Date(emp.join);if(jd>payMonthEnd)return false;}
-    if(emp.leave){const ld=new Date(emp.leave);if(ld<new Date(pY,pM-1,1))return false;}
+    if(emp.join){const jd=parseEmpDate(emp.join);if(jd>payMonthEnd)return false;}
+    if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<new Date(pY,pM-1,1))return false;}
     return true;
   }), 'payroll', payMonthEnd);
   document.getElementById('pay-grid').innerHTML=activePayEmps.map(emp=>{
@@ -2863,8 +2873,8 @@ function renderXlPreview(){
   const isMonthlyView = false;
 
   const payEmps = applyCommonFilter(EMPS.filter(emp=>{
-    if(emp.join){const jd=new Date(emp.join);if(jd>new Date(pY,pM,0))return false;}
-    if(emp.leave){const ld=new Date(emp.leave);if(ld<new Date(pY,pM-1,1))return false;}
+    if(emp.join){const jd=parseEmpDate(emp.join);if(jd>new Date(pY,pM,0))return false;}
+    if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<new Date(pY,pM-1,1))return false;}
     return true;
   }), 'payroll');
 
@@ -6005,8 +6015,8 @@ function exportExcel(){
     const ep = e.payMode || 'fixed';
     if(mode==='monthly'){ if(ep!=='monthly' && ep!=='pohal') return false; }
     else { if(ep!==mode) return false; }
-    if(e.join&&new Date(e.join)>new Date(pY,pM,0)) return false;
-    if(e.leave&&new Date(e.leave)<new Date(pY,pM-1,1)) return false;
+    if(e.join&&parseEmpDate(e.join)>new Date(pY,pM,0)) return false;
+    if(e.leave&&parseEmpDate(e.leave)<new Date(pY,pM-1,1)) return false;
     return true;
   }), 'payroll');
 
@@ -6051,8 +6061,8 @@ function exportDailyExcel(){
   // 직원 필터링 (renderTable과 동일)
   const dayDate2=new Date(cY,cM-1,cD);
   const activeDayEmps = applyCommonFilter(EMPS.filter(emp=>{
-    if(emp.join){const jd=new Date(emp.join);if(jd>dayDate2)return false;}
-    if(emp.leave){const ld=new Date(emp.leave);if(ld<=dayDate2)return false;}
+    if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate2)return false;}
+    if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<=dayDate2)return false;}
     return true;
   }), 'daily', dayDate2);
 
@@ -7203,7 +7213,7 @@ function calcLeaveByFiscal(emp, year) {
     return { total: 0, accrued: 0, used: r2(u), remain: r2(0 - u), monthly: [] };
   }
 
-  const joinDate = new Date(emp.join);
+  const joinDate = parseEmpDate(emp.join);
   const joinY = joinDate.getFullYear();
   const joinM = joinDate.getMonth(); // 0-indexed
 
@@ -7211,7 +7221,7 @@ function calcLeaveByFiscal(emp, year) {
   const today = new Date();
 
   if (emp.leave) {
-    const leaveDate = new Date(emp.leave);
+    const leaveDate = parseEmpDate(emp.leave);
     if (leaveDate < yearStart) {
       const u = (ov && ov.used !== undefined && ov.used !== null) ? ov.used : 0;
       return { total: 0, accrued: 0, used: r2(u), remain: r2(0 - u), monthly: [] };
@@ -7234,7 +7244,7 @@ function calcLeaveByFiscal(emp, year) {
         monthly.push({ month: m + 1, count: 0, date: null });
         continue;
       }
-      const cutoff = emp.leave ? new Date(emp.leave) : today;
+      const cutoff = emp.leave ? parseEmpDate(emp.leave) : today;
       let earned = 0;
       if (accrueDate <= cutoff) {
         // accrueDate 전 calendar 월 = 만근 체크 대상월 (1-indexed)
@@ -7315,7 +7325,7 @@ function calcLeaveByJoinDate(emp, year) {
     return { total: 0, accrued: 0, used: r2(u), remain: r2(0 - u), monthly: [] };
   }
 
-  const joinDate = new Date(emp.join);
+  const joinDate = parseEmpDate(emp.join);
   const joinY = joinDate.getFullYear();
   const joinM = joinDate.getMonth(); // 0-indexed
   const joinD = joinDate.getDate();
@@ -7324,7 +7334,7 @@ function calcLeaveByJoinDate(emp, year) {
   const today = new Date();
 
   if (emp.leave) {
-    const leaveDate = new Date(emp.leave);
+    const leaveDate = parseEmpDate(emp.leave);
     if (leaveDate < yearStart) {
       const u = (ov && ov.used !== undefined && ov.used !== null) ? ov.used : 0;
       return { total: 0, accrued: 0, used: r2(u), remain: r2(0 - u), monthly: [] };
@@ -7346,7 +7356,7 @@ function calcLeaveByJoinDate(emp, year) {
         monthly.push({ month: m + 1, count: 0, date: null });
         continue;
       }
-      const cutoff = emp.leave ? new Date(emp.leave) : today;
+      const cutoff = emp.leave ? parseEmpDate(emp.leave) : today;
       let earned = 0;
       if (accrueDate <= cutoff) {
         const workMonth = accrueDate.getMonth(); // 1-indexed prev calendar month
@@ -8126,8 +8136,8 @@ function exportMonthlyExcel(){
 
     // 데이터
     const emps = EMPS.filter(e=>{
-      if(!e.join||new Date(e.join)>new Date(vY,vM,0)) return false;
-      if(e.leave&&new Date(e.leave)<new Date(vY,vM-1,1)) return false;
+      if(!e.join||parseEmpDate(e.join)>new Date(vY,vM,0)) return false;
+      if(e.leave&&parseEmpDate(e.leave)<new Date(vY,vM-1,1)) return false;
       if(mvFilter!=='all'){const ep=e.payMode||'fixed';if(mvFilter==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}else{if(ep!==mvFilter)return false;}}
       if(MF.shift!=='all'&&(e.shift||'day')!==MF.shift) return false;
       const isFor=e.nation==='foreign'||e.foreigner===true;
@@ -8144,7 +8154,7 @@ function exportMonthlyExcel(){
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),emp.name,S.cell(C.navy,bg,true,'center'));
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),`${emp.role}${emp.grade?'/'+emp.grade:''}`,S.cell(C.gray,bg,false,'center'));
 
-      const empLeaveDate = emp.leave ? new Date(emp.leave) : null;
+      const empLeaveDate = emp.leave ? parseEmpDate(emp.leave) : null;
       for(let d=1;d<=days;d++){
         const dow=new Date(vY,vM-1,d).getDay();
         const isWe=[0,6].includes(dow);
@@ -8194,8 +8204,8 @@ function exportMonthlyExcel(){
 
   // ── 시트2~N: 직원별 캘린더 (전체현황표 시트와 동일한 필터 적용) ──
   const calEmps=EMPS.filter(e=>{
-    if(!e.join||new Date(e.join)>new Date(vY,vM,0)) return false;
-    if(e.leave&&new Date(e.leave)<new Date(vY,vM-1,1)) return false;
+    if(!e.join||parseEmpDate(e.join)>new Date(vY,vM,0)) return false;
+    if(e.leave&&parseEmpDate(e.leave)<new Date(vY,vM-1,1)) return false;
     if(mvFilter!=='all'){const ep=e.payMode||'fixed';if(mvFilter==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}else{if(ep!==mvFilter)return false;}}
     if(MF.shift!=='all'&&(e.shift||'day')!==MF.shift) return false;
     const isFor=e.nation==='foreign'||e.foreigner===true;
@@ -8260,7 +8270,7 @@ function exportMonthlyExcel(){
     ws['!rows'].push({hpt:8},{hpt:26});
     R++;
 
-    const empLeaveDate2 = emp.leave ? new Date(emp.leave) : null;
+    const empLeaveDate2 = emp.leave ? parseEmpDate(emp.leave) : null;
     let totalBk = 0;
     for(let d=1;d<=days;d++){
       const autoH=isAutoHol(vY,vM,d);
@@ -8345,8 +8355,8 @@ function exportMonthlyExcelOne(empId){
   if(!emp){ alert('직원을 먼저 선택해주세요.'); return; }
   const monthStart = new Date(vY, vM-1, 1);
   const monthEnd = new Date(vY, vM, 0);
-  if(emp.join && new Date(emp.join) > monthEnd){ alert('해당 월에 재직 중이 아닌 직원입니다.'); return; }
-  if(emp.leave && new Date(emp.leave) < monthStart){ alert('해당 월 이전에 퇴사한 직원입니다.'); return; }
+  if(emp.join && parseEmpDate(emp.join) > monthEnd){ alert('해당 월에 재직 중이 아닌 직원입니다.'); return; }
+  if(emp.leave && parseEmpDate(emp.leave) < monthStart){ alert('해당 월 이전에 퇴사한 직원입니다.'); return; }
 
   const wb = XLSX.utils.book_new();
   const days = dim(vY, vM);
@@ -8405,7 +8415,7 @@ function exportMonthlyExcelOne(empId){
   ws['!rows'].push({hpt:8},{hpt:26});
   R++;
 
-  const empLeaveDate = emp.leave ? new Date(emp.leave) : null;
+  const empLeaveDate = emp.leave ? parseEmpDate(emp.leave) : null;
   let totalBk = 0;
   for(let d=1;d<=days;d++){
     const autoH=isAutoHol(vY,vM,d);
@@ -8653,7 +8663,7 @@ function exportCompanyExcel(){
   // ── 데이터 ──
   const emps=EMPS.filter(e=>{
     if(companyFilter!=='all'){const ep=e.payMode||'fixed';if(companyFilter==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}else{if(ep!==companyFilter)return false;}}
-    if(!e.join||new Date(e.join)>new Date(companyYear,11,31)) return false;
+    if(!e.join||parseEmpDate(e.join)>new Date(companyYear,11,31)) return false;
     return true;
   });
 
@@ -8752,15 +8762,15 @@ function exportCompanyExcel(){
     const monthEnd  =new Date(companyYear,m,0);
     const activeEmps=EMPS.filter(e=>{
       if(!e.join) return false;
-      const jd=new Date(e.join);
+      const jd=parseEmpDate(e.join);
       if(jd>monthEnd) return false;
-      if(e.leave && new Date(e.leave)<monthStart) return false;
+      if(e.leave && parseEmpDate(e.leave)<monthStart) return false;
       return true;
     });
     const directCount    = activeEmps.filter(e=>!isOutsource(e)).length;
     const outsourceCount = activeEmps.filter(e=> isOutsource(e)).length;
-    const newCount  = EMPS.filter(e=>e.join  && new Date(e.join).getFullYear()===companyYear  && new Date(e.join).getMonth()+1===m).length;
-    const leftCount = EMPS.filter(e=>e.leave && new Date(e.leave).getFullYear()===companyYear && new Date(e.leave).getMonth()+1===m).length;
+    const newCount  = EMPS.filter(e=>e.join  && parseEmpDate(e.join).getFullYear()===companyYear  && parseEmpDate(e.join).getMonth()+1===m).length;
+    const leftCount = EMPS.filter(e=>e.leave && parseEmpDate(e.leave).getFullYear()===companyYear && parseEmpDate(e.leave).getMonth()+1===m).length;
     let totalPay=0, totalWorkDays=0;
     activeEmps.forEach(e=>{ const s=monthSummary(e.id,companyYear,m); totalPay+=s.total; totalWorkDays+=s.wdays; });
     let weekDays=0;
@@ -9003,9 +9013,9 @@ function renderCompany() {
     // 재직 직원
     const activeEmps = EMPS.filter(emp => {
       if (!emp.join) return false;
-      const jd = new Date(emp.join);
+      const jd = parseEmpDate(emp.join);
       if (jd > monthEnd) return false;
-      if (emp.leave && new Date(emp.leave) < monthStart) return false;
+      if (emp.leave && parseEmpDate(emp.leave) < monthStart) return false;
       return true;
     });
 
@@ -9014,8 +9024,8 @@ function renderCompany() {
     const outsourceCount = activeEmps.filter(e =>  isOutsource(e)).length;
 
     // 입사/퇴사
-    const newEmps  = EMPS.filter(emp => emp.join  && new Date(emp.join).getFullYear()===companyYear  && new Date(emp.join).getMonth()+1===m);
-    const leftEmps = EMPS.filter(emp => emp.leave && new Date(emp.leave).getFullYear()===companyYear && new Date(emp.leave).getMonth()+1===m);
+    const newEmps  = EMPS.filter(emp => emp.join  && parseEmpDate(emp.join).getFullYear()===companyYear  && parseEmpDate(emp.join).getMonth()+1===m);
+    const leftEmps = EMPS.filter(emp => emp.leave && parseEmpDate(emp.leave).getFullYear()===companyYear && parseEmpDate(emp.leave).getMonth()+1===m);
 
     // 급여 합계
     let totalPay = 0, totalWorkDays = 0;
@@ -9937,21 +9947,27 @@ async function pollForUpdates(){
   try {
     const server = await apiFetch('/data-load','POST',{});
     if(!server) return;
-    // 🛡️ 낙관적 잠금용 서버 버전 갱신 (data-load 응답에 _versions 포함)
-    if(server._versions){
-      _serverVersions = {..._serverVersions, ...server._versions};
-    }
+    // ⚠️ 낙관적 잠금용 _serverVersions은 이 함수 안에서 "실제로 로컬이 서버와 동기화된 키"만 갱신.
+    // 미저장 변경이 있는 키는 옛 버전 그대로 유지 → 다음 저장 시 충돌 감지로 stale-overwrite 차단.
     let changed = false;
     const snap = _syncedSnapshot || {};
     // 키 기반 블롭 — 필드 단위 머지
     const mergeKeyed = (name, getLocal, setLocal, lsKey)=>{
       if(server[name] === undefined) return;
       const local = getLocal();
+      const localStr = JSON.stringify(local);
+      const snapStr = (typeof snap[name]==='string') ? snap[name] : JSON.stringify(snap[name]||null);
       const m = _mergeByField(local, server[name]||{}, snap[name]);
-      if(JSON.stringify(m) !== JSON.stringify(local)){
+      const merged = JSON.stringify(m);
+      if(merged !== localStr){
         setLocal(m);
         if(lsKey) localStorage.setItem(lsKey, JSON.stringify(m));
         changed = true;
+      }
+      // 🛡️ 낙관적 잠금 버전 갱신: 로컬에 미저장 변경이 없을 때만 (snap === local 즉 마지막 sync 이후 무변경)
+      // 미저장 변경 있는 상태(snap ≠ local)면 옛 버전 유지 → 다음 저장 시 충돌 감지
+      if(localStr === snapStr && server._versions && server._versions[name]){
+        _serverVersions[name] = server._versions[name];
       }
     };
     // 🛡️ 서버가 비어있는데 로컬에 데이터가 있으면 서버 wipe 전파 방지 (로컬 보호)
@@ -9990,10 +10006,18 @@ async function pollForUpdates(){
       if(server[name] === undefined) return;
       const localStr = getStr();
       const serverStr = JSON.stringify(server[name]);
-      if(localStr !== serverStr && localStr === snap[name]){
+      if(localStr === serverStr){
+        // 이미 서버와 같음 — 버전만 갱신
+        if(server._versions && server._versions[name]) _serverVersions[name] = server._versions[name];
+        return;
+      }
+      if(localStr === snap[name]){
+        // 로컬 미수정 상태 → 서버 데이터로 교체 + 버전 갱신
         apply(server[name]);
         changed = true;
+        if(server._versions && server._versions[name]) _serverVersions[name] = server._versions[name];
       }
+      // localStr ≠ serverStr && localStr ≠ snap → 미저장 변경 있음 → 교체·버전 갱신 모두 스킵
     };
     // 🛡️ EMPS는 빈 배열로 전파 차단 (로컬에 데이터 있으면 서버 빈값 무시)
     const _guardedReplace = (name, getStr, apply)=>{
@@ -10708,7 +10732,7 @@ function renderMyInfo(){
         const now2=new Date(); const thisY2=now2.getFullYear(); const thisM2=now2.getMonth()+1;
         const newHires = EMPS.filter(e=>{
           if(!e.join) return false;
-          const d=new Date(e.join);
+          const d=parseEmpDate(e.join);
           return d.getFullYear()===thisY2 && d.getMonth()+1===thisM2;
         }).length;
         const turnoverRate = EMPS.length ? Math.round(retired/EMPS.length*100) : 0;
