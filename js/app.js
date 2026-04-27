@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-28-6';
+const CLIENT_BUILD = '2026-04-28-7';
 let _buildMismatchWarned = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -641,7 +641,7 @@ function saveLS(){
   try{
     const _sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
     if(_sess && _sess.companyId){
-      // debounce: 연속 저장 방지 (500ms)
+      // debounce: 연속 입력 결합 (250ms — 빠른 반응성 + 충분한 결합)
       if(saveLS._timer) clearTimeout(saveLS._timer);
       saveLS._timer = setTimeout(async ()=>{
         try {
@@ -655,7 +655,7 @@ function saveLS(){
             showSyncToast('⚠️ 서버 저장 실패\n네트워크 상태를 확인해주세요. 로컬에는 저장됨.','error',5000);
           }
         }
-      }, 500);
+      }, 250);
     }
   }catch(e){}
 }
@@ -10091,7 +10091,23 @@ async function sbSaveAll(companyId) {
   };
   const _guardKeys = new Set(['emps','rec','bonus','allow','tax','tbk','safety','bk']);
   const _blockedOverwrite = [];  // 실제 덮어쓰기 시도 (사용자 토스트)
+
+  // 🚀 변경된 키만 전송 (diff 기반) — 한 글자 수정해도 500KB+ 보내던 비효율 제거
+  // snap에 저장된 마지막 sync 시점 값과 비교해서 다른 키만 통과
+  const _hasChanged = (key, value) => {
+    if(!snap) return true;  // snap 없으면(초기) 모두 보냄
+    const snapVal = snap[key];
+    if(snapVal == null) return true;  // snap에 키 없으면 (신규) 보냄
+    try {
+      const cur = JSON.stringify(value);
+      const ref = (typeof snapVal === 'string') ? snapVal : JSON.stringify(snapVal);
+      return cur !== ref;
+    } catch(e){ return true; }
+  };
+
   const _filter = (items) => items.filter(it => {
+    // 🚀 변경 안 된 키는 보내지 않음 (성능 최적화)
+    if(!_hasChanged(it.key, it.value)) return false;
     if(!_guardKeys.has(it.key)) return true;
     if(_isEmpty(it.value)){
       // 🛡️ 스냅샷이 아직 없으면(sbLoadAll 미완): 빈값 저장 절대 금지. 콘솔만 로그.
