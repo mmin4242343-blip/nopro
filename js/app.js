@@ -1665,8 +1665,8 @@ const F = {
   leave:   { shift:'all', nation:'all', pay:'all', dept:'all', deptCat:'all', search:'' },
   emps:    { shift:'all', nation:'all', pay:'all', dept:'all', deptCat:'all', search:'' },
 };
-// 부서 분류 옵션 (운반/시설/선별 + 미분류) — 사번 자동 생성에는 영향 없음
-const DEPT_CATS = ['운반','시설','선별'];
+// 부서 분류 옵션 — 사무(미지정) / 선별 / 시설 / 운반. 사번 자동 생성에는 영향 없음
+const DEPT_CATS = ['선별','시설','운반'];
 
 function setFilter(tab, key, val, btn){
   F[tab][key] = val;
@@ -1753,10 +1753,10 @@ function makeFilterBar(tab){
     </div>
     <div class="filter-group" data-fg="deptCat" title="부서 분류">
       <button class="fb${(f.deptCat||'all')==='all'?' on':''}" onclick="setFilter('${tab}','deptCat','all',this)">전체</button>
-      <button class="fb${f.deptCat==='운반'?' on':''}" onclick="setFilter('${tab}','deptCat','운반',this)">운반</button>
-      <button class="fb${f.deptCat==='시설'?' on':''}" onclick="setFilter('${tab}','deptCat','시설',this)">시설</button>
+      <button class="fb${f.deptCat==='none'?' on':''}" onclick="setFilter('${tab}','deptCat','none',this)" title="부서 미지정">사무</button>
       <button class="fb${f.deptCat==='선별'?' on':''}" onclick="setFilter('${tab}','deptCat','선별',this)">선별</button>
-      <button class="fb${f.deptCat==='none'?' on':''}" onclick="setFilter('${tab}','deptCat','none',this)" title="부서 미지정">미분류</button>
+      <button class="fb${f.deptCat==='시설'?' on':''}" onclick="setFilter('${tab}','deptCat','시설',this)">시설</button>
+      <button class="fb${f.deptCat==='운반'?' on':''}" onclick="setFilter('${tab}','deptCat','운반',this)">운반</button>
     </div>
     ${(()=>{
       const depts=[...new Set(EMPS.map(e=>(e.dept||'').trim()).filter(d=>d))].sort();
@@ -1790,7 +1790,7 @@ function renderFilterBar(containerId, tab){
       if(!key) return;
       grp.querySelectorAll('.fb').forEach(b=>{
         b.classList.remove('on','on-night','on-foreign');
-        const vals = [['all','day','night'],['all','korean','foreign'],['all','fixed','hourly','monthly'],['all','운반','시설','선별','none']][gi];
+        const vals = [['all','day','night'],['all','korean','foreign'],['all','fixed','hourly','monthly'],['all','none','선별','시설','운반']][gi];
         const idx = Array.from(grp.children).indexOf(b);
         const bVal = vals[idx];
         if(bVal === f[key]){
@@ -3397,11 +3397,11 @@ function renderEmps(){
       </div></td>
       <td><input class="ei2" value="${esc(e.name)}" onchange="updE(${e.id},'name',this.value)" placeholder="이름" autocomplete="off"></td>
       <td><input class="ei2" value="${esc(e.role)}" onchange="updE(${e.id},'role',this.value)" autocomplete="off"></td>
-      <td><select class="ei2" onchange="updE(${e.id},'deptCat',this.value)" style="text-align:center;background:${e.deptCat?'#ECFDF5':'transparent'};color:${e.deptCat?'#047857':'var(--ink3)'};font-weight:${e.deptCat?'700':'500'};font-size:10px" title="부서 분류 (사번과 무관)">
-        <option value="" ${!e.deptCat?'selected':''}>미분류</option>
-        <option value="운반" ${e.deptCat==='운반'?'selected':''}>운반</option>
-        <option value="시설" ${e.deptCat==='시설'?'selected':''}>시설</option>
+      <td><select class="ei2" onchange="updE(${e.id},'deptCat',this.value)" style="text-align:center;background:${e.deptCat?'#ECFDF5':'transparent'};color:${e.deptCat?'#047857':'var(--ink2)'};font-weight:${e.deptCat?'700':'500'};font-size:10px" title="부서 분류 (사번과 무관)">
+        <option value="" ${!e.deptCat?'selected':''}>사무</option>
         <option value="선별" ${e.deptCat==='선별'?'selected':''}>선별</option>
+        <option value="시설" ${e.deptCat==='시설'?'selected':''}>시설</option>
+        <option value="운반" ${e.deptCat==='운반'?'selected':''}>운반</option>
       </select></td>
       <td><input class="ei2" value="${esc(e.grade||'')}" onchange="updE(${e.id},'grade',this.value)" placeholder="직급" autocomplete="off"></td>
       <td><input class="ei2" value="${esc(e.dept||'')}" onchange="updE(${e.id},'dept',this.value)" placeholder="인천본점" autocomplete="off"></td>
@@ -8486,7 +8486,7 @@ function exportEmpsExcel(){
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),e.grade||'',S.cell(C.gray2,bg,false,'center'));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),e.dept||'',S.cell(C.gray2,bg,false,'center'));
     // 부서 분류 (운반/시설/선별 또는 빈값)
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),e.deptCat||'',S.cell(C.teal,bg,!!e.deptCat,'center'));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),e.deptCat||'사무',S.cell(C.teal,bg,!!e.deptCat,'center'));
 
     // 급여방식 - 색상 구분
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),payLabel,{
