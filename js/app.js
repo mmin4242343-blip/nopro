@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-28-20';
+const CLIENT_BUILD = '2026-04-28-21';
 let _buildMismatchShown = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -393,6 +393,8 @@ function setTaxRec(eid,y,m,field,val){
   if(!TAX_REC[eid][k])TAX_REC[eid][k]={incomeTax:'',localTax:'',otherDed:'',bonusDed:''};
   TAX_REC[eid][k][field]=val;
   localStorage.setItem('npm5_tax',JSON.stringify(TAX_REC));
+  // 💾 서버 저장 — 이전엔 localStorage만 저장돼서 F5 시 옛 서버값으로 덮여 사용자 입력 유실 가능했음
+  if(typeof saveLS==='function') saveLS();
 }
 
 // ═══ 월별 정책 스냅샷 헬퍼 ═══
@@ -5178,7 +5180,7 @@ function showLawModal(){
 }
 function setDupMode(m){POL.dupMode=m;['legal','single'].forEach(x=>{const el=document.getElementById('rb-dup-'+x);if(el)el.classList.toggle('on',x===m);});updNotes(); if(typeof saveLS==='function') saveLS();}
 function setDedMode(m){POL.dedMode=m;['hour','day'].forEach(x=>{const el=document.getElementById('rb-ded-'+x);if(el)el.classList.toggle('on',x===m);}); if(typeof saveLS==='function') saveLS();}
-function setAlMode(m){POL.alMode=m;['legal','custom'].forEach(x=>{const el=document.getElementById('rb-al-'+x);if(el)el.classList.toggle('on',x===m);});}
+function setAlMode(m){POL.alMode=m;['legal','custom'].forEach(x=>{const el=document.getElementById('rb-al-'+x);if(el)el.classList.toggle('on',x===m);}); if(typeof saveLS==='function') saveLS();}
 
 // ── 주말 요일 설정 ──
 function setPremTab(t){
@@ -5211,7 +5213,7 @@ function initWeekendChecks(){
     cb.checked = nw.includes(+cb.dataset.dow);
   });
 }
-function updNightLabel(){const h=+document.getElementById('sel-ns').value;POL.nightStart=h;updNotes();}
+function updNightLabel(){const h=+document.getElementById('sel-ns').value;POL.nightStart=h;updNotes(); if(typeof saveLS==='function') saveLS();}
 function updNotes(){
   const ext=document.getElementById('tog-ext')?.checked;
   const nt=document.getElementById('tog-nt')?.checked;
@@ -6675,6 +6677,8 @@ function sfSaveTbm(){
   const val=document.getElementById('sf-tbm-content').value;
   SAFETY_REC[key+'_tbm']=val;
   sfSave();
+  // 💾 서버 저장 — sfSave는 localStorage만 저장하므로 서버까지 보장하려면 saveLS 추가 필요
+  if(typeof saveLS==='function') saveLS();
   // 한국어가 바뀌면 번역이 구버전임을 표시
   sfUpdTranslateStatus();
 }
