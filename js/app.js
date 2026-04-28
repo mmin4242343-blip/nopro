@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-28-14';
+const CLIENT_BUILD = '2026-04-28-15';
 let _buildMismatchShown = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -3832,6 +3832,8 @@ function empDrop(ev,i){
   }
   empDragIdx=null;
   saveLS();
+  // 🚀 드래그 직후 250ms 디바운스 우회하고 즉시 서버 저장 — 사용자가 빠르게 F5 눌러도 유실 방지
+  if(typeof flushPendingSave === 'function') flushPendingSave();
   renderEmps();
   renderSb(document.getElementById('sb-search-inp')?.value||'');
   renderTable();
