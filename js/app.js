@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-28-18';
+const CLIENT_BUILD = '2026-04-28-19';
 let _buildMismatchShown = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -10527,13 +10527,9 @@ async function handleConflicts(conflicts){
       leave_settings:'연차설정', folders:'폴더'};
     const keyList = conflicts.map(c => keyLabels[c.key] || c.key).join(', ');
     console.log('🔄 자동 머지 완료:', keyList);
-    // 사용자에게 가시화 — 작은 토스트, 본인 입력은 보존됐다는 안내
-    if(typeof showSyncToast === 'function'){
-      showSyncToast(
-        `🔄 다른 디바이스 변경 감지 — 자동 합쳐짐 (${keyList})\n본인 입력은 그대로 보존되었습니다.`,
-        'ok', 4000
-      );
-    }
+    // 토스트 제거 — 자동 머지는 백그라운드에서 안전하게 처리되므로 사용자 알림 불필요.
+    // 진단용 콘솔 로그는 유지 (F12에서 확인 가능).
+    // (이전: '🔄 다른 디바이스 변경 감지 — 자동 합쳐짐' 토스트가 자주 떠서 사용자 혼란 → 제거)
   } catch(e) {
     console.warn('자동 머지 실패:', e);
   } finally {
