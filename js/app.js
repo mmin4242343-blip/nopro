@@ -3,22 +3,85 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-28-9';
-let _buildMismatchWarned = false;
+const CLIENT_BUILD = '2026-04-28-10';
+let _buildMismatchShown = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
-  if(serverBuild === CLIENT_BUILD) return;
-  if(_buildMismatchWarned) return;
-  _buildMismatchWarned = true;
+  const banner = (typeof document!=='undefined') ? document.getElementById('version-update-banner') : null;
+  // 빌드 일치 → 배너 떠있으면 회수 (운영 실수 false-positive 회복용)
+  if(serverBuild === CLIENT_BUILD){
+    if(banner && banner.style.display !== 'none'){
+      banner.style.display = 'none';
+      try { document.body.classList.remove('has-version-banner'); } catch(e){}
+    }
+    _buildMismatchShown = false;
+    return;
+  }
+  // 불일치 → 배너 표시 (이미 떠있으면 idempotent)
+  if(_buildMismatchShown) return;
+  _buildMismatchShown = true;
   console.warn('🏷️ 빌드 버전 불일치:', {client:CLIENT_BUILD, server:serverBuild});
-  if(typeof showSyncToast==='function'){
+  if(banner){
+    const detail = document.getElementById('version-update-detail');
+    if(detail){
+      detail.textContent = `(현재 ${CLIENT_BUILD} → 최신 ${serverBuild})`;
+    }
+    banner.style.display = 'block';
+    // 배너 높이만큼 본문 밀어서 콘텐츠 가림 방지
+    try { document.body.classList.add('has-version-banner'); } catch(e){}
+    // 버튼 핸들러는 1회만 바인딩
+    const btn = document.getElementById('version-update-reload-btn');
+    if(btn && !btn._wired){
+      btn._wired = true;
+      btn.addEventListener('click', _doVersionReload);
+    }
+  } else if(typeof showSyncToast==='function'){
+    // 배너 DOM 못 찾을 때 폴백 (랜딩 진입 등 초기화 전)
     showSyncToast(
-      '🆕 새 버전이 배포되었습니다\n\n'+
-      '안정성 향상을 위해 페이지를 새로고침해주세요.\n'+
-      'Windows: Ctrl+F5  ·  Mac: Cmd+Shift+R\n\n'+
+      '🆕 새 버전이 배포되었습니다. Ctrl+F5로 새로고침해주세요.\n'+
       `(현재 ${CLIENT_BUILD} → 최신 ${serverBuild})`,
       'warn', 15000
     );
+  }
+}
+
+// 🔴 [지금 새로고침] 클릭 시 데이터 유실 방지 절차
+//   1) 현재 focus된 input의 onblur 발화 → 입력값 커밋 (handleTimeInput 등)
+//   2) 디바운스 중인 saveLS._timer를 즉시 flush + await
+//   3) 미저장 변경이 남아있으면 사용자 confirm으로 한 번 더 막음
+//   4) 최종 reload (브라우저가 beforeunload → _flushSaveOnUnload(sendBeacon)로 한 번 더 안전망)
+async function _doVersionReload(){
+  const btn = document.getElementById('version-update-reload-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '저장 중…'; }
+  try {
+    // 1. 입력 중 셀의 값 커밋 (blur 트리거 → handleTimeInput → saveLS 디바운스 등록)
+    if(typeof document!=='undefined' && document.activeElement && typeof document.activeElement.blur==='function'){
+      try { document.activeElement.blur(); } catch(e){}
+    }
+    // 2. 디바운스 중인 변경분 즉시 서버 저장
+    if(typeof flushPendingSave==='function'){
+      try { await flushPendingSave(); } catch(e){ console.warn('flushPendingSave 오류:', e); }
+    }
+    // 3. 그래도 미저장이 남아있으면 사용자 확인
+    if(typeof _hasUnsavedChanges!=='undefined' && _hasUnsavedChanges){
+      const proceed = confirm(
+        '⚠️ 서버에 미반영된 변경이 있습니다.\n\n'+
+        '그래도 새로고침하시겠습니까?\n'+
+        '(페이지 닫힘 직전 마지막으로 한 번 더 저장 시도되지만, 네트워크 상태에 따라 유실될 수 있습니다.)'
+      );
+      if(!proceed){
+        if(btn){ btn.disabled = false; btn.textContent = '지금 새로고침'; }
+        return;
+      }
+    }
+    // 4. reload — beforeunload 핸들러(_flushSaveOnUnload)가 마지막 안전망
+    location.reload();
+  } catch(e){
+    console.error('_doVersionReload 오류:', e);
+    if(btn){ btn.disabled = false; btn.textContent = '지금 새로고침'; }
+    if(typeof showSyncToast==='function'){
+      showSyncToast('⚠️ 새로고침 처리 중 오류. 잠시 후 다시 시도해주세요.','error',5000);
+    }
   }
 }
 const AUTH_REFRESH_INTERVAL_MS = 20 * 60 * 1000; // 쿠키 수명 7d 대비 20분마다 /auth-verify 호출해 슬라이딩 갱신 (안전망)

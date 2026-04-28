@@ -288,36 +288,94 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
 - 이미지 로드 실패 시 onerror 핸들러 추가
 - 안전교육 드래그앤드롭 중복 리스너 방지 + 사진 삭제 시 서버 반영
 
-### 데이터 유실 방지 4중 가드 (2026-04-23 도입, 같은 날 확장)
+### 데이터 유실 방지 다중 가드 (2026-04-23 도입, 이후 지속 확장 — 현재 클라 14 + 서버 7 = 21중)
 
 **사고 이력**:
-- **1차 wipe (01:40 UTC)**: 단일 `sbSaveAll()` 호출이 EMPS·REC·BONUS·ALLOW·TAX 5개 키를 동시에 빈값으로 덮어씀. 근본 원인: `sbLoadAll`의 `else { EMPS = []; }` 분기가 서버 파셜 응답 시 메모리 리셋 → 후속 saveLS가 빈값을 서버에 저장.
-- **2차 wipe (02:58 UTC, 1차 가드 배포 후 재발)**: 하드 새로고침 직후 초기 로드 구간에 save가 트리거되었고, `_syncedSnapshot=null` 상태에서 클라 가드가 "스냅샷 없음 = 데이터 없음"으로 오인해 빈값 저장을 허용. 서버 가드는 `oldValue` 존재 시에만 검사하던 로직 결함으로 함께 실패.
+- **1차 wipe (2026-04-23 01:40 UTC)**: 단일 `sbSaveAll()` 호출이 EMPS·REC·BONUS·ALLOW·TAX 5개 키를 동시에 빈값으로 덮어씀. 근본 원인: `sbLoadAll`의 `else { EMPS = []; }` 분기가 서버 파셜 응답 시 메모리 리셋 → 후속 saveLS가 빈값을 서버에 저장.
+- **2차 wipe (2026-04-23 02:58 UTC, 1차 가드 배포 후 재발)**: 하드 새로고침 직후 초기 로드 구간에 save가 트리거되었고, `_syncedSnapshot=null` 상태에서 클라 가드가 "스냅샷 없음 = 데이터 없음"으로 오인해 빈값 저장을 허용. 서버 가드는 `oldValue` 존재 시에만 검사하던 로직 결함으로 함께 실패.
 - 복구는 두 사고 모두 감사 로그 `old_value` 역추적으로 수행 성공 (최종 상태: EMPS 145명, REC 2117건, BONUS 4건, ALLOW 57건, TAX 1건).
 
-**최종 방어선 (4중 가드)** — 커밋 `faedc4f` → `ccbbfaa` → `d01bd4a` → `7cc5eba` → `513bc7d` → `30607d5`:
+**보호 대상 키 (PROTECTED)**: `emps`, `rec`, `bonus`, `allow`, `tax`, `tbk`, `safety`, `bk`
 
-#### 가드 1: `sbLoadAll` 단언적 교체 제거
+#### ▣ 클라이언트 가드 (js/app.js, 14중)
+
+**C-1. `sbLoadAll` 단언적 교체 제거**
 - `if('key' in map)` 패턴만 사용. 서버 응답에 키가 없으면 메모리·localStorage **그대로 유지**.
 - `else { X = []; }` 또는 `if(map.x)` 분기 **영구 금지**.
 
-#### 가드 2: `sbSaveAll` / `safeItemSave` / `_flushSaveOnUnload` 빈값 차단 (우회 불가)
-- 보호 대상: `emps`, `rec`, `bonus`, `allow`, `tax`, `tbk`, `safety`, `bk`
-- 조건 1 (**초기 로드 전**): `_syncedSnapshot === null` → 빈값 저장 **무조건 차단** (console만, 토스트 X)
-- 조건 2 (**덮어쓰기 시도**): 스냅샷에 데이터 있음 + 현재 빈값 → 차단 + 사용자 토스트
-- **우회 플래그 없음.** `rmAllEmps` 같은 "전체 삭제" 기능은 **완전 비활성화**(alert만 표시).
-- 직접 `apiFetch('/data-save', ...)` 호출 금지 → `safeItemSave(key, value)` 또는 `sbSaveAll()` 사용.
+**C-2. `sbSaveAll` 빈값 차단** (line ~10101)
+- `_syncedSnapshot === null` (초기 로드 전) → PROTECTED 키 빈값 저장 **무조건 차단** (console만)
+- 스냅샷에 데이터 있음 + 현재 빈값 → 차단 + 사용자 토스트
 
-#### 가드 3: `pollForUpdates` 서버 wipe 전파 차단
-- `_guardedMerge` / `_guardedReplace` 래퍼: 서버 값이 비었고 로컬에 데이터 있으면 해당 키 동기화 스킵 → 다른 기기/서버의 빈값이 로컬을 덮어쓸 수 없음.
+**C-3. `safeItemSave` 단일 키 저장 동일 가드** (line ~555)
+- 단일 키 저장 경로도 sbSaveAll과 동일한 빈값 차단 적용
+- 직접 `apiFetch('/data-save', ...)` 호출 금지 → 반드시 `safeItemSave(key, value)` 또는 `sbSaveAll()` 사용
 
-#### 가드 4 (서버측): `data-save.js` 빈값 저장 무조건 거부
-- `PROTECTED = new Set(['emps','rec','bonus','allow','tax','tbk','safety','bk'])` 키는 빈 배열/객체이면 **`oldValue` 존재 여부 불문 `continue`로 스킵** (upsert도 감사 로그 insert도 안 함).
-- 클라이언트 코드가 어떤 식으로 해킹/버그돼도 **빈값은 서버 DB에 도달 불가**.
+**C-4. `_flushSaveOnUnload` beacon 경로 동일 가드** (line ~695)
+- 페이지 닫힘 직전 sendBeacon 저장 시에도 동일한 빈값 가드 적용 (sbSaveAll 우회 불가)
 
-#### clearLocalData / 로그아웃 경쟁 조건 방어
-- `clearLocalData()`는 로컬 전역 리셋 시 **반드시** `_syncedSnapshot = null` + `clearTimeout(saveLS._timer)` 동반.
-- logout 중 대기 타이머가 유효 쿠키로 빈값 저장하던 race window 봉쇄.
+**C-5. `pollForUpdates _guardedMerge`** (line ~10591)
+- 서버 값이 비었고 로컬에 데이터 있으면 해당 키 동기화 스킵 → 서버 빈값이 로컬을 덮어쓸 수 없음
+- 적용 키: rec, bonus, allow, tbk
+
+**C-6. `pollForUpdates _guardedReplace`** (line ~10627)
+- 비키 블롭(replaceIfClean 경로)에도 동일한 서버 빈값 보호 적용
+
+**C-7. EMPS ADD-ONLY 폴링** (line ~10640)
+- 폴링은 새 직원만 흡수, **기존 직원은 절대 안 건드림**. 다른 기기에서 직원 삭제해도 폴링으론 전파 안 됨 (F5만 전파)
+
+**C-8. BK ADD-ONLY 폴링** (line ~10664)
+- 휴게시간도 동일 — 폴링은 추가만, 삭제는 F5에서만
+
+**C-9. POL 폴링 무변경** (line ~10658)
+- 급여 정책은 폴링에서 절대 변경 안 함. F5 시 sbLoadAll로만 동기화 → 사용자가 설정 중인 값 보호
+
+**C-10. `clearLocalData` race 봉쇄** (line ~10069)
+- 로컬 전역 리셋 시 **반드시** `_syncedSnapshot = null` + `clearTimeout(saveLS._timer)` 동반
+- logout 중 대기 타이머가 유효 쿠키로 빈값 저장하던 race window 차단
+
+**C-11. diff 기반 변경 키만 전송** (line ~10119)
+- 마지막 sync 스냅샷과 비교해 **변경된 키만** 서버 전송. 빈값 저장 시도 자체를 줄여 서버 가드 부하 감소
+
+**C-12. 낙관적 잠금 클라 송신** (line ~10156, ~575)
+- 저장 시 마지막으로 본 서버 `updated_at`을 `expectedUpdatedAt`으로 함께 전송 → 서버가 stale 거부
+
+**C-13. BroadcastChannel 멀티탭 동기화** (line ~10211)
+- 한 탭이 저장 성공하면 같은 브라우저 다른 탭에 즉시 알림 → 다른 탭 즉시 폴링 → 멀티탭 충돌 최소화
+
+**C-14. localStorage QuotaExceeded 감지** (line ~624)
+- `saveLS()` try-catch에서 `QuotaExceededError` 감지 시 사용자 토스트로 명확히 알림
+- **데이터는 서버에 정상 저장됨** (try-catch가 sbSaveAll 트리거를 막지 않음). 화면이 느려지거나 사진 일부 미표시 가능성만 안내
+
+#### ▣ 서버 가드 (netlify/functions/data-save.js, 7중)
+
+**S-1. 요청 본문 10MB 제한** (line ~14)
+- 비정상적으로 큰 페이로드는 413으로 거부
+
+**S-2. PROTECTED 빈값 무조건 거부** (line ~64)
+- 보호 키가 빈 배열/객체이면 **`oldValue` 존재 여부 불문** `continue`로 스킵 (upsert도 감사 로그도 안 함)
+- 클라이언트가 어떤 식으로 해킹/버그돼도 **빈값은 서버 DB에 도달 불가**
+
+**S-3. 낙관적 잠금 stale-version 거부** (line ~76)
+- 클라가 보낸 `expectedUpdatedAt`보다 서버 `updated_at`이 더 최신이면 거부 → 다른 디바이스의 옛 상태가 새 데이터를 덮어쓰는 사고 방지
+
+**S-4. 레거시 클라이언트 차단** (line ~77)
+- `expectedUpdatedAt`이 없는데 PROTECTED 키 + 서버에 기존 값 존재 → 거부 (옛 캐시 클라이언트가 가드 우회 시도)
+- 옛 코드를 캐시한 PC가 데이터를 덮어쓰는 일을 서버가 직접 막음
+
+**S-5. 사이즈 30% 급감 차단** (line ~89, 자체 코멘트 "6중 가드")
+- PROTECTED 키 + `oldValue` 존재 + 신규 사이즈가 30% 이상 줄고 5KB 이상 차이 → stale-overwrite로 간주, 거부
+- 정당한 대량 삭제는 보통 단계적으로 일어나므로 30% 급감은 사고 신호
+
+**S-6. atomic upsert** (line ~114)
+- `onConflict: 'company_id,data_key'` 단일 쿼리로 race 차단
+
+**S-7. 감사 로그 + old_value 백업** (line ~128)
+- 모든 변경의 변경 전 값을 audit_log에 보존 → 사고 시 복원 가능 (1차/2차 wipe 모두 이 경로로 복구)
+
+#### 페이지 닫힘 / 새로고침 시점 데이터 보호
+- `beforeunload` → `_flushSaveOnUnload`가 `saveLS._timer` 디바운스 중인 변경분을 sendBeacon으로 전송
+- **자동 강제 새로고침 금지**: 입력 중(input focus) 또는 `_hasUnsavedChanges === true` 상태에서 강제 reload 시 250ms 디바운스 윈도우 내 입력값이 유실 가능. 옛 캐시 클라 안내는 큰 배너 + 사용자 클릭 새로고침을 기본으로 하고, 자동 reload가 필요하면 (1) `_hasUnsavedChanges === false`, (2) `document.activeElement`가 input/textarea 아님, (3) 마지막 입력 후 30초 경과 — 3조건 동시 만족 시에만 허용
 
 ### 알려진 부수 이슈
 
@@ -497,9 +555,11 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
 11. httpOnly 쿠키 기반 인증이므로, 프론트엔드에서 JWT를 직접 다루지 말 것 (localStorage에 토큰 저장 금지)
 12. API 호출 시 `credentials: 'include'` 필수 (쿠키 자동 전송), Authorization 헤더 사용하지 않음
 13. Supabase Storage 버킷명: `nopro-files` (파일 업로드/삭제/URL 발급에 사용)
-14. **⚠️ 데이터 유실 방지 가드 절대 우회 금지** (2026-04-23 사고 이후 도입)
+14. **⚠️ 데이터 유실 방지 가드 절대 우회 금지** (2026-04-23 사고 이후 도입, 21중으로 확장)
     - `sbLoadAll`은 반드시 `if('key' in map)` 패턴만 사용. `else { X = []; }` 분기 절대 추가 금지.
-    - `sbSaveAll`의 빈값 가드는 수정·제거 금지. 필요 시 `window._allowEmptyXxxSave` 플래그로 명시적 우회.
-    - `pollForUpdates`의 `_guardedMerge`/`_guardedReplace` 래퍼 제거 금지.
-    - `clearLocalData`를 authLogout 외 다른 곳에서 호출 시 반드시 `_syncedSnapshot = null` 동반.
-    - 상세 규칙은 "데이터 유실 방지 3중 가드" 섹션 참조.
+    - `sbSaveAll` / `safeItemSave` / `_flushSaveOnUnload`의 빈값 가드는 수정·제거 금지.
+    - **`_allowEmptyXxxSave` 같은 우회 플래그 절대 재도입 금지.** 사용자가 명시적으로 거부한 패턴 (2026-04-24 확인).
+    - `pollForUpdates`의 `_guardedMerge`/`_guardedReplace`/EMPS·BK ADD-ONLY 래퍼 제거 금지.
+    - `clearLocalData`를 authLogout 외 다른 곳에서 호출 시 반드시 `_syncedSnapshot = null` + `clearTimeout(saveLS._timer)` 동반.
+    - 서버측 가드(`PROTECTED` 빈값 거부 / 낙관적 잠금 / 레거시 클라 차단 / 사이즈 30% 급감 차단) 어느 하나도 약화시키지 말 것.
+    - 상세 규칙은 "데이터 유실 방지 다중 가드" 섹션 참조 (클라 14 + 서버 7 = 21중).
