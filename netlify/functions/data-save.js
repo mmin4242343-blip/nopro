@@ -25,7 +25,7 @@ export const handler = async (event) => {
     try { body = JSON.parse(event.body); } catch { return err(400, '잘못된 요청 형식입니다', event); }
 
     // 단일 저장 또는 bulk 저장
-    const ALLOWED_KEYS = ['emps','pol','bk','tbk','rec','bonus','allow','tax','leave_settings','leave_overrides','folders','safety','pol_snapshots','pay_snapshots','bk_snapshots','emp_display_order'];
+    const ALLOWED_KEYS = ['emps','pol','bk','tbk','rec','bonus','allow','tax','leave_settings','leave_overrides','folders','safety','pol_snapshots','pay_snapshots','bk_snapshots'];
     const items = body.items || [{ key: body.key, value: body.value, expectedUpdatedAt: body.expectedUpdatedAt }];
 
     const versions = {};   // 저장 성공한 키 → 새 updated_at (클라가 자기 _serverVersions 갱신용)
@@ -62,17 +62,12 @@ export const handler = async (event) => {
       }
 
       // 🛡️ 서버측 2차 방어: 빈값 저장 절대 금지 (보호 대상 키)
-      const PROTECTED = new Set(['emps','rec','bonus','allow','tax','tbk','safety','bk','emp_display_order']);
+      const PROTECTED = new Set(['emps','rec','bonus','allow','tax','tbk','safety','bk']);
       if (PROTECTED.has(item.key)) {
-        // emp_display_order는 빈 배열이 정상값(아직 마이그레이션 전, 또는 직원 0명)이므로 oldValue 없을 때만 빈값 허용
-        if (item.key === 'emp_display_order' && Array.isArray(value) && value.length === 0 && !oldValue) {
-          // 최초 1회 빈 배열 저장 허용 (이후엔 PROTECTED 가드 풀로 작동)
-        } else {
-          const clientIsEmpty = Array.isArray(value) ? value.length === 0 : (value && typeof value==='object' && Object.keys(value).length===0);
-          if (clientIsEmpty) {
-            console.warn(`🛡️ 서버 가드: 빈값 저장 차단 (company=${companyId}, key=${item.key}, by=${changedBy}, oldExists=${!!oldValue})`);
-            continue;  // 해당 키만 스킵
-          }
+        const clientIsEmpty = Array.isArray(value) ? value.length === 0 : (value && typeof value==='object' && Object.keys(value).length===0);
+        if (clientIsEmpty) {
+          console.warn(`🛡️ 서버 가드: 빈값 저장 차단 (company=${companyId}, key=${item.key}, by=${changedBy}, oldExists=${!!oldValue})`);
+          continue;  // 해당 키만 스킵
         }
       }
 

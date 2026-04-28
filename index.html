@@ -15,25 +15,8 @@
     body.has-version-banner { padding-top: 110px; }
     body.has-version-banner #landing-overlay { top: 110px; }
   }
-  /* 📋 직원 순서 편집 모드 — 드래그 가능 표시 + 화면 강조 */
-  #daily-tbody.emp-order-edit-mode tr[data-eid] {
-    cursor: grab;
-    background: linear-gradient(90deg, transparent, rgba(245,158,11,.04), transparent);
-    transition: background .15s;
-  }
-  #daily-tbody.emp-order-edit-mode tr[data-eid]:hover {
-    background: rgba(245,158,11,.12);
-  }
-  #daily-tbody.emp-order-edit-mode tr[data-eid]:active { cursor: grabbing; }
-  .emp-order-ghost { opacity: .35; background: #FEF3C7 !important; }
-  .emp-order-chosen { background: #FDE68A !important; }
-  .emp-order-drag { opacity: .85; box-shadow: 0 4px 14px rgba(0,0,0,.15); }
-  #emp-order-edit-btn:hover { background:#F0F9FF !important; border-color:#3B82F6 !important; color:#1D4ED8 !important; }
-  #emp-order-edit-btn:active { transform: translateY(1px); }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js" integrity="sha384-OUW9euuUyxyHcAhTqbhI+Iyb8LMssXt/cpz0yXhs9UWG2/R/uaWdakx/4cfww7Vb" crossorigin="anonymous"></script>
-<!-- 📋 SortableJS — 출퇴근 기록의 직원 순서 드래그 편집 (CSP cdn.jsdelivr.net 허용 범위 내) -->
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js" defer></script>
 </head>
 <body>
 
@@ -1907,7 +1890,7 @@ noprohr.netlify.app/tbm_sign.html
 </div>
 
 </div></div></div>
-<script src="/js/app.js?v=2026-04-28-11"></script>
+<script src="/js/app.js?v=2026-04-28-12"></script>
 <!-- 인라인 핸들러용 unsafe-inline은 추후 단계적 제거 예정 -->
 <script>
 // placeholder - app.js에서 모든 로직 처리
