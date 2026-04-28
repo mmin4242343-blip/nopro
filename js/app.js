@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-28-21';
+const CLIENT_BUILD = '2026-04-28-22';
 let _buildMismatchShown = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -5267,6 +5267,10 @@ function updNotes(){
   }
   const el4=document.getElementById('night-info');if(el4)el4.innerHTML=`야간: <strong>${pad(ns)}:00~06:00</strong> / 월고정 ×0.5추가 / 시급제 ×1.5배`;
   const el5=document.getElementById('th-nt');if(el5)el5.textContent=`${pad(ns)}~06시`;
+  // 💾 야간/연장/휴일 11개 토글 onchange="updNotes()"가 POL을 변경하는데 저장 누락 → 추가.
+  // setSize/onJuhyu/setDupMode 등에서도 updNotes 호출하지만 그쪽은 자체 saveLS 있음 → 중복 호출되어도
+  // 디바운스 250ms로 결합되므로 부하 미미.
+  if(typeof saveLS==='function') saveLS();
 }
 function renderAllowanceList(){
   const tipMsg = '이 항목에 입력한 금액은 자동으로 마이너스(공제)로 계산됩니다. 총급여에서 해당 금액만큼 차감됩니다.';
@@ -5469,6 +5473,9 @@ function saveFolders(){
       files:(f.files||[]).map(x=>({id:x.id,name:x.name,storagePath:x.storagePath,size:x.size,type:x.type,date:x.date}))}));
     try{localStorage.setItem('npm5_folders',JSON.stringify(minimal));}catch(e2){console.error('폴더 저장 실패',e2);}
   }
+  // 💾 서버 저장 — 이전엔 localStorage만 저장돼서 폴더 추가/이름변경/삭제가 서버 미반영.
+  // saveLS는 saveFolders를 호출하지 않으므로 무한 루프 위험 없음.
+  if(typeof saveLS==='function') saveLS();
 }
 // 기존 base64 데이터 정리 (최초 1회)
 (function cleanLegacyFolders(){
