@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-28-13';
+const CLIENT_BUILD = '2026-04-28-14';
 let _buildMismatchShown = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -3621,20 +3621,10 @@ function renderEmps(){
   if(_oldDl) _oldDl.remove();
 
   renderFilterBar('emps-filter-bar','emps');
-  // sortEMPS와 동일한 4단계 정렬 (퇴사자 → 주간/야간 → 내국인/외국인 → stable)
-  let sorted=[...EMPS].sort((a,b)=>{
-    const aL = a.leave ? 1 : 0;
-    const bL = b.leave ? 1 : 0;
-    if(aL !== bL) return aL - bL;
-    const aS = (a.shift||'day')==='day' ? 0 : 1;
-    const bS = (b.shift||'day')==='day' ? 0 : 1;
-    if(aS !== bS) return aS - bS;
-    const aF = (a.nation==='foreign' || a.foreigner===true) ? 1 : 0;
-    const bF = (b.nation==='foreign' || b.foreigner===true) ? 1 : 0;
-    if(aF !== bF) return aF - bF;
-    return 0;
-  });
-  sorted = applyCommonFilter(sorted, 'emps');
+  // 🗂 EMPS 자연 순서 그대로 표시 — 사용자 드래그(empDrop)로 변경한 EMPS 배열 순서 100% 보존
+  // sortEMPS는 시작 시·shift/leave 변경 시·sbLoadAll 시 호출되어 EMPS를 4단계 정렬 상태로 유지.
+  // 그 후 사용자가 드래그로 미세조정하면 이 함수에서 추가 정렬 안 하므로 그대로 보존됨.
+  let sorted = applyCommonFilter([...EMPS], 'emps');
   let _prevGroup = null;
   document.getElementById('emp-tbody').innerHTML=sorted.map((e,i)=>{
     const al=calcAnnualLeave(e);
