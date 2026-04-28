@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-28-16';
+const CLIENT_BUILD = '2026-04-28-17';
 let _buildMismatchShown = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -3843,7 +3843,9 @@ function empDrop(ev,i){
 // 🔒 EMPS 편집 lock — 사용자가 직원관리에서 EMPS 변경(드래그/추가/삭제/필드 수정)한 시점 기록.
 // 폴링·충돌 머지가 lock 시간 내에 들어오면 EMPS 변경 스킵 → 사용자 작업 보호.
 // 60초 후 자동 만료. saveLS로 즉시 저장 트리거되므로 그 사이 다른 디바이스 폴링 영향을 막음.
+// _empResaveScheduled: lock 중 conflict로 머지 스킵 시 lock 만료 후 자동 재저장 예약 플래그.
 let _empLastModified = 0;
+let _empResaveScheduled = false;
 const EMP_EDIT_LOCK_MS = 60000;
 function markEmpEditing(){ _empLastModified = Date.now(); }
 function isEmpEditingLocked(){ return Date.now() - _empLastModified < EMP_EDIT_LOCK_MS; }
@@ -10343,7 +10345,26 @@ async function handleConflicts(conflicts){
       if(k === 'emps'){
         // 🔒 사용자 편집 중(60초 이내)이면 EMPS 충돌 머지 스킵 — 사용자 작업 우선 보호
         if(typeof isEmpEditingLocked === 'function' && isEmpEditingLocked()){
-          console.warn('🔒 EMPS 충돌 머지 스킵 — 사용자 편집 중. 다음 saveLS에서 재저장 예정');
+          console.warn('🔒 EMPS 충돌 머지 스킵 — 사용자 편집 중');
+          // 🚀 lock 만료 후 자동 재저장 예약 — 사용자 변경이 서버에 반영되도록 보장
+          // (사용자가 추가 변경 시 markEmpEditing 갱신 → lock 연장 → 그때 다시 시도)
+          if(!_empResaveScheduled){
+            _empResaveScheduled = true;
+            const remainMs = Math.max(EMP_EDIT_LOCK_MS - (Date.now() - _empLastModified), 0) + 500;
+            setTimeout(()=>{
+              _empResaveScheduled = false;
+              if(typeof isEmpEditingLocked === 'function' && isEmpEditingLocked()){
+                // 사용자가 추가 변경했으면 다음 saveLS 호출 시 자동 시도되니 여기서는 스킵
+                console.log('🔒 lock 재연장됨 → 다음 사용자 saveLS에 위임');
+                return;
+              }
+              console.log('🔓 EMPS lock 만료 → 자동 재저장 시도');
+              try {
+                saveLS();
+                if(typeof flushPendingSave === 'function') flushPendingSave();
+              } catch(e){ console.warn('자동 재저장 실패:', e); }
+            }, remainMs);
+          }
           continue;
         }
         const snapArr = (typeof snap.emps==='string') ? (function(){try{return JSON.parse(snap.emps);}catch(e){return [];}})() : (snap.emps||[]);
