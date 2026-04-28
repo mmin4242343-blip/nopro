@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-28-12';
+const CLIENT_BUILD = '2026-04-28-13';
 let _buildMismatchShown = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -3616,22 +3616,23 @@ function xlEdit(empId, field, rawText) {
 // ══════════════════════════════════════
 
 function renderEmps(){
-  // 부서 분류 자동완성용 datalist — 기본 3개 + EMPS에 입력된 커스텀 값 모두 포함
-  // 새 직원 등록 시 칸에 직접 새 부서명 입력하면 자동으로 다른 직원 자동완성·필터에도 반영됨
-  let dl = document.getElementById('dept-cat-options');
-  if(!dl){ dl = document.createElement('datalist'); dl.id = 'dept-cat-options'; document.body.appendChild(dl); }
-  const _customCats = [...new Set(EMPS.map(e=>(e.deptCat||'').trim()).filter(d=>d && !DEPT_CATS.includes(d)))].sort();
-  dl.innerHTML = [...DEPT_CATS, ..._customCats].map(c=>`<option value="${esc(c)}"></option>`).join('');
+  // 옛 dept-cat-options datalist DOM이 남아있으면 정리 (캐시된 페이지 잔재 청소)
+  const _oldDl = document.getElementById('dept-cat-options');
+  if(_oldDl) _oldDl.remove();
 
   renderFilterBar('emps-filter-bar','emps');
+  // sortEMPS와 동일한 4단계 정렬 (퇴사자 → 주간/야간 → 내국인/외국인 → stable)
   let sorted=[...EMPS].sort((a,b)=>{
-    // 퇴사자 맨 뒤
-    if(!a.leave&&b.leave)return -1;
-    if(a.leave&&!b.leave)return 1;
-    // 주간 먼저, 야간 나중
-    const aS=(a.shift||'day')==='day'?0:1;
-    const bS=(b.shift||'day')==='day'?0:1;
-    return aS-bS;
+    const aL = a.leave ? 1 : 0;
+    const bL = b.leave ? 1 : 0;
+    if(aL !== bL) return aL - bL;
+    const aS = (a.shift||'day')==='day' ? 0 : 1;
+    const bS = (b.shift||'day')==='day' ? 0 : 1;
+    if(aS !== bS) return aS - bS;
+    const aF = (a.nation==='foreign' || a.foreigner===true) ? 1 : 0;
+    const bF = (b.nation==='foreign' || b.foreigner===true) ? 1 : 0;
+    if(aF !== bF) return aF - bF;
+    return 0;
   });
   sorted = applyCommonFilter(sorted, 'emps');
   let _prevGroup = null;
@@ -3661,7 +3662,7 @@ function renderEmps(){
       </div></td>
       <td><input class="ei2" value="${esc(e.name)}" oninput="updE(${e.id},'name',this.value)" placeholder="이름" autocomplete="off"></td>
       <td><input class="ei2" value="${esc(e.role)}" oninput="updE(${e.id},'role',this.value)" autocomplete="off"></td>
-      <td><input class="ei2" list="dept-cat-options" value="${esc(e.deptCat||'')}" placeholder="사무" oninput="updE(${e.id},'deptCat',this.value.trim())" style="text-align:center;background:${e.deptCat?'#ECFDF5':'transparent'};color:${e.deptCat?'#047857':'var(--ink2)'};font-weight:${e.deptCat?'700':'500'};font-size:10px" title="부서 분류 (목록 선택 또는 직접 입력 — 입력 즉시 저장)" autocomplete="off" /></td>
+      <td><input class="ei2" value="${esc(e.deptCat||'')}" placeholder="사무" oninput="updE(${e.id},'deptCat',this.value.trim())" style="text-align:center;background:${e.deptCat?'#ECFDF5':'transparent'};color:${e.deptCat?'#047857':'var(--ink2)'};font-weight:${e.deptCat?'700':'500'};font-size:10px" title="부서 분류 (입력 즉시 저장 + 필터에 자동 분류)" autocomplete="off" /></td>
       <td><input class="ei2" value="${esc(e.grade||'')}" oninput="updE(${e.id},'grade',this.value)" placeholder="직급" autocomplete="off"></td>
       <td><input class="ei2" value="${esc(e.dept||'')}" oninput="updE(${e.id},'dept',this.value)" placeholder="인천본점" autocomplete="off"></td>
       <td>
@@ -3847,14 +3848,24 @@ function empDrop(ev,i){
 }
 // EMPS 배열 자체를 주간→야간→퇴사 순으로 정렬
 function sortEMPS(){
+  // 4단계 정렬: 퇴사자 뒤로 → 주간/야간 → 내국인/외국인 → 같은 그룹 내 원래 순서(stable sort)
+  // 결과 그룹 순서: 주간 내국인 → 주간 외국인 → 야간 내국인 → 야간 외국인 → 퇴사자
+  // EMPS 객체 자체는 미터치 (이름/주민번호/시급 등 변경 0). 배열 위치만 재배치.
   EMPS.sort((a,b)=>{
-    // 퇴사자 맨 뒤
-    if(!a.leave&&b.leave)return -1;
-    if(a.leave&&!b.leave)return 1;
-    // 주간 먼저, 야간 나중
-    const aS=(a.shift||'day')==='day'?0:1;
-    const bS=(b.shift||'day')==='day'?0:1;
-    return aS-bS;
+    // 1. 퇴사자 뒤로
+    const aL = a.leave ? 1 : 0;
+    const bL = b.leave ? 1 : 0;
+    if(aL !== bL) return aL - bL;
+    // 2. 주간 먼저
+    const aS = (a.shift||'day')==='day' ? 0 : 1;
+    const bS = (b.shift||'day')==='day' ? 0 : 1;
+    if(aS !== bS) return aS - bS;
+    // 3. 내국인 먼저 (외국인은 nation==='foreign' 또는 foreigner===true로 판정)
+    const aF = (a.nation==='foreign' || a.foreigner===true) ? 1 : 0;
+    const bF = (b.nation==='foreign' || b.foreigner===true) ? 1 : 0;
+    if(aF !== bF) return aF - bF;
+    // 4. 같은 그룹 내 원래 순서 유지 (ES2019 stable sort 특성 활용 — 사용자 드래그 정렬 보존)
+    return 0;
   });
 }
 
