@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-28-10';
+const CLIENT_BUILD = '2026-04-28-11';
 let _buildMismatchShown = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -50,6 +50,144 @@ function _checkServerBuild(serverBuild){
 //   2) 디바운스 중인 saveLS._timer를 즉시 flush + await
 //   3) 미저장 변경이 남아있으면 사용자 confirm으로 한 번 더 막음
 //   4) 최종 reload (브라우저가 beforeunload → _flushSaveOnUnload(sendBeacon)로 한 번 더 안전망)
+// ══════════════════════════════════════════════════════
+// 📋 직원 표시 순서 편집 — 출퇴근 기록의 [순서 편집] 버튼
+// 핵심 원칙:
+//   - EMPS 데이터 절대 미터치 (이름/주민번호/시급 등 변경 0)
+//   - 현재 필터 그룹의 ID들만 EMP_ORDER 안에서 위치 재배치
+//   - 다른 그룹의 ID는 그대로 (그룹 간 상대 순서 보존)
+//   - 21중 가드 그대로 작동 (saveLS → sbSaveAll 경로)
+//   - 취소 시 스냅샷으로 100% 복원
+// ══════════════════════════════════════════════════════
+let _empOrderEditMode = false;
+let _empOrderSnapshot = null;     // 진입 시 EMP_ORDER 백업 (취소 복원용)
+let _empOrderSortable = null;
+function _empOrderBeforeUnload(e){
+  if(!_empOrderEditMode) return;
+  e.preventDefault();
+  e.returnValue = '순서 편집 중입니다. 저장하지 않고 나가시겠습니까?';
+  return e.returnValue;
+}
+function enterEmpOrderEditMode(){
+  if(_empOrderEditMode) return;
+  if(typeof window.Sortable === 'undefined'){
+    alert('순서 편집 라이브러리 로딩 중입니다. 잠시 후 다시 시도해주세요.');
+    return;
+  }
+  const tbody = document.getElementById('daily-tbody');
+  if(!tbody || !tbody.querySelector('tr[data-eid]')){
+    alert('편집할 직원 목록이 없습니다. 필터를 조정해주세요.');
+    return;
+  }
+  _empOrderEditMode = true;
+  _empOrderSnapshot = Array.isArray(EMP_ORDER) ? [...EMP_ORDER] : [];
+  // 시간 입력 잠금 (실수 방지)
+  tbody.classList.add('emp-order-edit-mode');
+  tbody.querySelectorAll('input, textarea, select, button').forEach(el => {
+    if(el.dataset._eoLocked) return;
+    el.dataset._eoLocked = '1';
+    el.dataset._eoOrigDisabled = el.disabled ? '1' : '0';
+    el.disabled = true;
+  });
+  // 편집 토글바 표시
+  _renderEmpOrderEditBar();
+  // SortableJS 활성화
+  _empOrderSortable = new window.Sortable(tbody, {
+    animation: 150,
+    ghostClass: 'emp-order-ghost',
+    chosenClass: 'emp-order-chosen',
+    dragClass:  'emp-order-drag',
+  });
+  // 편집 중 페이지 이탈 경고
+  window.addEventListener('beforeunload', _empOrderBeforeUnload);
+}
+function exitEmpOrderEditMode(save){
+  if(!_empOrderEditMode) return;
+  const tbody = document.getElementById('daily-tbody');
+  try {
+    if(save && tbody){
+      // 현재 화면의 새 순서 (data-eid 순)
+      const newGroupOrder = Array.from(tbody.querySelectorAll('tr[data-eid]'))
+        .map(tr => Number(tr.dataset.eid))
+        .filter(n => !Number.isNaN(n));
+      // 현재 그룹 ID 셋
+      const groupSet = new Set(newGroupOrder);
+      // 기존 EMP_ORDER에서 그룹 ID 위치를 새 순서로 교체 (다른 그룹은 위치 그대로)
+      const queue = [...newGroupOrder];
+      const baseOrder = Array.isArray(_empOrderSnapshot) ? [..._empOrderSnapshot] : (Array.isArray(EMP_ORDER) ? [...EMP_ORDER] : []);
+      const updated = baseOrder.map(id => {
+        if(groupSet.has(id)){
+          return queue.shift();
+        }
+        return id;
+      });
+      // baseOrder에 없던 새 그룹 ID는 끝에 추가 (예: 신규 직원)
+      while(queue.length){
+        const nid = queue.shift();
+        if(nid != null && !updated.includes(nid)) updated.push(nid);
+      }
+      EMP_ORDER = updated;
+      saveLS();
+      if(typeof flushPendingSave === 'function') flushPendingSave();
+      if(typeof showSyncToast === 'function') showSyncToast('✅ 순서 저장됨', 'ok', 2500);
+    } else {
+      // 취소: 스냅샷 복원
+      if(Array.isArray(_empOrderSnapshot)) EMP_ORDER = [..._empOrderSnapshot];
+    }
+  } catch(e){
+    console.error('exitEmpOrderEditMode 오류:', e);
+    // 안전: 오류 시 스냅샷 복원
+    if(Array.isArray(_empOrderSnapshot)) EMP_ORDER = [..._empOrderSnapshot];
+  } finally {
+    // 정리
+    _empOrderEditMode = false;
+    _empOrderSnapshot = null;
+    if(_empOrderSortable){ try { _empOrderSortable.destroy(); } catch(e){} _empOrderSortable = null; }
+    if(tbody){
+      tbody.classList.remove('emp-order-edit-mode');
+      tbody.querySelectorAll('input, textarea, select, button').forEach(el => {
+        if(el.dataset._eoLocked){
+          el.disabled = (el.dataset._eoOrigDisabled === '1');
+          delete el.dataset._eoLocked;
+          delete el.dataset._eoOrigDisabled;
+        }
+      });
+    }
+    _removeEmpOrderEditBar();
+    window.removeEventListener('beforeunload', _empOrderBeforeUnload);
+    if(typeof renderTable === 'function') renderTable();
+  }
+}
+function _renderEmpOrderEditBar(){
+  if(document.getElementById('emp-order-edit-bar')) return;
+  const bar = document.createElement('div');
+  bar.id = 'emp-order-edit-bar';
+  bar.style.cssText = 'position:sticky;top:0;z-index:50;background:#FEF3C7;border:2px solid #F59E0B;border-radius:8px;padding:10px 16px;margin:8px 0;display:flex;align-items:center;justify-content:space-between;gap:12px;font-family:inherit;box-shadow:0 2px 8px rgba(245,158,11,.2);';
+  bar.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;min-width:0;">'+
+      '<span style="font-size:18px;flex-shrink:0;">✏️</span>'+
+      '<div style="min-width:0;">'+
+        '<div style="font-weight:700;color:#92400E;font-size:14px;">순서 편집 모드 — 행을 드래그해 순서 변경</div>'+
+        '<div style="font-size:11px;color:#78350F;margin-top:2px;">현재 필터 그룹만 적용. 시간 입력은 잠겼습니다.</div>'+
+      '</div>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px;flex-shrink:0;">'+
+      '<button onclick="exitEmpOrderEditMode(false)" style="padding:7px 14px;border:1px solid #D1D5DB;border-radius:6px;background:#fff;color:#374151;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">❌ 취소</button>'+
+      '<button onclick="exitEmpOrderEditMode(true)" style="padding:7px 16px;border:0;border-radius:6px;background:#22C55E;color:#fff;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;">💾 저장</button>'+
+    '</div>';
+  // 출퇴근 기록 페이지 본문 상단에 삽입
+  const dailyPg = document.getElementById('pg-daily');
+  if(dailyPg){
+    dailyPg.insertBefore(bar, dailyPg.firstChild);
+  } else {
+    document.body.appendChild(bar);
+  }
+}
+function _removeEmpOrderEditBar(){
+  const bar = document.getElementById('emp-order-edit-bar');
+  if(bar) bar.remove();
+}
+
 async function _doVersionReload(){
   const btn = document.getElementById('version-update-reload-btn');
   if(btn){ btn.disabled = true; btn.textContent = '저장 중…'; }
@@ -374,9 +512,13 @@ function calcAnnualLeave(emp, forYear){
 // ══════════════════════════════════════
 // LocalStorage
 // ══════════════════════════════════════
-const LS={E:'npm5_emps',R:'npm5_rec',P:'npm5_pol',B:'npm5_bk',T:'npm5_tbk',BN:'npm5_bonus',AL:'npm5_allow',TX:'npm5_tax',CL:'npm5_changelog'};
+const LS={E:'npm5_emps',R:'npm5_rec',P:'npm5_pol',B:'npm5_bk',T:'npm5_tbk',BN:'npm5_bonus',AL:'npm5_allow',TX:'npm5_tax',CL:'npm5_changelog',EO:'npm5_emp_order'};
 function load(k,def){try{const v=localStorage.getItem(k);return v?JSON.parse(v):def;}catch{return def;}}
 let TAX_REC = JSON.parse(localStorage.getItem('npm5_tax')||'{}');
+// 📋 직원 표시 순서 — 출퇴근 기록의 필터 적용 시 사용자 지정 순서로 정렬
+// 빈 배열이면 자연 정렬(EMPS 그대로). 새 직원은 끝에 push, 영구 삭제 시 자동 제거.
+// 편집은 출퇴근 기록 페이지의 [순서 편집] 버튼으로만 가능 (드래그 후 저장).
+let EMP_ORDER = (function(){ try { const v = localStorage.getItem(LS.EO); return v ? JSON.parse(v) : []; } catch(e){ return []; } })();
 // 특정 날짜에 유효한 값 반환 (from 이하 최신)
 // 변경 이력 등록
 // 변경 적용 확인 모달 표시
@@ -681,6 +823,7 @@ function saveLS(){
     localStorage.setItem(LS.R,JSON.stringify(REC));
     localStorage.setItem(LS.BN,JSON.stringify(BONUS_REC));
     localStorage.setItem(LS.AL,JSON.stringify(ALLOWANCE_REC));
+    localStorage.setItem(LS.EO,JSON.stringify(EMP_ORDER));
     sfSave();
   }catch(e){
     console.warn(e);
@@ -754,6 +897,7 @@ function _flushSaveOnUnload(){
       {key:'tax', value:JSON.parse(localStorage.getItem('npm5_tax')||'{}')},
       {key:'leave_settings', value:JSON.parse(localStorage.getItem('npm5_leave_settings')||'{}')},
       {key:'leave_overrides', value:JSON.parse(localStorage.getItem('npm5_leave_overrides')||'{}')},
+      {key:'emp_display_order', value:Array.isArray(EMP_ORDER)?EMP_ORDER:[]},
     ];
     // 🛡️ 가드: sbSaveAll과 동일한 빈값 덮어쓰기 방어 (beacon이 sbSaveAll 우회 못하도록)
     const snap = (typeof _syncedSnapshot!=='undefined' && _syncedSnapshot) || {};
@@ -1848,6 +1992,25 @@ function setSearch(tab, val){
   }, 200);
 }
 
+// 📋 직원 표시 순서 적용 — EMP_ORDER에 등록된 직원은 그 순서대로, 미등록 직원은 뒤쪽
+// 빈 EMP_ORDER이면 입력 배열 그대로 반환 (자연 순서). 안전한 graceful fallback.
+function applyEmpOrder(emps){
+  if(!Array.isArray(emps)) return emps;
+  if(!Array.isArray(EMP_ORDER) || EMP_ORDER.length === 0) return emps;
+  const orderMap = new Map();
+  EMP_ORDER.forEach((id, idx) => orderMap.set(String(id), idx));
+  const INF = Number.MAX_SAFE_INTEGER;
+  // 미등록 직원도 입력 배열의 자연 순서를 보존하기 위해 원래 인덱스를 보조 키로 사용
+  const indexed = emps.map((e, i) => ({e, i}));
+  indexed.sort((a, b) => {
+    const ai = orderMap.has(String(a.e.id)) ? orderMap.get(String(a.e.id)) : INF;
+    const bi = orderMap.has(String(b.e.id)) ? orderMap.get(String(b.e.id)) : INF;
+    if(ai !== bi) return ai - bi;
+    return a.i - b.i;  // 동일 그룹 내 자연 순서 유지
+  });
+  return indexed.map(x => x.e);
+}
+
 function applyCommonFilter(emps, tab, refDate){
   const f = F[tab];
   return emps.filter(emp=>{
@@ -1930,6 +2093,9 @@ function makeFilterBar(tab){
       <input placeholder="이름 검색..." value="${f.search}"
         oninput="setSearch('${tab}',this.value)">
     </div>
+    ${tab==='daily' ? `<button id="emp-order-edit-btn" onclick="enterEmpOrderEditMode()"
+        title="현재 필터 그룹의 직원 표시 순서를 드래그로 변경"
+        style="margin-left:6px;padding:6px 12px;font-size:12px;font-weight:600;border:1px solid #C8D6E5;border-radius:8px;background:#fff;color:#1E3A5F;cursor:pointer;font-family:inherit;white-space:nowrap;">✏️ 순서 편집</button>` : ''}
   </div>`;
 }
 
@@ -2037,11 +2203,11 @@ function renderTable(){
   try {
   renderFilterBar('daily-filter-bar','daily');
   const dayDate=new Date(cY,cM-1,cD);
-  const activeDayEmps = applyCommonFilter(EMPS.filter(emp=>{
+  const activeDayEmps = applyEmpOrder(applyCommonFilter(EMPS.filter(emp=>{
     if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate)return false;}
     if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<=dayDate)return false;}
     return true;
-  }), 'daily', dayDate);
+  }), 'daily', dayDate));
   document.getElementById('daily-tbody').innerHTML=activeDayEmps.map(emp=>{
     const k=rk(emp.id,cY,cM,cD);
     const todayStr = `${cY}-${pad(cM)}-${pad(cD)}`;
@@ -2119,7 +2285,7 @@ function renderTable(){
           <button class="out-x" onclick="delOutTime(${emp.id},${oi})">×</button>
         </div>`).join('')}
       </div>`:'';
-      return`<tr class="${rowCls}">
+      return`<tr data-eid="${emp.id}" class="${rowCls}">
         ${cbTd}${nameTd}
         <td><input class="time-inp ${rec.absent||rec.annual?'dis':''}" value="${rec.start||''}" placeholder="0900"
           ${rec.absent||rec.annual?'disabled':''} data-eid="${emp.id}" data-field="start"
@@ -2185,7 +2351,7 @@ function renderTable(){
           <button class="out-x" onclick="delOutTime(${emp.id},${oi})">×</button>
         </div>`).join('')}
       </div>`:'';
-      return`<tr class="${rowCls}">
+      return`<tr data-eid="${emp.id}" class="${rowCls}">
         ${cbTd}${nameTd}
         <td><input class="time-inp ${rec.absent||rec.annual?'dis':''}" value="${rec.start||''}" placeholder="0900" ${rec.absent||rec.annual?'disabled':''} data-eid="${emp.id}" data-field="start"
           onblur="handleTimeInput(${emp.id},'start',this.value)"></td>
@@ -2242,7 +2408,7 @@ function renderTable(){
       </div>`).join('')}
       <button class="bk-add" onclick="addCustomBk(${emp.id})" style="font-size:9px;margin-top:2px;padding:2px 8px">+ 세트 추가</button>
     </div>` : '';
-    return`<tr class="${rowCls}">
+    return`<tr data-eid="${emp.id}" class="${rowCls}">
       ${cbTd}${nameTd}
       <td><input class="time-inp ${sCls} ${rec.absent||rec.annual?'dis':''}" value="${rec.start||''}" placeholder="0900" ${rec.absent||rec.annual?'disabled':''} data-eid="${emp.id}" data-field="start"
         onblur="handleTimeInput(${emp.id},'start',this.value)"></td>
@@ -4403,6 +4569,8 @@ function confirmBulkAdd(){
       nation:row.nation||'local',
       color:colors[ci], tc:tcs[ci]
     });
+    // 📋 직원 표시 순서 — 일괄 등록도 끝에 자동 추가
+    if(typeof EMP_ORDER!=='undefined' && Array.isArray(EMP_ORDER) && !EMP_ORDER.includes(maxId)) EMP_ORDER.push(maxId);
   });
 
   sortEMPS();
@@ -4572,6 +4740,8 @@ function importEmpsExcel(input){
         tc:tcs[ci]
       };
       EMPS.push(emp);
+      // 📋 직원 표시 순서 — 엑셀 import도 끝에 자동 추가
+      if(typeof EMP_ORDER!=='undefined' && Array.isArray(EMP_ORDER) && !EMP_ORDER.includes(emp.id)) EMP_ORDER.push(emp.id);
       added++;
     }
 
@@ -4746,6 +4916,8 @@ function doAddEmp(empNo){
   const tcs=['#1E3A5F','#78350F','#064E3B','#4C1D95','#831843','#7C2D12'];
   const ci=EMPS.length%colors.length;
   EMPS.push({id:nid,name:'',role:'',dept:'',deptCat:'',empNo:empNo,rate:null,monthly:null,join:'',leave:'',age:'',phone:'',rrnFront:'',rrnBack:'',sot:209,payMode:null,shift:'day',gender:'male',nation:'local',color:colors[ci],tc:tcs[ci]});
+  // 📋 직원 표시 순서 — 신규 직원은 항상 리스트 끝에 추가 (사용자 요구: 추가되면 무조건 해당 리스트 밑에 추가)
+  if(typeof EMP_ORDER!=='undefined' && Array.isArray(EMP_ORDER) && !EMP_ORDER.includes(nid)) EMP_ORDER.push(nid);
   saveLS();renderEmps();renderSb();
 }
 // 고용형태(직접고용/아웃소싱) 판별 — 소속(dept) 텍스트에 키워드 포함되면 아웃소싱
@@ -4974,6 +5146,8 @@ function rmE(id){
   if(!confirm(`"${nm}" 직원을 삭제하시겠습니까?\n\n이 직원의 출퇴근·급여·연차·수당 이력이 화면에서 사라집니다.\n\n※ 복구가 필요하면 관리자에게 문의 (감사 로그에 기록은 남습니다)`))return;
   if(!confirm(`⚠️ 최종 확인\n\n"${nm}" 을(를) 정말 삭제할까요?`))return;
   EMPS=EMPS.filter(e=>e.id!==id);
+  // 📋 직원 표시 순서 — 영구 삭제 시 EMP_ORDER에서도 자동 제거
+  if(typeof EMP_ORDER!=='undefined' && Array.isArray(EMP_ORDER)) EMP_ORDER = EMP_ORDER.filter(eid => eid !== id);
   saveLS();
   // 다른 기기에 30초 폴링을 기다리지 않고 즉시 반영
   if(typeof flushPendingSave==='function') flushPendingSave();
@@ -10114,7 +10288,8 @@ function clearLocalData(){
     'npm5_emps','npm5_rec','npm5_pol','npm5_bk','npm5_tbk',
     'npm5_bonus','npm5_allow','npm5_tax','npm5_leave_settings',
     'npm5_leave_overrides','npm5_folders','npm5_safety',
-    'npm5_pol_snapshots','npm5_pay_snapshots','npm5_bk_snapshots'
+    'npm5_pol_snapshots','npm5_pay_snapshots','npm5_bk_snapshots',
+    'npm5_emp_order'
   ];
   keys.forEach(k => localStorage.removeItem(k));
   EMPS = [];
@@ -10125,6 +10300,7 @@ function clearLocalData(){
   BONUS_REC = {};
   ALLOWANCE_REC = {};
   SAFETY_REC = {};
+  if(typeof EMP_ORDER !== 'undefined') EMP_ORDER = [];
   if(typeof TAX_REC !== 'undefined') TAX_REC = {};
   if(typeof POL_SNAPSHOTS !== 'undefined') POL_SNAPSHOTS = {};
   if(typeof PAY_SNAPSHOTS !== 'undefined') PAY_SNAPSHOTS = {};
@@ -10152,6 +10328,7 @@ async function sbSaveAll(companyId) {
     {key:'pol_snapshots', value:POL_SNAPSHOTS||{}},
     {key:'pay_snapshots', value:PAY_SNAPSHOTS||{}},
     {key:'bk_snapshots', value:BK_SNAPSHOTS||{}},
+    {key:'emp_display_order', value:Array.isArray(EMP_ORDER)?EMP_ORDER:[]},
   ];
   // 대형 키: 각각 별도 저장 (타임아웃 방지 + old_value 감사로그 저장)
   const largeItems = [
@@ -10460,6 +10637,7 @@ function _takeSyncedSnapshot(){
       allow: _deepCopy(ALLOWANCE_REC),
       leave_overrides: _deepCopy(typeof leaveOverrides!=='undefined'?leaveOverrides:{}),
       safety: _deepCopy(typeof SAFETY_REC!=='undefined'?SAFETY_REC:{}),
+      emp_display_order: JSON.stringify(typeof EMP_ORDER!=='undefined'?EMP_ORDER:[]),
     };
   } catch(e){ console.warn('스냅샷 실패:', e); }
 }
@@ -10700,6 +10878,13 @@ async function pollForUpdates(){
       }
       replaceIfClean(name, getStr, apply);
     };
+    // 📋 직원 표시 순서 — 내 편집 없을 때만 서버 값으로 교체 (로컬 편집 보호)
+    if(server.emp_display_order !== undefined){
+      _guardedReplace('emp_display_order',
+        ()=>JSON.stringify(EMP_ORDER||[]),
+        v=>{ EMP_ORDER = Array.isArray(v) ? v : []; localStorage.setItem(LS.EO, JSON.stringify(EMP_ORDER)); }
+      );
+    }
     // 🛡️ EMPS — ADD-ONLY: 새 직원만 흡수, 기존 직원은 절대 안 건드림
     if(server.emps !== undefined && Array.isArray(server.emps)){
       const localIds = new Set((EMPS||[]).map(e => String(e.id)));
@@ -10851,6 +11036,8 @@ async function sbLoadAll(companyId) {
   if('pol_snapshots' in map)   { POL_SNAPSHOTS = map.pol_snapshots || {}; localStorage.setItem('npm5_pol_snapshots', JSON.stringify(POL_SNAPSHOTS)); }
   if('pay_snapshots' in map)   { PAY_SNAPSHOTS = map.pay_snapshots || {}; localStorage.setItem('npm5_pay_snapshots', JSON.stringify(PAY_SNAPSHOTS)); }
   if('bk_snapshots' in map)    { BK_SNAPSHOTS = map.bk_snapshots || {}; localStorage.setItem('npm5_bk_snapshots', JSON.stringify(BK_SNAPSHOTS)); }
+  // 📋 직원 표시 순서 — 서버에 키가 있을 때만 갱신 (Guard C-1, 빈 응답 시 로컬 보존)
+  if('emp_display_order' in map){ EMP_ORDER = Array.isArray(map.emp_display_order) ? map.emp_display_order : []; localStorage.setItem(LS.EO, JSON.stringify(EMP_ORDER)); }
 
   // 최초 1회: POL_SNAPSHOTS가 비어있고 REC 데이터가 있으면 현재 POL을 과거 달에 복사해 시작점 확보
   try {
