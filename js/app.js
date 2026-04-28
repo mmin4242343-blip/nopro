@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-28-17';
+const CLIENT_BUILD = '2026-04-28-18';
 let _buildMismatchShown = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -1930,6 +1930,9 @@ function makeFilterBar(tab){
       <input placeholder="이름 검색..." value="${f.search}"
         oninput="setSearch('${tab}',this.value)">
     </div>
+    ${tab==='emps' ? `<button id="emp-order-edit-btn" onclick="enterEmpOrderEditMode()"
+        title="직원 순서를 편집 모드에서 드래그로 변경 — 편집 중엔 다른 디바이스 변경에 안 덮여짐"
+        style="margin-left:6px;padding:6px 12px;font-size:12px;font-weight:600;border:1px solid #C8D6E5;border-radius:8px;background:#fff;color:#1E3A5F;cursor:pointer;font-family:inherit;white-space:nowrap;">✏️ 순서 편집</button>` : ''}
   </div>`;
 }
 
@@ -3831,8 +3834,6 @@ function empDrop(ev,i){
     }
   }
   empDragIdx=null;
-  // 🔒 사용자 편집 마크 — 60초 동안 폴링 EMPS 머지 스킵해서 옛 순서로 덮여지는 것 방지
-  markEmpEditing();
   saveLS();
   // 🚀 드래그 직후 250ms 디바운스 우회하고 즉시 서버 저장 — 사용자가 빠르게 F5 눌러도 유실 방지
   if(typeof flushPendingSave === 'function') flushPendingSave();
@@ -3840,15 +3841,88 @@ function empDrop(ev,i){
   renderSb(document.getElementById('sb-search-inp')?.value||'');
   renderTable();
 }
-// 🔒 EMPS 편집 lock — 사용자가 직원관리에서 EMPS 변경(드래그/추가/삭제/필드 수정)한 시점 기록.
-// 폴링·충돌 머지가 lock 시간 내에 들어오면 EMPS 변경 스킵 → 사용자 작업 보호.
-// 60초 후 자동 만료. saveLS로 즉시 저장 트리거되므로 그 사이 다른 디바이스 폴링 영향을 막음.
-// _empResaveScheduled: lock 중 conflict로 머지 스킵 시 lock 만료 후 자동 재저장 예약 플래그.
-let _empLastModified = 0;
-let _empResaveScheduled = false;
-const EMP_EDIT_LOCK_MS = 60000;
-function markEmpEditing(){ _empLastModified = Date.now(); }
-function isEmpEditingLocked(){ return Date.now() - _empLastModified < EMP_EDIT_LOCK_MS; }
+// 🔒 EMPS 명시적 편집 모드 — [✏️ 순서 편집] 버튼 클릭 시 활성, [저장]/[취소] 시 해제.
+// 활성 동안: 폴링 EMPS 동기화 스킵 + handleConflicts EMPS 머지는 항상 사용자 우선(스킵).
+// _empEditModeSnapshot: 진입 시점 EMPS 복사본 — [취소] 시 100% 복원 보장.
+let _empEditMode = false;
+let _empEditModeSnapshot = null;
+function isEmpEditingLocked(){ return _empEditMode === true; }
+
+// 편집 모드 진입 — 직원관리 페이지 [✏️ 순서 편집] 버튼에서 호출
+function enterEmpOrderEditMode(){
+  if(_empEditMode) return;
+  _empEditMode = true;
+  // EMPS 깊은 복사본 저장 (취소 시 복원용) — 객체 참조 체인까지 안전하게
+  try { _empEditModeSnapshot = JSON.parse(JSON.stringify(EMPS||[])); } catch(e){ _empEditModeSnapshot = []; }
+  _renderEmpEditBar();
+  // 편집 중 페이지 이탈 경고
+  window.addEventListener('beforeunload', _empEditBeforeUnload);
+}
+function _empEditBeforeUnload(e){
+  if(!_empEditMode) return;
+  e.preventDefault();
+  e.returnValue = '직원 순서 편집 중입니다. 저장하지 않고 나가시겠습니까?';
+  return e.returnValue;
+}
+function exitEmpOrderEditMode(save){
+  if(!_empEditMode) return;
+  try {
+    if(save){
+      // 사용자 변경을 즉시 저장 — 디바운스 우회 + handleConflicts에서도 항상 사용자 우선이므로 무조건 통과
+      saveLS();
+      if(typeof flushPendingSave === 'function') flushPendingSave();
+      if(typeof showSyncToast === 'function') showSyncToast('✅ 직원 순서 저장됨', 'ok', 2500);
+    } else {
+      // 취소: 진입 시점 EMPS로 100% 복원
+      if(Array.isArray(_empEditModeSnapshot)){
+        EMPS = JSON.parse(JSON.stringify(_empEditModeSnapshot));
+        try { localStorage.setItem('npm5_emps', JSON.stringify(EMPS)); } catch(e){}
+      }
+    }
+  } catch(e){
+    console.error('exitEmpOrderEditMode 오류:', e);
+    // 오류 시 안전: 스냅샷 복원
+    if(Array.isArray(_empEditModeSnapshot)){
+      try { EMPS = JSON.parse(JSON.stringify(_empEditModeSnapshot)); } catch(_){}
+    }
+  } finally {
+    _empEditMode = false;
+    _empEditModeSnapshot = null;
+    _removeEmpEditBar();
+    window.removeEventListener('beforeunload', _empEditBeforeUnload);
+    if(typeof renderEmps === 'function') renderEmps();
+    if(typeof renderSb === 'function') renderSb();
+    if(typeof renderTable === 'function') renderTable();
+  }
+}
+function _renderEmpEditBar(){
+  if(document.getElementById('emp-edit-bar')) return;
+  const bar = document.createElement('div');
+  bar.id = 'emp-edit-bar';
+  bar.style.cssText = 'position:sticky;top:0;z-index:50;background:#FEF3C7;border:2px solid #F59E0B;border-radius:8px;padding:10px 16px;margin:8px 0;display:flex;align-items:center;justify-content:space-between;gap:12px;font-family:inherit;box-shadow:0 2px 8px rgba(245,158,11,.2);';
+  bar.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;min-width:0;">'+
+      '<span style="font-size:18px;flex-shrink:0;">✏️</span>'+
+      '<div style="min-width:0;">'+
+        '<div style="font-weight:700;color:#92400E;font-size:14px;">직원 순서 편집 모드</div>'+
+        '<div style="font-size:11px;color:#78350F;margin-top:2px;">행을 드래그해 순서 변경. 편집 중엔 다른 디바이스 변경이 사용자 변경을 덮지 않습니다.</div>'+
+      '</div>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px;flex-shrink:0;">'+
+      '<button onclick="exitEmpOrderEditMode(false)" style="padding:7px 14px;border:1px solid #D1D5DB;border-radius:6px;background:#fff;color:#374151;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">❌ 취소</button>'+
+      '<button onclick="exitEmpOrderEditMode(true)" style="padding:7px 16px;border:0;border-radius:6px;background:#22C55E;color:#fff;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;">💾 저장</button>'+
+    '</div>';
+  const empsPg = document.getElementById('pg-emps');
+  if(empsPg){
+    empsPg.insertBefore(bar, empsPg.firstChild);
+  } else {
+    document.body.appendChild(bar);
+  }
+}
+function _removeEmpEditBar(){
+  const bar = document.getElementById('emp-edit-bar');
+  if(bar) bar.remove();
+}
 
 // EMPS 배열 자체를 주간→야간→퇴사 순으로 정렬
 function sortEMPS(){
@@ -3876,8 +3950,6 @@ function sortEMPS(){
 function updE(id,f,v){
   const e=EMPS.find(x=>x.id===id);
   if(!e)return;
-  // 🔒 EMPS 편집 마크 — 사용자가 직접 수정한 값이 다른 디바이스 폴링으로 덮여지지 않게 보호
-  markEmpEditing();
   // 숫자 필드는 음수 방지 (실수 입력으로 음의 급여가 들어가는 것 차단)
   if(f==='rate' || f==='monthly'){
     const n = +v;
@@ -4763,7 +4835,6 @@ function doAddEmp(empNo){
   const tcs=['#1E3A5F','#78350F','#064E3B','#4C1D95','#831843','#7C2D12'];
   const ci=EMPS.length%colors.length;
   EMPS.push({id:nid,name:'',role:'',dept:'',deptCat:'',empNo:empNo,rate:null,monthly:null,join:'',leave:'',age:'',phone:'',rrnFront:'',rrnBack:'',sot:209,payMode:null,shift:'day',gender:'male',nation:'local',color:colors[ci],tc:tcs[ci]});
-  markEmpEditing();
   saveLS();renderEmps();renderSb();
 }
 // 고용형태(직접고용/아웃소싱) 판별 — 소속(dept) 텍스트에 키워드 포함되면 아웃소싱
@@ -4992,7 +5063,6 @@ function rmE(id){
   if(!confirm(`"${nm}" 직원을 삭제하시겠습니까?\n\n이 직원의 출퇴근·급여·연차·수당 이력이 화면에서 사라집니다.\n\n※ 복구가 필요하면 관리자에게 문의 (감사 로그에 기록은 남습니다)`))return;
   if(!confirm(`⚠️ 최종 확인\n\n"${nm}" 을(를) 정말 삭제할까요?`))return;
   EMPS=EMPS.filter(e=>e.id!==id);
-  markEmpEditing();
   saveLS();
   // 다른 기기에 30초 폴링을 기다리지 않고 즉시 반영
   if(typeof flushPendingSave==='function') flushPendingSave();
@@ -10343,36 +10413,18 @@ async function handleConflicts(conflicts){
       let merged;
 
       if(k === 'emps'){
-        // 🔒 사용자 편집 중(60초 이내)이면 EMPS 충돌 머지 스킵 — 사용자 작업 우선 보호
-        if(typeof isEmpEditingLocked === 'function' && isEmpEditingLocked()){
-          console.warn('🔒 EMPS 충돌 머지 스킵 — 사용자 편집 중');
-          // 🚀 lock 만료 후 자동 재저장 예약 — 사용자 변경이 서버에 반영되도록 보장
-          // (사용자가 추가 변경 시 markEmpEditing 갱신 → lock 연장 → 그때 다시 시도)
-          if(!_empResaveScheduled){
-            _empResaveScheduled = true;
-            const remainMs = Math.max(EMP_EDIT_LOCK_MS - (Date.now() - _empLastModified), 0) + 500;
-            setTimeout(()=>{
-              _empResaveScheduled = false;
-              if(typeof isEmpEditingLocked === 'function' && isEmpEditingLocked()){
-                // 사용자가 추가 변경했으면 다음 saveLS 호출 시 자동 시도되니 여기서는 스킵
-                console.log('🔒 lock 재연장됨 → 다음 사용자 saveLS에 위임');
-                return;
-              }
-              console.log('🔓 EMPS lock 만료 → 자동 재저장 시도');
-              try {
-                saveLS();
-                if(typeof flushPendingSave === 'function') flushPendingSave();
-              } catch(e){ console.warn('자동 재저장 실패:', e); }
-            }, remainMs);
-          }
-          continue;
+        // 🔒 EMPS는 충돌 머지에서 항상 사용자 우선 — 다른 디바이스 변경이 사용자 EMPS를 절대 못 덮음.
+        // 다른 디바이스의 직원 정보 변경(이름/시급 등)은 사용자가 F5할 때 sbLoadAll로 받음.
+        // 편집 모드 중이면 추가로 더 강하게 보호 (재저장 시도도 안 함).
+        if(_empEditMode){
+          console.warn('🔒 EMPS 충돌 머지 스킵 — 편집 모드 중. 편집 종료 후 사용자 변경 우선 저장 예정');
+        } else {
+          console.warn('🔒 EMPS 충돌 머지 스킵 — 사용자 변경 우선 정책 (다음 saveLS에서 재시도)');
         }
-        const snapArr = (typeof snap.emps==='string') ? (function(){try{return JSON.parse(snap.emps);}catch(e){return [];}})() : (snap.emps||[]);
-        // 🛡️ 필드 단위 머지 — 같은 직원의 이름·직급·전화 등을 동시 수정 시 모두 보존
-        merged = _mergeEmpsArrayByField(EMPS, server.emps||[], snapArr);
-        EMPS = merged;
-        if(typeof sortEMPS==='function') sortEMPS();
-        localStorage.setItem('npm5_emps', JSON.stringify(EMPS));
+        // 사용자 EMPS는 그대로 유지, merged를 안 만들어서 resaveItems에 안 들어가도록
+        // (이전 _mergeEmpsArrayByField 머지 로직 제거 — 사용자 EMPS 절대 안 덮음)
+        // 만약 직원 정보 동기화가 필요하면 사용자가 F5 → sbLoadAll로 처리.
+        continue;
       } else if(k === 'rec'){
         merged = _mergeByField(REC, server.rec||{}, _parseSnap(snap.rec));
         REC = merged;
@@ -10744,10 +10796,10 @@ async function pollForUpdates(){
       replaceIfClean(name, getStr, apply);
     };
     // 🛡️ EMPS — ADD-ONLY: 새 직원만 흡수, 기존 직원은 절대 안 건드림
-    // 🔒 사용자 편집 중(60초 이내)이면 EMPS 동기화 전체 스킵 — 드래그 정렬 보호
+    // 🔒 편집 모드 중이면 EMPS 동기화 전체 스킵 — 사용자 드래그 정렬 보호
     if(server.emps !== undefined && Array.isArray(server.emps)){
-      if(typeof isEmpEditingLocked === 'function' && isEmpEditingLocked()){
-        console.warn('🔒 폴링 EMPS 동기화 스킵 — 사용자 편집 중 (lock 만료까지 ' + Math.round((EMP_EDIT_LOCK_MS - (Date.now() - _empLastModified))/1000) + 's)');
+      if(_empEditMode){
+        console.warn('🔒 폴링 EMPS 동기화 스킵 — 편집 모드 중');
       } else {
       const localIds = new Set((EMPS||[]).map(e => String(e.id)));
       const newEmps = server.emps.filter(s => !localIds.has(String(s.id)));
