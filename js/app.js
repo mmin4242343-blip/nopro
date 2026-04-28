@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-28-15';
+const CLIENT_BUILD = '2026-04-28-16';
 let _buildMismatchShown = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -3831,6 +3831,8 @@ function empDrop(ev,i){
     }
   }
   empDragIdx=null;
+  // 🔒 사용자 편집 마크 — 60초 동안 폴링 EMPS 머지 스킵해서 옛 순서로 덮여지는 것 방지
+  markEmpEditing();
   saveLS();
   // 🚀 드래그 직후 250ms 디바운스 우회하고 즉시 서버 저장 — 사용자가 빠르게 F5 눌러도 유실 방지
   if(typeof flushPendingSave === 'function') flushPendingSave();
@@ -3838,6 +3840,14 @@ function empDrop(ev,i){
   renderSb(document.getElementById('sb-search-inp')?.value||'');
   renderTable();
 }
+// 🔒 EMPS 편집 lock — 사용자가 직원관리에서 EMPS 변경(드래그/추가/삭제/필드 수정)한 시점 기록.
+// 폴링·충돌 머지가 lock 시간 내에 들어오면 EMPS 변경 스킵 → 사용자 작업 보호.
+// 60초 후 자동 만료. saveLS로 즉시 저장 트리거되므로 그 사이 다른 디바이스 폴링 영향을 막음.
+let _empLastModified = 0;
+const EMP_EDIT_LOCK_MS = 60000;
+function markEmpEditing(){ _empLastModified = Date.now(); }
+function isEmpEditingLocked(){ return Date.now() - _empLastModified < EMP_EDIT_LOCK_MS; }
+
 // EMPS 배열 자체를 주간→야간→퇴사 순으로 정렬
 function sortEMPS(){
   // 4단계 정렬: 퇴사자 뒤로 → 주간/야간 → 내국인/외국인 → 같은 그룹 내 원래 순서(stable sort)
@@ -3864,6 +3874,8 @@ function sortEMPS(){
 function updE(id,f,v){
   const e=EMPS.find(x=>x.id===id);
   if(!e)return;
+  // 🔒 EMPS 편집 마크 — 사용자가 직접 수정한 값이 다른 디바이스 폴링으로 덮여지지 않게 보호
+  markEmpEditing();
   // 숫자 필드는 음수 방지 (실수 입력으로 음의 급여가 들어가는 것 차단)
   if(f==='rate' || f==='monthly'){
     const n = +v;
@@ -4749,6 +4761,7 @@ function doAddEmp(empNo){
   const tcs=['#1E3A5F','#78350F','#064E3B','#4C1D95','#831843','#7C2D12'];
   const ci=EMPS.length%colors.length;
   EMPS.push({id:nid,name:'',role:'',dept:'',deptCat:'',empNo:empNo,rate:null,monthly:null,join:'',leave:'',age:'',phone:'',rrnFront:'',rrnBack:'',sot:209,payMode:null,shift:'day',gender:'male',nation:'local',color:colors[ci],tc:tcs[ci]});
+  markEmpEditing();
   saveLS();renderEmps();renderSb();
 }
 // 고용형태(직접고용/아웃소싱) 판별 — 소속(dept) 텍스트에 키워드 포함되면 아웃소싱
@@ -4977,6 +4990,7 @@ function rmE(id){
   if(!confirm(`"${nm}" 직원을 삭제하시겠습니까?\n\n이 직원의 출퇴근·급여·연차·수당 이력이 화면에서 사라집니다.\n\n※ 복구가 필요하면 관리자에게 문의 (감사 로그에 기록은 남습니다)`))return;
   if(!confirm(`⚠️ 최종 확인\n\n"${nm}" 을(를) 정말 삭제할까요?`))return;
   EMPS=EMPS.filter(e=>e.id!==id);
+  markEmpEditing();
   saveLS();
   // 다른 기기에 30초 폴링을 기다리지 않고 즉시 반영
   if(typeof flushPendingSave==='function') flushPendingSave();
@@ -10327,6 +10341,11 @@ async function handleConflicts(conflicts){
       let merged;
 
       if(k === 'emps'){
+        // 🔒 사용자 편집 중(60초 이내)이면 EMPS 충돌 머지 스킵 — 사용자 작업 우선 보호
+        if(typeof isEmpEditingLocked === 'function' && isEmpEditingLocked()){
+          console.warn('🔒 EMPS 충돌 머지 스킵 — 사용자 편집 중. 다음 saveLS에서 재저장 예정');
+          continue;
+        }
         const snapArr = (typeof snap.emps==='string') ? (function(){try{return JSON.parse(snap.emps);}catch(e){return [];}})() : (snap.emps||[]);
         // 🛡️ 필드 단위 머지 — 같은 직원의 이름·직급·전화 등을 동시 수정 시 모두 보존
         merged = _mergeEmpsArrayByField(EMPS, server.emps||[], snapArr);
@@ -10704,7 +10723,11 @@ async function pollForUpdates(){
       replaceIfClean(name, getStr, apply);
     };
     // 🛡️ EMPS — ADD-ONLY: 새 직원만 흡수, 기존 직원은 절대 안 건드림
+    // 🔒 사용자 편집 중(60초 이내)이면 EMPS 동기화 전체 스킵 — 드래그 정렬 보호
     if(server.emps !== undefined && Array.isArray(server.emps)){
+      if(typeof isEmpEditingLocked === 'function' && isEmpEditingLocked()){
+        console.warn('🔒 폴링 EMPS 동기화 스킵 — 사용자 편집 중 (lock 만료까지 ' + Math.round((EMP_EDIT_LOCK_MS - (Date.now() - _empLastModified))/1000) + 's)');
+      } else {
       const localIds = new Set((EMPS||[]).map(e => String(e.id)));
       const newEmps = server.emps.filter(s => !localIds.has(String(s.id)));
       if(newEmps.length > 0){
@@ -10719,6 +10742,7 @@ async function pollForUpdates(){
       const snapEmpsStr = snap.emps || '';
       if(localEmpsStr === snapEmpsStr && server._versions && server._versions.emps){
         _serverVersions.emps = server._versions.emps;
+      }
       }
     }
     // 🛡️ POL — 폴링에서 변경 안 함. F5 시 sbLoadAll로만 동기화. 사용자 설정 보호.
