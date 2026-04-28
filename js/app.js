@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-28-19';
+const CLIENT_BUILD = '2026-04-28-20';
 let _buildMismatchShown = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -5128,9 +5128,11 @@ function setBasePay(m){
     const rr3=document.getElementById('sr-base-rate');if(rr3)rr3.style.display='none';
   }
   setTimeout(updNotes,0);
+  // 💾 자동 저장 — 라디오 클릭 즉시 서버 반영 (F5 시 유실 방지)
+  if(typeof saveLS==='function') saveLS();
 }
-function setSize(s){POL.size=s;['u5','o5'].forEach(x=>{const el=document.getElementById('rb-'+x);if(el)el.classList.toggle('on',x===s);});const aw=document.getElementById('set-aw');if(s==='o5'){aw.style.display='flex';document.getElementById('set-aw-msg').textContent='5인 이상: 가산수당 50% 의무 (근기법 제56조)';}else aw.style.display='none';}
-function onJuhyu(){POL.juhyu=document.getElementById('tog-juhyu').checked;}
+function setSize(s){POL.size=s;['u5','o5'].forEach(x=>{const el=document.getElementById('rb-'+x);if(el)el.classList.toggle('on',x===s);});const aw=document.getElementById('set-aw');if(s==='o5'){aw.style.display='flex';document.getElementById('set-aw-msg').textContent='5인 이상: 가산수당 50% 의무 (근기법 제56조)';}else aw.style.display='none'; if(typeof saveLS==='function') saveLS();}
+function onJuhyu(){POL.juhyu=document.getElementById('tog-juhyu').checked; if(typeof saveLS==='function') saveLS();}
 function showLawModal(){
   const existing=document.getElementById('law-modal');
   if(existing){existing.remove();return;}
@@ -5174,8 +5176,8 @@ function showLawModal(){
   modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
   document.body.appendChild(modal);
 }
-function setDupMode(m){POL.dupMode=m;['legal','single'].forEach(x=>{const el=document.getElementById('rb-dup-'+x);if(el)el.classList.toggle('on',x===m);});updNotes();}
-function setDedMode(m){POL.dedMode=m;['hour','day'].forEach(x=>{const el=document.getElementById('rb-ded-'+x);if(el)el.classList.toggle('on',x===m);});}
+function setDupMode(m){POL.dupMode=m;['legal','single'].forEach(x=>{const el=document.getElementById('rb-dup-'+x);if(el)el.classList.toggle('on',x===m);});updNotes(); if(typeof saveLS==='function') saveLS();}
+function setDedMode(m){POL.dedMode=m;['hour','day'].forEach(x=>{const el=document.getElementById('rb-ded-'+x);if(el)el.classList.toggle('on',x===m);}); if(typeof saveLS==='function') saveLS();}
 function setAlMode(m){POL.alMode=m;['legal','custom'].forEach(x=>{const el=document.getElementById('rb-al-'+x);if(el)el.classList.toggle('on',x===m);});}
 
 // ── 주말 요일 설정 ──
