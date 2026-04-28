@@ -404,6 +404,11 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
 4. **서버 직접 저장(`/data-save`) 금지**: `sbSaveAll()` 또는 `safeItemSave(key, value)` 만 사용.
 5. **init 시점 자동 저장 로직 추가 금지**: 504 재발 원인. 변경 감지 후 조건부 저장만 허용.
 6. **복구 절차**: 감사 로그 `old_value`에서 복원. `/api/audit-log?key=X&limit=1&offset=N` 페이징으로 `old` 크고 `new` 작은 시점 찾기 → `old_value` JSON.parse → `/api/data-save` 재저장. `emps`의 경우 `rrnBack`이 암호화된 상태라 이중 암호화 방지 위해 `rrnBack=''`로 비우고 저장 필요(rrnBack 재입력 별도 요구).
+7. **배포 시 빌드 ID 갱신 — 반드시 3곳 동시에**: 빌드 ID 누락 시 모든 사용자에게 빨간 배너가 잘못 뜨거나(false positive) 새 버전 사용자에게 안 뜸(false negative). **데이터 영향은 없으나 UX 사고**.
+   - `js/app.js`의 `CLIENT_BUILD` 상수 (line 6 근처)
+   - `index.html`의 `<script src="/js/app.js?v=...">` 쿼리값
+   - `netlify/functions/data-load.js`의 fallback (`process.env.SERVER_BUILD || '...'` 우측 문자열, line 52 근처)
+   - 세 값을 모두 동일한 `YYYY-MM-DD-N` 형식으로 갱신. Netlify 환경변수 `SERVER_BUILD`는 선택사항(설정돼 있으면 fallback보다 우선).
 
 ### 남은 보안 작업 (선택)
 - CSP `script-src 'unsafe-inline'` 제거: 인라인 이벤트 핸들러 336개를 addEventListener로 전환 필요 (대규모 리팩토링)

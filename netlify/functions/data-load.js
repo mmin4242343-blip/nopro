@@ -48,8 +48,9 @@ export const handler = async (event) => {
     // 클라이언트가 _versions로 인식 (data_key는 ALLOWED_KEYS에만 있으므로 충돌 없음)
     map._versions = versions;
     // 🏷️ 빌드 버전 — 클라가 옛 캐시된 JS 사용 중이면 감지 후 새로고침 안내
-    // 배포 시 SERVER_BUILD env var를 갱신하면 클라가 자동 인지
-    map._serverBuild = process.env.SERVER_BUILD || '2026-04-28-9';
+    // 배포 시 이 fallback 값을 js/app.js의 CLIENT_BUILD와 동일하게 갱신 필수
+    // (Netlify env var SERVER_BUILD가 있으면 그것이 우선, 없으면 fallback 사용)
+    map._serverBuild = process.env.SERVER_BUILD || '2026-04-28-10';
 
     return ok(map, event);
 
