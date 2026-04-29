@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-29-4';
+const CLIENT_BUILD = '2026-04-29-5';
 let _buildMismatchShown = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -2894,7 +2894,7 @@ function fastSearchPayroll(){
     const visible = !search || name.includes(search);
     card.style.display = visible ? '' : 'none';
     if(!visible) return;
-    const s = _payrollSummaryCache.get(+card.dataset.empId);
+    const s = _payrollSummaryCache.get(`${+card.dataset.empId}_${pY}_${pM}`);
     if(!s) return;
     gt.base+=s.tBase; gt.nt+=s.tNightPay; gt.ot+=s.tOtDayPay+s.tOtNightPay;
     gt.hol+=(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0);
@@ -2929,8 +2929,9 @@ function renderPayroll(){
     return true;
   }), 'payroll', payMonthEnd);
   document.getElementById('pay-grid').innerHTML=activePayEmps.map(emp=>{
-    const s=monthSummary(emp.id,pY,pM);
-    _payrollSummaryCache.set(emp.id, s);
+    const _ck=`${emp.id}_${pY}_${pM}`;
+    let s=_payrollSummaryCache.get(_ck);
+    if(!s){ s=monthSummary(emp.id,pY,pM); _payrollSummaryCache.set(_ck, s); }
     const rate=getEmpRate(emp);
     gt.base+=s.tBase;gt.nt+=s.tNightPay;gt.ot+=s.tOtDayPay+s.tOtNightPay;gt.hol+=(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0);gt.al+=s.annualPay;gt.bonus+=s.bonus;gt.allow+=s.totalAllowance;gt.ded+=s.deduction;gt.total+=s.total;
     return`<div class="pc" data-emp-id="${emp.id}" data-emp-name="${esc((emp.name||'').toLowerCase())}">
@@ -3019,6 +3020,8 @@ function renderPayroll(){
   }
 }
 
+// 청크 렌더 race 방지용 토큰 — 동일 함수 재호출 시 진행 중인 RAF 청크 중단
+let _xlRenderToken = 0;
 function renderXlPreview(){
   const allowList = POL.allowances.filter(a => !a.isDeduct);
   const deductAllow = POL.allowances.filter(a => a.isDeduct===true);
@@ -3081,8 +3084,10 @@ function renderXlPreview(){
   // ── 데이터 행 ──
   let gt={base:0,nt:0,otDay:0,otNight:0,holDay:0,holNight:0,holDayOt:0,holNightOt:0,al:0,bonus:0,allow:0,ded:0,total:0};
 
-  const rows = payEmps.map((emp,idx)=>{
-    const s = monthSummary(emp.id, pY, pM);
+  const buildRow = (emp, idx) => {
+    const _ck = `${emp.id}_${pY}_${pM}`;
+    let s = _payrollSummaryCache.get(_ck);
+    if(!s){ s = monthSummary(emp.id, pY, pM); _payrollSummaryCache.set(_ck, s); }
     const rate = getEmpRate(emp);
     const tx = getTaxRec(emp.id, pY, pM);
 
@@ -3227,46 +3232,85 @@ function renderXlPreview(){
       <td class="num" style="${totalDeduct>0?'color:#A32D2D;font-weight:700':''}">${totalDeduct>0?'-'+fmt$(totalDeduct):''}</td>
       <td class="num" style="font-weight:700;color:#085041">${fmt$(netPay)}</td>
     </tr>`;
-  });
+  };
 
-  document.getElementById('xl-table').innerHTML = hdr + '<tbody>' + rows.join('') + '</tbody>';
-  // 하단 스크롤바 미러 동기화
-  setTimeout(()=>{
-    const wrap = document.getElementById('xl-wrap-main');
-    const mirror = document.getElementById('xl-scroll-mirror');
-    const mirrorInner = document.getElementById('xl-scroll-mirror-inner');
-    if(wrap && mirror && mirrorInner){
-      mirrorInner.style.width = wrap.scrollWidth + 'px';
-      // 미러 → 본체 동기화
-      mirror.onscroll = ()=>{ if(!wrap._syncing){ wrap._syncing=true; wrap.scrollLeft=mirror.scrollLeft; wrap._syncing=false; }};
-      // 본체 → 미러 동기화
-      wrap.onscroll = ()=>{ if(!mirror._syncing){ mirror._syncing=true; mirror.scrollLeft=wrap.scrollLeft; mirror._syncing=false; }};
-    }
-  }, 50);
-  // 클릭 즉시 편집 활성화
-  document.querySelectorAll('#xl-table td.xl-editable').forEach(td=>{
-    td.addEventListener('focus', function(){
-      this.setAttribute('contenteditable','true');
-      const range=document.createRange();
-      range.selectNodeContents(this);
-      window.getSelection().removeAllRanges();
-      window.getSelection().addRange(range);
-    });
-    td.addEventListener('blur', function(){
-      this.setAttribute('contenteditable','false');
-      _xlDispatchSave(this);
-    });
-    td.addEventListener('keydown', function(e){
-      if(e.key==='Enter'){e.preventDefault();this.blur();}
-      if(e.key==='Escape'){e.preventDefault();renderXlPreview();}
-      if(e.key==='Tab'){e.preventDefault();
-        const all=Array.from(document.querySelectorAll('#xl-table td.xl-editable'));
-        const idx=all.indexOf(this); this.blur();
-        const next=all[e.shiftKey?idx-1:idx+1];
-        if(next) setTimeout(()=>next.focus(),50);
+  // ── 스켈레톤 + RAF 청크 렌더 (체감 응답성 개선) ──
+  const myToken = ++_xlRenderToken;
+  const total = payEmps.length;
+  const SKEL_TR = '<tr class="xl-skel"><td colspan="100" style="padding:8px;height:30px;border:0"></td></tr>';
+  document.getElementById('xl-table').innerHTML = hdr + '<tbody id="xl-tbody">' + (total>0 ? SKEL_TR.repeat(total) : '') + '</tbody>';
+
+  // 스켈레톤 CSS (페이지당 한 번만 주입)
+  if(!document.getElementById('xl-skel-style')){
+    const _st = document.createElement('style');
+    _st.id = 'xl-skel-style';
+    _st.textContent = '@keyframes xlSkel{0%{background-position:200% 0}100%{background-position:-200% 0}} .xl-skel td{background:linear-gradient(90deg,#F1F5F9 25%,#E2E8F0 50%,#F1F5F9 75%);background-size:200% 100%;animation:xlSkel 1.5s infinite;border-bottom:1px solid #F1F5F9}';
+    document.head.appendChild(_st);
+  }
+
+  // 마지막 청크 후 호출: 스크롤 동기화 + 입력 핸들러 등록
+  const _attachPostRender = () => {
+    setTimeout(()=>{
+      const wrap = document.getElementById('xl-wrap-main');
+      const mirror = document.getElementById('xl-scroll-mirror');
+      const mirrorInner = document.getElementById('xl-scroll-mirror-inner');
+      if(wrap && mirror && mirrorInner){
+        mirrorInner.style.width = wrap.scrollWidth + 'px';
+        mirror.onscroll = ()=>{ if(!wrap._syncing){ wrap._syncing=true; wrap.scrollLeft=mirror.scrollLeft; wrap._syncing=false; }};
+        wrap.onscroll = ()=>{ if(!mirror._syncing){ mirror._syncing=true; mirror.scrollLeft=wrap.scrollLeft; mirror._syncing=false; }};
       }
+    }, 50);
+    document.querySelectorAll('#xl-table td.xl-editable').forEach(td=>{
+      td.addEventListener('focus', function(){
+        this.setAttribute('contenteditable','true');
+        const range=document.createRange();
+        range.selectNodeContents(this);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+      });
+      td.addEventListener('blur', function(){
+        this.setAttribute('contenteditable','false');
+        _xlDispatchSave(this);
+      });
+      td.addEventListener('keydown', function(e){
+        if(e.key==='Enter'){e.preventDefault();this.blur();}
+        if(e.key==='Escape'){e.preventDefault();renderXlPreview();}
+        if(e.key==='Tab'){e.preventDefault();
+          const all=Array.from(document.querySelectorAll('#xl-table td.xl-editable'));
+          const idx=all.indexOf(this); this.blur();
+          const next=all[e.shiftKey?idx-1:idx+1];
+          if(next) setTimeout(()=>next.focus(),50);
+        }
+      });
     });
-  });
+  };
+
+  if(total === 0){ _attachPostRender(); return; }
+
+  // 행 30개씩 RAF 청크로 점진 렌더 — 첫 화면 즉시 표시 + 메인 스레드 양보
+  const tbody = document.getElementById('xl-tbody');
+  const CHUNK = 30;
+  const renderChunk = (start) => {
+    if(myToken !== _xlRenderToken) return; // 새 호출 들어왔으면 이 청크 중단
+    const end = Math.min(start + CHUNK, total);
+    let html = '';
+    for(let i = start; i < end; i++){ html += buildRow(payEmps[i], i); }
+    const tmp = document.createElement('tbody');
+    tmp.innerHTML = html;
+    const newRows = Array.from(tmp.children);
+    const skelList = Array.from(tbody.querySelectorAll('tr.xl-skel')).slice(0, newRows.length);
+    for(let i = 0; i < newRows.length; i++){
+      if(skelList[i]) skelList[i].replaceWith(newRows[i]);
+      else tbody.appendChild(newRows[i]);
+    }
+    if(end < total){
+      requestAnimationFrame(() => renderChunk(end));
+    } else {
+      if(myToken !== _xlRenderToken) return;
+      _attachPostRender();
+    }
+  };
+  requestAnimationFrame(() => renderChunk(0));
 }
 
 function setupXlNav() {
@@ -9563,12 +9607,14 @@ function xlSaveAllow(inp){
   if(_xlLockedGuard()){ _xlDebouncedRefresh(); return; }
   const eid=+inp.dataset.eid, aid=inp.dataset.aid;
   setMonthAllowance(eid,pY,pM,aid,+String(inp.value).replace(/,/g,'')||0);
+  _payrollSummaryCache.delete(`${eid}_${pY}_${pM}`);
   _xlDebouncedRefresh();
 }
 function xlSaveBonus(inp){
   if(_xlLockedGuard()){ _xlDebouncedRefresh(); return; }
   const eid=+inp.dataset.eid;
   setMonthBonus(eid,pY,pM,+String(inp.value).replace(/,/g,'')||0);
+  _payrollSummaryCache.delete(`${eid}_${pY}_${pM}`);
   _xlDebouncedRefresh();
 }
 function xlSaveTax(inp){
@@ -9576,6 +9622,7 @@ function xlSaveTax(inp){
   const eid=+inp.dataset.eid, field=inp.dataset.tax;
   const raw = String(inp.value).replace(/,/g,'');
   setTaxRec(eid,pY,pM,field,raw===''?'':(+raw||0));
+  _payrollSummaryCache.delete(`${eid}_${pY}_${pM}`);
   _xlDebouncedRefresh();
 }
 
