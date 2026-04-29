@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-29-3';
+const CLIENT_BUILD = '2026-04-29-4';
 let _buildMismatchShown = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -1877,11 +1877,6 @@ function applyCommonFilter(emps, tab, refDate){
       if(f.deptCat==='none'){ if(ec) return false; }
       else if(ec!==f.deptCat) return false;
     }
-    // 🚫 급여관리 전용: 사무직 일시 숨김 토글
-    // 사무직 판별 — 명시적 증거 있을 때만 숨김 (안전한 기본: 분류 안 된 직원은 안 숨김)
-    if(tab==='payroll' && typeof _payrollHideOffice!=='undefined' && _payrollHideOffice){
-      if(_isOfficeForHide(emp)) return false;
-    }
     if(f.search && !(emp.name||'').toLowerCase().includes(f.search)) return false;
     return true;
   });
@@ -1974,61 +1969,6 @@ function renderFilterBar(containerId, tab){
 
 let payFilter = 'all';
 
-// ══ 급여관리: 사무직 일시 숨김 (일회성 기능, localStorage 영속) ══
-// 켜진 상태에서 사무직만 화면·엑셀에서 가림.
-// 다른 데이터는 그대로 (REC/BONUS/ALLOW 모두 보존), 토글로 즉시 복구 가능.
-//
-// 사무직 판별 규칙 (안전 우선 — 명시적 증거 있을 때만 숨김):
-//   1. emp.deptCat이 '운반/시설/선별/물류' 등 비-사무 값이면 → 사무직 아님 (절대 안 숨김)
-//   2. emp.role(직종)에 '사무|관리|경영|매니저|총무|회계|인사' 키워드 → 사무직 (숨김)
-//   3. emp.deptCat에 '사무|관리|경영|총무|회계' 키워드 → 사무직 (숨김)
-//   4. 둘 다 매칭 안 됨 → 사무직 아님 (안전한 기본 — 분류 안 된 직원은 보호)
-function _isOfficeForHide(emp){
-  if(!emp) return false;
-  const role = (emp.role||'').trim();
-  const deptCat = (emp.deptCat||'').trim();
-  // (1) 명시적으로 비-사무 부서로 분류 → 사무직 아님
-  if(deptCat && !/사무|관리|경영|총무|회계|인사/.test(deptCat)) return false;
-  // (2) 직종이 사무 키워드 매칭 → 사무직
-  if(/사무|관리|경영|매니저|총무|회계|인사/.test(role)) return true;
-  // (3) 부서명이 사무 키워드 매칭 → 사무직
-  if(/사무|관리|경영|총무|회계/.test(deptCat)) return true;
-  // (4) 그 외 (직종도 부서도 명시 없음) → 안전하게 사무직 아님
-  return false;
-}
-
-let _payrollHideOffice = false;
-try { _payrollHideOffice = localStorage.getItem('npm5_payroll_hide_office') === '1'; } catch(e){}
-
-function togglePayrollHideOffice(){
-  _payrollHideOffice = !_payrollHideOffice;
-  try { localStorage.setItem('npm5_payroll_hide_office', _payrollHideOffice ? '1' : '0'); } catch(e){}
-  _updateHideOfficeUI();
-  if(typeof renderPayroll === 'function') renderPayroll();
-  if(typeof showSyncToast === 'function'){
-    if(_payrollHideOffice) showSyncToast('🚫 사무직 급여 일시 숨김\n토글 다시 누르거나 배너의 [표시 복구] 클릭으로 즉시 복원','ok',3000);
-    else showSyncToast('✅ 사무직 급여 표시 복구','ok',2000);
-  }
-}
-
-function _updateHideOfficeUI(){
-  const btn = document.getElementById('pv-hide-office');
-  if(btn){
-    if(_payrollHideOffice){
-      btn.textContent = '👁 사무직 표시';
-      btn.style.background = 'var(--abg, #FEF3C7)';
-      btn.style.color = '#92400E';
-      btn.style.borderColor = '#FCD34D';
-      btn.title = '클릭하여 사무직 급여 표시를 복구';
-    } else {
-      btn.textContent = '🚫 사무직 가리기';
-      btn.style.background = '';
-      btn.style.color = '';
-      btn.style.borderColor = '';
-      btn.title = '사무직(부서 미지정) 급여를 일시 숨김 (데이터 보존, 즉시 복구 가능)';
-    }
-  }
-}
 function setPayFilter(f){ payFilter=f; }
 function filterEmpsByPay(emps){
   return applyCommonFilter(emps, 'payroll');
@@ -2978,29 +2918,6 @@ function renderPayroll(){
   document.getElementById('pv-title').textContent=`${pY}년 ${pM}월 급여 요약`;
   _renderPayConfirmBar();
   _payrollSummaryCache.clear();
-  // 🚫 사무직 숨김 배너: 토글 ON일 때 N명 숨김 표시 + 복구 버튼
-  _updateHideOfficeUI();
-  const _banner = document.getElementById('pay-office-hidden-banner');
-  if(_banner){
-    if(_payrollHideOffice){
-      const payMonthEnd2 = new Date(pY,pM,0);
-      const hiddenCount = EMPS.filter(e=>{
-        if(e.deletedAt) return false;
-        if(e.join){const jd=parseEmpDate(e.join);if(jd>payMonthEnd2)return false;}
-        if(e.leave){const ld=parseEmpDate(e.leave);if(ld<new Date(pY,pM-1,1))return false;}
-        return _isOfficeForHide(e);  // 동일 헬퍼로 카운트 일치 보장
-      }).length;
-      _banner.style.display = 'flex';
-      _banner.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;background:linear-gradient(90deg,#FEF3C7,#FFFBEB);border:1px solid #FCD34D;border-radius:10px;padding:10px 14px;margin:8px 14px;font-size:12px;color:#92400E;font-weight:600';
-      _banner.innerHTML = `
-        <span>🚫 사무직 ${hiddenCount}명의 급여가 일시 숨김 상태입니다 (데이터는 그대로 보존)</span>
-        <button class="btn btn-sm" onclick="togglePayrollHideOffice()" style="background:#FFFFFF;color:#92400E;border:1px solid #FCD34D;font-weight:700;padding:5px 14px">👁 표시 복구</button>
-      `;
-    } else {
-      _banner.style.display = 'none';
-      _banner.innerHTML = '';
-    }
-  }
   // 확정된 달은 입력칸을 잠가 "입력해도 안 먹히는" 현상 방지
   const _monthLocked = (typeof isPayMonthConfirmed==='function') && isPayMonthConfirmed(pY, pM);
   let gt={base:0,nt:0,ot:0,hol:0,al:0,bonus:0,allow:0,ded:0,total:0};

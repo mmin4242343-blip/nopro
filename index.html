@@ -818,12 +818,10 @@
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-sm" id="pv-tab-card" onclick="setPvMode('card')" style="background:var(--nbg);color:var(--navy2);border-color:var(--navy2)">급여 카드 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:12px;padding:0 2px;opacity:.7" onclick="showTip('급여 카드','직원별 카드 형태로 이번 달 급여를 확인합니다.\n수당·상여금 직접 입력 가능\n\n카드에서 금액 입력 → 상세 명세에도 자동 반영')">💡</button></span></button>
       <button class="btn btn-sm" id="pv-tab-xl" onclick="setPvMode('xl')">상세 명세 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:12px;padding:0 2px;opacity:.7" onclick="showTip('상세 명세','전체 직원 급여를 스프레드시트 형태로 한눈에 봅니다.\n\n• 셀 클릭 → 수당·세금 직접 입력 가능\n• 4대보험·소득세·지방소득세 입력 시 실지급액 자동 계산\n• [엑셀 내보내기]로 급여대장 파일 저장 가능')">💡</button></span></button>
-      <button class="btn btn-sm" id="pv-hide-office" onclick="togglePayrollHideOffice()" title="사무직(부서 미지정) 직원의 급여를 일시 숨김. 다시 누르면 표시 복구.">🚫 사무직 가리기</button>
       <button class="btn btn-sm btn-t" onclick="exportExcel()" style="display:flex;align-items:center;gap:4px">⬇ 엑셀 내보내기</button>
     </div>
   </div>
   <div id="payroll-filter-bar"></div>
-  <div id="pay-office-hidden-banner" style="display:none"></div>
   <div id="pay-confirm-bar" style="margin:6px 0"></div>
   <div id="pay-card-view">
     <div class="pg2" id="pay-grid"></div>
@@ -1890,7 +1888,7 @@ noprohr.netlify.app/tbm_sign.html
 </div>
 
 </div></div></div>
-<script src="/js/app.js?v=2026-04-29-3"></script>
+<script src="/js/app.js?v=2026-04-29-4"></script>
 <!-- 인라인 핸들러용 unsafe-inline은 추후 단계적 제거 예정 -->
 <script>
 // placeholder - app.js에서 모든 로직 처리
