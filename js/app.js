@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-29-1';
+const CLIENT_BUILD = '2026-04-29-2';
 let _buildMismatchShown = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -3119,9 +3119,9 @@ function renderXlPreview(){
     <th style="min-width:36px;background:#1a3a6e;color:#fff;position:sticky;left:0;z-index:5">순번</th>
     <th style="min-width:70px;background:#1a3a6e;color:#fff;position:sticky;left:36px;z-index:5">성명</th>
     <th style="min-width:60px;background:#1a3a6e;color:#fff">직종</th>
-    <th style="min-width:60px;background:#1a3a6e;color:#fff">부서</th>
+    <th style="min-width:60px;background:#1a3a6e;color:#fff">근무지</th>
     <th style="min-width:50px;background:#1a3a6e;color:#fff">직급</th>
-    <th style="min-width:60px;background:#1a3a6e;color:#fff">소속</th>
+    <th style="min-width:60px;background:#1a3a6e;color:#fff">부서</th>
     <th style="min-width:64px;background:#1a3a6e;color:#fff">급여<br>방식</th>
     <th style="min-width:46px;background:#1a3a6e;color:#fff">연차<br>개수</th>
     <th style="min-width:46px;background:#1a3a6e;color:#fff">근무<br>일수</th>
