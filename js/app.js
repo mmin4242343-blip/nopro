@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-29-5';
+const CLIENT_BUILD = '2026-04-29-6';
 let _buildMismatchShown = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -9759,6 +9759,8 @@ async function doAuthLogin(){
   try{
     const res=await apiFetch('/auth-login','POST',{email,password:pw});
     setNoproSession(res.session);
+    // 🔒 새 로그인 — 이전 계정의 메모리·localStorage 잔여물 즉시 제거 (계정 전환 시 데이터 누출 방지)
+    clearLocalData();
     if(res.session.role==='admin'){
       enterAdmin();
     } else {
@@ -10119,6 +10121,9 @@ async function admDeleteUser(id){
     const data=await res.json();
     if(!data.valid) throw new Error('invalid');
     setNoproSession(data.session);
+    // 🔒 F5/재진입 시 — JS 초기화 단계에서 localStorage로부터 자동 로드된 이전 데이터 클리어
+    // (sbLoadAll의 C-1 가드는 "응답에 키 없으면 메모리 유지" 정책이라, 계정 전환·세션 갱신 시 회사 A 데이터가 잔존할 수 있음)
+    clearLocalData();
     if(data.session.role==='admin'){
       enterAdmin();
     } else {
