@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-29-7';
+const CLIENT_BUILD = '2026-04-30-1';
 let _buildMismatchShown = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -10702,12 +10702,18 @@ function _mergeEmpsArrayByField(localArr, serverArr, snapArr){
   return merged;
 }
 
+// 🛡️ 폴링 시 받아올 키 화이트리스트 — rec/tbk 제외 (대용량 데이터 504 방지)
+// rec(출퇴근 기록)·tbk(임시 휴게)는 가장 큰 키이며 다른 디바이스 변경은 F5 시 sbLoadAll로 받음.
+// 같은 디바이스 내 변경은 saveLS → sbSaveAll로 즉시 반영되므로 폴링 의존도 없음.
+// CLAUDE.md C-7(EMPS ADD-ONLY), C-9(POL 폴링 무변경)와 동일한 "큰 데이터는 F5에서만" 패턴.
+const POLL_KEYS = ['emps','pol','bk','bonus','allow','tax','leave_settings','leave_overrides','folders','safety','pol_snapshots','pay_snapshots','bk_snapshots'];
+
 async function pollForUpdates(){
   if(document.hidden) return;
   const _sess = (()=>{ try { return JSON.parse(localStorage.getItem('nopro_session')||'null'); } catch(e){ return null; }})();
   if(!_sess || !_sess.companyId) return;
   try {
-    const server = await apiFetch('/data-load','POST',{});
+    const server = await apiFetch('/data-load','POST',{ keys: POLL_KEYS });
     if(!server) return;
     // 🏷️ 빌드 버전 체크
     if(server._serverBuild) _checkServerBuild(server._serverBuild);
