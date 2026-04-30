@@ -63,7 +63,9 @@ nopro/
     │   ├── auth.js                     # JWT 인증 + httpOnly 쿠키 + CORS 유틸
     │   ├── crypto.js                   # AES-256-GCM 암호화/복호화 (주민번호 뒷자리)
     │   ├── rate-limit.js               # 로그인 Rate Limiting (in-memory + DB)
-    │   └── supabase.js                 # Supabase 클라이언트 초기화
+    │   ├── supabase.js                 # Supabase 클라이언트 초기화
+    │   ├── scrub.js                    # PII 스크럽 (주민번호·사업자·전화·이메일·암호화값)
+    │   └── logger.js                   # 서버 측 로거 (error_log 테이블 기록)
     ├── auth-login.js                   # 로그인 (bcrypt only, Rate Limiting 적용)
     ├── auth-signup.js                  # 회사 가입
     ├── auth-verify.js                  # JWT 토큰 검증 및 자동 갱신 (쿠키 기반)
@@ -79,8 +81,10 @@ nopro/
     ├── admin-companies.js              # [관리자] 전체 회사 목록 조회
     ├── admin-delete.js                 # [관리자] 회사 삭제
     ├── admin-backup.js                 # [관리자] 회사별 전체 데이터 백업 다운로드 (companies + company_data + audit_log, 비밀번호 제외)
+    ├── admin-error-log.js              # [관리자] error_log 조회 + 통계 (모니터링 페이지용)
     ├── audit-restore.js                # [관리자] 감사 로그 기반 복구 API
     ├── holidays-fetch.js               # 공휴일 자동 동기화 (한국천문연구원 API 프록시)
+    ├── log-error.js                    # 클라이언트 → 서버 에러 전송 (인증 선택, IP rate-limit, PII 스크럽)
     └── migrate-passwords.js            # [관리자] SHA-256 → bcrypt 패스워드 마이그레이션
 ```
 
@@ -182,6 +186,26 @@ old_value       TEXT                -- 변경 전 JSON (롤백용)
 new_value       TEXT                -- 변경 후 JSON
 changed_at      TIMESTAMP NOT NULL DEFAULT now()
 ```
+
+### `error_log` 테이블 (2026-04-30 신설, 90일 자동 정리)
+```
+id              BIGSERIAL PRIMARY KEY
+occurred_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+level           VARCHAR(10)      -- 'error' | 'warn' | 'info' | 'guard'
+source          VARCHAR(40)      -- 'client' | 함수명
+message         TEXT (PII 스크럽)
+stack           TEXT (PII 스크럽)
+url             TEXT
+user_agent      TEXT
+company_id      BIGINT REFERENCES companies(id) ON DELETE SET NULL
+user_email      VARCHAR(255) (PII 스크럽)
+meta            JSONB (PII 스크럽)
+build_id        VARCHAR(20)      -- CLIENT_BUILD 식별자
+ip_hash         VARCHAR(16)      -- IP는 해시화하여 PII 회피
+```
+- 인덱스: `occurred_at DESC`, `level`, `source`, `company_id`
+- pg_cron으로 매일 새벽 3시 90일 초과 자동 삭제 (`cleanup_old_error_log()` 함수)
+- 마이그레이션 SQL: `docs/error-log-migration.sql`
 
 ### `login_attempts` 테이블
 ```
@@ -467,6 +491,55 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
 1. **Supabase 자체 정상 + 부분 데이터 손실:** audit_log `old_value` 역추적 (`docs/recovery-2026-04-27.sql` 패턴)
 2. **Supabase 자체 정상 + 7일 내 wipe:** Supabase Pro PITR 사용
 3. **Supabase 장애 또는 7일 초과:** 관리자 패널 백업 파일 → SQL로 수동 복원 (전체 매뉴얼은 `docs/backup-manual.md`)
+
+### 운영 모니터링 시스템 (2026-04-30 도입)
+
+**자체 로깅 방식** — 외부 서비스(Sentry 등) 미사용. 노무 데이터(주민번호·급여) 외부 누출 차단 목적.
+
+**아키텍처:**
+```
+클라이언트 에러 발생
+  ↓ window.onerror / unhandledrejection / 가드 트리거
+reportError() (js/app.js)
+  ↓ PII 스크럽 1차 (_scrubPII)
+  ↓ 같은 fingerprint 1분 1회 디바운스
+  ↓ navigator.sendBeacon (페이지 닫혀도 보장)
+/api/log-error
+  ↓ IP rate-limit (분당 30건)
+  ↓ PII 스크럽 2차 (서버 scrub.js)
+  ↓ logServerError() — Supabase error_log 테이블
+관리자 패널 [📊 모니터링] 탭
+  ↓ /api/admin-error-log
+  ↓ 레벨/소스/기간 필터, 통계 카드, 상세 모달
+```
+
+**PII 스크럽 패턴 (`_shared/scrub.js`):**
+- 주민번호: `\d{6}[-\s]?\d{7}` → `\1-*******`
+- 사업자번호: `\d{3}[-\s]?\d{2}[-\s]?\d{5}` → `***-**-*****`
+- 전화번호: `01x-XXXX-YYYY` → `01x-****-****`
+- 이메일: `local@domain` → `l****l@domain`
+- AES 암호화: `ENC:xxx` → `ENC:[REDACTED]`
+- 키 이름이 `password|hash|token|secret|rrn` 등이면 값 자체 `[REDACTED]`
+
+**기록되는 신호:**
+- 클라이언트: 잡히지 않은 JS 에러, Promise rejection
+- 가드 트리거: `safeItemSave`/`sbSaveAll` 빈값 차단 (level='guard')
+- 폴링 실패: `/data-load` 504/timeout (level='warn')
+- saveLS quota 초과 (level='warn'/'error')
+- 백엔드: 함수에서 `logServerError()` 직접 호출 (선택적)
+
+**관리자 패널 사용:**
+- 사이드바 [📊 모니터링] 클릭
+- 사이드바 뱃지에 미해결 error 카운트 표시
+- 필터: level / source / 기간(1일·7일·30일·90일)
+- 행 클릭 → 상세 모달 (스택, 메타, 빌드 ID 등)
+
+**보존 정책:** 90일 (pg_cron 매일 새벽 3시 자동 삭제). 대용량 사고 데이터에 대비한 안전 마진.
+
+**개발자 가이드:**
+- 새 가드 트리거 지점에서 `reportError({ level:'guard', source:'함수명', message:'...', meta:{key,...} })` 호출 권장
+- 백엔드에서는 `import { logServerError } from './_shared/logger.js'` 후 호출
+- **PII 직접 노출 금지** — 스크럽 패턴에 없는 민감 정보가 있으면 `meta`에 `[REDACTED]` 표시 후 전달
 
 ### 남은 보안 작업 (선택)
 - CSP `script-src 'unsafe-inline'` 제거: 인라인 이벤트 핸들러 336개를 addEventListener로 전환 필요 (대규모 리팩토링)

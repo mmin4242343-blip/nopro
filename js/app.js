@@ -3,7 +3,88 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-30-2';
+const CLIENT_BUILD = '2026-04-30-3';
+
+// ══════════════════════════════════════
+// 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
+// ══════════════════════════════════════
+// 클라이언트에서 발생한 에러·가드 트리거를 서버 로그 테이블에 전송.
+// PII 스크럽은 클라(1차) + 서버(2차) 이중 방어. 노무 데이터 외부 누출 차단.
+const _PII_PATTERNS = [
+  [/(\d{6})[-\s]?(\d{7})/g, '$1-*******'],                             // 주민번호
+  [/(\d{3})[-\s]?(\d{2})[-\s]?(\d{5})/g, '***-**-*****'],              // 사업자번호
+  [/(01[016789]|0[2-6]\d?)[-\s]?(\d{3,4})[-\s]?(\d{4})/g, '$1-****-****'], // 전화번호
+  [/ENC:[A-Za-z0-9+/=]{20,}/g, 'ENC:[REDACTED]']                       // AES 암호화값
+];
+function _scrubPII(s){
+  if(s == null) return s;
+  let str = String(s);
+  if(str.length > 4000) str = str.slice(0, 4000) + '...[TRUNCATED]';
+  for(const [re, rep] of _PII_PATTERNS) str = str.replace(re, rep);
+  return str;
+}
+
+// 같은 에러 폭주 방지 — fingerprint 기반 1분 1회
+const _reportSeen = new Map();
+function reportError({ level = 'error', source, message, stack, meta } = {}){
+  try {
+    if(!message) return;
+    const fp = (source||'') + '|' + String(message).slice(0, 100);
+    const now = Date.now();
+    const last = _reportSeen.get(fp) || 0;
+    if(now - last < 60 * 1000) return;
+    _reportSeen.set(fp, now);
+    if(_reportSeen.size > 200){
+      const cutoff = now - 60 * 1000;
+      for(const [k, v] of _reportSeen) if(v < cutoff) _reportSeen.delete(k);
+    }
+
+    const payload = {
+      level,
+      source: source || 'client',
+      message: _scrubPII(message),
+      stack: stack ? _scrubPII(stack) : null,
+      url: location.pathname + location.search,
+      userAgent: navigator.userAgent,
+      buildId: CLIENT_BUILD,
+      meta: meta || null
+    };
+
+    // sendBeacon이 가장 안정적 (페이지 닫혀도 전송 보장)
+    try {
+      if(navigator.sendBeacon){
+        const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+        navigator.sendBeacon('/api/log-error', blob);
+        return;
+      }
+    } catch {}
+    fetch('/api/log-error', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload), keepalive: true
+    }).catch(()=>{});
+  } catch {} // 로깅 실패는 절대 사용자 노출 안 함
+}
+
+// 글로벌 에러 캐치
+try {
+  window.addEventListener('error', (ev) => {
+    if(ev?.message === 'Script error.' && !ev.filename) return; // cross-origin 노이즈 무시
+    reportError({
+      level: 'error', source: 'window.onerror',
+      message: ev?.message || String(ev),
+      stack: ev?.error?.stack
+    });
+  });
+  window.addEventListener('unhandledrejection', (ev) => {
+    const r = ev?.reason;
+    reportError({
+      level: 'error', source: 'unhandledrejection',
+      message: r?.message || String(r),
+      stack: r?.stack
+    });
+  });
+} catch {}
 let _buildMismatchShown = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -645,10 +726,12 @@ async function safeItemSave(key, value){
   if(PROTECTED.has(key) && isEmpty(value)){
     if(snap === null){
       console.warn('🛡️ safeItemSave: 초기 로드 전 빈값 저장 차단 ('+key+')');
+      try { reportError({ level: 'guard', source: 'safeItemSave', message: '초기 로드 전 빈값 저장 차단', meta: { key, reason: 'snap_null' } }); } catch {}
       return {blocked:true};
     }
     if(snapHas(snap[key])){
       console.warn('🛡️ safeItemSave: 빈값 덮어쓰기 차단 ('+key+')');
+      try { reportError({ level: 'guard', source: 'safeItemSave', message: '빈값 덮어쓰기 차단', meta: { key, reason: 'snap_has_data' } }); } catch {}
       return {blocked:true};
     }
   }
@@ -704,6 +787,8 @@ function saveLS(){
     console.warn(e);
     // 🛡️ localStorage 용량 초과 감지 — 사용자에게 명확히 알림 (기존 토스트 1회만)
     const isQuota = e && (e.name==='QuotaExceededError' || e.code===22 || e.code===1014 || /quota|storage/i.test(String(e.message||'')));
+    // 🔭 운영 모니터링 기록
+    try { reportError({ level: isQuota?'warn':'error', source: 'saveLS', message: e?.message || String(e), stack: e?.stack, meta: { isQuota } }); } catch {}
     if(isQuota && typeof showSyncToast==='function' && !window._quotaToastShown){
       window._quotaToastShown = true;
       showSyncToast(
@@ -10026,7 +10111,175 @@ function admPage(page){
   else if(page==='backup'){
     admRenderBackupPage(users);
   }
+  else if(page==='monitoring'){
+    admRenderMonitoring();
+  }
   admUpdateBackupWarn();
+}
+
+// ══ 모니터링 ══
+let _admMonState = { level: '', source: '', sinceDays: 7, offset: 0, limit: 50 };
+
+async function admRenderMonitoring(){
+  const cont = document.getElementById('adm-content');
+  if(!cont) return;
+  cont.innerHTML = `
+    <div style="font-size:22px;font-weight:800;color:#fff;margin-bottom:4px">📊 모니터링</div>
+    <div style="font-size:12px;color:#94A3B8;margin-bottom:24px">시스템 에러·가드 트리거 추적 (자체 로깅, 외부 서비스 미사용)</div>
+    <div id="adm-mon-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px"></div>
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <select id="adm-mon-level" onchange="admMonChange()" style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:12px;font-family:inherit">
+        <option value="">전체 레벨</option>
+        <option value="error">🔴 error</option>
+        <option value="warn">🟡 warn</option>
+        <option value="guard">🛡️ guard</option>
+        <option value="info">ℹ️ info</option>
+      </select>
+      <input id="adm-mon-source" placeholder="🔍 source 필터 (예: pollForUpdates)" oninput="admMonChange()"
+        style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:12px;width:280px;font-family:inherit">
+      <select id="adm-mon-since" onchange="admMonChange()" style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:12px;font-family:inherit">
+        <option value="1">최근 24시간</option>
+        <option value="7" selected>최근 7일</option>
+        <option value="30">최근 30일</option>
+        <option value="90">최근 90일 (전체)</option>
+      </select>
+      <button onclick="admMonRefresh()" style="padding:8px 14px;border-radius:8px;border:1px solid rgba(96,165,250,.3);background:rgba(96,165,250,.1);color:#93C5FD;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">↻ 새로고침</button>
+    </div>
+    <div id="adm-mon-list" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;overflow:hidden;min-height:200px">
+      <div style="padding:30px;text-align:center;color:#64748B">불러오는 중...</div>
+    </div>`;
+  await admMonFetch();
+}
+
+function admMonChange(){
+  _admMonState.level = document.getElementById('adm-mon-level')?.value || '';
+  _admMonState.source = document.getElementById('adm-mon-source')?.value || '';
+  _admMonState.sinceDays = parseInt(document.getElementById('adm-mon-since')?.value || '7', 10);
+  _admMonState.offset = 0;
+  admMonFetch();
+}
+function admMonRefresh(){ admMonFetch(); }
+
+async function admMonFetch(){
+  const list = document.getElementById('adm-mon-list');
+  const stats = document.getElementById('adm-mon-stats');
+  if(!list) return;
+  try {
+    const params = new URLSearchParams();
+    if(_admMonState.level) params.set('level', _admMonState.level);
+    if(_admMonState.source) params.set('source', _admMonState.source);
+    const since = new Date(Date.now() - _admMonState.sinceDays * 86400000).toISOString();
+    params.set('since', since);
+    params.set('limit', String(_admMonState.limit));
+    params.set('offset', String(_admMonState.offset));
+    const res = await apiFetch('/admin-error-log?' + params.toString(), 'GET');
+    if(!res) throw new Error('응답 없음');
+
+    // 통계 카드
+    const sl = res.stats?.byLevel || {};
+    if(stats){
+      stats.innerHTML = [
+        ['🔴 error', sl.error||0, '#FCA5A5'],
+        ['🟡 warn', sl.warn||0, '#FCD34D'],
+        ['🛡️ guard', sl.guard||0, '#93C5FD'],
+        ['📊 총합', (sl.error||0)+(sl.warn||0)+(sl.guard||0)+(sl.info||0), '#6EE7B7']
+      ].map(([l,v,c])=>`
+        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:18px">
+          <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:8px;font-weight:600">${l}</div>
+          <div style="font-size:28px;font-weight:900;color:${c};letter-spacing:-1px">${v}</div>
+        </div>`).join('');
+    }
+
+    // 사이드바 뱃지 (error 누적 표시)
+    const monBadge = document.getElementById('adm-mon-badge');
+    if(monBadge){
+      const errCount = sl.error || 0;
+      if(errCount > 0){ monBadge.style.display='inline'; monBadge.textContent = errCount > 99 ? '99+' : String(errCount); }
+      else monBadge.style.display='none';
+    }
+
+    // 목록
+    if(!res.rows || res.rows.length === 0){
+      list.innerHTML = '<div style="padding:60px;text-align:center;color:#64748B;font-size:13px">조건에 맞는 로그가 없습니다 ✨</div>';
+      return;
+    }
+    const lvlColor = { error: '#FCA5A5', warn: '#FCD34D', guard: '#93C5FD', info: '#94A3B8' };
+    const lvlBg = { error: 'rgba(239,68,68,.15)', warn: 'rgba(245,158,11,.15)', guard: 'rgba(96,165,250,.15)', info: 'rgba(148,163,184,.15)' };
+    list.innerHTML = `
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:rgba(255,255,255,.04)">
+          ${['시각','레벨','source','메시지','회사','URL'].map(h=>`<th style="padding:10px 14px;font-size:10px;font-weight:700;color:#64748B;text-align:left;letter-spacing:.3px;border-bottom:1px solid rgba(255,255,255,.06)">${h}</th>`).join('')}
+        </tr></thead>
+        <tbody>${res.rows.map(r=>`<tr style="border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer" onclick="admMonShowDetail(${r.id})">
+          <td style="padding:9px 14px;font-size:11px;color:#94A3B8;white-space:nowrap;font-variant-numeric:tabular-nums">${new Date(r.occurred_at).toLocaleString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'})}</td>
+          <td style="padding:9px 14px"><span style="padding:2px 8px;border-radius:6px;background:${lvlBg[r.level]||''};color:${lvlColor[r.level]||'#fff'};font-size:10px;font-weight:700">${r.level}</span></td>
+          <td style="padding:9px 14px;font-size:11px;color:#94A3B8;font-family:monospace">${esc(r.source||'-')}</td>
+          <td style="padding:9px 14px;font-size:12px;color:#fff;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.message||'-')}</td>
+          <td style="padding:9px 14px;font-size:11px;color:#64748B">${r.company_id||'-'}</td>
+          <td style="padding:9px 14px;font-size:10px;color:#64748B;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.url||'-')}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+      <div style="padding:14px 20px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid rgba(255,255,255,.04)">
+        <div style="font-size:11px;color:#64748B">${res.total||0}건 중 ${_admMonState.offset+1}~${Math.min(_admMonState.offset+res.rows.length, res.total)}</div>
+        <div style="display:flex;gap:8px">
+          <button onclick="admMonPage(-1)" ${_admMonState.offset<=0?'disabled':''} style="padding:5px 12px;border-radius:6px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#94A3B8;font-size:11px;cursor:pointer;${_admMonState.offset<=0?'opacity:.4;cursor:not-allowed':''}">← 이전</button>
+          <button onclick="admMonPage(1)" ${_admMonState.offset+_admMonState.limit>=res.total?'disabled':''} style="padding:5px 12px;border-radius:6px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#94A3B8;font-size:11px;cursor:pointer;${_admMonState.offset+_admMonState.limit>=res.total?'opacity:.4;cursor:not-allowed':''}">다음 →</button>
+        </div>
+      </div>`;
+
+    // 상세 데이터를 메모리에 캐싱 (모달용)
+    window._admMonRows = (res.rows||[]).reduce((m,r)=>{m[r.id]=r;return m;}, {});
+
+  } catch(e){
+    list.innerHTML = `<div style="padding:40px;text-align:center;color:#FCA5A5;font-size:13px">조회 실패: ${esc(e.message||e)}</div>`;
+  }
+}
+
+function admMonPage(d){
+  _admMonState.offset = Math.max(0, _admMonState.offset + d * _admMonState.limit);
+  admMonFetch();
+}
+
+function admMonShowDetail(id){
+  const r = (window._admMonRows||{})[id];
+  if(!r) return;
+  const existing = document.getElementById('adm-mon-detail-modal');
+  if(existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'adm-mon-detail-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:30px';
+  modal.onclick = (e)=>{ if(e.target===modal) modal.remove(); };
+  modal.innerHTML = `
+    <div style="background:#0A0A0B;border:1px solid rgba(255,255,255,.1);border-radius:14px;max-width:900px;width:100%;max-height:80vh;overflow-y:auto;padding:24px;font-family:'Pretendard Variable','Pretendard',sans-serif">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <div style="font-size:16px;font-weight:800;color:#fff">로그 상세 #${id}</div>
+        <button onclick="document.getElementById('adm-mon-detail-modal').remove()" style="background:none;border:none;color:#94A3B8;font-size:20px;cursor:pointer">✕</button>
+      </div>
+      ${[
+        ['시각', new Date(r.occurred_at).toLocaleString('ko-KR')],
+        ['레벨', r.level],
+        ['source', r.source],
+        ['빌드', r.build_id||'-'],
+        ['회사 ID', r.company_id||'-'],
+        ['사용자', r.user_email||'-'],
+        ['URL', r.url||'-'],
+        ['IP hash', r.ip_hash||'-'],
+        ['User Agent', r.user_agent||'-']
+      ].map(([k,v])=>`<div style="display:grid;grid-template-columns:120px 1fr;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px">
+        <div style="color:#64748B">${k}</div>
+        <div style="color:#fff;word-break:break-all">${esc(String(v))}</div>
+      </div>`).join('')}
+      <div style="margin-top:16px"><div style="color:#64748B;font-size:11px;margin-bottom:6px">메시지</div>
+        <pre style="background:rgba(255,255,255,.03);padding:12px;border-radius:8px;color:#fff;font-size:12px;white-space:pre-wrap;word-break:break-word;max-height:200px;overflow-y:auto">${esc(r.message||'')}</pre>
+      </div>
+      ${r.stack?`<div style="margin-top:12px"><div style="color:#64748B;font-size:11px;margin-bottom:6px">스택</div>
+        <pre style="background:rgba(255,255,255,.03);padding:12px;border-radius:8px;color:#FCA5A5;font-size:11px;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow-y:auto;font-family:monospace">${esc(r.stack)}</pre>
+      </div>`:''}
+      ${r.meta?`<div style="margin-top:12px"><div style="color:#64748B;font-size:11px;margin-bottom:6px">메타</div>
+        <pre style="background:rgba(255,255,255,.03);padding:12px;border-radius:8px;color:#93C5FD;font-size:11px;white-space:pre-wrap;word-break:break-word;max-height:200px;overflow-y:auto;font-family:monospace">${esc(JSON.stringify(r.meta,null,2))}</pre>
+      </div>`:''}
+    </div>`;
+  document.body.appendChild(modal);
 }
 
 // ══ 백업/복구 ══
@@ -10418,12 +10671,14 @@ async function sbSaveAll(companyId) {
       // 🛡️ 스냅샷이 아직 없으면(sbLoadAll 미완): 빈값 저장 절대 금지. 콘솔만 로그.
       if(snap === null){
         console.warn('🛡️ 초기 로드 전 빈값 저장 차단:', it.key, '(스냅샷 없음 → 데이터 안전 우선)');
+        try { reportError({ level: 'guard', source: 'sbSaveAll', message: '초기 로드 전 빈값 저장 차단', meta: { key: it.key, reason: 'snap_null' } }); } catch {}
         return false;
       }
       // 스냅샷에 데이터가 있었는데 지금 비어있으면 차단. 사용자에게도 알림.
       if(_snapHasData(snap[it.key])){
         _blockedOverwrite.push(it.key);
         console.warn('🛡️ 빈 값 덮어쓰기 차단:', it.key, '(이전 스냅샷에 데이터 있음)');
+        try { reportError({ level: 'guard', source: 'sbSaveAll', message: '빈값 덮어쓰기 차단 (PROTECTED)', meta: { key: it.key, reason: 'snap_has_data' } }); } catch {}
         return false;
       }
     }
@@ -11043,11 +11298,14 @@ async function pollForUpdates(){
     if(isTimeout){
       _pollBackoffMs = Math.min((_pollBackoffMs||POLL_INTERVAL_MS) * 2, POLL_BACKOFF_MAX);
       console.warn('poll 504/timeout — 백오프:', Math.round(_pollBackoffMs/1000)+'초 후 재시도');
+      // 🔭 운영 모니터링: 504 발생 추세 추적
+      try { reportError({ level: 'warn', source: 'pollForUpdates', message: '504/timeout', meta: { backoffMs: _pollBackoffMs } }); } catch {}
       // setInterval 대신 setTimeout으로 재스케줄
       if(_pollTimerId){ clearInterval(_pollTimerId); _pollTimerId = null; }
       _pollTimerId = setTimeout(()=>{ _pollTimerId = null; startAutoPoll(); }, _pollBackoffMs);
     } else {
       console.warn('poll 실패:', e);
+      try { reportError({ level: 'warn', source: 'pollForUpdates', message: msg, stack: e?.stack }); } catch {}
     }
   }
 }
