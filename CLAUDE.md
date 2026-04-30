@@ -29,6 +29,19 @@
 2. Netlify가 GitHub push를 감지하여 자동 빌드/배포
 3. Claude가 push까지 직접 수행해왔음
 
+## 프론트엔드 빌드/번들 정책
+
+**프론트엔드 빌드 단계는 의도적으로 없음.** `js/app.js`, `index.html`, `css/app.css` 원본 그대로 Netlify에 배포됨 (`publish = "."`).
+
+- `package.json`에 build script 없음. 의존성은 백엔드(Netlify Functions)용만.
+- `netlify.toml`의 `node_bundler = "esbuild"`는 **백엔드 Functions 번들링용**이며 프론트엔드와 무관.
+- **Netlify가 자동 gzip 압축 적용** (`Content-Encoding: gzip`). 실측: `app.js` 638KB → 전송 시 약 163KB.
+- minify·번들 미적용 상태이며, 단순 도입 시 사이트 마비 위험:
+  - **이유 1**: `index.html`에 인라인 이벤트 핸들러 약 317개 존재. minifier가 전역 함수명을 mangle하면 `onclick="addEmp()"` 등이 즉시 ReferenceError.
+  - **이유 2**: esbuild로 IIFE 번들링하면 전역 스코프가 사라져 인라인 핸들러가 함수를 찾지 못함.
+- minify/번들 도입하려면 **인라인 핸들러 제거가 선행 필수**. 그 전엔 손대지 말 것.
+- 현재 gzip 후 전송 크기(약 163KB)는 현대 SPA 기준 평범한 수준이라 시급도 낮음.
+
 ## 디렉토리 구조
 
 ```
@@ -551,7 +564,7 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
 2. Netlify Functions는 ES Module 형식 (`.js`, `export const handler`, `package.json`에 `"type":"module"`)
 3. 프론트엔드에서 Supabase URL/키를 직접 참조하지 말 것 (보안)
 4. `saveLS()` 호출을 빠뜨리면 데이터가 유실될 수 있음
-5. 공휴일(`PH`) 객체는 매년 수동 업데이트 필요
+5. 공휴일(`PH`) 객체는 자동 동기화됨 — `loadHolidaysAround()`가 enterApp 시 작년·올해·내년 KASI API에서 fetch하여 `_genPH` 폴백을 덮어씀. localStorage 7일 캐시(`npm5_ph_{year}`) 사용. 수동 보정이 필요하면 `_genPH` 또는 `loadHolidaysForYear`에서 처리.
 6. CORS 허용 목록 변경 시 Netlify 환경변수 `ALLOWED_ORIGINS` 수정
 7. 비밀번호는 **bcrypt만 지원** (SHA-256, 평문 폴백 없음)
 8. push 시 Netlify 자동 배포가 즉시 이루어지므로 main 브랜치 직접 push 주의
