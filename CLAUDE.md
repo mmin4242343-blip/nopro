@@ -78,6 +78,9 @@ nopro/
     ├── tbm-sign.js                     # TBM 안전교육 서명 API (외부 링크용)
     ├── admin-companies.js              # [관리자] 전체 회사 목록 조회
     ├── admin-delete.js                 # [관리자] 회사 삭제
+    ├── admin-backup.js                 # [관리자] 회사별 전체 데이터 백업 다운로드 (companies + company_data + audit_log, 비밀번호 제외)
+    ├── audit-restore.js                # [관리자] 감사 로그 기반 복구 API
+    ├── holidays-fetch.js               # 공휴일 자동 동기화 (한국천문연구원 API 프록시)
     └── migrate-passwords.js            # [관리자] SHA-256 → bcrypt 패스워드 마이그레이션
 ```
 
@@ -306,7 +309,8 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
 **사고 이력**:
 - **1차 wipe (2026-04-23 01:40 UTC)**: 단일 `sbSaveAll()` 호출이 EMPS·REC·BONUS·ALLOW·TAX 5개 키를 동시에 빈값으로 덮어씀. 근본 원인: `sbLoadAll`의 `else { EMPS = []; }` 분기가 서버 파셜 응답 시 메모리 리셋 → 후속 saveLS가 빈값을 서버에 저장.
 - **2차 wipe (2026-04-23 02:58 UTC, 1차 가드 배포 후 재발)**: 하드 새로고침 직후 초기 로드 구간에 save가 트리거되었고, `_syncedSnapshot=null` 상태에서 클라 가드가 "스냅샷 없음 = 데이터 없음"으로 오인해 빈값 저장을 허용. 서버 가드는 `oldValue` 존재 시에만 검사하던 로직 결함으로 함께 실패.
-- 복구는 두 사고 모두 감사 로그 `old_value` 역추적으로 수행 성공 (최종 상태: EMPS 145명, REC 2117건, BONUS 4건, ALLOW 57건, TAX 1건).
+- **3차 부분 손실 (2026-04-26 23:52 UTC, company_id=4 / test2@naver.com)**: 21중 가드 도입 후에도 발생. emps -386 bytes, rec -54,232 bytes, tbk -699 bytes 손실 (전체 wipe 아닌 부분 축소). 대용량 키 저장 silent 버그가 원인으로 추정 (커밋 `263885c` "세션 만료 알림 강화 + 대형 키 저장 silent 버그 수정"으로 대응). 복구 SQL은 `docs/recovery-2026-04-27.sql` 참조.
+- 복구는 세 사고 모두 감사 로그 `old_value` 역추적으로 수행 성공.
 
 **보호 대상 키 (PROTECTED)**: `emps`, `rec`, `bonus`, `allow`, `tax`, `tbk`, `safety`, `bk`
 
@@ -422,6 +426,47 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
    - `index.html`의 `<script src="/js/app.js?v=...">` 쿼리값
    - `netlify/functions/data-load.js`의 fallback (`process.env.SERVER_BUILD || '...'` 우측 문자열, line 52 근처)
    - 세 값을 모두 동일한 `YYYY-MM-DD-N` 형식으로 갱신. Netlify 환경변수 `SERVER_BUILD`는 선택사항(설정돼 있으면 fallback보다 우선).
+
+### 백업/복구 운영 정책
+
+**3중 방어선 구조:**
+
+1. **1차: Supabase Pro PITR (7일 자동)** — Supabase 콘솔에서 7일 내 임의 시점 복원 가능. Supabase 자체가 정상이면 가장 빠른 수단.
+2. **2차: 관리자 패널 수동 백업** — 관리자 패널 [백업/복구] 탭에서 회사별 또는 전체 일괄 다운로드. **주 1회 받아 외부 저장소에 보관 필수**. Supabase 자체 장애 시 유일한 복구 수단.
+3. **3차: audit_log 영구 보존** — 부분 wipe·실수 변경은 `old_value` 역추적으로 시점 복원 (1·2·3차 사고 모두 이 경로로 복구 성공).
+
+**백업 다운로드 파일 구조 (`admin-backup.js` 응답):**
+```json
+{
+  "version": "1.0",
+  "exportedAt": "ISO timestamp",
+  "companyId": <int>,
+  "company": { ... },          // companies 테이블 1행 (password_hash 제외)
+  "company_data": { "emps": "<JSON>", "rec": "<JSON>", ... },
+  "company_data_versions": { "emps": "ISO", ... },
+  "audit_log": [ ... ]          // 해당 회사 전체 감사 이력
+}
+```
+
+**파일 보안:**
+- 주민번호 뒷자리(`rrnBack`)는 AES-256-GCM 암호화 상태 그대로. 복원 시 ENCRYPTION_KEY 필요.
+- 비밀번호 해시는 의도적으로 제외 (유출 시 무차별 대입 공격 차단).
+- 그 외 주민번호 앞자리·이름·연락처·급여·근무 기록 등은 **평문 포함**. 다운로드 파일을 안전하지 않은 곳에 두면 즉시 개인정보 사고.
+- 운영자 매뉴얼: `docs/backup-manual.md`
+
+**백업 주기:**
+- **권장: 주 1회 (매주 월요일)**. 외장 드라이브 또는 암호화된 클라우드 폴더에 보관.
+- 매일은 과함 (PITR 7일이 일별 커버). 월 1회는 부족 (PITR 만료 후 사고 시 한 달치 손실).
+
+**관리자 패널 UI:**
+- [백업/복구] 탭에 "마지막 백업 N일 전" 표시
+- 7일 초과 시 사이드바 뱃지 + 대시보드 경고 배너
+- localStorage `nopro_admin_last_backup`에 시점 기록
+
+**복구 절차 (가장 자주 쓰는 순서):**
+1. **Supabase 자체 정상 + 부분 데이터 손실:** audit_log `old_value` 역추적 (`docs/recovery-2026-04-27.sql` 패턴)
+2. **Supabase 자체 정상 + 7일 내 wipe:** Supabase Pro PITR 사용
+3. **Supabase 장애 또는 7일 초과:** 관리자 패널 백업 파일 → SQL로 수동 복원 (전체 매뉴얼은 `docs/backup-manual.md`)
 
 ### 남은 보안 작업 (선택)
 - CSP `script-src 'unsafe-inline'` 제거: 인라인 이벤트 핸들러 336개를 addEventListener로 전환 필요 (대규모 리팩토링)

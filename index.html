@@ -601,6 +601,11 @@
         알림
         <span id="adm-alert-badge" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:#FF453A;color:#fff;font-size:9px;font-weight:600;padding:1px 6px;border-radius:980px;display:none;font-variant-numeric:tabular-nums">0</span>
       </div>
+      <div class="adm-sb-item" id="adm-m-backup" onclick="admPage('backup')" style="position:relative;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        백업/복구
+        <span id="adm-backup-warn" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:#F59E0B;color:#fff;font-size:9px;font-weight:600;padding:1px 6px;border-radius:980px;display:none">!</span>
+      </div>
     </nav>
 
     <div style="padding:14px 10px;border-top:.5px solid rgba(255,255,255,.08)">
@@ -1888,7 +1893,7 @@ noprohr.netlify.app/tbm_sign.html
 </div>
 
 </div></div></div>
-<script src="/js/app.js?v=2026-04-30-1"></script>
+<script src="/js/app.js?v=2026-04-30-2"></script>
 <!-- 인라인 핸들러용 unsafe-inline은 추후 단계적 제거 예정 -->
 <script>
 // placeholder - app.js에서 모든 로직 처리

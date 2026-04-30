@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-30-1';
+const CLIENT_BUILD = '2026-04-30-2';
 let _buildMismatchShown = false;
 function _checkServerBuild(serverBuild){
   if(!serverBuild) return;
@@ -9898,9 +9898,21 @@ function admPage(page){
   if(page==='dashboard'){
     const revenue=users.reduce((s,u)=>s+(planRevenue[u.size]||0),0);
     const recent=[...users].sort((a,b)=>(b.joinDate||'').localeCompare(a.joinDate||'')).slice(0,10);
+    const _last = admGetLastBackup();
+    const _lastDays = _last ? Math.floor((Date.now() - _last.ts) / 86400000) : null;
+    const _bkBanner = (_lastDays === null || _lastDays > 7)
+      ? `<div onclick="admPage('backup')" style="background:linear-gradient(90deg,rgba(245,158,11,.15),rgba(239,68,68,.1));border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:14px 20px;margin-bottom:18px;cursor:pointer;display:flex;align-items:center;gap:14px" onmouseover="this.style.background='linear-gradient(90deg,rgba(245,158,11,.22),rgba(239,68,68,.15))'" onmouseout="this.style.background='linear-gradient(90deg,rgba(245,158,11,.15),rgba(239,68,68,.1))'">
+          <div style="font-size:22px">⚠️</div>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:700;color:#FCD34D;margin-bottom:2px">${_lastDays === null ? '백업 기록이 없습니다' : `마지막 백업이 ${_lastDays}일 전입니다`}</div>
+            <div style="font-size:11px;color:#94A3B8">데이터 사고 대비를 위해 주 1회 백업을 권장합니다. 클릭하여 백업 페이지로 이동.</div>
+          </div>
+          <div style="font-size:11px;color:#FCD34D;font-weight:700">백업하기 →</div>
+        </div>` : '';
     cont.innerHTML=`
       <div style="font-size:24px;font-weight:800;color:#fff;margin-bottom:4px;letter-spacing:-.5px">대시보드</div>
       <div style="font-size:13px;color:rgba(240,244,255,.35);margin-bottom:28px;font-weight:500">노프로 서비스 전체 현황</div>
+      ${_bkBanner}
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px">
         ${[
           ['🏢 총 가입 회사',users.length,'#60A5FA'],
@@ -10011,6 +10023,121 @@ function admPage(page){
         </table>
       </div>`;
   }
+  else if(page==='backup'){
+    admRenderBackupPage(users);
+  }
+  admUpdateBackupWarn();
+}
+
+// ══ 백업/복구 ══
+function admGetLastBackup(){
+  try { return JSON.parse(localStorage.getItem('nopro_admin_last_backup') || 'null'); } catch { return null; }
+}
+function admSetLastBackup(scope){
+  localStorage.setItem('nopro_admin_last_backup', JSON.stringify({ ts: Date.now(), scope }));
+  admUpdateBackupWarn();
+}
+function admUpdateBackupWarn(){
+  const last = admGetLastBackup();
+  const badge = document.getElementById('adm-backup-warn');
+  if(!badge) return;
+  if(!last){ badge.style.display = 'inline-block'; badge.textContent='!'; return; }
+  const days = Math.floor((Date.now() - last.ts) / 86400000);
+  if(days > 7){ badge.style.display = 'inline-block'; badge.textContent = days + 'd'; }
+  else { badge.style.display = 'none'; }
+}
+
+function admRenderBackupPage(users){
+  const cont = document.getElementById('adm-content');
+  if(!cont) return;
+  const last = admGetLastBackup();
+  const lastDays = last ? Math.floor((Date.now() - last.ts) / 86400000) : null;
+  const warnColor = lastDays === null ? '#FCA5A5' : lastDays > 7 ? '#FCA5A5' : lastDays > 3 ? '#FCD34D' : '#6EE7B7';
+  const warnText = lastDays === null ? '백업 기록 없음 — 첫 백업을 받으세요' :
+                   lastDays === 0 ? '오늘 백업됨 ✓' :
+                   `마지막 백업: ${lastDays}일 전`;
+
+  cont.innerHTML = `
+    <div style="font-size:22px;font-weight:800;color:#fff;margin-bottom:4px">💾 백업/복구</div>
+    <div style="font-size:12px;color:#94A3B8;margin-bottom:24px">데이터 사고에 대비한 외부 백업</div>
+
+    <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:20px;margin-bottom:18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:14px">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#94A3B8;margin-bottom:6px;letter-spacing:.3px">📅 백업 상태</div>
+          <div style="font-size:20px;font-weight:800;color:${warnColor}">${warnText}</div>
+          ${last ? `<div style="font-size:10px;color:#64748B;margin-top:4px">${new Date(last.ts).toLocaleString('ko-KR')} · ${last.scope==='all'?'전체 일괄':'개별'}</div>` : ''}
+        </div>
+        <button onclick="admBackupAll()" style="padding:11px 20px;border-radius:9px;border:1px solid rgba(96,165,250,.4);background:rgba(96,165,250,.15);color:#93C5FD;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">⬇ 전체 회사 일괄 백업</button>
+      </div>
+      <div style="font-size:11px;color:#94A3B8;line-height:1.7;background:rgba(255,255,255,.03);padding:11px 14px;border-radius:8px;border-left:2px solid #60A5FA">
+        💡 <b>주 1회</b>(권장: 매주 월요일) 백업 받아 외부 저장소에 보관하세요.<br>
+        ⚠️ 다운로드 파일은 주민번호·급여 등 민감 정보를 포함합니다. 암호화된 폴더 또는 안전한 클라우드에 보관하고, 불필요한 PC·USB에 방치하지 마세요.
+      </div>
+    </div>
+
+    <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;overflow:hidden">
+      <div style="padding:14px 20px;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px;font-weight:700;color:#fff">회사별 개별 백업 (${users.length}개)</div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:rgba(255,255,255,.03)">
+          ${['#','회사명','담당자','이메일','직원수','액션'].map(h=>`<th style="padding:10px 14px;font-size:10px;font-weight:700;color:#64748B;text-align:left;letter-spacing:.3px;border-bottom:1px solid rgba(255,255,255,.04)">${h}</th>`).join('')}
+        </tr></thead>
+        <tbody>${users.length ? users.map((u,i)=>`<tr style="border-bottom:1px solid rgba(255,255,255,.04)">
+          <td style="padding:10px 14px;font-size:11px;color:#64748B">${i+1}</td>
+          <td style="padding:10px 14px;font-size:13px;font-weight:700;color:#fff">${esc(u.company||'-')}</td>
+          <td style="padding:10px 14px;font-size:12px;color:#94A3B8">${esc(u.name||'-')}</td>
+          <td style="padding:10px 14px;font-size:11px;color:#64748B">${esc(u.email||'-')}</td>
+          <td style="padding:10px 14px;font-size:12px;color:#6EE7B7">${u.empCount!==undefined?u.empCount:0}명</td>
+          <td style="padding:10px 14px"><button onclick="admBackupCompany(${u.id}, ${JSON.stringify(u.company||'unknown').replace(/"/g,'&quot;')})" style="padding:5px 12px;border-radius:7px;border:1px solid rgba(96,165,250,.3);background:rgba(96,165,250,.1);color:#93C5FD;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">📥 백업</button></td>
+        </tr>`).join('') : '<tr><td colspan="6" style="padding:50px;text-align:center;color:#64748B">회사가 없습니다</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+async function admBackupCompany(companyId, companyName){
+  try {
+    const data = await apiFetch('/admin-backup?companyId=' + companyId, 'GET');
+    if(!data) throw new Error('백업 데이터 없음');
+    const safeName = String(companyName||'unknown').replace(/[^가-힣a-zA-Z0-9_-]/g,'_').slice(0,30);
+    const ts = new Date().toISOString().slice(0,10).replace(/-/g,'');
+    _admDownloadJson(data, `nopro-backup-${safeName}-${ts}.json`);
+    admSetLastBackup('single');
+    if(typeof toast === 'function') toast(`✓ ${companyName} 백업 완료`);
+  } catch(e){
+    alert('백업 실패: ' + (e.message||e));
+  }
+}
+
+async function admBackupAll(){
+  const users = getNoproUsers();
+  if(!users || !users.length){ alert('회사 목록이 비어있습니다'); return; }
+  if(!confirm(`${users.length}개 회사를 순차 백업합니다.\n파일이 ${users.length}개 다운로드됩니다.\n진행할까요?`)) return;
+
+  let success = 0, failed = 0;
+  for(const u of users){
+    try {
+      const data = await apiFetch('/admin-backup?companyId=' + u.id, 'GET');
+      if(!data) throw new Error('데이터 없음');
+      const safeName = String(u.company||'unknown').replace(/[^가-힣a-zA-Z0-9_-]/g,'_').slice(0,30);
+      const ts = new Date().toISOString().slice(0,10).replace(/-/g,'');
+      _admDownloadJson(data, `nopro-backup-${safeName}-${ts}.json`);
+      success++;
+      await new Promise(r => setTimeout(r, 500)); // 서버 부하 분산
+    } catch(e){
+      console.warn(`${u.company} 백업 실패:`, e);
+      failed++;
+    }
+  }
+  admSetLastBackup('all');
+  alert(`백업 완료: 성공 ${success}개 / 실패 ${failed}개`);
+}
+
+function _admDownloadJson(obj, filename){
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
 }
 
 function admRenderCompanies(users, filter=''){
