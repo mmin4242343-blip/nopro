@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-04-8';
+const CLIENT_BUILD = '2026-05-04-9';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -2433,10 +2433,7 @@ function timeKeyNav(e, el, eid, field) {
     e.preventDefault();
     e.stopPropagation();
 
-    // 1. 값 파싱 + 포맷
-    const parsed = parseTimeInput(el.value);
-
-    // 2. 다음 input 위치 정보 보관 (DOM 재생성 후 다시 찾기 위해)
+    // 1. 다음 input 위치 정보 보관 (DOM 재생성 후 다시 찾기 위해 eid+field로 식별)
     const allInputs = Array.from(document.querySelectorAll('#daily-tbody input.time-inp'))
       .filter(inp => !inp.disabled && inp.offsetParent !== null);
     const curIdx = allInputs.indexOf(el);
@@ -2445,24 +2442,14 @@ function timeKeyNav(e, el, eid, field) {
       ? { eid: allInputs[nextIdx].dataset.eid, field: allInputs[nextIdx].dataset.field }
       : null;
 
-    // 3. REC 업데이트
-    const k = rk(eid, cY, cM, cD);
-    if(!REC[k]) REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
-    REC[k][field] = parsed;
+    // 2. blur 트리거 → onblur="handleTimeInput(...)"이 자동으로:
+    //    · REC[k][field] = parsed 갱신
+    //    · saveLS (디바운스 후 서버 저장)
+    //    · renderTable (계산셀·chip 즉시 반영, focus snap=null이라 복원 X)
+    //    위 한 번의 호출이 원래 timeKeyNav가 직접 하던 모든 일을 안전하게 처리.
+    el.blur();
 
-    // 4. localStorage + Supabase 비동기 저장
-    try{
-      localStorage.setItem(LS.R, JSON.stringify(REC));
-      const _sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
-      if(_sess && _sess.companyId){
-        sbSaveAll(_sess.companyId).catch(e=>console.warn(e));
-      }
-    }catch(err){}
-
-    // 5. 🔄 전체 즉시 반영 (계산셀·chip·휴게시간 등 모두 REC 그대로 재렌더)
-    try { renderTable(); } catch(e){ console.warn('timeKeyNav 후 renderTable 실패:', e); }
-
-    // 6. 다음 input 다시 찾아 포커스 + 전체 선택 (재렌더 후 새 DOM에서 검색)
+    // 3. 다음 input 다시 찾아 포커스 + 전체 선택 (재렌더 후 새 DOM에서)
     if(nextRef){
       const newNext = document.querySelector(
         '#daily-tbody input.time-inp[data-eid="'+nextRef.eid+'"][data-field="'+nextRef.field+'"]'
