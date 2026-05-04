@@ -150,6 +150,8 @@ address         VARCHAR         -- 주소
 join_date       DATE            -- 가입일
 status          VARCHAR         -- 'active' | 'inactive'
 created_at      TIMESTAMP
+active_session_id   TEXT        -- 현재 활성 세션 UUID (JWT의 sid와 매칭, 단일 로그인)
+active_session_at   TIMESTAMPTZ -- 마지막 활동 시각 (heartbeat, idle timeout 1시간)
 ```
 
 ### `company_data` 테이블
@@ -279,6 +281,50 @@ SAFETY_REC = {}     // 안전교육 기록
 - **DB-backed**: 동일 이메일로 15분 내 10회 초과 시 차단 (persistent)
 - 로그인 성공 시 시도 기록 초기화
 - 429 응답 + Retry-After 헤더
+
+### 단일 로그인 차단 (2026-05-04 도입)
+
+같은 계정으로 **여러 PC/브라우저 동시 로그인 차단**. 마지막 사용자 보호 우선 (옵션 A).
+
+**핵심 동작:**
+1. 로그인 성공 시 UUID(`sid`) 생성 → JWT payload에 포함 + `companies.active_session_id`에 저장
+2. `auth-verify` 호출마다 토큰 sid vs DB sid 비교 + `active_session_at = now()` 갱신 (heartbeat)
+3. 새 로그인 시도 → DB에 활성 세션 있고 `active_session_at` 1시간 이내 → **409 거부**
+4. 1시간 idle 초과 → 옛 세션 자동 만료 → 새 로그인 허용 (DB sid 교체)
+5. 명시적 로그아웃 → DB의 `active_session_id` NULL로 클리어 → 즉시 다른 곳 로그인 가능
+
+**대응 모드:**
+- 새 로그인 차단 (409) → 로그인 폼에 "이미 다른 기기/브라우저에서 사용 중" 안내
+- 옛 세션이 새 sid로 교체된 후 옛 토큰으로 접근 → 401 + `reason: 'session_replaced'` → 프론트가 강제 로그아웃 모달 + 2초 후 자동 로그아웃
+- 레거시 JWT (sid 없음): DB도 NULL이면 자동으로 새 sid 발급해 무중단 전환, DB에 sid 있으면 session_replaced
+
+**관리자(role='admin') 예외:**
+단일 세션 정책 면제. 여러 브라우저 동시 로그인 가능 (개발자 편의).
+
+**활동 감지 (heartbeat):**
+- 프론트가 20분마다 `/auth-verify` 자동 호출 (`AUTH_REFRESH_INTERVAL_MS`)
+- `apiFetch`가 일반 API 성공 후 `AUTH_ACTIVITY_COOLDOWN_MS` 경과 시에도 `/auth-verify` 백그라운드 호출
+- 사용자가 화면 켜놓기만 해도 자동 갱신 → 본인이 차단되는 일 없음
+
+**비상 롤백 (코드 변경 없이):**
+```sql
+-- 모든 세션 즉시 클리어 → 모두 새 로그인 허용
+UPDATE companies SET active_session_id = NULL, active_session_at = NULL;
+
+-- 특정 회사만:
+UPDATE companies SET active_session_id = NULL, active_session_at = NULL WHERE id = <ID>;
+
+-- 현재 활성 세션 조회:
+SELECT id, email, company_name, active_session_at, NOW() - active_session_at AS idle_for
+  FROM companies WHERE active_session_id IS NOT NULL ORDER BY active_session_at DESC;
+```
+
+**마이그레이션 SQL**: `docs/single-session-migration.sql`
+
+**개발 시 주의:**
+- `signToken` 호출 시 user payload에 반드시 `sid` 포함 (admin은 제외)
+- 새 인증 함수 만들 때 `auth-verify.js`의 sid 검증 로직 패턴 참조
+- 단일 세션 정책 무력화 우회 코드 추가 금지 (의도적 우회 시 21중 가드와 동급으로 사고 위험)
 
 ## 환경 변수 (Netlify에 설정)
 

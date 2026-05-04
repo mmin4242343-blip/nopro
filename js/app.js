@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-04-11';
+const CLIENT_BUILD = '2026-05-04-12';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -210,6 +210,16 @@ async function apiFetch(endpoint, method='POST', body=null){
   let data;
   try{data=JSON.parse(text);}catch(e){throw new Error('서버 응답 오류 (status:'+res.status+')');}
   const isAuthEndpoint=endpoint.startsWith('/auth-login')||endpoint.startsWith('/auth-signup')||endpoint.startsWith('/auth-verify');
+  // 🔒 단일 로그인 — 다른 기기/브라우저에서 새 로그인됨 → 강제 로그아웃
+  // (auth-verify에서도 발생 가능 → isAuthEndpoint 검사보다 먼저 처리)
+  if(res.status===401 && data && data.reason==='session_replaced'){
+    if(typeof showSyncToast==='function'){
+      showSyncToast('⚠️ 다른 기기에서 로그인되어 종료됩니다\n잠시 후 로그인 화면으로 이동합니다.\n저장되지 않은 값은 로컬에 남아있을 수 있습니다.','error',8000);
+    }
+    try { showSessionExpiredBanner(); } catch(e){}
+    setTimeout(()=>{ try { authLogout(); } catch(e){} }, 2000);
+    throw new Error('다른 기기에서 로그인되어 종료됩니다');
+  }
   if(res.status===401 && !isAuthEndpoint){
     if(typeof showSyncToast==='function'){
       showSyncToast('⚠️ 세션이 만료되었습니다. 다시 로그인해주세요.\n저장되지 않은 값은 로컬에 남아있을 수 있습니다.','error',5000);
@@ -219,6 +229,14 @@ async function apiFetch(endpoint, method='POST', body=null){
     throw new Error('세션이 만료되었습니다');
   }
   if(res.status===429) throw new Error(data.error||'요청이 너무 많습니다. 잠시 후 다시 시도해주세요.');
+  // 🔒 단일 로그인 — 새 로그인 시도 시 기존 활성 세션 있음 → 친절한 메시지로 throw
+  if(res.status===409 && data && data.reason==='session_active'){
+    const remain = data.retry_after_minutes || 0;
+    const msg = '이미 다른 기기/브라우저에서 사용 중입니다.\n\n'
+      + '먼저 그 기기에서 로그아웃하거나, 약 ' + remain + '분 후 자동 만료를 기다려 주세요.\n'
+      + '(마지막 활동 후 1시간 idle 시 자동 만료)';
+    throw new Error(msg);
+  }
   if(!res.ok) throw new Error(data.error||'서버 오류');
   // 활동 기반 능동 갱신: 일반 API 호출 성공 후 쿨다운 경과 시 백그라운드로 verify 호출.
   // 서버의 shouldRefresh가 만족되면 Set-Cookie로 쿠키가 7일로 리셋됨. 실패해도 무시(fire-and-forget).
@@ -9930,6 +9948,7 @@ async function doAuthLogin(){
     startAuthRefreshTimer();
   } catch(e){
     errEl.textContent=e.message||'로그인 실패';
+    errEl.style.whiteSpace='pre-line';  // 줄바꿈(\n) 표시 — 단일세션 충돌 등 다중 행 메시지용
     errEl.style.display='block';
   } finally {
     if(btn){ btn.textContent='로그인'; btn.disabled=false; }
