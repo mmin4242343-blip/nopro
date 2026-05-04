@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-04-14';
+const CLIENT_BUILD = '2026-05-04-15';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -3016,11 +3016,22 @@ let _dpkY=null,_dpkM=null;
 function toggleDayPicker(ev){
   if(ev) ev.stopPropagation();
   const pop=document.getElementById('day-picker-pop');
-  if(!pop) return;
+  const btn=document.getElementById('day-cal-btn');
+  if(!pop||!btn) return;
   if(pop.style.display==='block'){closeDayPicker();return;}
   _dpkY=cY; _dpkM=cM;
+  // 팝업을 document.body로 이동 (.dbar의 overflow:hidden 회피)
+  if(pop.parentNode!==document.body) document.body.appendChild(pop);
   pop.style.display='block';
   renderDayPicker();
+  // 버튼 위치 기준으로 팝업 좌표 계산 (viewport 안 들어오면 좌측으로 보정)
+  const r=btn.getBoundingClientRect();
+  const popW=300; // padding 포함 대략
+  const vw=window.innerWidth;
+  let left=r.left;
+  if(left+popW>vw-12) left=Math.max(12, vw-popW-12);
+  pop.style.top=`${r.bottom+6}px`;
+  pop.style.left=`${left}px`;
   setTimeout(()=>{ document.addEventListener('click', _dpkOutsideClose, {once:false}); }, 0);
 }
 function closeDayPicker(){
