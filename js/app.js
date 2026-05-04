@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-04-15';
+const CLIENT_BUILD = '2026-05-04-16';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -3022,6 +3022,11 @@ function toggleDayPicker(ev){
   _dpkY=cY; _dpkM=cM;
   // 팝업을 document.body로 이동 (.dbar의 overflow:hidden 회피)
   if(pop.parentNode!==document.body) document.body.appendChild(pop);
+  // 팝업 내부 클릭은 outside-close로 전파되지 않도록 차단 (innerHTML 재렌더 후 e.target이 detach되는 race 방지)
+  if(!pop._stopPropAdded){
+    pop.addEventListener('click', e=>e.stopPropagation());
+    pop._stopPropAdded=true;
+  }
   pop.style.display='block';
   renderDayPicker();
   // 버튼 위치 기준으로 팝업 좌표 계산 (viewport 안 들어오면 좌측으로 보정)
@@ -3048,8 +3053,9 @@ function _dpkOutsideClose(e){
 }
 function dpkNav(d){
   _dpkM+=d;
-  if(_dpkM>12){_dpkM=1;_dpkY++;}
-  if(_dpkM<1){_dpkM=12;_dpkY--;}
+  // ±12 (연 단위)도 정확히 처리 — while 루프로 누적 캐리오버
+  while(_dpkM>12){_dpkM-=12;_dpkY++;}
+  while(_dpkM<1){_dpkM+=12;_dpkY--;}
   renderDayPicker();
 }
 function dpkPick(y,m,d){
