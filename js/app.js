@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-04-9';
+const CLIENT_BUILD = '2026-05-04-10';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -2091,7 +2091,14 @@ function filterEmpsByPay(emps){
 // renderTable/renderEmps 등 innerHTML 교체로 input이 destroy & recreate될 때
 // 사용자가 입력 중인 글자가 사라지지 않도록 스냅샷 → 복원.
 // 체크박스/버튼 등 비-텍스트 input은 보존 대상 아님.
+//
+// 🚦 _skipFocusRestore 플래그: timeKeyNav(Enter/Tab)에서 blur 후 다음 셀로 이동할 때
+// renderTable의 focus 복원이 현재 셀에 cursor를 다시 잡아버리는 충돌 방지용.
+// 플래그 ON이면 스냅샷 자체를 안 찍어 _restoreInputIn은 자동 no-op.
+let _skipFocusRestore = false;
+
 function _snapshotInputIn(containerEl){
+  if(_skipFocusRestore) return null;
   if(!containerEl) return null;
   const ae = document.activeElement;
   if(!ae || !ae.matches || !containerEl.contains(ae)) return null;
@@ -2442,12 +2449,11 @@ function timeKeyNav(e, el, eid, field) {
       ? { eid: allInputs[nextIdx].dataset.eid, field: allInputs[nextIdx].dataset.field }
       : null;
 
-    // 2. blur 트리거 → onblur="handleTimeInput(...)"이 자동으로:
-    //    · REC[k][field] = parsed 갱신
-    //    · saveLS (디바운스 후 서버 저장)
-    //    · renderTable (계산셀·chip 즉시 반영, focus snap=null이라 복원 X)
-    //    위 한 번의 호출이 원래 timeKeyNav가 직접 하던 모든 일을 안전하게 처리.
-    el.blur();
+    // 2. 🚦 blur 전후로 _skipFocusRestore 플래그 ON → renderTable의 focus 복원 일시 비활성화
+    //    (그렇지 않으면 _restoreInputIn이 현재 셀에 cursor 잡아버려 다음 셀로 이동 막힘)
+    //    blur 트리거 → onblur가 handleTimeInput → REC 갱신 + saveLS + renderTable 처리
+    _skipFocusRestore = true;
+    try { el.blur(); } finally { _skipFocusRestore = false; }
 
     // 3. 다음 input 다시 찾아 포커스 + 전체 선택 (재렌더 후 새 DOM에서)
     if(nextRef){
