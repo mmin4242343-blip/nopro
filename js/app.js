@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-04-1';
+const CLIENT_BUILD = '2026-05-04-2';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -926,6 +926,14 @@ window.addEventListener('beforeunload', (e)=>{
 // 탭/창 복귀 시 서버 최신값 자동 반영 (동시 접속 반영 — 옵션 A)
 // 내 편집 중 값이 덮어쓰이지 않도록: blur → pending flush → sbLoadAll 순서
 async function reloadOnFocus(){
+  // 🛑 자동 재로드 비활성화 (2026-05-04) — 입력값 유실 사고 차단.
+  // 입력 직후(특히 timeKeyNav Enter 경로) 서버 저장이 비동기로 진행 중인데
+  // 다른 앱/탭에서 돌아오면 sbLoadAll이 옛 서버 값으로 메모리를 덮어쓰는 사례 발생.
+  // (timeKeyNav는 saveLS._timer를 안 쓰므로 flushPendingSave가 건너뛰어짐 → 무방비)
+  // 단일 로그인 차단(예정) 후엔 동시 접속이 없으므로 자동 재로드 무용지물.
+  // 사용자가 명시적으로 새로고침(F5) 시 sbLoadAll로 동기화됨.
+  return;
+  // 아래 원본 코드 보존 (재활성화 필요 시 위 return 제거):
   if(document.hidden) return;
   const now = Date.now();
   if(now - (reloadOnFocus._lastAt||0) < 3000) return; // 중복 방지 (focus+visibilitychange 동시 발화)
@@ -11364,7 +11372,13 @@ async function pollForUpdates(){
 
 function startAutoPoll(){
   if(_pollTimerId) return;
-  _pollTimerId = setInterval(pollForUpdates, POLL_INTERVAL_MS);
+  // 🛑 폴링 비활성화 (2026-05-04) — 입력값 유실 사고 차단.
+  // 폴링이 입력 중/직후 메모리·렌더에 끼어들어 사용자 입력을 덮어쓰는 사례 발생.
+  // 단일 로그인 차단(예정) 시 폴링은 사실상 무용지물. 빌드 버전 체크는 다음 사용자 액션
+  // 시 발생하는 일반 API 응답에서 _serverBuild로 자연스럽게 처리됨.
+  // 재활성화 필요 시 이 줄 복원.
+  return;
+  // _pollTimerId = setInterval(pollForUpdates, POLL_INTERVAL_MS);
 }
 function stopAutoPoll(){
   if(_pollTimerId){
