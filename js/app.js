@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-04-12';
+const CLIENT_BUILD = '2026-05-04-13';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1424,7 +1424,7 @@ function monthSummary(eid,y,m){
     if(emp.leave){
       const ld=parseEmpDate(emp.leave);
       const curDate=new Date(y,m-1,d);
-      if(ld<=curDate) continue;
+      if(ld<curDate) continue;
     }
     const rec=REC[rk(eid,y,m,d)];if(!rec)continue;
     if(rec.annual){aldays+=1;continue;}
@@ -1547,8 +1547,8 @@ function monthSummary(eid,y,m){
       for(let offset=0;offset<7;offset++){
         const d=mon+offset;
         if(d<1||d>daysInMonth) continue;
-        // 퇴사일 이후 날짜는 주휴수당 판정 제외
-        if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<=new Date(y,m-1,d)) continue;}
+        // 퇴사일 이후 날짜는 주휴수당 판정 제외 (퇴사일 당일은 포함)
+        if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<new Date(y,m-1,d)) continue;}
         // 근무형태 등록된 경우만 소정근로일 체크
         if(isRegistered){
           const dowKo=DOW_KO[new Date(y,m-1,d).getDay()];
@@ -2173,7 +2173,7 @@ function renderTable(){
   const dayDate=new Date(cY,cM-1,cD);
   const activeDayEmps = applyCommonFilter(EMPS.filter(emp=>{
     if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate)return false;}
-    if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<=dayDate)return false;}
+    if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<dayDate)return false;}
     return true;
   }), 'daily', dayDate);
   document.getElementById('daily-tbody').innerHTML=activeDayEmps.map(emp=>{
@@ -2609,7 +2609,7 @@ function activeDayEmpsForCopy(){
   const search=(document.getElementById('sb-search-inp')?.value||'').trim();
   return EMPS.filter(emp=>{
     if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate) return false;}
-    if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<=dayDate) return false;}
+    if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<dayDate) return false;}
     // 사이드바 필터 반영 (renderSb와 동일 로직)
     if(SBF.shift!=='all' && (emp.shift||'day')!==SBF.shift) return false;
     const isFor = emp.nation==='foreign' || emp.foreigner===true;
@@ -2880,10 +2880,10 @@ function renderCal(){
   const calLeaveDate = emp.leave ? parseEmpDate(emp.leave) : null;
   for(let d=1;d<=days;d++){
     const dow=(fd+d-1)%7,rec=REC[rk(vEid,vY,vM,d)];
-    // 퇴사일 이후 날짜는 비활성 표시 (근무시간 미집계와 UI 일치)
+    // 퇴사일 이후 날짜는 비활성 표시 (근무시간 미집계와 UI 일치, 퇴사일 당일은 정상 표시)
     if(calLeaveDate){
       const curDate=new Date(vY,vM-1,d);
-      if(calLeaveDate<=curDate){
+      if(calLeaveDate<curDate){
         h+=`<div class="cdc em" style="opacity:.45;background:var(--rose-dim,#FEE2E2)"><div class="cdn ${dow===0?'su':dow===6?'sa':''}">${d}</div><div style="font-size:9px;color:var(--rose);font-weight:700">퇴사후</div></div>`;
         continue;
       }
@@ -3092,13 +3092,14 @@ function renderPayroll(){
   // 확정된 달은 입력칸을 잠가 "입력해도 안 먹히는" 현상 방지
   const _monthLocked = (typeof isPayMonthConfirmed==='function') && isPayMonthConfirmed(pY, pM);
   let gt={base:0,nt:0,ot:0,hol:0,al:0,bonus:0,allow:0,ded:0,total:0};
-  // 해당 월에 재직 중인 직원만
+  // 해당 월에 재직 중인 직원만 (refDate=월 시작일: 월 도중 퇴사자도 해당 월엔 표시)
   const payMonthEnd=new Date(pY,pM,0);
+  const payMonthStart=new Date(pY,pM-1,1);
   const activePayEmps = applyCommonFilter(EMPS.filter(emp=>{
     if(emp.join){const jd=parseEmpDate(emp.join);if(jd>payMonthEnd)return false;}
-    if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<new Date(pY,pM-1,1))return false;}
+    if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<payMonthStart)return false;}
     return true;
-  }), 'payroll', payMonthEnd);
+  }), 'payroll', payMonthStart);
   document.getElementById('pay-grid').innerHTML=activePayEmps.map(emp=>{
     const _ck=`${emp.id}_${pY}_${pM}`;
     let s=_payrollSummaryCache.get(_ck);
@@ -3203,7 +3204,7 @@ function renderXlPreview(){
     if(emp.join){const jd=parseEmpDate(emp.join);if(jd>new Date(pY,pM,0))return false;}
     if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<new Date(pY,pM-1,1))return false;}
     return true;
-  }), 'payroll');
+  }), 'payroll', new Date(pY,pM-1,1));
 
   // ── 헤더 ──
   const hdr = `<thead><tr>
@@ -6664,11 +6665,11 @@ function exportDailyExcel(){
   ws['!rows'].push({hpt:26});
   R++;
 
-  // 직원 필터링 (renderTable과 동일)
+  // 직원 필터링 (renderTable과 동일, 퇴사일 당일은 포함)
   const dayDate2=new Date(cY,cM-1,cD);
   const activeDayEmps = applyCommonFilter(EMPS.filter(emp=>{
     if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate2)return false;}
-    if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<=dayDate2)return false;}
+    if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<dayDate2)return false;}
     return true;
   }), 'daily', dayDate2);
 
@@ -8767,8 +8768,8 @@ function exportMonthlyExcel(){
         const dow=new Date(vY,vM-1,d).getDay();
         const isWe=[0,6].includes(dow);
         const autoH=isAutoHol(vY,vM,d);
-        // 퇴사일 이후 날짜는 빈 셀
-        if(empLeaveDate && empLeaveDate<=new Date(vY,vM-1,d)){
+        // 퇴사일 이후 날짜는 빈 셀 (퇴사일 당일은 정상 집계)
+        if(empLeaveDate && empLeaveDate<new Date(vY,vM-1,d)){
           xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:d+1}),'',S.cell(C.gray,'F5F5F5',false,'center'));
           continue;
         }
@@ -8897,8 +8898,8 @@ function exportMonthlyExcel(){
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),dateStr,S.cell(C.navy,rowBg,false,'center'));
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),phName||dowLabel,S.cell(autoH?C.rose:dowColor,rowBg,autoH||isSun||isSat,'center'));
 
-      // 퇴사일 이후 날짜는 빈 행 (REC 무시)
-      if(empLeaveDate2 && empLeaveDate2<=new Date(vY,vM-1,d)){
+      // 퇴사일 이후 날짜는 빈 행 (REC 무시, 퇴사일 당일은 정상 집계)
+      if(empLeaveDate2 && empLeaveDate2<new Date(vY,vM-1,d)){
         [2,3,4,5,6,7,8,9,10].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty('F5F5F5')));
         ws['!rows'].push({hpt:18});
         R++;
