@@ -907,7 +907,7 @@
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
       <div style="font-size:12px;font-weight:700;color:var(--ink)">📤 엑셀 업로드 미리보기</div>
       <div style="display:flex;gap:6px;align-items:center">
-        <select id="leave-upload-sheet1" onchange="leaveUploadParseSheet()" style="padding:4px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-weight:600"></select>
+        <select id="leave-upload-sheet1" onchange="leaveUploadParseSheet(event)" style="padding:4px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-weight:600"></select>
         <button class="btn btn-n btn-sm" onclick="leaveUploadApply()" id="leave-upload-apply-btn1" style="font-size:11px">적용</button>
         <button class="btn btn-sm" onclick="leaveUploadCancel()" style="font-size:11px;color:var(--ink3)">취소</button>
       </div>
@@ -1045,7 +1045,7 @@
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div style="font-size:12px;font-weight:700;color:var(--ink)">📤 엑셀 업로드 미리보기</div>
       <div style="display:flex;gap:6px;align-items:center">
-        <select id="leave-upload-sheet" onchange="leaveUploadParseSheet()" style="padding:4px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-weight:600"></select>
+        <select id="leave-upload-sheet" onchange="leaveUploadParseSheet(event)" style="padding:4px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-weight:600"></select>
         <button class="btn btn-n btn-sm" onclick="leaveUploadApply()" id="leave-upload-apply-btn" style="font-size:11px">적용</button>
         <button class="btn btn-sm" onclick="leaveUploadCancel()" style="font-size:11px;color:var(--ink3)">취소</button>
       </div>
@@ -1904,7 +1904,7 @@ noprohr.netlify.app/tbm_sign.html
 </div>
 
 </div></div></div>
-<script src="/js/app.js?v=2026-05-04-16"></script>
+<script src="/js/app.js?v=2026-05-04-17"></script>
 <!-- 인라인 핸들러용 unsafe-inline은 추후 단계적 제거 예정 -->
 <script>
 // placeholder - app.js에서 모든 로직 처리

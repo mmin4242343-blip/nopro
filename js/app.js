@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-04-16';
+const CLIENT_BUILD = '2026-05-04-17';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -8656,10 +8656,11 @@ function _excelDateToISO(serial){
   return d.toISOString().slice(0,10);
 }
 
-function leaveUploadParseSheet(){
+function leaveUploadParseSheet(event){
   if(!_leaveUploadWB)return;
   const sels=_luEl('leave-upload-sheet');
-  const sheetName=sels.length?sels[0].value:'';
+  // 사용자가 실제로 변경한 select 우선 (중복 ID로 인한 동기화 역전 버그 방지)
+  const sheetName = (event && event.target && event.target.value) || (sels.length?sels[0].value:'');
   // 양쪽 셀렉트 동기화
   sels.forEach(s=>{if(s.value!==sheetName)s.value=sheetName;});
   const ws=_leaveUploadWB.Sheets[sheetName];
