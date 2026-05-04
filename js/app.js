@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-04-10';
+const CLIENT_BUILD = '2026-05-04-11';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1853,17 +1853,38 @@ function handleTimeInput(eid,field,raw){
   if(!REC[k])REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
   REC[k][field]=parsed;
   saveLS();
-  // 🔄 즉시 화면 반영 — renderTable이 input/계산셀/chip 모두 REC 그대로 다시 그림.
-  //   · 빈값으로 지운 경우: 계산 셀(_updateDailyRowCells가 빈값 처리 못 하던 옛 버그) 즉시 클리어
-  //   · 잘못된 형식: input.value도 빈값으로 정상화
-  //   · focus 보존 래퍼(_snapshotInputIn)가 입력 흐름 보호
-  try { renderTable(); } catch(e){ console.warn('handleTimeInput 후 renderTable 실패:', e); }
+  // input 값 즉시 반영 (포커스가 이미 떠난 상태에서만)
+  const inp=document.querySelector('#daily-tbody input.time-inp[data-eid="'+eid+'"][data-field="'+field+'"]');
+  if(inp && inp!==document.activeElement) inp.value=parsed;
+  // 계산 셀(실근무/야간/연장/휴일) 갱신 — 빈값/특수상태도 처리해서 옛 값 잔존 방지
+  _updateDailyRowCells(eid);
 }
 
 function _updateDailyRowCells(eid){
   const k=rk(eid,cY,cM,cD);
   const rec=REC[k];
-  if(!rec||!rec.start||!rec.end) return;
+  // 행 찾기
+  const rows=document.querySelectorAll('#daily-tbody tr');
+  let targetTr=null;
+  for(const tr of rows){
+    if(tr.querySelector('input.time-inp[data-eid="'+eid+'"]')){ targetTr=tr; break; }
+  }
+  if(!targetTr) return;
+  const tdW=targetTr.querySelector('.td-w');
+  const tdNt=targetTr.querySelector('.td-nt');
+  const tdOt=targetTr.querySelector('.td-ot');
+  const tdHol=targetTr.querySelector('.td-hol');
+  // 🛡️ 빈값/연차/결근 등 계산 불필요 → 계산 셀 클리어 (옛 값 잔존 방지)
+  // 단, 특수상태(연차/결근/반차)일 때는 renderTable이 chip을 그렸으므로 여기서 안 건드림
+  if(!rec || (!rec.start || !rec.end)){
+    if(!rec || (!rec.absent && !rec.annual && !rec.halfAnnual)){
+      if(tdW){ const d=tdW.querySelector('div')||tdW; d.textContent=''; }
+      if(tdNt) tdNt.textContent='';
+      if(tdOt) tdOt.textContent='';
+      if(tdHol) tdHol.textContent='';
+    }
+    return;
+  }
   if(rec.absent||rec.annual) return;
   const emp=EMPS.find(e=>e.id===eid);
   if(!emp) return;
@@ -1873,23 +1894,13 @@ function _updateDailyRowCells(eid){
   try{
     const c=calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,cY,cM));
     if(!c) return;
-    // row 찾기
-    const rows=document.querySelectorAll('#daily-tbody tr');
-    for(const tr of rows){
-      if(!tr.querySelector('input.time-inp[data-eid="'+eid+'"]')) continue;
-      const tdW=tr.querySelector('.td-w');
-      if(tdW){
-        const d=tdW.querySelector('div')||tdW;
-        d.textContent=c.work>0?fmtH(c.work):'';
-      }
-      const tdNt=tr.querySelector('.td-nt');
-      if(tdNt) tdNt.textContent=c.nightM>30?fmtH(c.nightM):'';
-      const tdOt=tr.querySelector('.td-ot');
-      if(tdOt) tdOt.textContent=c.ot>0?fmtH(c.ot):'';
-      const tdHol=tr.querySelector('.td-hol');
-      if(tdHol) tdHol.textContent=autoH&&c.work>0?fmtH(c.work):'';
-      break;
+    if(tdW){
+      const d=tdW.querySelector('div')||tdW;
+      d.textContent=c.work>0?fmtH(c.work):'';
     }
+    if(tdNt) tdNt.textContent=c.nightM>30?fmtH(c.nightM):'';
+    if(tdOt) tdOt.textContent=c.ot>0?fmtH(c.ot):'';
+    if(tdHol) tdHol.textContent=autoH&&c.work>0?fmtH(c.work):'';
   }catch(err){console.warn('row update 오류:',err);}
 }
 function setR(eid,f,v){
@@ -2440,28 +2451,39 @@ function timeKeyNav(e, el, eid, field) {
     e.preventDefault();
     e.stopPropagation();
 
-    // 1. 다음 input 위치 정보 보관 (DOM 재생성 후 다시 찾기 위해 eid+field로 식별)
+    // 1. 값 파싱 + DOM input value 정규화
+    const parsed = parseTimeInput(el.value);
+    el.value = parsed;
+
+    // 2. 다음 input 찾기 (DOM 그대로 유지하므로 변경 없음)
     const allInputs = Array.from(document.querySelectorAll('#daily-tbody input.time-inp'))
       .filter(inp => !inp.disabled && inp.offsetParent !== null);
     const curIdx = allInputs.indexOf(el);
     const nextIdx = e.shiftKey ? curIdx - 1 : curIdx + 1;
-    const nextRef = (nextIdx >= 0 && nextIdx < allInputs.length)
-      ? { eid: allInputs[nextIdx].dataset.eid, field: allInputs[nextIdx].dataset.field }
-      : null;
+    const nextInput = (nextIdx >= 0 && nextIdx < allInputs.length) ? allInputs[nextIdx] : null;
 
-    // 2. 🚦 blur 전후로 _skipFocusRestore 플래그 ON → renderTable의 focus 복원 일시 비활성화
-    //    (그렇지 않으면 _restoreInputIn이 현재 셀에 cursor 잡아버려 다음 셀로 이동 막힘)
-    //    blur 트리거 → onblur가 handleTimeInput → REC 갱신 + saveLS + renderTable 처리
-    _skipFocusRestore = true;
-    try { el.blur(); } finally { _skipFocusRestore = false; }
+    // 3. REC 업데이트 (renderTable 안 부름 → DOM 안 깨짐 → focus 자유롭게 이동 가능)
+    const k = rk(eid, cY, cM, cD);
+    if(!REC[k]) REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
+    REC[k][field] = parsed;
 
-    // 3. 다음 input 다시 찾아 포커스 + 전체 선택 (재렌더 후 새 DOM에서)
-    if(nextRef){
-      const newNext = document.querySelector(
-        '#daily-tbody input.time-inp[data-eid="'+nextRef.eid+'"][data-field="'+nextRef.field+'"]'
-      );
-      if(newNext){ newNext.focus(); newNext.select(); }
+    // 4. localStorage + Supabase 비동기 저장 (포커스 이동 방해 안 함)
+    try{
+      localStorage.setItem(LS.R, JSON.stringify(REC));
+      const _sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
+      if(_sess && _sess.companyId){
+        sbSaveAll(_sess.companyId).catch(e=>console.warn(e));
+      }
+    }catch(err){}
+
+    // 5. 다음 셀로 포커스 이동 + 전체 선택 (출근→퇴근→다음 직원 출근 순서)
+    if(nextInput){
+      nextInput.focus();
+      nextInput.select();
     }
+
+    // 6. 현재 행 계산 셀(실근무/야간/연장/휴일) 갱신 — 빈값일 때도 클리어 처리됨
+    _updateDailyRowCells(eid);
 
   } else if(e.key === 'ArrowDown' || e.key === 'ArrowUp') {
     e.preventDefault();
