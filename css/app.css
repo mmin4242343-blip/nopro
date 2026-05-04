@@ -133,6 +133,31 @@ button,div,span{letter-spacing:-.01em}
 .dar:hover{background:var(--nbg2);color:var(--ink)}
 .ddow{padding:7px 14px;font-size:11.5px;color:var(--ink3);background:var(--surf);white-space:nowrap;font-weight:500;letter-spacing:-.01em}
 
+/* 일별 미니 캘린더 팝업 */
+.day-picker-pop{position:absolute;top:calc(100% + 6px);left:50%;transform:translateX(-50%);z-index:100;background:var(--card);border:1px solid var(--bd2);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.15);padding:12px;width:280px;font-family:inherit}
+.dpk-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:6px}
+.dpk-nav{padding:4px 9px;background:var(--surf);border:1px solid var(--bd);border-radius:6px;cursor:pointer;font-size:12px;color:var(--ink2);font-family:inherit;line-height:1}
+.dpk-nav:hover{background:var(--nbg2);color:var(--ink)}
+.dpk-title{font-size:13px;font-weight:700;color:var(--ink);flex:1;text-align:center;cursor:pointer;padding:4px 8px;border-radius:6px}
+.dpk-title:hover{background:var(--surf)}
+.dpk-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.dpk-dow{font-size:10px;font-weight:700;color:var(--ink3);text-align:center;padding:4px 0}
+.dpk-dow.su{color:var(--rose)}
+.dpk-dow.sa{color:var(--navy2)}
+.dpk-cell{position:relative;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--ink);background:transparent;border:1px solid transparent;border-radius:6px;cursor:pointer;transition:all .12s;font-family:inherit;padding:0}
+.dpk-cell:hover{background:var(--nbg);border-color:var(--navy2)}
+.dpk-cell.empty{cursor:default;opacity:0}
+.dpk-cell.other{color:var(--ink3);opacity:.4}
+.dpk-cell.su{color:var(--rose)}
+.dpk-cell.sa{color:var(--navy2)}
+.dpk-cell.hol{color:var(--rose);background:#FFF1F2}
+.dpk-cell.today{border-color:var(--navy2);font-weight:800}
+.dpk-cell.sel{background:var(--navy)!important;color:#fff!important;border-color:var(--navy)}
+.dpk-dot{position:absolute;bottom:3px;width:4px;height:4px;border-radius:50%;background:var(--green)}
+.dpk-cell.sel .dpk-dot{background:#fff}
+.dpk-foot{display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--bd);font-size:10px;color:var(--ink3)}
+.dpk-today-btn{padding:3px 9px;background:var(--navy);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:10px;font-weight:600;font-family:inherit}
+
 /* 휴게 */
 .bk-box{background:var(--card);border:.5px solid var(--bd);border-radius:var(--radius);margin-bottom:16px;overflow:hidden;box-shadow:var(--shadow-sm)}
 .bk-hd{background:var(--grad1);color:#fff;padding:13px 20px;font-size:12.5px;font-weight:500;display:flex;align-items:center;justify-content:space-between;letter-spacing:-.01em}

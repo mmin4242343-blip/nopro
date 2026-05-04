@@ -222,7 +222,8 @@ attempted_at    TIMESTAMP NOT NULL DEFAULT now()
 ```javascript
 EMPS = []           // 직원 배열 [{id, name, phone, rrnFront, rrnBack, rate, payMode, monthly, position, ...}]
 POL = {}            // 급여 정책 {basePayMode, baseRate, sot, nightStart, extFixed, ntFixed, ...}
-REC = {}            // 출퇴근 기록 {"{empId}_{YYYY-MM-DD}": {start, end, pohal, att, outTimes, customBk}}
+REC = {}            // 출퇴근 기록 {"{empId}_{YYYY-MM-DD}": {start, end, pohal, att, outTimes, customBk, subWork}}
+                    //   subWork=true: 휴일대체근무. 휴일가산 무력화 → 평일처럼 산정 (예: 5/1 근로자의날 대체)
 BONUS_REC = {}      // 상여금 {"{empId}_{YYYY}_{MM}": amount}
 ALLOWANCE_REC = {}  // 수당 {"{empId}_{YYYY}_{MM}": {ability, position, career, ...}}
 TAX_REC = {}        // 세금 {"{empId}_{YYYY}_{MM}": {incomeMin, incomeMax, ...}}

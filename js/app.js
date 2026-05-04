@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-04-13';
+const CLIENT_BUILD = '2026-05-04-14';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1440,7 +1440,7 @@ function monthSummary(eid,y,m){
     if(rec.absent){
       adays++;
       if(empPayMode==='monthly'){
-        // 월급제: 주말/공휴일 결근은 공제 안 함 (원래 안 나와도 되는 날)
+        // 월급제: 주말/공휴일 결근은 공제 안 함 (원래 안 나와도 되는 날) — 대체근무 무관 (결근이라 가산 자체 없음)
         const isHolDay = isAutoHol(y,m,d,emp);
         if(!isHolDay && (POL.dedMonthly??true)){
           const monthlyBase=getEmpMonthlyAt(emp, y, m, 1);
@@ -1456,7 +1456,8 @@ function monthSummary(eid,y,m){
       }
       continue;
     }
-    const autoH=isAutoHol(y,m,d,emp);
+    // 대체근무 체크 시 휴일성 무력화 → 평일처럼 산정
+    const autoH=isAutoHol(y,m,d,emp) && !rec.subWork;
     const bks=getActiveBk(y,m,d,emp);
     const msBks = rec.customBk ? (rec.customBkList||[]) : bks;
     const c=rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,msBks,rec.outTimes||[],empPayMode,ordRate):null;
@@ -1562,7 +1563,7 @@ function monthSummary(eid,y,m){
         const bks=getActiveBk(y,m,d,emp);
         const _whActiveBks = rec.customBk ? (rec.customBkList||[]) : bks;
         const c=rec.start&&rec.end
-          ?calcSession(rec.start,rec.end,rate,isAutoHol(y,m,d,emp),_whActiveBks,rec.outTimes||[],empPayMode,ordRate)
+          ?calcSession(rec.start,rec.end,rate,isAutoHol(y,m,d,emp)&&!rec.subWork,_whActiveBks,rec.outTimes||[],empPayMode,ordRate)
           :null;
         if(c&&c.work>0) weekWork+=c.work;
       }
@@ -1779,6 +1780,9 @@ function updDbar(){
   const al=document.getElementById('hol-alert');
   if(autoH){al.style.display='block';al.textContent=`🎌 ${phName||(dow===6?'토요일':'일요일')} — 휴일 가산 자동 적용`;}
   else al.style.display='none';
+  // 미니 캘린더가 열려있으면 동기화
+  const _dpkPop=document.getElementById('day-picker-pop');
+  if(_dpkPop && _dpkPop.style.display==='block'){ _dpkY=cY; _dpkM=cM; renderDayPicker(); }
 }
 
 function getDsBk(){const k=`${cY}-${pad(cM)}-${pad(cD)}`;return TBK[k]||DEF_BK.map(b=>({...b}));}
@@ -1906,7 +1910,8 @@ function _updateDailyRowCells(eid){
   if(rec.absent||rec.annual) return;
   const emp=EMPS.find(e=>e.id===eid);
   if(!emp) return;
-  const autoH=isAutoHol(cY,cM,cD,emp);
+  // 대체근무 체크 시 휴일성 무력화
+  const autoH=isAutoHol(cY,cM,cD,emp) && !rec.subWork;
   const bks=getActiveBk(cY,cM,cD,emp);
   const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
   try{
@@ -1938,8 +1943,8 @@ function setR(eid,f,v){
   // input.value는 사용자가 친 그대로 DOM에 살아있고, 다음 자연스러운 재렌더에 REC 값으로 그려짐.
   if(f==='note') return;
   renderTable();
-  // 연차/반차 변경 시 관련 탭도 즉시 갱신
-  if(f==='annual'||f==='halfAnnual'||f==='absent'){
+  // 연차/반차/대체근무 변경 시 관련 탭도 즉시 갱신 (휴일→평일 전환은 급여 재계산 필요)
+  if(f==='annual'||f==='halfAnnual'||f==='absent'||f==='subWork'){
     const lvPage=document.getElementById('pg-leave');
     if(lvPage&&lvPage.classList.contains('on')) renderLeave();
     const mvPage=document.getElementById('pg-monthly');
@@ -2183,7 +2188,8 @@ function renderTable(){
     const prevKey = rk(emp.id,prevD.getFullYear(),prevD.getMonth()+1,prevD.getDate());
     // 저장된 기록만 사용 (자동 채우기 없음 - 최근 데이터 불러오기 버튼으로만 적용)
     const rec=REC[k]||{empId:emp.id,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
-    const autoH=isAutoHol(cY,cM,cD,emp);
+    // 대체근무 체크 시 휴일성 무력화 (UI 휴일 배지·계산 모두 평일로 처리)
+    const autoH=isAutoHol(cY,cM,cD,emp) && !rec.subWork;
     const rate=getEmpRate(emp);
     const al=calcAnnualLeave(emp);
     const empPayMode=getEmpPayMode(emp);
@@ -2277,6 +2283,9 @@ function renderTable(){
             <label style="font-size:10px;color:var(--green);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600" title="전체 휴게시간 무시하고 개인 휴게시간 적용">
               <input type="checkbox" ${rec.customBk?'checked':''} onchange="setR(${emp.id},'customBk',this.checked)">개별휴게
             </label>
+            <label style="font-size:10px;color:#7C3AED;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600" title="휴일이지만 평일 대체근무로 처리 (휴일가산 미적용, 기본 근무로 산정)">
+              <input type="checkbox" ${rec.subWork?'checked':''} onchange="setR(${emp.id},'subWork',this.checked)">대체근무
+            </label>
             <button class="out-btn ${(rec.outTimes&&rec.outTimes.length>0)?'active':''}" onclick="addOutTime(${emp.id})">+ 외출</button>
             <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" oninput="setR(${emp.id},'note',this.value)">
           </div>
@@ -2344,6 +2353,9 @@ function renderTable(){
             <label style="font-size:10px;color:var(--green);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600" title="전체 휴게시간 무시하고 개인 휴게시간 적용">
               <input type="checkbox" ${rec.customBk?'checked':''} onchange="setR(${emp.id},'customBk',this.checked)">개별휴게
             </label>
+            <label style="font-size:10px;color:#7C3AED;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600" title="휴일이지만 평일 대체근무로 처리 (휴일가산 미적용, 기본 근무로 산정)">
+              <input type="checkbox" ${rec.subWork?'checked':''} onchange="setR(${emp.id},'subWork',this.checked)">대체근무
+            </label>
             <button class="out-btn ${(rec.outTimes&&rec.outTimes.length>0)?'active':''}" onclick="addOutTime(${emp.id})">+ 외출</button>
             <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" oninput="setR(${emp.id},'note',this.value)">
           </div>
@@ -2400,6 +2412,9 @@ function renderTable(){
           </label>
           <label style="font-size:10px;color:var(--green);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600" title="전체 휴게시간 무시하고 개인 휴게시간 적용">
             <input type="checkbox" ${rec.customBk?'checked':''} onchange="setR(${emp.id},'customBk',this.checked)">개별휴게
+          </label>
+          <label style="font-size:10px;color:#7C3AED;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600" title="휴일이지만 평일 대체근무로 처리 (휴일가산 미적용, 기본 근무로 산정)">
+            <input type="checkbox" ${rec.subWork?'checked':''} onchange="setR(${emp.id},'subWork',this.checked)">대체근무
           </label>
           <button class="out-btn ${(rec.outTimes&&rec.outTimes.length>0)?'active':''}" onclick="addOutTime(${emp.id})">+ 외출</button>
           <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" oninput="setR(${emp.id},'note',this.value)">
@@ -2522,7 +2537,8 @@ function updateRowCalc(eid){
   if(!rec || !rec.start || !rec.end) return;
   const emp = EMPS.find(e=>e.id===eid);
   if(!emp) return;
-  const autoH = isAutoHol(cY, cM, cD);
+  // 대체근무 체크 시 휴일성 무력화
+  const autoH = isAutoHol(cY, cM, cD) && !rec.subWork;
   const bks = getActiveBk(cY, cM, cD, emp);
   const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
   const c = calcSession(rec.start, rec.end, getEmpRate(emp), autoH, activeBks, rec.outTimes||[], getEmpPayMode(emp), getOrdinaryRate(emp,cY,cM));
@@ -2888,7 +2904,8 @@ function renderCal(){
         continue;
       }
     }
-    const autoH=isAutoHol(vY,vM,d,emp),phName=getPhName(vY,vM,d);
+    // 대체근무 체크 시 휴일성 무력화 (캘린더 셀 색·계산 모두 평일로)
+    const autoH=isAutoHol(vY,vM,d,emp) && !(rec&&rec.subWork),phName=getPhName(vY,vM,d);
     const rate=getEmpRate(emp);
     const isAl=rec&&rec.annual;
     const isHalf=rec&&rec.halfAnnual;
@@ -2939,13 +2956,14 @@ function renderOv(){
     const ovLeaveDate = emp.leave ? parseEmpDate(emp.leave) : null;
     let tr=`<td class="ec"><div style="display:flex;align-items:center;gap:4px"><div class="av" style="width:19px;height:19px;font-size:9px;background:${safeColor(emp.color,'#DBEAFE')};color:${safeColor(emp.tc,'#1E3A5F')}">${esc(emp.name)[0]}</div>${esc(emp.name)}${emp.leave?'<span style="font-size:8px;color:var(--rose);margin-left:2px">퇴사</span>':''}</div></td>`;
     for(let d=1;d<=days;d++){
-      // 퇴사일 이후 셀은 비활성 표시
+      // 퇴사일 이후 셀은 비활성 표시 (퇴사일 당일은 정상 표시)
       if(ovLeaveDate){
         const curDate=new Date(vY,vM-1,d);
-        if(ovLeaveDate<=curDate){ tr+=`<td class="mt" style="background:var(--rose-dim,#FEE2E2);color:var(--rose);opacity:.5">-</td>`; continue; }
+        if(ovLeaveDate<curDate){ tr+=`<td class="mt" style="background:var(--rose-dim,#FEE2E2);color:var(--rose);opacity:.5">-</td>`; continue; }
       }
       const rec=REC[rk(emp.id,vY,vM,d)];
-      const autoH=isAutoHol(vY,vM,d);
+      // 대체근무 체크 시 휴일성 무력화
+      const autoH=isAutoHol(vY,vM,d) && !(rec&&rec.subWork);
       const isAl=rec&&rec.annual;
       const _ovBks=getActiveBk(vY,vM,d,emp);
       const _ovActiveBks = rec && rec.customBk ? (rec.customBkList||[]) : _ovBks;
@@ -2992,6 +3010,118 @@ function setupOvScrollSync(){
   }
 }
 function jumpDay(y,m,d){cY=y;cM=m;cD=d;vY=y;vM=m;updDbar();renderBks();renderTable();gp('daily');}
+
+// ── 일별 미니 캘린더 팝업 ──
+let _dpkY=null,_dpkM=null;
+function toggleDayPicker(ev){
+  if(ev) ev.stopPropagation();
+  const pop=document.getElementById('day-picker-pop');
+  if(!pop) return;
+  if(pop.style.display==='block'){closeDayPicker();return;}
+  _dpkY=cY; _dpkM=cM;
+  pop.style.display='block';
+  renderDayPicker();
+  setTimeout(()=>{ document.addEventListener('click', _dpkOutsideClose, {once:false}); }, 0);
+}
+function closeDayPicker(){
+  const pop=document.getElementById('day-picker-pop');
+  if(pop) pop.style.display='none';
+  document.removeEventListener('click', _dpkOutsideClose);
+}
+function _dpkOutsideClose(e){
+  const pop=document.getElementById('day-picker-pop');
+  const btn=document.getElementById('day-cal-btn');
+  if(!pop||pop.style.display!=='block') return;
+  if(pop.contains(e.target) || (btn&&btn.contains(e.target))) return;
+  closeDayPicker();
+}
+function dpkNav(d){
+  _dpkM+=d;
+  if(_dpkM>12){_dpkM=1;_dpkY++;}
+  if(_dpkM<1){_dpkM=12;_dpkY--;}
+  renderDayPicker();
+}
+function dpkPick(y,m,d){
+  cY=y; cM=m; cD=d;
+  closeDayPicker();
+  updDbar(); renderBks(); renderTable();
+}
+function dpkToday(){
+  const t=new Date();
+  cY=t.getFullYear(); cM=t.getMonth()+1; cD=t.getDate();
+  closeDayPicker();
+  updDbar(); renderBks(); renderTable();
+}
+function _dpkHasRecord(y,m,d){
+  const prefix=`_${y}-${pad(m)}-${pad(d)}`;
+  for(const e of EMPS){
+    const r=REC[`${e.id}${prefix}`];
+    if(r && (r.start||r.end||r.absent||r.annual||r.halfAnnual)) return true;
+  }
+  return false;
+}
+function renderDayPicker(){
+  const pop=document.getElementById('day-picker-pop');
+  if(!pop) return;
+  const y=_dpkY, m=_dpkM;
+  const days=dim(y,m);
+  const firstDow=new Date(y,m-1,1).getDay();
+  const today=new Date();
+  const tY=today.getFullYear(), tM=today.getMonth()+1, tD=today.getDate();
+  const dows=['일','월','화','수','목','금','토'];
+  let html=`<div class="dpk-hd">
+    <button type="button" class="dpk-nav" onclick="dpkNav(-12)" title="작년">«</button>
+    <button type="button" class="dpk-nav" onclick="dpkNav(-1)" title="이전 달">‹</button>
+    <div class="dpk-title" onclick="dpkToday()">${y}년 ${m}월</div>
+    <button type="button" class="dpk-nav" onclick="dpkNav(1)" title="다음 달">›</button>
+    <button type="button" class="dpk-nav" onclick="dpkNav(12)" title="내년">»</button>
+  </div>
+  <div class="dpk-grid">`;
+  dows.forEach((x,i)=>{html+=`<div class="dpk-dow ${i===0?'su':i===6?'sa':''}">${x}</div>`;});
+  for(let i=0;i<firstDow;i++) html+=`<div class="dpk-cell empty"></div>`;
+  for(let d=1;d<=days;d++){
+    const dow=(firstDow+d-1)%7;
+    const phName=getPhName(y,m,d);
+    const isHol=phName||dow===0;
+    const isToday=(y===tY&&m===tM&&d===tD);
+    const isSel=(y===cY&&m===cM&&d===cD);
+    const hasRec=_dpkHasRecord(y,m,d);
+    const cls=['dpk-cell'];
+    if(dow===0)cls.push('su');
+    else if(dow===6)cls.push('sa');
+    if(phName)cls.push('hol');
+    if(isToday)cls.push('today');
+    if(isSel)cls.push('sel');
+    html+=`<button type="button" class="${cls.join(' ')}" onclick="dpkPick(${y},${m},${d})" title="${y}-${pad(m)}-${pad(d)}${phName?' · '+phName:''}">${d}${hasRec?'<span class="dpk-dot"></span>':''}</button>`;
+  }
+  html+=`</div>
+  <div class="dpk-foot">
+    <span><span class="dpk-dot" style="position:static;display:inline-block;vertical-align:middle;margin-right:4px"></span>기록 있음</span>
+    <button type="button" class="dpk-today-btn" onclick="dpkToday()">오늘로</button>
+  </div>`;
+  pop.innerHTML=html;
+}
+
+// ── 일별 엑셀 드롭다운 ──
+function toggleDailyExcelMenu(ev){
+  if(ev) ev.stopPropagation();
+  const menu=document.getElementById('daily-excel-menu');
+  if(!menu) return;
+  if(menu.style.display==='block'){closeDailyExcelMenu();return;}
+  menu.style.display='block';
+  setTimeout(()=>{ document.addEventListener('click', _dailyExcelOutsideClose, {once:false}); }, 0);
+}
+function closeDailyExcelMenu(){
+  const menu=document.getElementById('daily-excel-menu');
+  if(menu) menu.style.display='none';
+  document.removeEventListener('click', _dailyExcelOutsideClose);
+}
+function _dailyExcelOutsideClose(e){
+  const menu=document.getElementById('daily-excel-menu');
+  if(!menu||menu.style.display!=='block') return;
+  if(menu.contains(e.target)) return;
+  closeDailyExcelMenu();
+}
 
 // ══════════════════════════════════════
 // 급여 요약
@@ -6678,7 +6808,8 @@ function exportDailyExcel(){
   activeDayEmps.forEach((emp,ei)=>{
     const k=rk(emp.id,cY,cM,cD);
     const rec=REC[k]||{start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
-    const autoH=isAutoHol(cY,cM,cD,emp);
+    // 대체근무 체크 시 휴일성 무력화
+    const autoH=isAutoHol(cY,cM,cD,emp) && !rec.subWork;
     const rate=getEmpRate(emp);
     const empPayMode=getEmpPayMode(emp);
     // 직원 shift별 휴게세트
@@ -6732,6 +6863,218 @@ function exportDailyExcel(){
   ws['!cols']=hdrs.map((_,i)=>({wch:i===1?12:i===2?12:i===10?14:i===11?16:10}));
   XLSX.utils.book_append_sheet(wb,ws,`${cM}M${cD}D`);
   XLSX.writeFile(wb,`출퇴근기록_${dateStr}.xlsx`,{bookType:'xlsx',type:'binary'});
+}
+
+// ── 기간 엑셀 모달 ──
+function openRangeExcelModal(){
+  const today=`${cY}-${pad(cM)}-${pad(cD)}`;
+  // 기본 시작: 같은 달 1일
+  const defaultStart=`${cY}-${pad(cM)}-01`;
+  const bg=document.createElement('div');
+  bg.id='range-excel-modal';
+  bg.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;';
+  bg.innerHTML=`
+    <div style="background:var(--card);border-radius:16px;padding:24px;width:380px;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+      <div style="font-size:15px;font-weight:700;color:var(--ink);margin-bottom:6px;">🗓️ 기간 엑셀 다운로드</div>
+      <div style="font-size:12px;color:var(--ink3);margin-bottom:16px;">선택한 기간의 출퇴근 기록을 <b>날짜별 시트</b>로 받습니다.</div>
+      <div style="display:flex;gap:10px;margin-bottom:14px">
+        <div style="flex:1">
+          <label style="font-size:11px;font-weight:600;color:var(--ink);display:block;margin-bottom:4px">시작일</label>
+          <input type="date" id="range-start" value="${defaultStart}" max="${today}"
+            style="width:100%;height:36px;border:1.5px solid var(--bd2);border-radius:8px;padding:0 10px;font-size:13px;font-family:inherit;background:var(--card);color:var(--ink);">
+        </div>
+        <div style="flex:1">
+          <label style="font-size:11px;font-weight:600;color:var(--ink);display:block;margin-bottom:4px">종료일</label>
+          <input type="date" id="range-end" value="${today}"
+            style="width:100%;height:36px;border:1.5px solid var(--bd2);border-radius:8px;padding:0 10px;font-size:13px;font-family:inherit;background:var(--card);color:var(--ink);">
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink2);margin-bottom:14px;cursor:pointer">
+        <input type="checkbox" id="range-skip-empty" checked> 기록 없는 날짜는 시트 생략
+      </label>
+      <div id="range-info" style="font-size:11px;color:var(--ink3);margin-bottom:14px"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="closeRangeExcelModal()" style="padding:7px 16px;border:1px solid var(--bd2);border-radius:8px;background:transparent;font-size:12px;color:var(--ink3);cursor:pointer;font-family:inherit;">취소</button>
+        <button onclick="execRangeExcel()" style="padding:7px 18px;background:#065F46;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">⬇ 다운로드</button>
+      </div>
+    </div>`;
+  document.body.appendChild(bg);
+  const upd=()=>{
+    const s=document.getElementById('range-start').value;
+    const e=document.getElementById('range-end').value;
+    if(!s||!e) return;
+    const sd=new Date(s), ed=new Date(e);
+    const days=Math.floor((ed-sd)/86400000)+1;
+    const info=document.getElementById('range-info');
+    if(days<=0) info.innerHTML='<span style="color:var(--rose)">⚠️ 종료일이 시작일보다 빨라야 합니다.</span>';
+    else info.textContent=`총 ${days}일 (시트 ${days}개)`;
+  };
+  document.getElementById('range-start').addEventListener('change',upd);
+  document.getElementById('range-end').addEventListener('change',upd);
+  upd();
+}
+function closeRangeExcelModal(){
+  const el=document.getElementById('range-excel-modal');
+  if(el) el.remove();
+}
+function execRangeExcel(){
+  const s=document.getElementById('range-start').value;
+  const e=document.getElementById('range-end').value;
+  const skipEmpty=document.getElementById('range-skip-empty').checked;
+  if(!s||!e){showSyncToast('날짜를 선택해주세요.','warn');return;}
+  const sd=new Date(s), ed=new Date(e);
+  if(ed<sd){showSyncToast('종료일이 시작일보다 빨라야 합니다.','warn');return;}
+  closeRangeExcelModal();
+  showSyncToast('엑셀 생성 중...','info',2000);
+  setTimeout(()=>{
+    try{ _buildRangeExcel(sd, ed, skipEmpty); }
+    catch(err){ console.error(err); showSyncToast('엑셀 생성 실패: '+err.message,'err',5000); }
+  }, 50);
+}
+function _buildRangeExcel(sd, ed, skipEmpty){
+  const C=XLS.C, S=XLS.S;
+  const wb=XLSX.utils.book_new();
+  const dowNames=['일','월','화','수','목','금','토'];
+  const payModeLabel={fixed:'통상임금제',hourly:'시급제',monthly:'월급제',pohal:'포괄임금'};
+  const hdrs=['순번','이름','급여형태','출근','퇴근','근무시간','휴게h','야간h','연장h','휴일h','상태','급여','비고'];
+  let totalSheets=0, totalEmpRows=0, totalWorkH=0, totalPay=0;
+  const cur=new Date(sd);
+  while(cur<=ed){
+    const y=cur.getFullYear(), m=cur.getMonth()+1, d=cur.getDate();
+    const dateStr=`${y}-${pad(m)}-${pad(d)}`;
+    const dow=dowNames[cur.getDay()];
+    const dayDate=new Date(y,m-1,d);
+    const activeEmps=applyCommonFilter(EMPS.filter(emp=>{
+      if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate)return false;}
+      if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<dayDate)return false;}
+      return true;
+    }), 'daily', dayDate);
+    // 기록 있는 직원만 카운트
+    const hasAnyRec=activeEmps.some(emp=>{
+      const r=REC[rk(emp.id,y,m,d)];
+      return r && (r.start||r.end||r.absent||r.annual||r.halfAnnual);
+    });
+    if(skipEmpty && !hasAnyRec){ cur.setDate(cur.getDate()+1); continue; }
+
+    const ws={};
+    xlsWrite(ws,XLSX.utils.encode_cell({r:0,c:0}),`${y}년 ${m}월 ${d}일 (${dow}) 출퇴근 기록`,{
+      font:{bold:true,sz:16,color:{rgb:C.navy},name:'맑은 고딕'},
+      fill:{fgColor:{rgb:'EFF6FF'}},alignment:{horizontal:'left',vertical:'center'},
+    });
+    xlsMerge(ws,0,0,0,12);
+    xlsWrite(ws,XLSX.utils.encode_cell({r:1,c:0}),`출력일: ${new Date().toLocaleDateString('ko-KR')}`,{
+      font:{sz:9,color:{rgb:C.gray2},italic:true,name:'맑은 고딕'},
+      fill:{fgColor:{rgb:'EFF6FF'}},alignment:{horizontal:'left',vertical:'center'},
+    });
+    xlsMerge(ws,1,0,1,12);
+    ws['!rows']=[{hpt:28},{hpt:16}];
+    let R=2;
+    hdrs.forEach((h,ci)=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),h,S.mainHdr(C.navy,'FFFFFF','center')));
+    ws['!rows'].push({hpt:26});
+    R++;
+
+    let dayWorkH=0, dayPay=0, dayCount=0;
+    activeEmps.forEach((emp,ei)=>{
+      const k=rk(emp.id,y,m,d);
+      const rec=REC[k]||{start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
+      const autoH=isAutoHol(y,m,d,emp) && !rec.subWork;
+      const rate=getEmpRate(emp);
+      const empPayMode=getEmpPayMode(emp);
+      const bks=getActiveBk(y,m,d,emp);
+      const activeBks=rec.customBk?(rec.customBkList||[]):bks;
+      let c=null;
+      if(rec.annual){
+        c={work:480,nightM:0,ot:0,bkMins:0,nightBkMins:0,basePay:rate*8,nightPay:0,otPay:0,holPay:0,totalPay:rate*8};
+      } else if(rec.halfAnnual){
+        if(rec.start&&rec.end) c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],empPayMode,getOrdinaryRate(emp,y,m));
+        else c={work:240,nightM:0,ot:0,bkMins:0,nightBkMins:0,basePay:rate*4,nightPay:0,otPay:0,holPay:0,totalPay:rate*4};
+      } else if(!rec.absent&&rec.start&&rec.end){
+        c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],empPayMode,getOrdinaryRate(emp,y,m));
+      }
+      let status='-';
+      if(rec.annual) status='연차';
+      else if(rec.halfAnnual) status='반차';
+      else if(rec.absent) status='결근';
+      else if(c) status='출근';
+      const bg=xlsRowBg(ei);
+      let ci=0;
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),ei+1,S.cell(C.gray,bg,false,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),emp.name||'',S.cell(C.gray,bg,false,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),payModeLabel[empPayMode]||empPayMode,S.cell(C.gray,bg,false,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),rec.start||'',S.cell(C.gray,bg,false,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),rec.end||'',S.cell(C.gray,bg,false,'center'));
+      const wH=c?m2h(c.work):0;
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),wH,S.num(C.gray,bg,false,'center'));
+      const bkVal=c&&c.bkMins?m2h(c.bkMins):0;
+      const nightBkVal=c&&c.nightBkMins?Math.round(c.nightBkMins/60*100)/100:0;
+      const bkText=nightBkVal>0?`${bkVal}h (야간${nightBkVal}h)`:(bkVal>0?bkVal:0);
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),bkText,S.num('#2D6A4F',bg,false,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c?Math.round(c.nightM/60*100)/100:0,S.num(C.gray,bg,false,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c?Math.round(c.ot/60*100)/100:0,S.num(C.gray,bg,false,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c&&autoH?Math.round(c.work/60*100)/100:0,S.num(C.gray,bg,false,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),status,S.cell(status==='연차'||status==='반차'?C.green:status==='결근'?C.rose:C.gray,bg,false,'center'));
+      const pay=c?Math.round(c.totalPay/10)*10:0;
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),pay,S.num(C.gray,bg,false,'right'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),rec.note||'',S.cell(C.gray,bg,false,'left'));
+      ws['!rows'].push({hpt:22});
+      R++;
+      dayWorkH+=wH; dayPay+=pay; dayCount++;
+    });
+    // 일별 합계행
+    if(dayCount>0){
+      const sumBg='FFF7E6';
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),'',S.cell(C.navy,sumBg,true,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),`합계 (${dayCount}명)`,S.cell(C.navy,sumBg,true,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),'',S.cell(C.navy,sumBg,true,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),'',S.cell(C.navy,sumBg,true,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),'',S.cell(C.navy,sumBg,true,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),Math.round(dayWorkH*100)/100,S.num(C.navy,sumBg,true,'center'));
+      for(let cc=6;cc<=10;cc++) xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:cc}),'',S.cell(C.navy,sumBg,true,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),dayPay,S.num(C.navy,sumBg,true,'right'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:12}),'',S.cell(C.navy,sumBg,true,'left'));
+      ws['!rows'].push({hpt:24});
+      R++;
+    }
+    xlsRange(ws,0,0,R-1,hdrs.length-1);
+    ws['!cols']=hdrs.map((_,i)=>({wch:i===1?12:i===2?12:i===10?14:i===11?16:10}));
+    // 시트명: M-DD (월-일). 31일치까지 unique.
+    const sheetName=`${m}-${pad(d)}`;
+    XLSX.utils.book_append_sheet(wb,ws,sheetName);
+    totalSheets++; totalEmpRows+=dayCount; totalWorkH+=dayWorkH; totalPay+=dayPay;
+    cur.setDate(cur.getDate()+1);
+  }
+  if(totalSheets===0){
+    showSyncToast('선택 기간에 출퇴근 기록이 없습니다.','warn',4000);
+    return;
+  }
+  // 요약 시트 (맨 앞에 삽입)
+  const sumWs={};
+  xlsWrite(sumWs,XLSX.utils.encode_cell({r:0,c:0}),`기간 합계 (${sd.toISOString().slice(0,10)} ~ ${ed.toISOString().slice(0,10)})`,{
+    font:{bold:true,sz:14,color:{rgb:C.navy},name:'맑은 고딕'},
+    fill:{fgColor:{rgb:'EFF6FF'}},alignment:{horizontal:'left',vertical:'center'},
+  });
+  xlsMerge(sumWs,0,0,0,3);
+  let sR=2;
+  const summary=[
+    ['기간', `${sd.toISOString().slice(0,10)} ~ ${ed.toISOString().slice(0,10)}`],
+    ['포함 시트 수', `${totalSheets}개`],
+    ['총 근무 인원수(연 합계)', `${totalEmpRows}명`],
+    ['총 근무시간', `${Math.round(totalWorkH*100)/100} h`],
+    ['총 급여(추정)', `${Math.round(totalPay).toLocaleString()} 원`],
+  ];
+  summary.forEach(([k,v])=>{
+    xlsWrite(sumWs,XLSX.utils.encode_cell({r:sR,c:0}),k,S.cell(C.navy,'F8FAFC',true,'left'));
+    xlsWrite(sumWs,XLSX.utils.encode_cell({r:sR,c:1}),v,S.cell(C.gray,'FFFFFF',false,'left'));
+    sR++;
+  });
+  sumWs['!cols']=[{wch:24},{wch:40}];
+  xlsRange(sumWs,0,0,sR-1,1);
+  // 요약 시트를 맨 앞으로
+  wb.SheetNames.unshift('요약');
+  wb.Sheets['요약']=sumWs;
+  const fname=`출퇴근기록_${sd.toISOString().slice(0,10)}_${ed.toISOString().slice(0,10)}.xlsx`;
+  XLSX.writeFile(wb,fname,{bookType:'xlsx',type:'binary'});
+  showSyncToast(`엑셀 생성 완료 (시트 ${totalSheets+1}개)`,'ok',4000);
 }
 
 
@@ -8767,13 +9110,14 @@ function exportMonthlyExcel(){
       for(let d=1;d<=days;d++){
         const dow=new Date(vY,vM-1,d).getDay();
         const isWe=[0,6].includes(dow);
-        const autoH=isAutoHol(vY,vM,d);
         // 퇴사일 이후 날짜는 빈 셀 (퇴사일 당일은 정상 집계)
         if(empLeaveDate && empLeaveDate<new Date(vY,vM-1,d)){
           xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:d+1}),'',S.cell(C.gray,'F5F5F5',false,'center'));
           continue;
         }
         const rec=REC[rk(emp.id,vY,vM,d)];
+        // 대체근무 체크 시 휴일성 무력화
+        const autoH=isAutoHol(vY,vM,d) && !(rec&&rec.subWork);
         let val='', cellBg=bg, fg=C.gray;
         if(autoH||isWe) cellBg=ei%2===0?'FFEBEE':'FFCDD2';
         if(rec){
@@ -8882,7 +9226,9 @@ function exportMonthlyExcel(){
     const empLeaveDate2 = emp.leave ? parseEmpDate(emp.leave) : null;
     let totalBk = 0;
     for(let d=1;d<=days;d++){
-      const autoH=isAutoHol(vY,vM,d);
+      const _recForAutoH=REC[rk(emp.id,vY,vM,d)];
+      // 대체근무 체크 시 휴일성 무력화 (배경색·요일색·계산 모두 평일로)
+      const autoH=isAutoHol(vY,vM,d) && !(_recForAutoH&&_recForAutoH.subWork);
       const dow=new Date(vY,vM-1,d).getDay();
       const isSun=dow===0; const isSat=dow===6;
       const phName=getPhName&&getPhName(vY,vM,d)||'';
@@ -8906,7 +9252,7 @@ function exportMonthlyExcel(){
         continue;
       }
 
-      const rec=REC[rk(emp.id,vY,vM,d)];
+      const rec=_recForAutoH;
       if(rec){
         const bks=getActiveBk(vY,vM,d,emp);
         const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
@@ -9027,7 +9373,9 @@ function exportMonthlyExcelOne(empId){
   const empLeaveDate = emp.leave ? parseEmpDate(emp.leave) : null;
   let totalBk = 0;
   for(let d=1;d<=days;d++){
-    const autoH=isAutoHol(vY,vM,d);
+    const _recForAutoH2=REC[rk(emp.id,vY,vM,d)];
+    // 대체근무 체크 시 휴일성 무력화
+    const autoH=isAutoHol(vY,vM,d) && !(_recForAutoH2&&_recForAutoH2.subWork);
     const dow=new Date(vY,vM-1,d).getDay();
     const isSun=dow===0, isSat=dow===6;
     const phName=getPhName&&getPhName(vY,vM,d)||'';
@@ -9039,11 +9387,11 @@ function exportMonthlyExcelOne(empId){
     const dowColor=isSun?C.rose:isSat?C.blue:C.navy;
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),dateStr,S.cell(C.navy,rowBg,false,'center'));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),phName||dowLabel,S.cell(autoH?C.rose:dowColor,rowBg,autoH||isSun||isSat,'center'));
-    if(empLeaveDate && empLeaveDate<=new Date(vY,vM-1,d)){
+    if(empLeaveDate && empLeaveDate<new Date(vY,vM-1,d)){
       [2,3,4,5,6,7,8,9,10].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty('F5F5F5')));
       ws['!rows'].push({hpt:18}); R++; continue;
     }
-    const rec=REC[rk(emp.id,vY,vM,d)];
+    const rec=_recForAutoH2;
     if(rec){
       const bks=getActiveBk(vY,vM,d,emp);
       const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
@@ -11678,9 +12026,11 @@ function fillNormalAttend(empIds){
   targets.forEach(id=>{
     const emp=EMPS.find(e=>e.id===id);
     if(!emp||!emp.workStart||!emp.workEnd)return;
-    const autoH=isAutoHol(cY,cM,cD,emp);
-    if(autoH){blocked.push(emp.name);return;}
     const k=rk(id,cY,cM,cD);
+    // 대체근무 체크된 직원은 휴일이라도 통과 (대체근무 = 평일처럼 처리)
+    const existingRec=REC[k];
+    const autoH=isAutoHol(cY,cM,cD,emp) && !(existingRec&&existingRec.subWork);
+    if(autoH){blocked.push(emp.name);return;}
     if(!REC[k])REC[k]={empId:id,start:'',end:'',absent:false,annual:false,note:'',outTimes:[]};
     REC[k].start=emp.workStart;REC[k].end=emp.workEnd;
     REC[k].absent=false;REC[k].annual=false;

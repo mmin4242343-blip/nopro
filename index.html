@@ -708,7 +708,13 @@
       <button class="btn btn-sm" onclick="fillNormalAttend()" style="color:var(--navy);border-color:var(--navy);">✅ 전체 정상출퇴근</button>
       <button class="btn btn-sm" onclick="fillNormalAttendSelected()" style="color:var(--teal);border-color:var(--teal);">☑ 선택 정상출퇴근</button>
       <button class="btn btn-sm" onclick="applyRecentAll()" title="직원별 가장 최근 출퇴근 기록을 오늘에 불러옵니다" style="color:var(--purple);border-color:var(--purple)">📋 최근 데이터 불러오기</button>
-      <button class="btn btn-sm" onclick="exportDailyExcel()" style="color:#065F46;border-color:#065F46;">⬇ 당일 엑셀</button>
+      <div style="position:relative;display:inline-block">
+        <button class="btn btn-sm" onclick="toggleDailyExcelMenu(event)" style="color:#065F46;border-color:#065F46;">⬇ 엑셀 ▾</button>
+        <div id="daily-excel-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--card);border:1px solid var(--bd2);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:50;min-width:140px;overflow:hidden">
+          <button type="button" onclick="exportDailyExcel();closeDailyExcelMenu();" style="display:block;width:100%;padding:9px 14px;background:transparent;border:none;text-align:left;font-size:12px;color:var(--ink);cursor:pointer;font-family:inherit;font-weight:600">📅 당일 엑셀</button>
+          <button type="button" onclick="openRangeExcelModal();closeDailyExcelMenu();" style="display:block;width:100%;padding:9px 14px;background:transparent;border:none;text-align:left;font-size:12px;color:var(--ink);cursor:pointer;font-family:inherit;font-weight:600;border-top:1px solid var(--bd)">🗓️ 기간 엑셀</button>
+        </div>
+      </div>
       <button class="btn btn-xs" onclick="clearDay()" style="color:var(--rose);border-color:#FECACA">이 날 초기화</button>
       <button class="btn btn-sm" onclick="openMoveDate()" style="color:var(--navy2);border-color:var(--navy2);">📅 날짜 이동</button>
     </div>
@@ -721,8 +727,10 @@
     <div class="ds">
       <div class="dar" onclick="nd('month',-1)">‹</div><div class="dl">월</div><div class="dv" id="dm">3</div><div class="dar" onclick="nd('month',1)">›</div>
     </div>
-    <div class="ds">
+    <div class="ds" style="position:relative">
       <div class="dar" onclick="nd('day',-1)">‹</div><div class="dl">일</div><div class="dv" id="dd">1</div><div class="dar" onclick="nd('day',1)">›</div>
+      <button id="day-cal-btn" type="button" onclick="toggleDayPicker(event)" title="달력에서 날짜 선택" style="margin-left:6px;padding:3px 7px;background:var(--card);border:1px solid var(--bd2);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;color:var(--navy2);font-family:inherit">📅</button>
+      <div id="day-picker-pop" class="day-picker-pop" style="display:none"></div>
     </div>
     <div class="ds" style="border-right:none"><div class="ddow" id="ddow">토요일</div></div>
   </div>
@@ -1896,7 +1904,7 @@ noprohr.netlify.app/tbm_sign.html
 </div>
 
 </div></div></div>
-<script src="/js/app.js?v=2026-05-04-13"></script>
+<script src="/js/app.js?v=2026-05-04-14"></script>
 <!-- 인라인 핸들러용 unsafe-inline은 추후 단계적 제거 예정 -->
 <script>
 // placeholder - app.js에서 모든 로직 처리
