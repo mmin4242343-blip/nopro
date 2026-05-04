@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-04-17';
+const CLIENT_BUILD = '2026-05-04-18';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -11043,6 +11043,8 @@ function clearLocalData(){
   ALLOWANCE_REC = {};
   SAFETY_REC = {};
   if(typeof TAX_REC !== 'undefined') TAX_REC = {};
+  if(typeof leaveOverrides !== 'undefined') leaveOverrides = {};
+  if(typeof leaveSettings !== 'undefined') leaveSettings = {};
   if(typeof POL_SNAPSHOTS !== 'undefined') POL_SNAPSHOTS = {};
   if(typeof PAY_SNAPSHOTS !== 'undefined') PAY_SNAPSHOTS = {};
   if(typeof BK_SNAPSHOTS !== 'undefined') BK_SNAPSHOTS = {};
@@ -11799,8 +11801,14 @@ async function sbLoadAll(companyId) {
   if('bonus' in map)           { BONUS_REC = map.bonus || {}; localStorage.setItem('npm5_bonus', JSON.stringify(BONUS_REC)); }
   if('allow' in map)           { ALLOWANCE_REC = map.allow || {}; localStorage.setItem('npm5_allow', JSON.stringify(ALLOWANCE_REC)); }
   if('tax' in map)             { TAX_REC = map.tax || {}; localStorage.setItem('npm5_tax', JSON.stringify(TAX_REC)); }
-  if('leave_settings' in map)  localStorage.setItem('npm5_leave_settings', JSON.stringify(map.leave_settings||{}));
-  if('leave_overrides' in map) localStorage.setItem('npm5_leave_overrides', JSON.stringify(map.leave_overrides||{}));
+  if('leave_settings' in map)  {
+    localStorage.setItem('npm5_leave_settings', JSON.stringify(map.leave_settings||{}));
+    leaveSettings = map.leave_settings || {};
+  }
+  if('leave_overrides' in map) {
+    localStorage.setItem('npm5_leave_overrides', JSON.stringify(map.leave_overrides||{}));
+    leaveOverrides = loadLeaveOverrides();
+  }
   if('folders' in map)         localStorage.setItem('npm5_folders', JSON.stringify(map.folders||[]));
   if('safety' in map)          { SAFETY_REC = map.safety || {}; localStorage.setItem('npm5_safety', JSON.stringify(SAFETY_REC)); }
   if('pol_snapshots' in map)   { POL_SNAPSHOTS = map.pol_snapshots || {}; localStorage.setItem('npm5_pol_snapshots', JSON.stringify(POL_SNAPSHOTS)); }
