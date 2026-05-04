@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-04-7';
+const CLIENT_BUILD = '2026-05-04-8';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -807,7 +807,7 @@ function saveLS(){
   try{
     const _sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
     if(_sess && _sess.companyId){
-      // debounce: 연속 입력 결합 (250ms — 빠른 반응성 + 충분한 결합)
+      // debounce: 연속 입력 결합 (100ms — 사용자 체감 즉시 + 빠른 키 입력은 묶임)
       if(saveLS._timer) clearTimeout(saveLS._timer);
       saveLS._timer = setTimeout(async ()=>{
         try {
@@ -821,7 +821,7 @@ function saveLS(){
             showSyncToast('⚠️ 서버 저장 실패\n네트워크 상태를 확인해주세요. 로컬에는 저장됨.','error',5000);
           }
         }
-      }, 250);
+      }, 100);
     }
   }catch(e){}
 }
@@ -1853,11 +1853,11 @@ function handleTimeInput(eid,field,raw){
   if(!REC[k])REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
   REC[k][field]=parsed;
   saveLS();
-  // input 값 즉시 반영
-  const inp=document.querySelector('#daily-tbody input.time-inp[data-eid="'+eid+'"][data-field="'+field+'"]');
-  if(inp && inp!==document.activeElement) inp.value=parsed;
-  // 실근무/야간/연장 셀 업데이트
-  _updateDailyRowCells(eid);
+  // 🔄 즉시 화면 반영 — renderTable이 input/계산셀/chip 모두 REC 그대로 다시 그림.
+  //   · 빈값으로 지운 경우: 계산 셀(_updateDailyRowCells가 빈값 처리 못 하던 옛 버그) 즉시 클리어
+  //   · 잘못된 형식: input.value도 빈값으로 정상화
+  //   · focus 보존 래퍼(_snapshotInputIn)가 입력 흐름 보호
+  try { renderTable(); } catch(e){ console.warn('handleTimeInput 후 renderTable 실패:', e); }
 }
 
 function _updateDailyRowCells(eid){
@@ -2435,38 +2435,40 @@ function timeKeyNav(e, el, eid, field) {
 
     // 1. 값 파싱 + 포맷
     const parsed = parseTimeInput(el.value);
-    el.value = parsed;
 
-    // 2. 다음 input 먼저 찾기 (DOM 재생성 전에)
+    // 2. 다음 input 위치 정보 보관 (DOM 재생성 후 다시 찾기 위해)
     const allInputs = Array.from(document.querySelectorAll('#daily-tbody input.time-inp'))
       .filter(inp => !inp.disabled && inp.offsetParent !== null);
     const curIdx = allInputs.indexOf(el);
     const nextIdx = e.shiftKey ? curIdx - 1 : curIdx + 1;
-    const nextInput = (nextIdx >= 0 && nextIdx < allInputs.length) ? allInputs[nextIdx] : null;
+    const nextRef = (nextIdx >= 0 && nextIdx < allInputs.length)
+      ? { eid: allInputs[nextIdx].dataset.eid, field: allInputs[nextIdx].dataset.field }
+      : null;
 
-    // 3. REC 업데이트 (renderTable 없이 직접)
+    // 3. REC 업데이트
     const k = rk(eid, cY, cM, cD);
     if(!REC[k]) REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
     REC[k][field] = parsed;
 
-    // 4. localStorage만 저장 (renderTable X → DOM 재생성 방지)
+    // 4. localStorage + Supabase 비동기 저장
     try{
       localStorage.setItem(LS.R, JSON.stringify(REC));
-      // Supabase 비동기 저장 (포커스 이동 방해 안 함)
       const _sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
       if(_sess && _sess.companyId){
         sbSaveAll(_sess.companyId).catch(e=>console.warn(e));
       }
     }catch(err){}
 
-    // 5. 포커스 이동
-    if(nextInput){
-      nextInput.focus();
-      nextInput.select();
-    }
+    // 5. 🔄 전체 즉시 반영 (계산셀·chip·휴게시간 등 모두 REC 그대로 재렌더)
+    try { renderTable(); } catch(e){ console.warn('timeKeyNav 후 renderTable 실패:', e); }
 
-    // 6. 현재 행 수치만 업데이트 (전체 renderTable 없이)
-    updateRowCalc(eid);
+    // 6. 다음 input 다시 찾아 포커스 + 전체 선택 (재렌더 후 새 DOM에서 검색)
+    if(nextRef){
+      const newNext = document.querySelector(
+        '#daily-tbody input.time-inp[data-eid="'+nextRef.eid+'"][data-field="'+nextRef.field+'"]'
+      );
+      if(newNext){ newNext.focus(); newNext.select(); }
+    }
 
   } else if(e.key === 'ArrowDown' || e.key === 'ArrowUp') {
     e.preventDefault();
