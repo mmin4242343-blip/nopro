@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-04-5';
+const CLIENT_BUILD = '2026-05-04-6';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -2605,34 +2605,25 @@ function setTableLock(locked){ /* 제거됨 */ }
 function startEditDay(){/* 제거됨 */}
 
 function saveDay(){
-  // 🔒 "저장 = 화면 상태 박제" — 화면에 보이는 그대로 REC에 반영
-  //   · 빈 input  → REC 해당 필드도 빈값 (사용자 명시적 삭제 보존)
+  // 🔒 "저장 = 화면에 입력된 값을 REC에 반영" — 보수적 정책 (옛 값 절대 보존)
+  //   · 빈 input → 건드리지 않음 (REC 옛 값 보존). 명시적 삭제는 빈 후 blur 경로로.
   //   · 값 있는 input → 정규화 후 저장
   //   · 비활성(disabled = 연차/결근 등 특수 상태) → 건드리지 않음
   //   · 잘못된 형식 → 스킵 + 토스트 경고 (REC 옛 값 보존)
-  const _saveDbg = { saved: [], cleared: [], skippedInvalid: [], skippedDisabled: [], unchanged: [] };
+  // 🔭 디버깅: F12 Console에서 어떤 셀이 어떤 분류인지 확인
+  const _saveDbg = { saved: [], skippedEmpty: [], skippedInvalid: [], skippedDisabled: [], unchanged: [] };
   document.querySelectorAll('#daily-tbody input.time-inp').forEach(inp=>{
     const eid=parseInt(inp.dataset.eid);
     const field=inp.dataset.field;
     if(!eid||!field) return;
     if(inp.disabled){ _saveDbg.skippedDisabled.push(`${eid}/${field}`); return; }
-    const k=rk(eid,cY,cM,cD);
-    // 빈 input: 사용자가 지운 것으로 간주 → REC 필드도 비움
-    if(!inp.value){
-      if(REC[k] && REC[k][field]){
-        REC[k][field] = '';
-        __recWrite('saveDay-clear', eid, k, {field});
-        _saveDbg.cleared.push(`${eid}/${field}`);
-      } else {
-        _saveDbg.unchanged.push(`${eid}/${field}`);
-      }
-      return;
-    }
+    if(!inp.value){ _saveDbg.skippedEmpty.push(`${eid}/${field}`); return; }
     const parsed=parseTimeInput(inp.value);
     if(!parsed){
       _saveDbg.skippedInvalid.push(`${eid}/${field}=${inp.value}`);
       return;
     }
+    const k=rk(eid,cY,cM,cD);
     if(!REC[k])REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
     if(REC[k][field] !== parsed){
       REC[k][field]=parsed;
