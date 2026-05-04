@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-04-30-3';
+const CLIENT_BUILD = '2026-05-04-1';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1896,7 +1896,11 @@ function setR(eid,f,v){
   if(f==='customBk'&&v&&!REC[k].customBkList?.length){
     REC[k].customBkList=[{s:'',e:''}];
   }
-  saveLS();renderTable();
+  saveLS();
+  // 비고(note)는 시각 변화 없음 → 재렌더 생략 (한글 IME 조합 깨짐·입력 유실 방지).
+  // input.value는 사용자가 친 그대로 DOM에 살아있고, 다음 자연스러운 재렌더에 REC 값으로 그려짐.
+  if(f==='note') return;
+  renderTable();
   // 연차/반차 변경 시 관련 탭도 즉시 갱신
   if(f==='annual'||f==='halfAnnual'||f==='absent'){
     const lvPage=document.getElementById('pg-leave');
@@ -2074,7 +2078,47 @@ function setPayFilter(f){ payFilter=f; }
 function filterEmpsByPay(emps){
   return applyCommonFilter(emps, 'payroll');
 }
+
+// ══ 입력값 유실 방지: 재렌더 시 활성 input의 값/캐럿/포커스 보존 ══
+// renderTable/renderEmps 등 innerHTML 교체로 input이 destroy & recreate될 때
+// 사용자가 입력 중인 글자가 사라지지 않도록 스냅샷 → 복원.
+// 체크박스/버튼 등 비-텍스트 input은 보존 대상 아님.
+function _snapshotInputIn(containerEl){
+  if(!containerEl) return null;
+  const ae = document.activeElement;
+  if(!ae || !ae.matches || !containerEl.contains(ae)) return null;
+  if(!ae.matches('input,textarea')) return null;
+  const t = (ae.type||'').toLowerCase();
+  if(t==='checkbox'||t==='radio'||t==='button'||t==='submit'||t==='file') return null;
+  return {
+    eid: ae.dataset.eid || '',
+    field: ae.dataset.field || '',
+    id: ae.id || '',
+    val: ae.value,
+    ss: ae.selectionStart,
+    se: ae.selectionEnd
+  };
+}
+function _restoreInputIn(containerEl, snap){
+  if(!snap || !containerEl) return;
+  let el = null;
+  if(snap.eid && snap.field){
+    el = containerEl.querySelector('input[data-eid="'+snap.eid+'"][data-field="'+snap.field+'"]');
+  } else if(snap.id){
+    const candidate = document.getElementById(snap.id);
+    if(candidate && containerEl.contains(candidate)) el = candidate;
+  }
+  if(!el) return;
+  // 사용자가 친 raw 값 보존 (REC의 옛 값으로 그려진 새 input을 raw로 덮음)
+  if(el.value !== snap.val) el.value = snap.val;
+  try { el.focus(); } catch(e){}
+  try { el.setSelectionRange(snap.ss, snap.se); } catch(e){}
+}
+
 function renderTable(){
+  // 🛡️ 입력 중 input 스냅 (재렌더 후 복원)
+  const _focusTbody = document.getElementById('daily-tbody');
+  const _focusSnap = _snapshotInputIn(_focusTbody);
   // 과거 날짜 조회 시 그 달의 정책 스냅샷 사용
   const _origPOL = POL;
   const _monthPOL = (typeof getPolForMonth==='function') ? getPolForMonth(cY, cM) : POL;
@@ -2324,6 +2368,8 @@ function renderTable(){
   } finally {
     if(_polSwapped) POL = _origPOL;
   }
+  // 🛡️ 활성 input 복원 (raw 값 + 캐럿 + 포커스)
+  _restoreInputIn(document.getElementById('daily-tbody'), _focusSnap);
 }
 
 // ══ Tab 키 네비게이션 ══
@@ -3691,6 +3737,10 @@ function renderEmps(){
   const _oldDl = document.getElementById('dept-cat-options');
   if(_oldDl) _oldDl.remove();
 
+  // 🛡️ 입력 중 input 스냅 (재렌더 후 복원 — 직원 정보 입력 보호)
+  const _focusTbody = document.getElementById('emp-tbody');
+  const _focusSnap = _snapshotInputIn(_focusTbody);
+
   renderFilterBar('emps-filter-bar','emps');
   // 🗂 EMPS 자연 순서 그대로 표시 — 사용자 드래그(empDrop)로 변경한 EMPS 배열 순서 100% 보존
   // sortEMPS는 시작 시·shift/leave 변경 시·sbLoadAll 시 호출되어 EMPS를 4단계 정렬 상태로 유지.
@@ -3789,6 +3839,8 @@ function renderEmps(){
     </tr>`;
   }).join('');
   initColResize();
+  // 🛡️ 활성 input 복원 (이름/주민번호/시급/사번 등 입력 중 보호)
+  _restoreInputIn(document.getElementById('emp-tbody'), _focusSnap);
 }
 
 // 직원관리 테이블 헤더 드래그 리사이즈
