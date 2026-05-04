@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-04-2';
+const CLIENT_BUILD = '2026-05-04-3';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -10823,14 +10823,10 @@ try {
     _bc = new BroadcastChannel('nopro-sync');
     _bc.onmessage = (ev) => {
       if(!ev || !ev.data) return;
-      // 다른 탭에서 저장됨 — 즉시 폴링으로 최신 상태 가져오기
-      // (메모리에 미저장 변경 있으면 replaceIfClean이 자동 보호)
-      if(ev.data.type === 'data-saved'){
-        if(typeof pollForUpdates === 'function'){
-          // 1초 후 polling — 서버 commit 완료 시간 확보
-          setTimeout(()=>{ try { pollForUpdates(); } catch(e){} }, 1000);
-        }
-      }
+      // 🛑 다른 탭 저장 알림 받아도 자동 폴링 안 함 (2026-05-04 입력 유실 사고 차단).
+      // 폴링이 입력 중 메모리/렌더에 끼어드는 모든 경로 제거. 다른 탭의 변경은
+      // F5로 명시적으로 동기화. 단일 로그인 차단 후엔 같은 사용자 멀티탭이 유일한 시나리오.
+      // (메시지 수신 자체는 유지 — 향후 가벼운 알림 등에 재활용 가능)
     };
   }
 } catch(e){ console.warn('BroadcastChannel 초기화 실패:', e); }
@@ -11152,6 +11148,14 @@ const POLL_KEYS = ['emps','pol','bk','bonus','allow','tax','leave_settings','lea
 
 async function pollForUpdates(){
   if(document.hidden) return;
+  // 🛡️ 입력 중이면 폴링 자체 스킵 (메모리 갱신 + 재렌더 둘 다 차단)
+  // 기존 코드는 메모리 갱신 후 재렌더만 스킵 → 입력값이 다른 키 머지로 영향받을 수 있었음
+  const _ae = document.activeElement;
+  if(_ae && (_ae.tagName==='INPUT' || _ae.tagName==='TEXTAREA' || _ae.tagName==='SELECT')){
+    return;
+  }
+  // 🛡️ 디바운스 중인 저장이 있으면 스킵 (서버에 아직 안 간 변경분 보호)
+  if(saveLS._timer) return;
   const _sess = (()=>{ try { return JSON.parse(localStorage.getItem('nopro_session')||'null'); } catch(e){ return null; }})();
   if(!_sess || !_sess.companyId) return;
   try {
