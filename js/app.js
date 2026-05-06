@@ -2599,16 +2599,21 @@ function applyRecentAll() {
   if(empsToApply.length===0){
     const toast=document.createElement('div');
     toast.style.cssText='position:fixed;bottom:24px;right:24px;background:#B45309;color:#fff;padding:10px 18px;border-radius:9px;font-size:12px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2)';
-    toast.textContent='⚠ 대상 직원이 없습니다 (사이드바 필터를 확인해주세요)';
+    toast.textContent='⚠ 대상 직원이 없습니다 (필터를 확인해주세요)';
     document.body.appendChild(toast); setTimeout(()=>toast.remove(),2500);
     return;
   }
   const dateStr=`${cY}-${pad(cM)}-${pad(cD)}`;
-  const search=(document.getElementById('sb-search-inp')?.value||'').trim();
-  const filterActive=SBF.shift!=='all'||SBF.nation!=='all'||SBF.pay!=='all'||!!search;
-  const filterNote=filterActive?`\n(사이드바 필터 적용됨: shift=${SBF.shift}, nation=${SBF.nation}, pay=${SBF.pay}${search?`, 검색="${search}"`:''})`:'';
+  const sbSearch=(document.getElementById('sb-search-inp')?.value||'').trim();
+  const fd=F.daily;
+  const sbActive=SBF.shift!=='all'||SBF.nation!=='all'||SBF.pay!=='all'||!!sbSearch;
+  const pgActive=fd.shift!=='all'||fd.nation!=='all'||fd.pay!=='all'||(fd.dept&&fd.dept!=='all')||(fd.deptCat&&fd.deptCat!=='all')||!!fd.search;
+  const filterActive=sbActive||pgActive;
   const preview=empsToApply.slice(0,5).map(e=>e.name).join(', ')+(empsToApply.length>5?` 외 ${empsToApply.length-5}명`:'');
-  const msg=`📋 ${dateStr}에 직원 ${empsToApply.length}명의 가장 최근 출퇴근 기록을 복사합니다.\n\n대상: ${preview}${filterNote}\n\n※ 이미 기록이 있는 직원은 건너뜁니다.\n진행하시겠습니까?`;
+  const headLine=filterActive
+    ? `📋 현재 필터링된 ${empsToApply.length}명만 ${dateStr}에 최근 출퇴근 기록을 불러오겠습니까?`
+    : `📋 ${dateStr}에 직원 ${empsToApply.length}명의 가장 최근 출퇴근 기록을 복사합니다.`;
+  const msg=`${headLine}\n\n대상: ${preview}\n\n※ 이미 기록이 있는 직원은 건너뜁니다.`;
   if(!confirm(msg)) return;
 
   let cnt=0, skipped=0, noRecent=0;
@@ -2644,13 +2649,18 @@ function applyRecentAll() {
 }
 
 function activeDayEmpsForCopy(){
-  // 현재 필터 + 입사일 + 퇴사일 조건 적용한 직원 목록 (퇴사일 이후엔 자동 복사 방지)
+  // 화면에 보이는 직원과 동일한 목록 (renderTable과 같은 필터 적용)
+  // 입사일/퇴사일 + 페이지 상단 필터바(F.daily) + 사이드바 필터(SBF) 모두 반영
   const dayDate=new Date(cY,cM-1,cD);
   const search=(document.getElementById('sb-search-inp')?.value||'').trim();
-  return EMPS.filter(emp=>{
+  // 1) renderTable과 동일하게: 입퇴사 + 페이지 상단 필터바
+  const baseFiltered = applyCommonFilter(EMPS.filter(emp=>{
     if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate) return false;}
     if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<dayDate) return false;}
-    // 사이드바 필터 반영 (renderSb와 동일 로직)
+    return true;
+  }), 'daily', dayDate);
+  // 2) 사이드바 필터 추가 적용 (사이드바 검색 input 포함)
+  return baseFiltered.filter(emp=>{
     if(SBF.shift!=='all' && (emp.shift||'day')!==SBF.shift) return false;
     const isFor = emp.nation==='foreign' || emp.foreigner===true;
     if(SBF.nation==='korean' && isFor) return false;
