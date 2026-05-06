@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-06-2';
+const CLIENT_BUILD = '2026-05-06-3';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -3493,7 +3493,7 @@ function renderXlPreview(){
       <td>${esc(emp.grade||'')}</td>
       <td>${esc(emp.deptCat||'')}</td>
       <td style="text-align:center"><span class="emp-mode-badge ${getEmpPayModeLabel(emp).cls}" style="font-size:9px;padding:2px 6px">${getEmpPayModeLabel(emp).text}</span></td>
-      <td class="num">${annualTotal}</td>
+      <td class="num">${Number(annualTotal||0).toFixed(1)}</td>
       <td class="num">${s.wdays}</td>
       <td class="num">${(getEmpPayMode(emp)==='hourly'||getEmpPayMode(emp)==='monthly')?'':sot}</td>
       <td class="num" style="font-size:11px">${joinStr}</td>
@@ -6687,7 +6687,7 @@ function exportExcel(){
       W(ci++,emp.grade||'',S.cell(C.gray,bg,false,'center'));        // 직급 (emp.grade)
       W(ci++,emp.deptCat||'사무',S.cell(C.teal,bg,!!emp.deptCat,'center')); // 부서 (emp.deptCat)
       W(ci++,getEmpPayModeLabel(emp).text,S.cell(C.blue,bg,false,'center'));
-      W(ci++,annualTotal,S.num(C.gray,bg));
+      W(ci++,Number(annualTotal||0),S.num(C.gray,bg,false,'0.0'));
       W(ci++,s.wdays||0,S.num(C.navy,bg));
       W(ci++,(_pm==='hourly'||_pm==='monthly')?'':sot,S.num(C.gray,bg));
       W(ci++,emp.join||'',S.cell(C.gray,bg,false,'center'));
