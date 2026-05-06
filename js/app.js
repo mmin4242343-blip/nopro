@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-06-8';
+const CLIENT_BUILD = '2026-05-06-9';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1713,7 +1713,7 @@ function gp(p){
     renderPayroll();
   }
   if(p==='emps')renderEmps();
-  if(p==='settings'){renderDefBk();renderAllowanceList();}
+  if(p==='settings'){populateSettingsUI();renderDefBk();renderAllowanceList();}
   if(p==='shift')renderShiftList();
   if(p==='safety')renderSafety();
   if(p==='leave')renderLeave();
@@ -10269,8 +10269,9 @@ function showTip(title, msg) {
 // ══════════════════════════════════════
 // 초기화
 // ══════════════════════════════════════
-function init(){
-  // DOM 요소 존재 확인 후 안전하게 세팅
+// 급여설정 입력칸들을 POL에서 다시 채움 — init() + gp('settings') 양쪽에서 호출.
+// 계정 전환 후 inp-base-rate 등이 이전 계정 값을 그대로 보여주던 버그 차단.
+function populateSettingsUI(){
   const safe = (id, fn) => { const el=document.getElementById(id); if(el) fn(el); };
   safe('tog-ext',  el=>el.checked=POL.extFixed??true);
   safe('tog-nt',   el=>el.checked=POL.ntFixed??POL.nt??true);
@@ -10283,22 +10284,23 @@ function init(){
   safe('tog-hol-monthly-std', el=>el.checked=POL.holMonthlyStd??true);
   safe('tog-hol-monthly-ot',  el=>el.checked=POL.holMonthlyOt??true);
   safe('tog-ded-monthly',     el=>el.checked=POL.dedMonthly??true);
-  setPremTab('fixed');
   safe('tog-juhyu',el=>el.checked=POL.juhyu);
   safe('inp-sot',       el=>el.value=POL.sot);
   safe('inp-base-rate', el=>el.value=Number(POL.baseRate||0).toLocaleString());
   safe('inp-base-monthly', el=>el.value=Number(POL.baseMonthly||0).toLocaleString());
   safe('inp-site-code', el=>el.value=POL.siteCode||'');
-  initEmpNoSetting();
   safe('sel-ns',        el=>el.value=POL.nightStart);
   setSize(POL.size||'u5');
   setDupMode(POL.dupMode||'single');
   setDedMode(POL.dedMode||'hour');
   setBasePay(POL.basePayMode||'fixed');
-  const initMonthlyRow=document.getElementById('sr-base-monthly');
-  if(initMonthlyRow&&POL.basePayMode!=='monthly')initMonthlyRow.style.display='none';
-  const initMonthlyInp=document.getElementById('inp-base-monthly');
-  if(initMonthlyInp)initMonthlyInp.value=POL.baseMonthly||2455750;
+  const monthlyRow=document.getElementById('sr-base-monthly');
+  if(monthlyRow&&POL.basePayMode!=='monthly')monthlyRow.style.display='none';
+}
+function init(){
+  populateSettingsUI();
+  setPremTab('fixed');
+  initEmpNoSetting();
   initWeekendChecks();
   sortEMPS(); // 시작 시 주간→야간 정렬
   renderSb();updDbar();renderBks();renderTable();updNotes();
