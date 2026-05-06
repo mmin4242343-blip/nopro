@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-04-18';
+const CLIENT_BUILD = '2026-05-06-1';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -518,7 +518,11 @@ function _polKey(y, m){ return y + '-' + String(m).padStart(2,'0'); }
 
 function getPolForMonth(y, m){
   const snap = POL_SNAPSHOTS[_polKey(y, m)];
-  return snap || POL;
+  if(!snap) return POL;
+  // 수당 정의(allowances)는 항상 라이브 POL을 사용한다.
+  // 스냅샷이 동결된 시점 이후 추가/삭제/이름변경된 수당이 모든 월의 카드·엑셀에 즉시 반영되도록 함.
+  // 정책 토글(야간/연장/휴일 등)은 스냅샷 그대로 보존.
+  return Object.assign({}, snap, { allowances: POL.allowances });
 }
 
 // REC에서 데이터가 있는 모든 (y,m) 집합을 반환
@@ -1404,6 +1408,21 @@ function monthSummary(eid,y,m){
   if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<new Date(y,m-1,1))return{wdays:0,adays:0,aldays:0,twkH:0,tNightH:0,tOtDayH:0,tOtNightH:0,tHolDayH:0,tHolNightH:0,tHolDayOtH:0,tHolNightOtH:0,tBase:0,tNightPay:0,tOtDayPay:0,tOtNightPay:0,tHolDayPay:0,tHolNightPay:0,tHolDayOtPay:0,tHolNightOtPay:0,annualPay:0,wkly:0,bonus:0,allowances:{},totalAllowance:0,deduction:0,total:0};}
   const days=dim(y,m);
   const sot=emp.sot||POL.sot||209;
+  // ── 입사/퇴사월 일할 계수 ──
+  // 사용자 정책: 해당월 실제 일수(28~31) 기준. (재직일 / 해당월 일수) 비율을
+  // tBase·수당에 곱한다. 시급제(hourly)는 실근무 기반이라 일할 비율 미적용.
+  let _proStart=1, _proEnd=days;
+  if(emp.join){
+    const jd=parseEmpDate(emp.join);
+    if(jd && jd.getFullYear()===y && jd.getMonth()===m-1) _proStart=jd.getDate();
+  }
+  if(emp.leave){
+    const ld=parseEmpDate(emp.leave);
+    if(ld && ld.getFullYear()===y && ld.getMonth()===m-1) _proEnd=ld.getDate();
+  }
+  const _prorateDays=Math.max(0, _proEnd - _proStart + 1);
+  const _prorate=days>0 ? (_prorateDays/days) : 1;
+  const _isPartialMonth=_prorate<1;
   let wdays=0,adays=0,aldays=0,tBase=0,tNightPay=0,tOtDayPay=0,tOtNightPay=0,tHolDayPay=0,tHolNightPay=0,tHolDayOtPay=0,tHolNightOtPay=0,deduction=0,dedShortMins=0;
   let tExtraWorkPay=0,tHolPayNew=0;
   let tMonthlyHolStdPay=0,tMonthlyHolOtPay=0;
@@ -1499,7 +1518,7 @@ function monthSummary(eid,y,m){
   const _rh = v=>Math.round(v*100 + FP_EPS)/100;
   if(empPayMode==='fixed'){
     const _ntF=POL.ntFixed??true, _otF=POL.otFixed??true;
-    tBase=r10(rate*sot);
+    tBase=r10(rate*sot*_prorate);
     tNightPay=_ntF?r10(ordRate*0.5*_rh(tAllNightH)):0;
     // 초과연장: 엑셀 X = rh(주간연장) + rh(야간연장, ntF꺼지면 제외) → 1회 ROUND (주간/야간 배율 동일 0.5로 통합 가능)
     const otHExcel = _rh(tAllOtDayH) + (_ntF?_rh(tAllOtNightH):0);
@@ -1521,11 +1540,11 @@ function monthSummary(eid,y,m){
       tHolNightOtPay=r10(ordRate*2.5*tHolNightOtH);
     }
   } else if(empPayMode==='monthly'){
-    tBase=r10(getEmpMonthlyAt(emp, y, m, 1));
+    tBase=r10(getEmpMonthlyAt(emp, y, m, 1)*_prorate);
     tMonthlyHolStdPay=(POL.holMonthlyStd??true)?r10(ordRate*1.5*tMhHolStdH):0;
     tMonthlyHolOtPay=(POL.holMonthlyOt??true)?r10(ordRate*2.0*tMhHolOtH):0;
   } else if(empPayMode==='pohal'){
-    tBase=r10(rate*sot);
+    tBase=r10(rate*sot*_prorate);
     const pohalRate=ordRate||Math.round((POL.baseMonthly||2455750)/209);
     tMonthlyHolStdPay=(POL.holMonthlyStd??true)?r10(pohalRate*1.5*tMhHolStdH):0;
     tMonthlyHolOtPay=(POL.holMonthlyOt??true)?r10(pohalRate*2.0*tMhHolOtH):0;
@@ -1578,7 +1597,11 @@ function monthSummary(eid,y,m){
   POL.allowances.forEach(a=>{
     const v=getMonthAllowance(eid,y,m,a.id);
     // isDeduct인 항목은 입력값을 음수로 처리
-    const effectiveV = (a.isDeduct && v>0) ? -v : v;
+    let effectiveV = (a.isDeduct && v>0) ? -v : v;
+    // 입사·퇴사월 일할: 공제(가불·선지급 등 약정 금액)는 일할 안 함, 수당만 일할
+    if(_isPartialMonth && !a.isDeduct){
+      effectiveV = r10(effectiveV * _prorate);
+    }
     allowances[a.id]=effectiveV;
     totalAllowance+=effectiveV;
   });
@@ -1599,7 +1622,8 @@ function monthSummary(eid,y,m){
     tBase,tNightPay,tOtDayPay,tOtNightPay,tHolDayPay,tHolNightPay,tHolDayOtPay,tHolNightOtPay,
     tExtraWorkH:rh(tFixExtraH),tExtraWorkPay,tHolPayNew,tTotalBonus,
     tMonthlyHolStdPay,tMonthlyHolOtPay,
-    annualPay,wkly,bonus,allowances,totalAllowance,deduction,dedShortH:dedShortMins/60,total};
+    annualPay,wkly,bonus,allowances,totalAllowance,deduction,dedShortH:dedShortMins/60,total,
+    prorateDays:_prorateDays,prorateMonthDays:days,isPartialMonth:_isPartialMonth};
   } finally {
     if(_polSwapped) POL = _origPOL;
   }
@@ -3258,7 +3282,7 @@ function renderPayroll(){
         <div class="av" style="width:32px;height:32px;font-size:12px;background:${safeColor(emp.color,'#DBEAFE')};color:${safeColor(emp.tc,'#1E3A5F')}">${esc(emp.name)[0]}</div>
         <div>
           <div style="font-size:13px;font-weight:700;color:var(--ink)">${esc(emp.name)}</div>
-          <div style="font-size:10px;color:var(--ink3)">${esc(emp.role)} · ${s.wdays}일<span class="emp-mode-badge ${getEmpPayModeLabel(emp).cls}" style="margin-left:4px">${getEmpPayModeLabel(emp).text}</span><span style="font-size:9px;padding:1px 5px;border-radius:5px;background:${getEmpShiftLabel(emp).bg};color:${getEmpShiftLabel(emp).color};font-weight:700;margin-left:2px">${getEmpShiftLabel(emp).text}</span>${(()=>{const or=getOrdinaryRate(emp,pY,pM);const br=getEmpRate(emp);return or>br?`<span style="font-size:9px;padding:1px 5px;border-radius:5px;background:#EFF6FF;color:var(--navy2);font-weight:700;margin-left:2px">통상시급 ${or.toLocaleString()}원</span>`:''})()}</div>
+          <div style="font-size:10px;color:var(--ink3)">${esc(emp.role)} · ${s.wdays}일<span class="emp-mode-badge ${getEmpPayModeLabel(emp).cls}" style="margin-left:4px">${getEmpPayModeLabel(emp).text}</span><span style="font-size:9px;padding:1px 5px;border-radius:5px;background:${getEmpShiftLabel(emp).bg};color:${getEmpShiftLabel(emp).color};font-weight:700;margin-left:2px">${getEmpShiftLabel(emp).text}</span>${(()=>{const or=getOrdinaryRate(emp,pY,pM);const br=getEmpRate(emp);return or>br?`<span style="font-size:9px;padding:1px 5px;border-radius:5px;background:#EFF6FF;color:var(--navy2);font-weight:700;margin-left:2px">통상시급 ${or.toLocaleString()}원</span>`:''})()}${s.isPartialMonth?`<span style="font-size:9px;padding:1px 5px;border-radius:5px;background:#FEF3C7;color:#92400E;font-weight:700;margin-left:2px" title="입사·퇴사월 일할 적용: ${s.prorateDays}/${s.prorateMonthDays}일">일할 ${s.prorateDays}/${s.prorateMonthDays}일</span>`:''}</div>
         </div>
       </div>
       <div class="pcb">
@@ -3366,6 +3390,7 @@ function renderXlPreview(){
     <th style="min-width:46px;background:#1a3a6e;color:#fff">근무<br>일수</th>
     <th style="min-width:52px;background:#1a3a6e;color:#fff">소정근로<br>시간</th>
     <th style="min-width:72px;background:#1a3a6e;color:#fff">입사일</th>
+    <th style="min-width:72px;background:#1a3a6e;color:#fff">퇴사일</th>
     <th style="min-width:60px;background:#1a3a6e;color:#fff">시급</th>
     <th style="min-width:80px;background:#1a3a6e;color:#fff">기본급<br><span style="font-size:9px;opacity:.7">(월고정:209h / 시급:실근무)</span></th>
     <th style="min-width:72px;background:#0D9488;color:#fff">주휴수당<br><span style="font-size:9px;opacity:.7">(시간급 전용)</span></th>
@@ -3455,6 +3480,7 @@ function renderXlPreview(){
     const netPay = totalPay - deductAllowTotal - pension4 - health4 - employ4 - incomeTax - localTax;
 
     const joinStr = emp.join ? emp.join.substring(0,10) : '';
+    const leaveStr = emp.leave ? emp.leave.substring(0,10) : '';
     const leaveCalc = calcLeaveForYear(emp, pY);
     const annualTotal = leaveCalc ? leaveCalc.total : 0;
     const annualUsed = countUsedLeave(emp.id, pY);
@@ -3471,6 +3497,7 @@ function renderXlPreview(){
       <td class="num">${s.wdays}</td>
       <td class="num">${(getEmpPayMode(emp)==='hourly'||getEmpPayMode(emp)==='monthly')?'':sot}</td>
       <td class="num" style="font-size:11px">${joinStr}</td>
+      <td class="num" style="font-size:11px;${leaveStr?'color:var(--rose);font-weight:700':''}">${leaveStr}</td>
       <td class="num">${getOrdinaryRate(emp, pY, pM).toLocaleString('ko-KR')}</td>
       <td class="num" style="font-weight:500">${s.tBase>0?fmt$(s.tBase):'-'}</td>
       <td class="num" style="${getEmpPayMode(emp)==='hourly'&&s.wkly>0?'color:#0D9488;font-weight:700':''}">${getEmpPayMode(emp)==='hourly'?(s.wkly>0?fmt$(s.wkly):''):''}</td>
@@ -5576,7 +5603,7 @@ function renderAllowanceList(){
       ? '<button class="tip-btn" onclick="showTip(' + "'공제 항목'" + ',' + "'" + tipMsg + "'" + ')" style="background:var(--rbg);color:var(--rose);width:22px;height:22px">💡</button>'
       : '<label style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--ink3);cursor:pointer;white-space:nowrap"><input type="checkbox"' + (isDeduct ? ' checked' : '') + ' onchange="POL.allowances[' + i + '].isDeduct=this.checked;saveLS();renderAllowanceList();renderPayroll()">공제</label>';
     return '<div class="allowance-item" style="' + bgStyle + '">'
-      + '<input class="allowance-name" value="' + a.name + '" placeholder="수당 이름" style="' + nameColor + '" onchange="POL.allowances[' + i + '].name=this.value;saveLS()">'
+      + '<input class="allowance-name" value="' + a.name + '" placeholder="수당 이름" style="' + nameColor + '" onchange="POL.allowances[' + i + '].name=this.value;saveLS();renderPayroll()">'
       + deductCtrl
       + rightBtn
       + '</div>';
@@ -6583,21 +6610,21 @@ function exportExcel(){
 
     // ── 헤더 정의 (스프레드시트 동일) ──
     const allHdrs = [
-      '순번','성명','직종','근무지','직급','부서','급여유형','연차개수','근무일수','소정근로시간','입사일','시급',
+      '순번','성명','직종','근무지','직급','부서','급여방식','연차개수','근무일수','소정근로시간','입사일','퇴사일','시급',
       '기본급','주휴수당','연차수당',
       ...allowList.map(a=>a.name),
       '급여',
       '실근무(h)','소정근로외(h)','야간(h)','초과연장(h)','초과휴일(h)','결근일수','공제시간(h)',
       '소정근로외수당','야간수당','초과연장수당','초과휴일수당',
-      '포괄임금제휴일수당','포괄임금제휴일초과','결근차감','총가산수당',
-      '상여금','총급여',
+      '월급제휴일수당','월급제휴일초과','총가산수당','결근차감',
+      '상여금(선지급)','총급여',
       ...deductList.map(a=>a.name),
-      '국민연금','건강보험','고용보험','소득세','주민세','공제합계','실지급액'
+      '국민연금','건강보험','고용보험','소득세','주민세','총공제액','실지급액'
     ];
 
     // 헤더 색상 그룹
     const getHdrStyle = (h) => {
-      if(['순번','성명','직종','근무지','직급','부서','급여유형','연차개수','근무일수','소정근로시간','입사일','시급'].includes(h)) return S.mainHdr(C.navy,'FFFFFF','center');
+      if(['순번','성명','직종','근무지','직급','부서','급여방식','연차개수','근무일수','소정근로시간','입사일','퇴사일','시급'].includes(h)) return S.mainHdr(C.navy,'FFFFFF','center');
       if(h==='기본급'||h==='급여') return S.mainHdr(C.navy,'FFFFFF','center');
       if(h==='주휴수당') return S.mainHdr(C.teal,'FFFFFF','center');
       if(h==='연차수당') return S.mainHdr(C.navy,'FFFFFF','center');
@@ -6606,9 +6633,9 @@ function exportExcel(){
       if(h==='소정근로외수당') return S.mainHdr('1565C0','FFFFFF','center');
       if(h==='야간수당') return S.mainHdr('0C447C','B5D4F4','center');
       if(h==='초과연장수당') return S.mainHdr('534AB7','EEEDFE','center');
-      if(h==='초과휴일수당'||h.includes('포괄임금제')) return S.mainHdr('854F0B','FAC775','center');
+      if(h==='초과휴일수당'||h.includes('월급제')) return S.mainHdr('854F0B','FAC775','center');
       if(h==='총가산수당') return S.mainHdr('065F46','D1FAE5','center');
-      if(h==='상여금') return S.mainHdr(C.orange2,'FFFFFF','center');
+      if(h.includes('상여금')) return S.mainHdr(C.orange2,'FFFFFF','center');
       if(h==='총급여') return S.mainHdr('0D47A1','FFFFFF','center');
       if(h.includes('공제')||h.includes('세')||h.includes('보험')||h==='결근차감') return S.mainHdr(C.rose,'FFFFFF','center');
       if(h==='실지급액') return S.mainHdr('1B5E20','FFFFFF','center');
@@ -6664,6 +6691,7 @@ function exportExcel(){
       W(ci++,s.wdays||0,S.num(C.navy,bg));
       W(ci++,(_pm==='hourly'||_pm==='monthly')?'':sot,S.num(C.gray,bg));
       W(ci++,emp.join||'',S.cell(C.gray,bg,false,'center'));
+      W(ci++,emp.leave||'',S.cell(emp.leave?C.rose:C.gray,bg,false,'center'));
       W(ci++,getOrdinaryRate(emp, pY, pM),S.num(C.blue,C.blue4||bg,true));
 
       // 기본급 + 주휴 + 연차수당
@@ -6696,8 +6724,9 @@ function exportExcel(){
       W(ci++,Math.round(s.tHolPayNew||0)||'',(s.tHolPayNew||0)?S.num(C.orange2,C.orange4):S.empty(bg));
       W(ci++,Math.round(s.tMonthlyHolStdPay||0)||'',(s.tMonthlyHolStdPay||0)?S.num(C.orange2,C.orange4):S.empty(bg));
       W(ci++,Math.round(s.tMonthlyHolOtPay||0)||'',(s.tMonthlyHolOtPay||0)?S.num(C.rose,C.rose4):S.empty(bg));
-      W(ci++,s.deduction>0?-Math.round(s.deduction):'',s.deduction?S.num(C.rose,C.rose4):S.empty(bg));
+      // 헤더 순서(총가산수당 → 결근차감)에 맞춰 데이터도 동일 순서로 작성
       W(ci++,Math.round(s.tTotalBonus||0)||'',(s.tTotalBonus||0)?S.num('065F46','ECFDF5',true):S.empty(bg));
+      W(ci++,s.deduction>0?-Math.round(s.deduction):'',s.deduction?S.num(C.rose,C.rose4):S.empty(bg));
 
       // 상여금 + 총급여
       W(ci++,s.bonus||'',s.bonus?S.num(C.orange2,C.orange4):S.empty(bg));
@@ -6744,9 +6773,9 @@ function exportExcel(){
       border:XLS.B.thin('1E3A5F'),
     });
     // 빈 셀들 (부서 다음부터)
-    for(let c=6;c<ci2-1;c++) xlsWrite(ws,XLSX.utils.encode_cell({r:R,c}),'',(c===allHdrs.indexOf('총 급여'))?S.total('FFFFFF','0D47A1'):{fill:{fgColor:{rgb:C_.gray4}},border:XLS.B.thin()});
+    for(let c=6;c<ci2-1;c++) xlsWrite(ws,XLSX.utils.encode_cell({r:R,c}),'',(c===allHdrs.indexOf('총급여'))?S.total('FFFFFF','0D47A1'):{fill:{fgColor:{rgb:C_.gray4}},border:XLS.B.thin()});
     // 총급여 합계
-    const totalIdx=allHdrs.indexOf('총 급여');
+    const totalIdx=allHdrs.indexOf('총급여');
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:totalIdx}),Math.round(grandTotal),S.total('FFFFFF','0D47A1'));
     // 실지급액 합계
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci2}),Math.round(grandNet),{
@@ -11109,10 +11138,41 @@ async function sbSaveAll(companyId) {
     } catch(e){ return true; }
   };
 
+  // 📊 부분 손실 진단 (옵션 A) — 빈값은 아닌데 키 일부가 사라졌으면 error_log에 기록.
+  // 21중 가드는 "전체 wipe"는 막지만 "일부 누락"은 정상 저장으로 통과 → 사고 패턴 추적용.
+  const _diagPartialLoss = (key, value) => {
+    if(!snap || snap[key] == null) return;
+    let oldObj;
+    try { oldObj = (typeof snap[key]==='string') ? JSON.parse(snap[key]) : snap[key]; }
+    catch { return; }
+    const newObj = value;
+    if(!oldObj || !newObj || typeof oldObj!=='object' || typeof newObj!=='object') return;
+    if(Array.isArray(oldObj) && Array.isArray(newObj)){
+      if(newObj.length < oldObj.length){
+        try { reportError({ level:'guard', source:'sbSaveAll-diff', message:`${key} 항목 감소: ${oldObj.length} → ${newObj.length}`, meta:{ key, oldCount:oldObj.length, newCount:newObj.length, diff:oldObj.length-newObj.length } }); } catch {}
+      }
+      return;
+    }
+    const oldKeys = Object.keys(oldObj);
+    const newSet = new Set(Object.keys(newObj));
+    const missing = oldKeys.filter(k => !newSet.has(k));
+    if(missing.length){
+      try {
+        reportError({
+          level:'guard', source:'sbSaveAll-diff',
+          message:`${key} 키 일부 사라짐: ${missing.length}개`,
+          meta:{ key, missingCount:missing.length, missingSample:missing.slice(0,15), oldCount:oldKeys.length, newCount:newSet.size }
+        });
+      } catch {}
+    }
+  };
+
   const _filter = (items) => items.filter(it => {
     // 🚀 변경 안 된 키는 보내지 않음 (성능 최적화)
     if(!_hasChanged(it.key, it.value)) return false;
-    if(!_guardKeys.has(it.key)) return true;
+    if(!_guardKeys.has(it.key)){
+      return true;
+    }
     if(_isEmpty(it.value)){
       // 🛡️ 스냅샷이 아직 없으면(sbLoadAll 미완): 빈값 저장 절대 금지. 콘솔만 로그.
       if(snap === null){
@@ -11128,6 +11188,8 @@ async function sbSaveAll(companyId) {
         return false;
       }
     }
+    // 📊 정상 통과 직전 — 부분 손실 패턴 진단 (저장은 그대로 진행)
+    _diagPartialLoss(it.key, it.value);
     return true;
   });
   const safeSmall = _filter(smallItems);
