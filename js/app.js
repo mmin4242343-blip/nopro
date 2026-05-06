@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-06-6';
+const CLIENT_BUILD = '2026-05-06-7';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1802,7 +1802,7 @@ function updDbar(){
   document.getElementById('ddow').textContent=dowText;
   document.getElementById('daily-sub').textContent=`${cY}년 ${cM}월 ${cD}일 ${DOW[dow]}요일`;
   const al=document.getElementById('hol-alert');
-  if(autoH){al.style.display='block';al.textContent=`🎌 ${phName||(dow===6?'토요일':'일요일')} — 휴일 가산 자동 적용`;}
+  if(autoH){al.style.display='block';al.textContent=`${phName||(dow===6?'토요일':'일요일')} — 휴일 가산 자동 적용`;}
   else al.style.display='none';
   // 미니 캘린더가 열려있으면 동기화
   const _dpkPop=document.getElementById('day-picker-pop');
@@ -2984,7 +2984,7 @@ function renderCal(){
 function renderOv(){
   const days=dim(vY,vM);
   let th=`<th style="position:sticky;left:0;z-index:2;background:var(--navy);min-width:76px">직원</th>`;
-  for(let d=1;d<=days;d++){const dow=(fdow(vY,vM)+d-1)%7;const ph=getPhName(vY,vM,d);const autoH=isAutoHol(vY,vM,d);th+=`<th style="${dow===0||autoH?'color:#FCA5A5':dow===6?'color:#93C5FD':''}" title="${ph||''}">${d}${ph?'🎌':''}<br><span style="font-weight:400;font-size:8px;opacity:.7">${DOW[dow]}</span></th>`;}
+  for(let d=1;d<=days;d++){const dow=(fdow(vY,vM)+d-1)%7;const ph=getPhName(vY,vM,d);const autoH=isAutoHol(vY,vM,d);th+=`<th style="${dow===0||autoH?'color:#FCA5A5':dow===6?'color:#93C5FD':''}" title="${ph||''}">${d}<br><span style="font-weight:400;font-size:8px;opacity:.7">${ph||DOW[dow]}</span></th>`;}
   th+=`<th style="background:#0E4D2E">근무일</th><th style="background:#0E4D2E">연차</th><th style="background:#0E4D2E">실근무</th><th style="background:#0E4D2E">월급여</th>`;
   const mvEmps = EMPS.filter(e=>{
     // 🗑️ 휴지통 제외
@@ -3019,7 +3019,7 @@ function renderOv(){
       if(rec&&rec.absent)tr+=`<td class="ab2">결근</td>`;
       else if(isAl)tr+=`<td class="al2">연차</td>`;
       else if(rec&&rec.halfAnnual)tr+=`<td class="al2" style="background:#E0F2FE;color:#0891B2">반차${c?'<br>'+fmtH(c.work):''}</td>`;
-      else if(ph&&!c)tr+=`<td class="ph2" title="${ph}">🎌</td>`;
+      else if(ph&&!c)tr+=`<td class="ph2" title="${ph}" style="font-size:9px;line-height:1.1;padding:2px">${ph}</td>`;
       else if(c)tr+=`<td class="${autoH?'ph2':'hd2'}">${fmtH(c.work)}</td>`;
       else tr+=`<td class="mt">-</td>`;
     }
