@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-06-5';
+const CLIENT_BUILD = '2026-05-06-6';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -11319,67 +11319,34 @@ function _broadcastSaved(keys){
   try { if(_bc && keys && keys.length) _bc.postMessage({type:'data-saved', keys, ts:Date.now()}); } catch(e){}
 }
 
+// 🛡️ 단일 사용자 정책 (2026-05-06): 충돌 시 강제 재저장도 폐기.
+// 옛 코드는 /data-load → 강제 재저장 시도 → 그 사이 saveLS B가 끼어들면 또 stale →
+// 또 conflicts → handleConflicts 재호출 → 무한 루프 발생.
+// 새 정책: 서버가 알려준 conflicts[i].actual(서버 현재 버전)을 _serverVersions에 즉시 반영하고
+// 다음 saveLS 디바운스 사이클이 자연스럽게 새 버전으로 재시도하도록 위임. fetch 추가 호출 없음 → race 자체가 발생 안 함.
+// size-drop-blocked는 진짜 위험한 사이즈 급감 차단이므로 사용자에게만 알리고 자동 재시도 안 함.
 async function handleConflicts(conflicts){
   if(!conflicts || !conflicts.length) return;
-  if(_conflictHandling) return; // 동시 충돌 진행 중이면 패스 (다음 디바운스에서 자연 처리)
+  if(_conflictHandling) return;
   _conflictHandling = true;
   try {
-    console.log('🔄 충돌 → 사용자 로컬값 강제 재저장:', conflicts.map(c=>c.key));
-
-    const _sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
-    if(!_sess || !_sess.companyId) return;
-
-    // 🛡️ 단일 사용자 정책 (2026-05-06): 충돌 머지 로직 폐기.
-    // 사용자 입력값을 옛 서버값과 머지하다가 휘발될 위험을 차단하기 위해
-    // "사용자 로컬값을 무조건 그대로 강제 재저장"하도록 단순화.
-    // (단일 로그인 차단 + 폴링 비활성화 정책 하에서는 실제 충돌이 거의 없음.
-    //  드물게 네트워크 끊김 등으로 발생한 stale-version 응답에서도 로컬 우선.)
-
-    // 1. 서버 최신 _versions만 가져옴 (다음 저장의 expectedUpdatedAt 갱신용)
-    const server = await apiFetch('/data-load','POST',{});
-    if(server && server._versions){
-      Object.assign(_serverVersions, server._versions);
-    }
-
-    // 2. 충돌 키들의 현재 로컬값을 그대로 다시 저장 (낙관적 잠금 통과)
-    const _localOf = (k) => {
-      switch(k){
-        case 'emps': return Array.isArray(EMPS) ? EMPS : [];
-        case 'rec':  return REC || {};
-        case 'tbk':  return TBK || {};
-        case 'bonus':return BONUS_REC || {};
-        case 'allow':return ALLOWANCE_REC || {};
-        case 'tax':  return TAX_REC || {};
-        case 'pol':  return POL || {};
-        case 'bk':   return Array.isArray(DEF_BK) ? DEF_BK : [];
-        case 'safety': return (typeof SAFETY_REC!=='undefined') ? SAFETY_REC : {};
-        case 'leave_overrides': return (typeof leaveOverrides!=='undefined') ? leaveOverrides : {};
-        case 'leave_settings':  return (typeof leaveSettings!=='undefined') ? leaveSettings : {};
-        case 'pol_snapshots':   return (typeof POL_SNAPSHOTS!=='undefined') ? POL_SNAPSHOTS : {};
-        case 'pay_snapshots':   return (typeof PAY_SNAPSHOTS!=='undefined') ? PAY_SNAPSHOTS : {};
-        case 'bk_snapshots':    return (typeof BK_SNAPSHOTS!=='undefined') ? BK_SNAPSHOTS : {};
-        default: return undefined;
+    const sizeDropKeys = [];
+    conflicts.forEach(c => {
+      if(c && c.key){
+        if(c.actual) _serverVersions[c.key] = c.actual; // 서버 최신 버전을 클라에 반영
+        if(c.reason === 'size-drop-blocked') sizeDropKeys.push(c.key);
       }
-    };
-    const resaveItems = [];
-    for(const c of conflicts){
-      const v = _localOf(c.key);
-      if(v !== undefined) resaveItems.push({ key: c.key, value: v });
+    });
+    // 다음 사용자 액션 시 자연스러운 saveLS 디바운스로 재시도됨 — 여기서 즉시 재호출 안 함.
+    // 단, 사용자가 지금 입력 중이지 않으면 한 번 트리거해서 빠른 동기화.
+    if(!_isUserInputActive() && typeof saveLS === 'function'){
+      try { saveLS(); } catch {}
     }
-
-    if(resaveItems.length){
-      const attachVer = it => ({...it, expectedUpdatedAt: _serverVersions[it.key] || null});
-      try {
-        const resp = await apiFetch('/data-save','POST',{items: resaveItems.map(attachVer)});
-        if(resp && resp.versions) Object.assign(_serverVersions, resp.versions);
-      } catch(e){ console.warn('강제 재저장 실패:', e); }
+    if(sizeDropKeys.length && typeof showSyncToast==='function'){
+      showSyncToast('⚠️ 데이터 크기 급감 차단: '+sizeDropKeys.join(', ')+'\n새로고침 권장 (서버 보호)','warn',6000);
     }
-
-    // 3. 스냅샷 갱신
-    if(typeof _takeSyncedSnapshot==='function') _takeSyncedSnapshot();
-    console.log('🔄 충돌 강제 재저장 완료:', conflicts.map(c=>c.key));
   } catch(e) {
-    console.warn('충돌 강제 재저장 실패:', e);
+    console.warn('충돌 처리 실패:', e);
   } finally {
     _conflictHandling = false;
   }
