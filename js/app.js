@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-06-3';
+const CLIENT_BUILD = '2026-05-06-4';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -3250,6 +3250,20 @@ function fastSearchPayroll(){
 }
 
 function renderPayroll(){
+  // 🛡️ 입력 보호: 사용자가 카드/스프레드시트 입력칸에 타이핑 중이면 재렌더 미룬다.
+  // 이전엔 onblur의 setTimeout(renderPayroll, 500)이 다른 칸을 채우는 도중 트리거되어
+  // 입력 중인 input이 새로 그려지며 입력값이 화면에서 사라지는 사고 발생.
+  // 입력칸이 빠질 때까지 1초 뒤 다시 시도. (활성 input이 사라지면 자연스럽게 진행)
+  const _ae = document.activeElement;
+  if(_ae && _ae.tagName === 'INPUT' && (
+       (_ae.classList && _ae.classList.contains('pay-card-inp')) ||
+       _ae.dataset?.xlInp === '1' ||
+       _ae.dataset?.field === 'bonus' ||
+       _ae.dataset?.tax)){
+    clearTimeout(window._cardRefT);
+    window._cardRefT = setTimeout(()=>renderPayroll(), 1000);
+    return;
+  }
   // 과거 달 조회 시 그 달 정책 스냅샷 사용
   const _origPOL = POL;
   const _monthPOL = (typeof getPolForMonth==='function') ? getPolForMonth(pY, pM) : POL;
