@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-06-7';
+const CLIENT_BUILD = '2026-05-06-8';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -11338,10 +11338,7 @@ async function handleConflicts(conflicts){
       }
     });
     // 다음 사용자 액션 시 자연스러운 saveLS 디바운스로 재시도됨 — 여기서 즉시 재호출 안 함.
-    // 단, 사용자가 지금 입력 중이지 않으면 한 번 트리거해서 빠른 동기화.
-    if(!_isUserInputActive() && typeof saveLS === 'function'){
-      try { saveLS(); } catch {}
-    }
+    // (옛 코드가 즉시 saveLS 재호출 → 또 conflicts → handleConflicts 재진입 → 무한 루프 발생)
     if(sizeDropKeys.length && typeof showSyncToast==='function'){
       showSyncToast('⚠️ 데이터 크기 급감 차단: '+sizeDropKeys.join(', ')+'\n새로고침 권장 (서버 보호)','warn',6000);
     }
