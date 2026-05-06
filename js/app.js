@@ -12047,7 +12047,11 @@ function fillNormalAttend(empIds){
     if(!REC[k])REC[k]={empId:id,start:'',end:'',absent:false,annual:false,note:'',outTimes:[]};
     REC[k].start=emp.workStart;REC[k].end=emp.workEnd;
     REC[k].absent=false;REC[k].annual=false;
-    if(emp.workBks && emp.workBks.length > 0){
+    // 근무형태가 등록된 직원은 workBks를 그대로 신뢰:
+    //   - 비어있으면 customBkList=[] → 휴게시간 공제 없음 (실근무시간 그대로)
+    //   - 항목이 있으면 그대로 customBkList에 적용
+    // workBks가 undefined인 레거시 데이터에서만 DEF_BK로 폴백
+    if(Array.isArray(emp.workBks)){
       REC[k].customBk = true;
       REC[k].customBkList = emp.workBks.map(b=>({start:b.start||b.s, end:b.end||b.e}));
     }
