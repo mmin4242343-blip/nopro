@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-06-1';
+const CLIENT_BUILD = '2026-05-06-2';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -6794,6 +6794,8 @@ function exportExcel(){
   }
 
   // 3개 시트 — 화면 필터와 동일: 포괄임금제 시트는 monthly + pohal 둘 다 포함
+  // ⚠️ refDate를 반드시 그 달 1일로 전달. 안 넘기면 applyCommonFilter가 오늘 기준으로 동작 →
+  //    과거월 엑셀에서 그 달에 재직했던 퇴사자가 누락됨 (카드/XL뷰와 결과 어긋남).
   const getEmps = mode => applyCommonFilter(EMPS.filter(e=>{
     const ep = e.payMode || 'fixed';
     if(mode==='monthly'){ if(ep!=='monthly' && ep!=='pohal') return false; }
@@ -6801,7 +6803,7 @@ function exportExcel(){
     if(e.join&&parseEmpDate(e.join)>new Date(pY,pM,0)) return false;
     if(e.leave&&parseEmpDate(e.leave)<new Date(pY,pM-1,1)) return false;
     return true;
-  }), 'payroll');
+  }), 'payroll', new Date(pY,pM-1,1));
 
   writePaySheet(getEmps('fixed'), '통상임금제', false);
   writePaySheet(getEmps('hourly'), '시급제', false);
