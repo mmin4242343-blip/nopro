@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-06-4';
+const CLIENT_BUILD = '2026-05-06-5';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -2823,7 +2823,30 @@ function setMvFilter(f){
   });
   renderMonthly();
 }
+// 🛡️ 사용자 입력 보호 헬퍼 — 활성 input이 사용자 입력칸이면 true.
+// 입력 중 화면 재렌더 시 input이 reset되어 입력값이 화면에서 휘발되는 사고 방지용.
+// 출퇴근 시간 입력(time-input/data-eid), 급여 카드(pay-card-inp), XL뷰(data-xl-inp),
+// 상여금(data-field=bonus), 세금(data-tax), 직원관리 등 모든 사용자 데이터 input 포함.
+function _isUserInputActive(){
+  const ae = document.activeElement;
+  if(!ae) return false;
+  const tag = ae.tagName;
+  if(tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') return false;
+  // textarea/select는 입력 중이면 무조건 보호
+  if(tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  const t = (ae.type || 'text').toLowerCase();
+  // 검색·필터·체크·라디오 등은 데이터 입력칸 아님 → 보호 대상에서 제외
+  if(t === 'checkbox' || t === 'radio' || t === 'button' || t === 'submit' || t === 'search') return false;
+  return true;
+}
+
 function renderMonthly(){
+  // 🛡️ 입력 보호
+  if(_isUserInputActive()){
+    clearTimeout(window._monthlyRefT);
+    window._monthlyRefT = setTimeout(()=>renderMonthly(), 1000);
+    return;
+  }
   // 과거 달 조회 시 그 달 정책 스냅샷 사용 (renderCal/renderOv 내부 calcSession에 전파)
   const _origPOL = POL;
   const _monthPOL = (typeof getPolForMonth==='function') ? getPolForMonth(vY, vM) : POL;
@@ -3250,16 +3273,8 @@ function fastSearchPayroll(){
 }
 
 function renderPayroll(){
-  // 🛡️ 입력 보호: 사용자가 카드/스프레드시트 입력칸에 타이핑 중이면 재렌더 미룬다.
-  // 이전엔 onblur의 setTimeout(renderPayroll, 500)이 다른 칸을 채우는 도중 트리거되어
-  // 입력 중인 input이 새로 그려지며 입력값이 화면에서 사라지는 사고 발생.
-  // 입력칸이 빠질 때까지 1초 뒤 다시 시도. (활성 input이 사라지면 자연스럽게 진행)
-  const _ae = document.activeElement;
-  if(_ae && _ae.tagName === 'INPUT' && (
-       (_ae.classList && _ae.classList.contains('pay-card-inp')) ||
-       _ae.dataset?.xlInp === '1' ||
-       _ae.dataset?.field === 'bonus' ||
-       _ae.dataset?.tax)){
+  // 🛡️ 입력 보호 — 입력칸에 타이핑 중이면 재렌더 미룸 (입력값 휘발 방지)
+  if(_isUserInputActive()){
     clearTimeout(window._cardRefT);
     window._cardRefT = setTimeout(()=>renderPayroll(), 1000);
     return;
@@ -3380,6 +3395,12 @@ function renderPayroll(){
 // 청크 렌더 race 방지용 토큰 — 동일 함수 재호출 시 진행 중인 RAF 청크 중단
 let _xlRenderToken = 0;
 function renderXlPreview(){
+  // 🛡️ 입력 보호
+  if(_isUserInputActive()){
+    if(_xlRefreshTimer) clearTimeout(_xlRefreshTimer);
+    _xlRefreshTimer = setTimeout(()=>renderXlPreview(), 1000);
+    return;
+  }
   const allowList = POL.allowances.filter(a => !a.isDeduct);
   const deductAllow = POL.allowances.filter(a => a.isDeduct===true);
   const sot = POL.sot || 209;
@@ -11303,155 +11324,67 @@ async function handleConflicts(conflicts){
   if(_conflictHandling) return; // 동시 충돌 진행 중이면 패스 (다음 디바운스에서 자연 처리)
   _conflictHandling = true;
   try {
-    console.log('🔄 자동 머지 시작:', conflicts.map(c=>c.key));
+    console.log('🔄 충돌 → 사용자 로컬값 강제 재저장:', conflicts.map(c=>c.key));
 
     const _sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
     if(!_sess || !_sess.companyId) return;
 
-    // 1. 서버 최신본 fetch (다른 디바이스 변경분 + 새 _versions)
+    // 🛡️ 단일 사용자 정책 (2026-05-06): 충돌 머지 로직 폐기.
+    // 사용자 입력값을 옛 서버값과 머지하다가 휘발될 위험을 차단하기 위해
+    // "사용자 로컬값을 무조건 그대로 강제 재저장"하도록 단순화.
+    // (단일 로그인 차단 + 폴링 비활성화 정책 하에서는 실제 충돌이 거의 없음.
+    //  드물게 네트워크 끊김 등으로 발생한 stale-version 응답에서도 로컬 우선.)
+
+    // 1. 서버 최신 _versions만 가져옴 (다음 저장의 expectedUpdatedAt 갱신용)
     const server = await apiFetch('/data-load','POST',{});
-    if(!server) return;
-
-    const snap = _syncedSnapshot || {};
-    const resaveItems = [];
-
-    // 2. 충돌 키 각각 _mergeByField로 머지 — 로컬 변경분 절대 보존, 서버 변경분 흡수
-    //    (배열 데이터인 emps는 id 기반 맵으로 변환 후 머지)
-    const _arrToMap = arr => Object.fromEntries((arr||[]).map(x => [String(x.id), x]));
-    const _mapToArr = m => Object.values(m);
-    const _parseSnap = s => {
-      if(s==null) return {};
-      try { return typeof s==='string' ? JSON.parse(s) : s; } catch(e){ return {}; }
-    };
-
-    for(const c of conflicts){
-      const k = c.key;
-      let merged;
-
-      if(k === 'emps'){
-        // 🔒 EMPS는 충돌 머지에서 항상 사용자 우선 — 다른 디바이스 변경이 사용자 EMPS를 절대 못 덮음.
-        // 다른 디바이스의 직원 정보 변경(이름/시급 등)은 사용자가 F5할 때 sbLoadAll로 받음.
-        // 편집 모드 중이면 추가로 더 강하게 보호 (재저장 시도도 안 함).
-        if(_empEditMode){
-          console.warn('🔒 EMPS 충돌 머지 스킵 — 편집 모드 중. 편집 종료 후 사용자 변경 우선 저장 예정');
-        } else {
-          console.warn('🔒 EMPS 충돌 머지 스킵 — 사용자 변경 우선 정책 (다음 saveLS에서 재시도)');
-        }
-        // 사용자 EMPS는 그대로 유지, merged를 안 만들어서 resaveItems에 안 들어가도록
-        // (이전 _mergeEmpsArrayByField 머지 로직 제거 — 사용자 EMPS 절대 안 덮음)
-        // 만약 직원 정보 동기화가 필요하면 사용자가 F5 → sbLoadAll로 처리.
-        continue;
-      } else if(k === 'rec'){
-        merged = _mergeByField(REC, server.rec||{}, _parseSnap(snap.rec));
-        REC = merged;
-        localStorage.setItem('npm5_rec', JSON.stringify(REC));
-      } else if(k === 'tbk'){
-        merged = _mergeByField(TBK, server.tbk||{}, _parseSnap(snap.tbk));
-        TBK = merged;
-        localStorage.setItem('npm5_tbk', JSON.stringify(TBK));
-      } else if(k === 'bonus'){
-        merged = _mergeByField(BONUS_REC, server.bonus||{}, _parseSnap(snap.bonus));
-        BONUS_REC = merged;
-        localStorage.setItem('npm5_bonus', JSON.stringify(BONUS_REC));
-      } else if(k === 'allow'){
-        merged = _mergeByField(ALLOWANCE_REC, server.allow||{}, _parseSnap(snap.allow));
-        ALLOWANCE_REC = merged;
-        localStorage.setItem('npm5_allow', JSON.stringify(ALLOWANCE_REC));
-      } else if(k === 'safety'){
-        merged = _mergeByField(typeof SAFETY_REC!=='undefined'?SAFETY_REC:{}, server.safety||{}, _parseSnap(snap.safety));
-        if(typeof SAFETY_REC!=='undefined') SAFETY_REC = merged;
-        localStorage.setItem('npm5_safety', JSON.stringify(merged));
-      } else if(k === 'leave_overrides'){
-        let lo = {}; try { lo = JSON.parse(localStorage.getItem('npm5_leave_overrides')||'{}'); } catch(e){}
-        merged = _mergeByField(lo, server.leave_overrides||{}, _parseSnap(snap.leave_overrides));
-        if(typeof leaveOverrides!=='undefined') leaveOverrides = merged;
-        localStorage.setItem('npm5_leave_overrides', JSON.stringify(merged));
-      } else if(k === 'bk'){
-        // 🛡️ 휴게시간 — id 기반 배열 머지로 사용자 변경 보존 (덮어쓰기 X)
-        let snapArr = [];
-        try { snapArr = (typeof snap.bk === 'string') ? JSON.parse(snap.bk) : (snap.bk || []); } catch(e){}
-        merged = _mergeEmpsArrayByField(DEF_BK || [], server.bk || [], snapArr);
-        if(typeof DEF_BK!=='undefined') DEF_BK = merged;
-        try { localStorage.setItem('npm5_bk', JSON.stringify(merged)); } catch(e){}
-      } else if(k === 'pol'){
-        // 🛡️ 급여설정 — 필드 단위 머지 (사용자 수정 필드 우선 보존)
-        merged = _mergeByField(POL || {}, server.pol || {}, _parseSnap(snap.pol));
-        if(typeof POL!=='undefined' && typeof DEF_POL!=='undefined') POL = Object.assign({...DEF_POL}, merged);
-        try { localStorage.setItem('npm5_pol', JSON.stringify(merged)); } catch(e){}
-      } else if(k === 'tax'){
-        // 🛡️ 세금 — 필드 단위 머지
-        merged = _mergeByField(TAX_REC || {}, server.tax || {}, _parseSnap(snap.tax));
-        if(typeof TAX_REC!=='undefined') TAX_REC = merged;
-        try { localStorage.setItem('npm5_tax', JSON.stringify(merged)); } catch(e){}
-      } else {
-        // leave_settings/folders/*_snapshots — 단순 설정류는 서버값 채택
-        // (작고 동시 편집 가능성 낮음)
-        if(k in server){
-          merged = server[k];
-          const lsKey = 'npm5_'+k;
-          try { localStorage.setItem(lsKey, JSON.stringify(merged)); } catch(e){}
-          if(k === 'pol_snapshots' && typeof POL_SNAPSHOTS!=='undefined') POL_SNAPSHOTS = merged;
-          else if(k === 'pay_snapshots' && typeof PAY_SNAPSHOTS!=='undefined') PAY_SNAPSHOTS = merged;
-          else if(k === 'bk_snapshots' && typeof BK_SNAPSHOTS!=='undefined') BK_SNAPSHOTS = merged;
-        }
-      }
-
-      // 충돌 해소된 키의 버전을 서버 최신값으로 갱신 (재저장이 통과하도록)
-      if(server._versions && server._versions[k]){
-        _serverVersions[k] = server._versions[k];
-      }
-      if(merged !== undefined) resaveItems.push({key:k, value:merged});
+    if(server && server._versions){
+      Object.assign(_serverVersions, server._versions);
     }
 
-    // 3. 머지된 결과를 다시 저장 (새 expectedUpdatedAt으로)
+    // 2. 충돌 키들의 현재 로컬값을 그대로 다시 저장 (낙관적 잠금 통과)
+    const _localOf = (k) => {
+      switch(k){
+        case 'emps': return Array.isArray(EMPS) ? EMPS : [];
+        case 'rec':  return REC || {};
+        case 'tbk':  return TBK || {};
+        case 'bonus':return BONUS_REC || {};
+        case 'allow':return ALLOWANCE_REC || {};
+        case 'tax':  return TAX_REC || {};
+        case 'pol':  return POL || {};
+        case 'bk':   return Array.isArray(DEF_BK) ? DEF_BK : [];
+        case 'safety': return (typeof SAFETY_REC!=='undefined') ? SAFETY_REC : {};
+        case 'leave_overrides': return (typeof leaveOverrides!=='undefined') ? leaveOverrides : {};
+        case 'leave_settings':  return (typeof leaveSettings!=='undefined') ? leaveSettings : {};
+        case 'pol_snapshots':   return (typeof POL_SNAPSHOTS!=='undefined') ? POL_SNAPSHOTS : {};
+        case 'pay_snapshots':   return (typeof PAY_SNAPSHOTS!=='undefined') ? PAY_SNAPSHOTS : {};
+        case 'bk_snapshots':    return (typeof BK_SNAPSHOTS!=='undefined') ? BK_SNAPSHOTS : {};
+        default: return undefined;
+      }
+    };
+    const resaveItems = [];
+    for(const c of conflicts){
+      const v = _localOf(c.key);
+      if(v !== undefined) resaveItems.push({ key: c.key, value: v });
+    }
+
     if(resaveItems.length){
       const attachVer = it => ({...it, expectedUpdatedAt: _serverVersions[it.key] || null});
       try {
         const resp = await apiFetch('/data-save','POST',{items: resaveItems.map(attachVer)});
-        if(resp){
-          if(resp.versions) Object.assign(_serverVersions, resp.versions);
-          if(resp.conflicts && resp.conflicts.length){
-            // 재머지 후에도 충돌 — 매우 드문 케이스, 재귀 방지 위해 다음 사용자 동작에 맡김
-            console.warn('재머지 후 잔여 충돌 — 다음 저장에서 재시도:', resp.conflicts);
-          }
-        }
-      } catch(e){ console.warn('자동 머지 후 재저장 실패:', e); }
+        if(resp && resp.versions) Object.assign(_serverVersions, resp.versions);
+      } catch(e){ console.warn('강제 재저장 실패:', e); }
     }
 
-    // 4. 스냅샷 갱신 — 다음 폴링/저장의 기준선이 됨
+    // 3. 스냅샷 갱신
     if(typeof _takeSyncedSnapshot==='function') _takeSyncedSnapshot();
-
-    // 5. 입력 중인 input/textarea가 있으면 화면 재렌더 생략 (타이핑 보존)
-    //    아니면 활성 페이지만 살짝 리렌더
-    const ae = document.activeElement;
-    const editing = ae && (ae.tagName==='INPUT' || ae.tagName==='TEXTAREA' || ae.tagName==='SELECT');
-    if(!editing){
-      const active = document.querySelector('.pg.on');
-      if(active){
-        const p = active.id.replace('pg-','');
-        if(p==='daily' && typeof renderTable==='function') renderTable();
-        else if(p==='monthly' && typeof renderMonthly==='function') renderMonthly();
-        else if(p==='payroll' && typeof renderPayroll==='function') renderPayroll();
-        else if(p==='emps' && typeof renderEmps==='function') renderEmps();
-        else if(p==='leave' && typeof renderLeave==='function') renderLeave();
-        else if(p==='company' && typeof renderCompany==='function') renderCompany();
-      }
-    }
-
-    const keyLabels = {emps:'직원', rec:'출퇴근/연차', tbk:'임시휴게', bonus:'상여금', allow:'수당',
-      tax:'세금', safety:'안전교육', bk:'기본휴게', pol:'급여설정', leave_overrides:'연차',
-      leave_settings:'연차설정', folders:'폴더'};
-    const keyList = conflicts.map(c => keyLabels[c.key] || c.key).join(', ');
-    console.log('🔄 자동 머지 완료:', keyList);
-    // 토스트 제거 — 자동 머지는 백그라운드에서 안전하게 처리되므로 사용자 알림 불필요.
-    // 진단용 콘솔 로그는 유지 (F12에서 확인 가능).
-    // (이전: '🔄 다른 디바이스 변경 감지 — 자동 합쳐짐' 토스트가 자주 떠서 사용자 혼란 → 제거)
+    console.log('🔄 충돌 강제 재저장 완료:', conflicts.map(c=>c.key));
   } catch(e) {
-    console.warn('자동 머지 실패:', e);
+    console.warn('충돌 강제 재저장 실패:', e);
   } finally {
     _conflictHandling = false;
   }
 }
+
 
 function _deepCopy(x){ try { return JSON.parse(JSON.stringify(x||{})); } catch(e){ return {}; } }
 
