@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-07-7';
+const CLIENT_BUILD = '2026-05-07-8';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1509,9 +1509,10 @@ function monthSummary(eid,y,m){
     // 월급제·시급제는 시간기준 공제 없음
     // 시급제: 실근무시간 기준 계산이라 별도 공제 불필요
     // 반차일은 4시간(240분) 인정 → 기준 시간에서 차감 (반차 4h + 출근 c.work ≥ 8h이면 공제 없음)
+    // 임계값 0: 1분 부족도 다 누적 (소정시간 미달은 모두 공제)
     const _adjStdM = dailyStd*60 - (rec.halfAnnual ? 240 : 0);
     if(empPayMode!=='monthly' && empPayMode!=='hourly' && POL.dedMode==='hour' && c.work<_adjStdM && !autoH){
-      const sh=_adjStdM-c.work; if(sh>10){deduction+=r10(rate*m2h(sh)); dedShortMins+=sh;}
+      const sh=_adjStdM-c.work; if(sh>0){deduction+=r10(rate*m2h(sh)); dedShortMins+=sh;}
     }
   }
   // ── 누적 시간(hours) × 시급 → r10 한 번 (엑셀 방식) ──
@@ -2925,6 +2926,7 @@ function renderMonthly(){
 // 일별 공제시간 (분 단위) 계산 — monthSummary의 dedShortMins 누적 조건과 100% 동일
 // 모든 표시(일별 chip / 엑셀 / 캘린더 카드)가 같은 함수를 쓰도록 통일
 // isHalf: 반차일은 4h(240분) 인정 → 기준 시간에서 차감
+// 임계값 0: 1분 부족도 다 잡음 (소정시간 미달은 모두 공제 표시)
 function _nfDedMin(c, autoH, mode, emp, isHalf){
   if(!c) return 0;
   if(mode==='monthly' || mode==='hourly') return 0;
@@ -2934,7 +2936,7 @@ function _nfDedMin(c, autoH, mode, emp, isHalf){
   const dailyStdH = (mode==='fixed' || mode==='monthly') ? 8 : sot/4.345/5;
   const adjStdM = dailyStdH*60 - (isHalf ? 240 : 0);
   const dedShMin = adjStdM - c.work;
-  return dedShMin > 10 ? dedShMin : 0;
+  return dedShMin > 0 ? dedShMin : 0;
 }
 
 // 공제시간 chip (캘린더 일별 셀용) — _nfDedMin 결과를 HTML로 래핑
