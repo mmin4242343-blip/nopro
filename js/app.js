@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-07-14';
+const CLIENT_BUILD = '2026-05-07-15';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -10810,29 +10810,36 @@ function exportMonthlyExcel(){
 
       const rec=_recForAutoH;
       if(rec){
-        const bks=getActiveBk(vY,vM,d,emp);
-        const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
-        const c2=rec.start&&rec.end?calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM)):null;
-        const note=rec.absent?'결근':rec.annual?'연차':rec.halfAnnual?'반차':'';
-        const noteBg=rec.absent?C.rose3:rec.annual?C.green3:rec.halfAnnual?C.blue3:rowBg;
-        const noteFg=rec.absent?C.rose:rec.annual?C.green:rec.halfAnnual?C.blue:C.gray;
-        const bkH = c2 && c2.bkMins ? +m2h(c2.bkMins).toFixed(2) : 0;
-        if(c2 && c2.bkMins) totalBk += c2.bkMins;
-        // 일별 공제(h) — _nfDedMin과 동일 로직 (반차일은 4h 인정 차감)
-        const _dedMin = c2 ? _nfDedMin(c2, autoH, getEmpPayMode(emp), emp, !!rec.halfAnnual) : 0;
-        const _dedH = _dedMin > 0 ? +m2h(_dedMin).toFixed(2) : 0;
-        totalDedH += _dedH;  // 일별 표시값 그대로 누적 → 합계와 100% 일치
+        // 연차일: 시간 컬럼 모두 비우고 '연차' 표시만 (출퇴근 기록 무시)
+        if(rec.annual){
+          [2,3,4,5,6,7,8,9].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty(rowBg)));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),'연차',S.accent(C.green,C.green3,true));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
+        } else {
+          const bks=getActiveBk(vY,vM,d,emp);
+          const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
+          const c2=rec.start&&rec.end?calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM)):null;
+          const note=rec.absent?'결근':rec.halfAnnual?'반차':'';
+          const noteBg=rec.absent?C.rose3:rec.halfAnnual?C.blue3:rowBg;
+          const noteFg=rec.absent?C.rose:rec.halfAnnual?C.blue:C.gray;
+          const bkH = c2 && c2.bkMins ? +m2h(c2.bkMins).toFixed(2) : 0;
+          if(c2 && c2.bkMins) totalBk += c2.bkMins;
+          // 일별 공제(h) — _nfDedMin과 동일 로직 (반차일은 4h 인정 차감)
+          const _dedMin = c2 ? _nfDedMin(c2, autoH, getEmpPayMode(emp), emp, !!rec.halfAnnual) : 0;
+          const _dedH = _dedMin > 0 ? +m2h(_dedMin).toFixed(2) : 0;
+          totalDedH += _dedH;  // 일별 표시값 그대로 누적 → 합계와 100% 일치
 
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),rec.start||'',S.cell(C.navy,rec.start?C.teal4:rowBg,!!rec.start,'center'));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),rec.end||'',S.cell(C.navy,rec.end?C.teal4:rowBg,!!rec.end,'center'));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),bkH,S.numDec('2D6A4F',bkH>0?'E8F5E9':rowBg,bkH>0));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),c2?+m2h(c2.work).toFixed(2):0,S.numDec(c2?.work>=480?C.green:C.navy,c2?.work>=480?C.green4:rowBg,c2?.work>=480));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),_dedH,S.numDec(C.rose, _dedH>0?C.rose3:rowBg, _dedH>0));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),c2&&c2.nightM>0?+m2h(c2.nightM).toFixed(2):0,S.numDec(C.purple2,c2?.nightM>0?C.purple4:rowBg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),c2&&c2.ot>0?+m2h(c2.ot).toFixed(2):0,S.numDec(C.blue,c2?.ot>0?C.blue4:rowBg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),autoH&&c2?+m2h(c2.work).toFixed(2):0,S.numDec(C.orange2,autoH&&c2?C.orange4:rowBg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),note,S.accent(noteFg,noteBg,!!note));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),rec.start||'',S.cell(C.navy,rec.start?C.teal4:rowBg,!!rec.start,'center'));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),rec.end||'',S.cell(C.navy,rec.end?C.teal4:rowBg,!!rec.end,'center'));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),bkH,S.numDec('2D6A4F',bkH>0?'E8F5E9':rowBg,bkH>0));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),c2?+m2h(c2.work).toFixed(2):0,S.numDec(c2?.work>=480?C.green:C.navy,c2?.work>=480?C.green4:rowBg,c2?.work>=480));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),_dedH,S.numDec(C.rose, _dedH>0?C.rose3:rowBg, _dedH>0));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),c2&&c2.nightM>0?+m2h(c2.nightM).toFixed(2):0,S.numDec(C.purple2,c2?.nightM>0?C.purple4:rowBg));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),c2&&c2.ot>0?+m2h(c2.ot).toFixed(2):0,S.numDec(C.blue,c2?.ot>0?C.blue4:rowBg));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),autoH&&c2?+m2h(c2.work).toFixed(2):0,S.numDec(C.orange2,autoH&&c2?C.orange4:rowBg));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),note,S.accent(noteFg,noteBg,!!note));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
+        }
       } else {
         [2,3,4,5,6,7,8,9,10,11].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty(rowBg)));
       }
@@ -10957,28 +10964,35 @@ function exportMonthlyExcelOne(empId){
     }
     const rec=_recForAutoH2;
     if(rec){
-      const bks=getActiveBk(vY,vM,d,emp);
-      const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
-      const c2=rec.start&&rec.end?calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM)):null;
-      const note=rec.absent?'결근':rec.annual?'연차':rec.halfAnnual?'반차':'';
-      const noteBg=rec.absent?C.rose3:rec.annual?C.green3:rec.halfAnnual?C.blue3:rowBg;
-      const noteFg=rec.absent?C.rose:rec.annual?C.green:rec.halfAnnual?C.blue:C.gray;
-      const bkH = c2 && c2.bkMins ? +m2h(c2.bkMins).toFixed(2) : 0;
-      if(c2 && c2.bkMins) totalBk += c2.bkMins;
-      // 일별 공제(h) — _nfDedMin과 동일 로직 (반차일은 4h 인정 차감)
-      const _dedMin = c2 ? _nfDedMin(c2, autoH, getEmpPayMode(emp), emp, !!rec.halfAnnual) : 0;
-      const _dedH = _dedMin > 0 ? +m2h(_dedMin).toFixed(2) : 0;
-      totalDedH += _dedH;  // 일별 표시값 그대로 누적 → 합계와 100% 일치
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),rec.start||'',S.cell(C.navy,rec.start?C.teal4:rowBg,!!rec.start,'center'));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),rec.end||'',S.cell(C.navy,rec.end?C.teal4:rowBg,!!rec.end,'center'));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),bkH,S.numDec('2D6A4F',bkH>0?'E8F5E9':rowBg,bkH>0));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),c2?+m2h(c2.work).toFixed(2):0,S.numDec(c2?.work>=480?C.green:C.navy,c2?.work>=480?C.green4:rowBg,c2?.work>=480));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),_dedH,S.numDec(C.rose, _dedH>0?C.rose3:rowBg, _dedH>0));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),c2&&c2.nightM>0?+m2h(c2.nightM).toFixed(2):0,S.numDec(C.purple2,c2?.nightM>0?C.purple4:rowBg));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),c2&&c2.ot>0?+m2h(c2.ot).toFixed(2):0,S.numDec(C.blue,c2?.ot>0?C.blue4:rowBg));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),autoH&&c2?+m2h(c2.work).toFixed(2):0,S.numDec(C.orange2,autoH&&c2?C.orange4:rowBg));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),note,S.accent(noteFg,noteBg,!!note));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
+      // 연차일: 시간 컬럼 모두 비우고 '연차' 표시만
+      if(rec.annual){
+        [2,3,4,5,6,7,8,9].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty(rowBg)));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),'연차',S.accent(C.green,C.green3,true));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
+      } else {
+        const bks=getActiveBk(vY,vM,d,emp);
+        const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
+        const c2=rec.start&&rec.end?calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM)):null;
+        const note=rec.absent?'결근':rec.halfAnnual?'반차':'';
+        const noteBg=rec.absent?C.rose3:rec.halfAnnual?C.blue3:rowBg;
+        const noteFg=rec.absent?C.rose:rec.halfAnnual?C.blue:C.gray;
+        const bkH = c2 && c2.bkMins ? +m2h(c2.bkMins).toFixed(2) : 0;
+        if(c2 && c2.bkMins) totalBk += c2.bkMins;
+        // 일별 공제(h) — _nfDedMin과 동일 로직 (반차일은 4h 인정 차감)
+        const _dedMin = c2 ? _nfDedMin(c2, autoH, getEmpPayMode(emp), emp, !!rec.halfAnnual) : 0;
+        const _dedH = _dedMin > 0 ? +m2h(_dedMin).toFixed(2) : 0;
+        totalDedH += _dedH;  // 일별 표시값 그대로 누적 → 합계와 100% 일치
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),rec.start||'',S.cell(C.navy,rec.start?C.teal4:rowBg,!!rec.start,'center'));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),rec.end||'',S.cell(C.navy,rec.end?C.teal4:rowBg,!!rec.end,'center'));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),bkH,S.numDec('2D6A4F',bkH>0?'E8F5E9':rowBg,bkH>0));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),c2?+m2h(c2.work).toFixed(2):0,S.numDec(c2?.work>=480?C.green:C.navy,c2?.work>=480?C.green4:rowBg,c2?.work>=480));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),_dedH,S.numDec(C.rose, _dedH>0?C.rose3:rowBg, _dedH>0));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),c2&&c2.nightM>0?+m2h(c2.nightM).toFixed(2):0,S.numDec(C.purple2,c2?.nightM>0?C.purple4:rowBg));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),c2&&c2.ot>0?+m2h(c2.ot).toFixed(2):0,S.numDec(C.blue,c2?.ot>0?C.blue4:rowBg));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),autoH&&c2?+m2h(c2.work).toFixed(2):0,S.numDec(C.orange2,autoH&&c2?C.orange4:rowBg));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),note,S.accent(noteFg,noteBg,!!note));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
+      }
     } else {
       [2,3,4,5,6,7,8,9,10,11].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty(rowBg)));
     }
