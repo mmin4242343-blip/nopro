@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-06-9';
+const CLIENT_BUILD = '2026-05-07-1';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -5817,10 +5817,234 @@ function loadStorageImages(container) {
 }
 
 // ══════════════════════════════════════
-// 📁 폴더 관리
+// 📁 폴더 관리 — 표준 27종 양식 + 회사 양식 + 내 폴더
 // ══════════════════════════════════════
 let FOLDERS = JSON.parse(localStorage.getItem('npm5_folders')||'[]');
 // 구조: [{id, name, parentId:null|id, files:[{name,storagePath,size,type,date}], open:bool}]
+//   ⚠️ 새 디자인은 단일 단계만 사용 (parentId 항상 null). 기존 하위폴더는 사장됨.
+
+// 회사 정보 (양식 작성 시 자동 사용 — 노프로 회원가입 정보와 별개)
+let COMPANY_INFO = JSON.parse(localStorage.getItem('npm5_company_info')||'{}');
+function saveCompanyInfo(){
+  try{ localStorage.setItem('npm5_company_info', JSON.stringify(COMPANY_INFO)); }catch(e){}
+  if(typeof saveLS==='function') saveLS();
+}
+
+// 회사 자체 양식 메타데이터 (실제 파일은 Supabase Storage)
+let CUSTOM_DOCS = JSON.parse(localStorage.getItem('npm5_custom_docs')||'[]');
+function saveCustomDocs(){
+  try{ localStorage.setItem('npm5_custom_docs', JSON.stringify(CUSTOM_DOCS)); }catch(e){}
+  if(typeof saveLS==='function') saveLS();
+}
+
+// 작성된 양식 (서버 보관 — Phase 2에서 활용)
+let SAVED_FORMS = JSON.parse(localStorage.getItem('npm5_saved_forms')||'[]');
+function saveSavedForms(){
+  try{ localStorage.setItem('npm5_saved_forms', JSON.stringify(SAVED_FORMS)); }catch(e){}
+  if(typeof saveLS==='function') saveLS();
+}
+
+// 폴더탭 상태
+const folderState = {
+  view: 'home',         // 'home' | 'userFolder'
+  docTab: 'templates',  // 'templates' | 'custom'
+  folderId: null,
+  cat: 'all',
+  search: '',
+  companyExpanded: false
+};
+
+// 카테고리 정의
+const NF_CATEGORIES = [
+  { key:'all',        name:'전체',     emoji:'📂' },
+  { key:'legal',      name:'근로계약', emoji:'📜' },
+  { key:'payroll',    name:'임금·급여', emoji:'💰' },
+  { key:'leave',      name:'휴가·휴직', emoji:'📅' },
+  { key:'discipline', name:'징계·퇴직', emoji:'📝' },
+  { key:'cert',       name:'증명서',   emoji:'🎓' },
+  { key:'insurance',  name:'4대보험',  emoji:'🏥' },
+  { key:'policy',     name:'회사 규정', emoji:'📕' }
+];
+
+// 표준 27종 양식 (고용노동부 표준)
+const NF_TEMPLATES = [
+  { id:'lc_regular', category:'legal', icon:'📜', iconType:'legal',
+    name:'표준 근로계약서 (정규직)', nameEn:'Standard Employment Contract',
+    desc:'기간의 정함이 없는 정규직. 고용노동부 공식 표준 양식.',
+    tags:[{text:'정부 공식',type:'govt'},{text:'필수',type:'req'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'startDate',label:'근로 시작일',type:'date'},
+      {key:'workTime',label:'근무 시간',type:'text'}] },
+  { id:'lc_fixed', category:'legal', icon:'📜', iconType:'legal',
+    name:'표준 근로계약서 (계약직)', nameEn:'Fixed-term Contract',
+    desc:'기간의 정함이 있는 계약직. 2년 이상 시 무기계약 전환.',
+    tags:[{text:'정부 공식',type:'govt'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'startDate',label:'계약 시작일',type:'date'},
+      {key:'endDate',label:'계약 종료일',type:'date'}] },
+  { id:'lc_minor', category:'legal', icon:'👦', iconType:'legal',
+    name:'연소근로자 근로계약서', nameEn:'Minor Worker Contract',
+    desc:'만 18세 미만 근로자용. 친권자 동의서 포함.',
+    tags:[{text:'정부 공식',type:'govt'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'guardianName',label:'친권자 성명',type:'text'}] },
+  { id:'lc_part', category:'legal', icon:'⏰', iconType:'legal',
+    name:'단시간근로자 근로계약서', nameEn:'Part-time Contract',
+    desc:'주 15시간 미만 또는 통상근로자보다 짧게 근무.',
+    tags:[{text:'정부 공식',type:'govt'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'hourlyWage',label:'시급 (원)',type:'number'}] },
+  { id:'lc_construction', category:'legal', icon:'🏗', iconType:'legal',
+    name:'건설일용근로자 근로계약서', nameEn:'Construction Day Labor',
+    desc:'건설현장 일용직 전용. 근로일별 임금 명시.',
+    tags:[{text:'정부 공식',type:'govt'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'siteName',label:'현장명',type:'text'}] },
+  { id:'lc_foreign', category:'legal', icon:'🌐', iconType:'legal',
+    name:'외국인근로자 근로계약서 (한·영)', nameEn:'Foreign Worker Contract',
+    desc:'E-9, H-2 비자 외국인 근로자. 한국어/영어 병기.',
+    tags:[{text:'정부 공식',type:'govt'},{text:'법정',type:'req'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'nationality',label:'국적',type:'text'},
+      {key:'passportNo',label:'여권번호',type:'text'}] },
+  { id:'lc_foreign_agri', category:'legal', icon:'🌾', iconType:'legal',
+    name:'외국인근로자 근로계약서 (농축어업)', nameEn:'Foreign Worker (Agriculture)',
+    desc:'농업·축산업·어업 분야 외국인. 한·영 병기.',
+    tags:[{text:'정부 공식',type:'govt'},{text:'법정',type:'req'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'industry',label:'업종',type:'select',options:['농업','축산업','어업','임업']}] },
+  { id:'lc_executive', category:'legal', icon:'👔', iconType:'legal',
+    name:'임원 위임계약서', nameEn:'Executive Contract',
+    desc:'이사·감사 등 임원용. 근로기준법 일부 적용 제외.',
+    tags:[],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'title',label:'직위',type:'text'}] },
+  { id:'salary_contract', category:'payroll', icon:'💰', iconType:'payroll',
+    name:'연봉계약서', nameEn:'Annual Salary Contract',
+    desc:'연봉 인상·계약 갱신 시 작성.',
+    tags:[],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'annualSalary',label:'연봉 (원)',type:'number'},
+      {key:'effectiveDate',label:'적용 시작일',type:'date'}] },
+  { id:'payslip', category:'payroll', icon:'📋', iconType:'payroll',
+    name:'임금명세서', nameEn:'Pay Slip',
+    desc:'매월 임금 지급 시 의무 교부 (근기법 §48).',
+    tags:[{text:'필수',type:'req'},{text:'근기법 §48',type:'law'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'payMonth',label:'지급 월',type:'month'}] },
+  { id:'wage_ledger', category:'payroll', icon:'📒', iconType:'payroll',
+    name:'임금대장', nameEn:'Wage Ledger',
+    desc:'전 직원 임금 지급 기록부. 3년 보관 의무.',
+    tags:[{text:'필수',type:'req'},{text:'근기법 §48',type:'law'}],
+    fields:[{key:'year',label:'연도',type:'number'},
+      {key:'month',label:'월',type:'number'}] },
+  { id:'leave_promo_1st', category:'leave', icon:'📅', iconType:'leave',
+    name:'연차 사용 촉진 통지 (1차)', nameEn:'Annual Leave Promotion 1st',
+    desc:'근기법 §61. 사용 만료 6개월 전 통지 의무.',
+    tags:[{text:'법정',type:'req'},{text:'근기법 §61',type:'law'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'totalDays',label:'발생 연차 (일)',type:'number'},
+      {key:'deadlineDate',label:'사용 마감일',type:'date'}] },
+  { id:'leave_promo_2nd', category:'leave', icon:'📆', iconType:'leave',
+    name:'연차 사용 촉진 통지 (2차)', nameEn:'Annual Leave Promotion 2nd',
+    desc:'근기법 §61. 1차 통지 후에도 미사용 시 2차.',
+    tags:[{text:'법정',type:'req'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'designatedDate',label:'회사 지정일',type:'date'}] },
+  { id:'leave_request', category:'leave', icon:'✈️', iconType:'leave',
+    name:'휴가 신청서', nameEn:'Leave Request',
+    desc:'연차·병가·경조사 휴가 신청.',
+    tags:[],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'leaveType',label:'휴가 종류',type:'select',options:['연차','병가','경조사','공가','기타']}] },
+  { id:'parental_leave', category:'leave', icon:'👶', iconType:'leave',
+    name:'육아휴직 신청서', nameEn:'Parental Leave',
+    desc:'남녀고용평등법 §19. 만 8세 이하 자녀.',
+    tags:[{text:'법정',type:'req'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'childName',label:'자녀 성명',type:'text'}] },
+  { id:'maternity_leave', category:'leave', icon:'🤰', iconType:'leave',
+    name:'출산전후휴가 신청서', nameEn:'Maternity Leave',
+    desc:'근기법 §74. 출산 전후 90일 (다태아 120일).',
+    tags:[{text:'법정',type:'req'},{text:'근기법 §74',type:'law'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'expectedDate',label:'출산 예정일',type:'date'}] },
+  { id:'family_care', category:'leave', icon:'❤️', iconType:'leave',
+    name:'가족돌봄휴가 신청서', nameEn:'Family Care Leave',
+    desc:'남녀고용평등법 §22의2. 연 10일 이내.',
+    tags:[{text:'법정',type:'req'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'familyName',label:'돌봄 대상자',type:'text'}] },
+  { id:'personnel_order', category:'policy', icon:'📋', iconType:'policy',
+    name:'인사명령서 (전직·발령)', nameEn:'Personnel Order',
+    desc:'직무 변경, 부서 이동, 승진 등.',
+    tags:[],
+    fields:[{key:'empId',label:'대상 직원',type:'employee'},
+      {key:'orderType',label:'발령 종류',type:'select',options:['승진','전직','전보','복직','겸직']}] },
+  { id:'resignation', category:'discipline', icon:'📝', iconType:'discipline',
+    name:'사직서', nameEn:'Resignation Letter',
+    desc:'직원 자발적 퇴직 시 작성.',
+    tags:[],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'resignDate',label:'퇴사 희망일',type:'date'}] },
+  { id:'termination', category:'discipline', icon:'🛑', iconType:'discipline',
+    name:'해고 통지서 (30일 전)', nameEn:'Termination Notice',
+    desc:'근기법 §26. 30일 전 서면 통지 의무.',
+    tags:[{text:'법정',type:'req'},{text:'근기법 §26',type:'law'}],
+    fields:[{key:'empId',label:'대상 직원',type:'employee'},
+      {key:'noticeDate',label:'통지일',type:'date'}] },
+  { id:'advance_termination', category:'discipline', icon:'⚡', iconType:'discipline',
+    name:'해고예고 적용 제외 통지서', nameEn:'Termination without Notice',
+    desc:'근기법 §26 단서. 천재지변·중대 귀책사유.',
+    tags:[],
+    fields:[{key:'empId',label:'대상 직원',type:'employee'}] },
+  { id:'warning', category:'discipline', icon:'⚠️', iconType:'discipline',
+    name:'시말서 / 경위서', nameEn:'Disciplinary Notice',
+    desc:'징계·경고 사유 발생 시 작성.',
+    tags:[],
+    fields:[{key:'empId',label:'대상 직원',type:'employee'},
+      {key:'incidentDate',label:'사건 발생일',type:'date'}] },
+  { id:'discipline_notice', category:'discipline', icon:'🚨', iconType:'discipline',
+    name:'징계처분 통지서', nameEn:'Disciplinary Action Notice',
+    desc:'정식 징계 의결 후 본인 통지.',
+    tags:[],
+    fields:[{key:'empId',label:'대상 직원',type:'employee'},
+      {key:'actionType',label:'징계 종류',type:'select',options:['견책','감봉','정직','강등','해고']}] },
+  { id:'cert_employment', category:'cert', icon:'🎓', iconType:'cert',
+    name:'재직 증명서', nameEn:'Certificate of Employment',
+    desc:'은행·관공서 제출용.',
+    tags:[],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'purpose',label:'용도',type:'text'}] },
+  { id:'cert_career', category:'cert', icon:'📔', iconType:'cert',
+    name:'경력 증명서', nameEn:'Career Certificate',
+    desc:'근기법 §39. 직원 청구 시 즉시 발급 의무.',
+    tags:[{text:'근기법 §39',type:'law'}],
+    fields:[{key:'empId',label:'직원',type:'employee'}] },
+  { id:'cert_resignation', category:'cert', icon:'🪪', iconType:'cert',
+    name:'퇴직 증명서', nameEn:'Certificate of Resignation',
+    desc:'퇴직 후 직원 요청 시 발급.',
+    tags:[],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'resignDate',label:'퇴직일',type:'date'}] },
+  { id:'ins_acquire', category:'insurance', icon:'🏥', iconType:'insurance',
+    name:'4대보험 자격취득신고서', nameEn:'Social Insurance Acquisition',
+    desc:'신규 입사 시 14일 이내 신고 의무.',
+    tags:[{text:'필수',type:'req'},{text:'정부 공식',type:'govt'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'acquireDate',label:'자격 취득일',type:'date'}] },
+  { id:'ins_loss', category:'insurance', icon:'📤', iconType:'insurance',
+    name:'4대보험 자격상실신고서', nameEn:'Social Insurance Loss',
+    desc:'퇴사 시 다음달 15일까지 신고 의무.',
+    tags:[{text:'필수',type:'req'},{text:'정부 공식',type:'govt'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'lossDate',label:'자격 상실일',type:'date'}] },
+  { id:'rules_of_employment', category:'policy', icon:'📕', iconType:'policy',
+    name:'취업규칙 (표준)', nameEn:'Rules of Employment',
+    desc:'근기법 §93. 상시 10인 이상 사업장 의무.',
+    tags:[{text:'10인↑ 의무',type:'req'},{text:'정부 공식',type:'govt'}],
+    fields:[{key:'category',label:'업종',type:'select',options:['일반 사무직','제조업','서비스업','건설업','음식·숙박업']}] }
+];
 
 // localStorage에는 base64(dataUrl) 제거 후 메타데이터만 저장
 function saveFolders(){
@@ -6057,126 +6281,1242 @@ function goUp(){
   renderFolder();
 }
 
+// ══ 폴더탭 메인 렌더 ══
 function renderFolder(){
+  renderFolderCompanyPanel();
+  renderFolderBreadcrumb();
+  if(folderState.view==='home'){
+    renderFolderHome();
+  } else if(folderState.view==='userFolder'){
+    const folder = FOLDERS.find(f=>f.id===folderState.folderId);
+    if(!folder){ folderState.view='home'; renderFolder(); return; }
+    renderUserFolderView(folder);
+  }
+}
+
+// ══ 회사 정보 패널 (양식 작성 시 자동 사용) ══
+function renderFolderCompanyPanel(){
+  const panel = document.getElementById('nf-company-panel');
+  if(!panel) return;
+  const info = COMPANY_INFO || {};
+  const hasInfo = info.name || info.ceo || info.address;
+  let summary = '';
+  if(hasInfo){
+    const parts = [];
+    if(info.name) parts.push(`<strong>${esc(info.name)}</strong>`);
+    if(info.ceo) parts.push(`대표 ${esc(info.ceo)}`);
+    if(info.address) parts.push(esc(info.address));
+    summary = parts.join(' · ');
+  } else {
+    summary = '아직 회사 정보가 입력되지 않았어요. 한 번 입력해두면 모든 양식에서 자동 사용할 수 있습니다.';
+  }
+  panel.innerHTML = `
+    <div class="nf-cp-header" onclick="toggleFolderCompanyPanel()">
+      <div style="flex:1;min-width:0">
+        <div class="nf-cp-title">
+          🏢 회사 정보
+          ${hasInfo ? '<span class="nf-cp-badge saved">저장됨</span>' : '<span class="nf-cp-badge">미입력</span>'}
+        </div>
+        <div class="nf-cp-summary">${summary}</div>
+      </div>
+      <button class="nf-cp-toggle">
+        ${folderState.companyExpanded ? '접기 ▴' : (hasInfo ? '수정 ▾' : '입력하기 ▾')}
+      </button>
+    </div>
+    <div class="nf-cp-body ${folderState.companyExpanded ? '' : 'hidden'}">
+      <div class="nf-cp-row">
+        <div class="nf-cp-label">회사명</div>
+        <input class="nf-cp-input" id="nf-ci-name" value="${esc(info.name||'')}" placeholder="예: ○○산업주식회사">
+      </div>
+      <div class="nf-cp-row">
+        <div class="nf-cp-label">대표자</div>
+        <input class="nf-cp-input" id="nf-ci-ceo" value="${esc(info.ceo||'')}" placeholder="예: 홍길동">
+      </div>
+      <div class="nf-cp-row full">
+        <div class="nf-cp-label">사업장 주소</div>
+        <input class="nf-cp-input" id="nf-ci-address" value="${esc(info.address||'')}" placeholder="예: 서울시 강남구 ○○로 123">
+      </div>
+      <div class="nf-cp-row">
+        <div class="nf-cp-label">사업자번호</div>
+        <input class="nf-cp-input" id="nf-ci-bizNumber" value="${esc(info.bizNumber||'')}" placeholder="예: 123-45-67890">
+      </div>
+      <div class="nf-cp-row">
+        <div class="nf-cp-label">연락처</div>
+        <input class="nf-cp-input" id="nf-ci-phone" value="${esc(info.phone||'')}" placeholder="예: 02-1234-5678">
+      </div>
+      <div class="nf-cp-actions">
+        <button class="nf-btn-pill outline" onclick="clearFolderCompanyInfo()">초기화</button>
+        <button class="nf-btn-pill" onclick="saveFolderCompanyInfo()">💾 저장</button>
+      </div>
+    </div>`;
+}
+function toggleFolderCompanyPanel(){ folderState.companyExpanded=!folderState.companyExpanded; renderFolderCompanyPanel(); }
+function saveFolderCompanyInfo(){
+  COMPANY_INFO = {
+    name: (document.getElementById('nf-ci-name').value||'').trim(),
+    ceo: (document.getElementById('nf-ci-ceo').value||'').trim(),
+    address: (document.getElementById('nf-ci-address').value||'').trim(),
+    bizNumber: (document.getElementById('nf-ci-bizNumber').value||'').trim(),
+    phone: (document.getElementById('nf-ci-phone').value||'').trim()
+  };
+  saveCompanyInfo();
+  if(typeof showSyncToast==='function') showSyncToast('회사 정보가 저장됐어요','ok');
+  folderState.companyExpanded = false;
+  renderFolderCompanyPanel();
+}
+function clearFolderCompanyInfo(){
+  if(!confirm('저장된 회사 정보를 모두 지울까요?')) return;
+  COMPANY_INFO = {};
+  saveCompanyInfo();
+  if(typeof showSyncToast==='function') showSyncToast('회사 정보 초기화됨','info');
+  renderFolderCompanyPanel();
+}
+
+// ══ 브레드크럼 ══
+function renderFolderBreadcrumb(){
+  const bc = document.getElementById('nf-breadcrumb');
+  if(!bc) return;
+  if(folderState.view==='home'){
+    bc.innerHTML = `<div class="nf-bc-item active">🏠 폴더 관리</div>`;
+  } else if(folderState.view==='userFolder'){
+    const f = FOLDERS.find(x=>x.id===folderState.folderId);
+    bc.innerHTML = `
+      <div class="nf-bc-item" onclick="goFolderHome()">🏠 폴더 관리</div>
+      <span class="nf-bc-sep">›</span>
+      <div class="nf-bc-item active">📁 ${esc(f?.name||'')}</div>`;
+  }
+}
+function goFolderHome(){ folderState.view='home'; folderState.folderId=null; renderFolder(); }
+
+// ══ 홈 화면 (메인 탭 + 내 폴더) ══
+function renderFolderHome(){
   const body = document.getElementById('folder-body');
   if(!body) return;
-
-  const cur = currentFolderId ? FOLDERS.find(f=>f.id===currentFolderId) : null;
-
-  // ── 브레드크럼 경로 ──
-  function getBreadcrumb(folderId){
-    const path = [];
-    let id = folderId;
-    while(id){
-      const f = FOLDERS.find(x=>x.id===id);
-      if(!f) break;
-      path.unshift(f);
-      id = f.parentId;
-    }
-    return path;
-  }
-  const breadcrumb = currentFolderId ? getBreadcrumb(currentFolderId) : [];
-
-  const breadcrumbHtml = `
-    <div style="display:flex;align-items:center;gap:4px;margin-bottom:16px;flex-wrap:wrap">
-      <span onclick="openFolder(null)" style="font-size:12px;font-weight:600;color:${currentFolderId?'var(--navy2)':'var(--ink)'};cursor:${currentFolderId?'pointer':'default'};padding:4px 8px;border-radius:6px;${currentFolderId?'hover:background:var(--nbg)':''}">
-        🏠 폴더 관리
-      </span>
-      ${breadcrumb.map((f,i)=>`
-        <span style="color:var(--ink3);font-size:11px">›</span>
-        <span onclick="openFolder(${f.id})" style="font-size:12px;font-weight:600;color:${i===breadcrumb.length-1?'var(--ink)':'var(--navy2)'};cursor:${i===breadcrumb.length-1?'default':'pointer'};padding:4px 8px;border-radius:6px">
-          ${f.name}
-        </span>
-      `).join('')}
+  const userFolders = FOLDERS.filter(f=>!f.parentId);
+  const customCount = (CUSTOM_DOCS||[]).length;
+  body.innerHTML = `
+    <div class="nf-main-tabs">
+      <button class="nf-main-tab ${folderState.docTab==='templates'?'on':''}" onclick="setFolderDocTab('templates')">
+        📄 표준 양식 <span class="cnt">${NF_TEMPLATES.length}</span>
+      </button>
+      <button class="nf-main-tab ${folderState.docTab==='custom'?'on':''}" onclick="setFolderDocTab('custom')">
+        📋 회사 양식 <span class="cnt">${customCount}</span>
+      </button>
+    </div>
+    <div id="nf-docs-area"></div>
+    <div class="nf-section">
+      <div class="nf-section-title">
+        📁 내 폴더 <span class="count">${userFolders.length}</span>
+        <button class="nf-btn-pill outline" style="margin-left:auto;font-size:11px;padding:5px 12px" onclick="addRootFolder()">+ 폴더 추가</button>
+      </div>
+      ${userFolders.length===0 ? `
+        <div class="nf-empty" style="padding:32px 20px">
+          <div class="nf-empty-icon" style="font-size:36px">📁</div>
+          <div class="nf-empty-title">아직 만든 폴더가 없어요</div>
+          <div class="nf-empty-sub">파일이나 작성한 양식을 보관할 폴더를 만들어보세요</div>
+        </div>` : `
+        <div class="nf-folder-grid">
+          ${userFolders.map(f=>`
+            <div class="nf-folder-card" onclick="openUserFolder(${f.id})">
+              <div class="nf-folder-icon">📁</div>
+              <div class="nf-folder-name">${esc(f.name)}</div>
+              <div class="nf-folder-meta">${(f.files||[]).length}개 파일</div>
+              <div class="nf-folder-actions" onclick="event.stopPropagation()">
+                <button class="nf-folder-act" onclick="renameFolder(${f.id})" title="이름변경">✏️</button>
+                <button class="nf-folder-act danger" onclick="deleteFolder(${f.id})" title="삭제">🗑</button>
+              </div>
+            </div>`).join('')}
+        </div>`}
     </div>`;
+  if(folderState.docTab==='templates') renderFolderTemplates();
+  else renderFolderCustom();
+}
 
-  // 현재 폴더 안의 하위 폴더들
-  const subFolders = FOLDERS.filter(f=>f.parentId===currentFolderId);
-  // 현재 폴더의 파일들
-  const files = cur ? (cur.files||[]) : [];
+function setFolderDocTab(tab){
+  folderState.docTab = tab;
+  folderState.cat = 'all';
+  folderState.search = '';
+  renderFolderHome();
+}
 
-  // ── 빈 상태 ──
-  if(subFolders.length===0 && files.length===0){
-    // 상단 버튼 업데이트
-    const addBtn0 = document.querySelector('#pg-folder .btn-n');
-    if(addBtn0){
-      if(currentFolderId){ addBtn0.onclick=()=>addSubFolder(currentFolderId); addBtn0.textContent='+ 하위 폴더 추가'; }
-      else { addBtn0.onclick=addRootFolder; addBtn0.textContent='+ 폴더 추가'; }
-    }
-    body.innerHTML = breadcrumbHtml + `
-      <div style="text-align:center;padding:40px 20px 24px;color:var(--ink3)">
-        <div style="font-size:48px;margin-bottom:10px">📁</div>
-        <div style="font-size:14px;font-weight:600;margin-bottom:6px;color:var(--ink2)">
-          ${currentFolderId ? '이 폴더가 비어 있습니다' : '폴더가 없습니다'}
-        </div>
-        <div style="font-size:12px;margin-bottom:16px">폴더나 파일을 추가해보세요</div>
-        ${currentFolderId ? `
-        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-          <button class="btn btn-sm" onclick="addSubFolder(${currentFolderId})" style="color:var(--navy2);border-color:var(--navy2)">📁 하위 폴더 추가</button>
-          <button class="btn btn-n btn-sm" onclick="uploadFile(${currentFolderId})">⬆️ 파일 업로드</button>
-        </div>` : ''}
-      </div>`;
+// ══ 표준 27종 양식 ══
+function renderFolderTemplates(){
+  const area = document.getElementById('nf-docs-area');
+  if(!area) return;
+  area.innerHTML = `
+    <div class="nf-cat-tabs">
+      ${NF_CATEGORIES.map(c=>{
+        const cnt = c.key==='all' ? NF_TEMPLATES.length : NF_TEMPLATES.filter(d=>d.category===c.key).length;
+        return `<button class="nf-cat-tab ${folderState.cat===c.key?'on':''}" onclick="setFolderCat('${c.key}')">${c.emoji} ${c.name} <span class="cnt">${cnt}</span></button>`;
+      }).join('')}
+    </div>
+    <div class="nf-search-bar">
+      🔍 <input type="text" id="nf-search" placeholder="서식 이름 또는 키워드 검색..." value="${esc(folderState.search)}">
+    </div>
+    <div id="nf-doc-grid"></div>`;
+  const inp = document.getElementById('nf-search');
+  if(inp) inp.addEventListener('input', e=>{ folderState.search=e.target.value; renderFolderTemplateGrid(); });
+  renderFolderTemplateGrid();
+}
+function setFolderCat(k){ folderState.cat=k; renderFolderTemplates(); }
+
+function renderFolderTemplateGrid(){
+  const el = document.getElementById('nf-doc-grid');
+  if(!el) return;
+  let docs = NF_TEMPLATES;
+  if(folderState.cat!=='all') docs = docs.filter(d=>d.category===folderState.cat);
+  if(folderState.search){
+    const q = folderState.search.toLowerCase();
+    docs = docs.filter(d=>d.name.toLowerCase().includes(q) || (d.desc||'').toLowerCase().includes(q));
+  }
+  if(docs.length===0){
+    el.className = '';
+    el.innerHTML = `<div class="nf-empty"><div class="nf-empty-icon">📭</div><div class="nf-empty-title">조건에 맞는 서식이 없습니다</div></div>`;
     return;
   }
+  el.className = 'nf-doc-grid';
+  el.innerHTML = docs.map(d=>`
+    <div class="nf-doc-card" onclick="openTemplateForm('${d.id}')">
+      <div class="nf-doc-head">
+        <div class="nf-doc-icon ${d.iconType}">${d.icon}</div>
+        <div class="nf-doc-info">
+          <div class="nf-doc-name">${esc(d.name)}</div>
+          <div class="nf-doc-en">${esc(d.nameEn)}</div>
+        </div>
+      </div>
+      <div class="nf-doc-desc">${esc(d.desc)}</div>
+      <div class="nf-doc-meta">${(d.tags||[]).map(t=>`<span class="nf-doc-tag ${t.type}">${esc(t.text)}</span>`).join('')}</div>
+      <div class="nf-doc-actions">
+        <button class="nf-doc-btn primary" onclick="event.stopPropagation();openTemplateForm('${d.id}')">✍️ 작성</button>
+      </div>
+    </div>`).join('');
+}
 
-  // 상단 버튼 업데이트
-  const addBtn = document.querySelector('#pg-folder .btn-n');
-  if(addBtn){
-    if(currentFolderId){
-      addBtn.onclick = ()=>addSubFolder(currentFolderId);
-      addBtn.textContent = '+ 하위 폴더 추가';
-    } else {
-      addBtn.onclick = addRootFolder;
-      addBtn.textContent = '+ 폴더 추가';
-    }
+// ══ 양식 작성 모달 ══
+let _activeNfTplId = null;
+
+function openNfModal(title, sub){
+  document.getElementById('nf-modal-title').textContent = title;
+  document.getElementById('nf-modal-sub').textContent = sub;
+  document.getElementById('nf-modal').classList.add('show');
+}
+function closeNfModal(){
+  document.getElementById('nf-modal').classList.remove('show');
+  _activeNfTplId = null;
+  _nfSelectedFile = null;
+}
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape' && document.getElementById('nf-modal')?.classList.contains('show')) closeNfModal();
+});
+
+// 노프로 EMPS → 양식용 emp 객체 매핑
+function nfMapEmp(empOrName){
+  if(!empOrName) return null;
+  // 이름으로 EMPS에서 매칭 시도
+  let e = null;
+  if(typeof empOrName==='string'){
+    const name = empOrName.trim();
+    if(!name) return null;
+    e = (EMPS||[]).find(x=>x.name===name);
+    if(!e) return { name, rrn:'', phone:'', address:'', position:'', salary:0, hireDate:'', workType:'', payType:'' };
+  } else {
+    e = empOrName;
   }
+  // 주민번호: 뒷자리는 암호화 상태이므로 앞자리만 표시 (보안)
+  const rrn = e.rrnFront ? `${e.rrnFront}-*******` : '';
+  // workType 매핑
+  const workType = e.shift==='night' ? '야간' : (e.shift==='day' ? '주간' : '');
+  // payType 매핑
+  const payType = e.payMode==='fixed' ? '고정급' : (e.payMode==='hourly' ? '시급제' : (e.payMode==='monthly' ? '포괄임금제' : ''));
+  // salary: monthly가 있으면 우선, 없으면 rate*209 추정
+  const salary = Number(e.monthly) || (e.rate ? Number(e.rate)*209 : 0);
+  return {
+    name: e.name||'',
+    rrn,
+    phone: e.phone||'',
+    address: '',  // 노프로 EMPS는 address 필드 없음
+    position: e.role||e.dept||'',
+    salary,
+    hireDate: e.join||'',
+    workType,
+    payType
+  };
+}
 
-  // ── 폴더 그리드 ──
-  const foldersHtml = subFolders.length > 0 ? `
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:20px">
-      ${subFolders.map(f=>`
-        <div onclick="openFolder(${f.id})"
-          style="background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px 14px;cursor:pointer;transition:all .15s;text-align:center;position:relative"
-          onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)';this.style.borderColor='var(--navy2)'"
-          onmouseout="this.style.boxShadow='';this.style.borderColor='var(--bd)'">
-          <div style="font-size:32px;margin-bottom:8px">📁</div>
-          <div style="font-size:12px;font-weight:700;color:var(--ink);margin-bottom:4px;word-break:break-all">${f.name}</div>
-          <div style="font-size:10px;color:var(--ink3)">${FOLDERS.filter(x=>x.parentId===f.id).length}개 폴더 · ${(f.files||[]).length}개 파일</div>
-          <div style="position:absolute;top:8px;right:8px;display:flex;gap:3px" onclick="event.stopPropagation()">
-            <button class="btn btn-xs" onclick="addSubFolder(${f.id})" title="하위 폴더">+</button>
-            <button class="btn btn-xs" onclick="uploadFile(${f.id})" title="업로드">⬆</button>
-            <button class="btn btn-xs" onclick="renameFolder(${f.id})" title="이름변경">✏️</button>
-            <button class="btn btn-xs" onclick="deleteFolder(${f.id})" title="삭제" style="color:var(--rose)">🗑</button>
+function openTemplateForm(id){
+  const tpl = NF_TEMPLATES.find(d=>d.id===id);
+  if(!tpl) return;
+  _activeNfTplId = id;
+  const info = COMPANY_INFO||{};
+  const hasInfo = info.name || info.ceo || info.address;
+
+  let html = `<div class="nf-info-tip">
+    <strong>💡 작성 방법</strong><br>
+    필요한 정보를 입력하시면 워드(.doc) 또는 PDF로 다운로드됩니다. <strong>비워둔 항목은 빈칸으로 출력</strong>되며, 다운로드 후 직접 채울 수 있어요.
+  </div>`;
+
+  // 회사 정보 자동 적용 체크박스
+  if(hasInfo){
+    html += `<div style="background:var(--nbg);border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:14px">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
+        <input type="checkbox" id="nf-use-company" checked style="width:17px;height:17px;margin-top:1px;cursor:pointer;accent-color:var(--navy)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;color:var(--ink);margin-bottom:3px">🏢 저장된 회사 정보 자동 적용</div>
+          <div style="font-size:11.5px;color:var(--ink3);line-height:1.5">
+            <strong style="color:var(--ink)">${esc(info.name||'(회사명 미입력)')}</strong>
+            ${info.ceo?` · 대표 ${esc(info.ceo)}`:''}
+            ${info.address?` · ${esc(info.address)}`:''}
+            ${info.bizNumber?`<br>사업자번호: ${esc(info.bizNumber)}`:''}
+            ${info.phone?` · 연락처: ${esc(info.phone)}`:''}
           </div>
         </div>
-      `).join('')}
-    </div>` : '';
+      </label>
+    </div>`;
+  } else {
+    html += `<div class="nf-info-tip warn">
+      <strong>💡 회사 정보 미입력</strong><br>
+      상단 [🏢 회사 정보] 영역에 한 번 입력해두면, 다음부터 모든 양식에 자동 적용됩니다.
+    </div>`;
+  }
 
-  // ── 파일 목록 ──
-  // 파일 섹션 (항상 표시 - 파일 없어도 업로드 가능)
-  const filesHtml = currentFolderId ? `
-    <div style="background:var(--card);border:1px solid var(--bd);border-radius:14px;overflow:hidden;margin-top:${subFolders.length>0?'0':'0'}">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:rgba(0,0,0,.02);border-bottom:1px solid var(--bd)">
-        <span style="font-size:11px;font-weight:700;color:var(--ink3);letter-spacing:.4px;text-transform:uppercase">파일 ${files.length}개</span>
-        <button class="btn btn-sm btn-n" onclick="uploadFile(${currentFolderId})" style="font-size:11px;padding:4px 12px">⬆️ 파일 업로드</button>
+  // 양식별 입력 필드
+  if(tpl.fields && tpl.fields.length>0){
+    html += `<div style="font-size:12px;font-weight:800;color:var(--ink);margin:6px 0 10px;letter-spacing:.3px">📝 양식 정보</div>`;
+    html += tpl.fields.map(f=>{
+      let input = '';
+      if(f.type==='employee'){
+        // 등록된 직원 이름 자동완성용 datalist
+        const dl = `nf-dl-emps`;
+        input = `<input class="nf-form-input" type="text" id="nf-f-${f.key}" list="${dl}" placeholder="직원 이름을 입력하세요" autocomplete="off">
+          <datalist id="${dl}">${(EMPS||[]).filter(e=>e.name).map(e=>`<option value="${esc(e.name)}">`).join('')}</datalist>`;
+      } else if(f.type==='select'){
+        input = `<select class="nf-form-input" id="nf-f-${f.key}">
+          <option value="">— 선택 안 함 (다운로드 후 입력) —</option>
+          ${(f.options||[]).map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join('')}
+        </select>`;
+      } else {
+        input = `<input class="nf-form-input" type="${f.type}" id="nf-f-${f.key}" placeholder="비워두면 다운로드 후 입력">`;
+      }
+      return `<div class="nf-form-row">
+        <div class="nf-form-label">${esc(f.label)} <span class="opt">(선택)</span></div>
+        <div>${input}</div>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('nf-modal-body').innerHTML = html;
+  document.getElementById('nf-modal-foot').innerHTML = `
+    <button class="nf-modal-btn" onclick="closeNfModal()">취소</button>
+    <button class="nf-modal-btn" onclick="generateNfForm('preview')">👁 미리보기</button>
+    <button class="nf-modal-btn" onclick="generateNfForm('word')">📝 워드(.doc)</button>
+    <button class="nf-modal-btn primary" onclick="generateNfForm('pdf')">📄 PDF 다운로드</button>
+  `;
+  openNfModal(tpl.name, tpl.nameEn);
+}
+
+// 양식 데이터 수집 (회사정보 + 직원 + 필드)
+function _nfCollectFormData(tpl){
+  const useCompany = document.getElementById('nf-use-company')?.checked;
+  const company = useCompany
+    ? { name:COMPANY_INFO.name||'', ceo:COMPANY_INFO.ceo||'', address:COMPANY_INFO.address||'',
+        bizNumber:COMPANY_INFO.bizNumber||'', phone:COMPANY_INFO.phone||'' }
+    : { name:'', ceo:'', address:'', bizNumber:'', phone:'' };
+  const data = {};
+  let emp = null;
+  (tpl.fields||[]).forEach(f=>{
+    const el = document.getElementById(`nf-f-${f.key}`);
+    const val = el ? el.value : '';
+    data[f.key] = val;
+    if(f.type==='employee' && val) emp = nfMapEmp(val);
+  });
+  return { company, data, emp };
+}
+
+function generateNfForm(mode){
+  const tpl = NF_TEMPLATES.find(d=>d.id===_activeNfTplId);
+  if(!tpl) return;
+  const { company, data, emp } = _nfCollectFormData(tpl);
+
+  // 작성 기록 saved_forms에 저장 (Phase 4에서 서버 동기화)
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  SAVED_FORMS.push({
+    id: 'sf_'+Date.now(),
+    tplId: tpl.id,
+    tplName: tpl.name,
+    empName: emp?.name||'',
+    data, company,
+    createdAt: new Date().toISOString()
+  });
+  if(SAVED_FORMS.length>200) SAVED_FORMS = SAVED_FORMS.slice(-200);
+  saveSavedForms();
+
+  // Word blob 미리 생성 (다운로드 + 폴더 저장에 모두 사용)
+  const wordBlob = _nfBuildWordBlob(tpl, data, emp, company);
+  const empName = emp?.name ? `_${emp.name}` : '';
+  const baseName = `${tpl.name}${empName}_${dateStr}`;
+
+  if(mode==='preview'){
+    const html = nfWrapForView(tpl, data, emp, company, false);
+    const w = window.open('', '_blank');
+    if(!w){ if(typeof showSyncToast==='function') showSyncToast('팝업이 차단되었습니다','warn'); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+    closeNfModal();
+    return; // 미리보기는 폴더 저장 알럿 없음
+  }
+  if(mode==='word'){
+    _nfDownloadBlob(wordBlob, baseName+'.doc');
+    closeNfModal();
+    if(typeof showSyncToast==='function') showSyncToast(`${tpl.name}.doc 다운로드 — 빈칸은 워드에서 채워주세요`,'ok');
+  } else if(mode==='pdf'){
+    const html = nfWrapForView(tpl, data, emp, company, true);
+    const w = window.open('', '_blank');
+    if(!w){ if(typeof showSyncToast==='function') showSyncToast('팝업이 차단되었습니다','warn'); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+    closeNfModal();
+    if(typeof showSyncToast==='function') showSyncToast('인쇄 대화상자 → "PDF로 저장" 선택','info');
+  }
+  // 다운로드 후 "내 폴더에 저장" 알럿
+  setTimeout(()=>askSaveToFolder(tpl, emp, dateStr, wordBlob, baseName), 500);
+}
+
+// 다운로드 후 "내 폴더에도 저장하시겠습니까?" 알럿 → 폴더 선택 모달
+function askSaveToFolder(tpl, emp, dateStr, wordBlob, baseName){
+  if(!confirm('📁 내 폴더에도 저장하시겠습니까?\n\n작성한 양식을 폴더에 워드(.doc) 파일로 보관합니다.\n나중에 [폴더 관리] 탭에서 다시 다운로드하거나 PDF로 변환할 수 있어요.')) return;
+
+  // 폴더 선택 모달
+  const userFolders = FOLDERS.filter(f=>!f.parentId);
+  const optionsHtml = userFolders.length===0 ? `
+    <div class="nf-info-tip warn">
+      <strong>💡 안내</strong> 아직 만든 폴더가 없어요. <strong>"작성한 양식"</strong> 폴더가 자동으로 만들어집니다.
+    </div>` : `
+    <div class="nf-form-row">
+      <div class="nf-form-label">폴더 선택</div>
+      <select class="nf-form-input" id="nf-tgt-folder">
+        ${userFolders.map(f=>`<option value="${f.id}">${esc(f.name)}</option>`).join('')}
+        <option value="__new__">+ 새 폴더 만들기</option>
+      </select>
+    </div>
+    <div class="nf-form-row" id="nf-new-folder-row" style="display:none">
+      <div class="nf-form-label">새 폴더 이름</div>
+      <input class="nf-form-input" id="nf-new-folder-name" placeholder="예: 근로계약서, 급여명세 등">
+    </div>`;
+  document.getElementById('nf-modal-body').innerHTML = `
+    <div class="nf-info-tip">
+      <strong>📄 ${esc(tpl.name)}</strong> 을(를) 어느 폴더에 저장할까요?<br>
+      <span style="color:var(--ink3);font-size:11.5px">파일명: ${esc(baseName)}.doc</span>
+    </div>
+    ${optionsHtml}
+  `;
+  document.getElementById('nf-modal-foot').innerHTML = `
+    <button class="nf-modal-btn" onclick="closeNfModal()">건너뛰기</button>
+    <button class="nf-modal-btn primary" onclick="confirmSaveToFolder()">📁 폴더에 저장</button>
+  `;
+  openNfModal('내 폴더에 저장', tpl.name);
+  // 새 폴더 옵션 선택 시 입력칸 표시
+  setTimeout(()=>{
+    const sel = document.getElementById('nf-tgt-folder');
+    if(sel) sel.addEventListener('change', e=>{
+      document.getElementById('nf-new-folder-row').style.display = e.target.value==='__new__' ? '' : 'none';
+    });
+  }, 50);
+  // 클로저로 blob 보관
+  _pendingFormSave = { tpl, dateStr, wordBlob, baseName };
+}
+let _pendingFormSave = null;
+
+async function confirmSaveToFolder(){
+  if(!_pendingFormSave){ closeNfModal(); return; }
+  const { wordBlob, baseName } = _pendingFormSave;
+  const sel = document.getElementById('nf-tgt-folder');
+  let targetId;
+  if(!sel){
+    // 폴더 0개 → 자동 생성
+    targetId = Date.now();
+    FOLDERS.push({id:targetId, name:'작성한 양식', parentId:null, files:[], open:true});
+    saveFolders();
+  } else if(sel.value==='__new__'){
+    const name = (document.getElementById('nf-new-folder-name').value||'').trim();
+    if(!name){ if(typeof showSyncToast==='function') showSyncToast('새 폴더 이름을 입력해주세요','warn'); return; }
+    targetId = Date.now();
+    FOLDERS.push({id:targetId, name, parentId:null, files:[], open:true});
+    saveFolders();
+  } else {
+    targetId = parseInt(sel.value);
+  }
+
+  closeNfModal();
+  if(typeof showSyncToast==='function') showSyncToast('폴더에 업로드 중...','info');
+  try {
+    // Blob → File 변환 후 업로드
+    const fileName = baseName + '.doc';
+    const file = new File([wordBlob], fileName, { type:'application/msword' });
+    const res = await uploadFileToStorage(file, 'folder', targetId);
+    const folder = FOLDERS.find(f=>f.id===targetId);
+    if(folder){
+      folder.files = folder.files||[];
+      folder.files.push({
+        id: Date.now()+Math.random(),
+        name: fileName,
+        storagePath: res.path,
+        size: res.size||file.size,
+        type: 'application/msword',
+        date: new Date().toLocaleDateString('ko-KR')
+      });
+      saveFolders();
+    }
+    if(typeof showSyncToast==='function') showSyncToast(`✓ ${folder?.name||'폴더'}에 저장 완료`,'ok');
+    if(folderState.view==='userFolder') renderFolder();
+    else if(folderState.view==='home') renderFolderHome();
+  } catch(e){
+    console.error('Folder save failed:', e);
+    if(typeof showSyncToast==='function') showSyncToast('폴더 저장 실패: '+(e.message||''),'warn');
+  }
+  _pendingFormSave = null;
+}
+
+// ══ 27종 양식 본문 렌더러 ══
+function _nfBlank(val, width='120pt'){
+  if(val) return esc(String(val));
+  return `<span style="display:inline-block;min-width:${width};border-bottom:.75pt solid #999;color:#9CA3AF;font-size:9.5pt">&nbsp;(직접 입력)&nbsp;</span>`;
+}
+function _nfCompanyTable(c){
+  return `<table>
+<tr><th>사업체명</th><td>${_nfBlank(c.name)}</td><th>대표자</th><td>${_nfBlank(c.ceo)}</td></tr>
+<tr><th>사업장 주소</th><td colspan="3">${_nfBlank(c.address,"300pt")}</td></tr>
+<tr><th>사업자번호</th><td>${_nfBlank(c.bizNumber)}</td><th>연락처</th><td>${_nfBlank(c.phone)}</td></tr>
+</table>`;
+}
+function _nfEmployeeTable(emp){
+  if(!emp){
+    return `<table>
+<tr><th>성명</th><td>${_nfBlank('')}</td><th>주민번호</th><td>${_nfBlank('')}</td></tr>
+<tr><th>주소</th><td colspan="3">${_nfBlank('',"300pt")}</td></tr>
+<tr><th>연락처</th><td>${_nfBlank('')}</td><th>직위</th><td>${_nfBlank('')}</td></tr>
+</table>`;
+  }
+  return `<table>
+<tr><th>성명</th><td>${_nfBlank(emp.name)}</td><th>주민번호</th><td>${_nfBlank(emp.rrn)}</td></tr>
+<tr><th>주소</th><td colspan="3">${_nfBlank(emp.address,"300pt")}</td></tr>
+<tr><th>연락처</th><td>${_nfBlank(emp.phone)}</td><th>직위</th><td>${_nfBlank(emp.position)}</td></tr>
+</table>`;
+}
+function _nfSig(emp, todayStr, leftLabel='사 용 자', rightLabel='근 로 자', c={}){
+  return `<p class="nf-center nf-bold" style="margin-top:25pt;font-size:13pt">${todayStr}</p>
+<table style="margin-top:14pt;border:none;width:100%"><tr style="border:none">
+<td class="nf-sig-block">
+  <div style="font-weight:700;font-size:12pt">${leftLabel}</div>
+  <div style="margin-top:6pt">${_nfBlank(c.name||'')}</div>
+  <div class="nf-sig-line">대표 ${_nfBlank(c.ceo||'')} (인)</div>
+</td>
+<td class="nf-sig-block">
+  <div style="font-weight:700;font-size:12pt">${rightLabel}</div>
+  <div style="margin-top:6pt">${_nfBlank(emp?.name||'')}</div>
+  <div class="nf-sig-line">${_nfBlank(emp?.name||'')} (서명/인)</div>
+</td>
+</tr></table>`;
+}
+
+function nfRenderTemplateBody(tpl, d, emp, c){
+  c = c||{};
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}년 ${today.getMonth()+1}월 ${today.getDate()}일`;
+  const sig = (l,r)=>_nfSig(emp,todayStr,l||'사 용 자',r||'근 로 자',c);
+  const ct = _nfCompanyTable(c);
+  const et = _nfEmployeeTable(emp);
+
+  const renderers = {
+    lc_regular: ()=>`<h1>표 준 근 로 계 약 서</h1>
+<p class="nf-center" style="margin-bottom:12pt;color:#6B7280;font-size:10pt">(기간의 정함이 없는 경우)</p>
+${ct}${et}
+<div class="nf-clause"><div class="nf-clause-title">1. 근로개시일</div>${_nfBlank(d.startDate)}부터</div>
+<div class="nf-clause"><div class="nf-clause-title">2. 근무 장소</div>${_nfBlank(c.address,"300pt")}</div>
+<div class="nf-clause"><div class="nf-clause-title">3. 업무 내용</div>${_nfBlank(emp?.position)} 업무</div>
+<div class="nf-clause"><div class="nf-clause-title">4. 소정근로시간</div>${_nfBlank(d.workTime,"200pt")}</div>
+<div class="nf-clause"><div class="nf-clause-title">5. 임금</div>월급여 <strong>${emp?.salary?emp.salary.toLocaleString()+'원':_nfBlank('')}</strong> · 매월 25일 지급 · 통장 이체</div>
+<div class="nf-clause"><div class="nf-clause-title">6. 연차유급휴가</div>근로기준법에 따라 부여</div>
+<div class="nf-clause"><div class="nf-clause-title">7. 사회보험</div>국민연금·건강보험·고용보험·산재보험 모두 가입</div>
+<div class="nf-clause"><div class="nf-clause-title">8. 근로계약서 교부</div>근기법 §17에 따라 본 계약서를 근로자에게 교부함</div>
+${sig()}`,
+
+    lc_fixed: ()=>`<h1>표 준 근 로 계 약 서</h1>
+<p class="nf-center" style="margin-bottom:12pt;color:#6B7280;font-size:10pt">(기간의 정함이 있는 경우 / 계약직)</p>
+${ct}${et}
+<div class="nf-clause"><div class="nf-clause-title">1. 근로계약기간</div>${_nfBlank(d.startDate)}부터 ${_nfBlank(d.endDate)}까지</div>
+<div class="nf-clause"><div class="nf-clause-title">2. 임금</div>월급여 <strong>${emp?.salary?emp.salary.toLocaleString()+'원':_nfBlank('')}</strong></div>
+<div class="nf-clause"><div class="nf-clause-title">3. 사회보험</div>4대보험 모두 가입</div>
+${sig()}`,
+
+    lc_minor: ()=>`<h1>연소근로자 표준 근로계약서</h1>
+<p class="nf-center" style="margin-bottom:12pt;color:#6B7280;font-size:10pt">(만 18세 미만 / 친권자 동의서 포함)</p>
+${ct}${et}
+<h3>친권자(후견인)</h3>
+<table>
+<tr><th>성명</th><td>${_nfBlank(d.guardianName)}</td><th>관계</th><td>${_nfBlank('')}</td></tr>
+<tr><th>연락처</th><td colspan="3">${_nfBlank('','200pt')}</td></tr>
+</table>
+<div class="nf-clause"><div class="nf-clause-title">1. 근로개시일</div>${_nfBlank(d.startDate)}부터</div>
+<div class="nf-clause"><div class="nf-clause-title">2. 근무시간 한도</div>1일 7시간 / 주 35시간 (근기법 §69)</div>
+<div class="nf-clause"><div class="nf-clause-title">3. 야간·휴일근로 제한</div>22시~6시 야간 및 휴일근로는 본인 동의 + 노동부 인가 시에만 가능</div>
+<p style="margin:14pt 0">위 근로자의 친권자(후견인)로서 본 근로계약 체결에 동의합니다.</p>
+<p class="nf-right nf-bold" style="margin-top:30pt">친권자: ${_nfBlank(d.guardianName)} (서명/인) ___________________</p>
+${sig()}`,
+
+    lc_part: ()=>`<h1>단시간근로자 표준 근로계약서</h1>
+${ct}${et}
+<div class="nf-clause"><div class="nf-clause-title">1. 근로계약기간</div>별도 정함 없음</div>
+<div class="nf-clause"><div class="nf-clause-title">2. 근로일별 시간</div>${_nfBlank('',"200pt")}<br><span style="font-size:9.5pt;color:#9CA3AF">(예: 월 18:00-22:00, 화 18:00-22:00...)</span></div>
+<div class="nf-clause"><div class="nf-clause-title">3. 임금</div>시급 <strong>${_nfBlank(d.hourlyWage)}원</strong> · 매월 25일 지급</div>
+${sig()}`,
+
+    lc_construction: ()=>`<h1>건설일용근로자 표준 근로계약서</h1>
+${ct}${et}
+<h3>현장 정보</h3>
+<table>
+<tr><th>현장명</th><td>${_nfBlank(d.siteName)}</td></tr>
+<tr><th>현장 주소</th><td>${_nfBlank('',"300pt")}</td></tr>
+</table>
+<div class="nf-clause"><div class="nf-clause-title">1. 근로개시일</div>${_nfBlank('')} (현장 종료 시까지)</div>
+<div class="nf-clause"><div class="nf-clause-title">2. 일당</div><strong>${_nfBlank('')}원</strong> · 매주 통장 이체</div>
+<div class="nf-clause"><div class="nf-clause-title">3. 안전보건</div>안전모·안전화 등 개인보호구 착용 의무</div>
+${sig()}`,
+
+    lc_foreign: ()=>`<h1>STANDARD LABOR CONTRACT</h1>
+<p class="nf-center" style="margin-bottom:6pt;font-size:14pt;font-weight:700">표 준 근 로 계 약 서</p>
+<p class="nf-center" style="margin-bottom:12pt;color:#6B7280;font-size:10pt">For Foreign Workers / 외국인 근로자용</p>
+<table>
+<tr><th>Employer / 사업주</th><td>${_nfBlank(c.name)}</td><th>Representative / 대표</th><td>${_nfBlank(c.ceo)}</td></tr>
+</table>
+<table>
+<tr><th>Worker / 근로자</th><td>${_nfBlank(emp?.name)}</td><th>Nationality / 국적</th><td>${_nfBlank(d.nationality)}</td></tr>
+<tr><th>Passport / 여권</th><td>${_nfBlank(d.passportNo)}</td><th>Visa / 체류자격</th><td>${_nfBlank('')}</td></tr>
+</table>
+<div class="nf-clause"><div class="nf-clause-title">1. Term / 근로계약기간</div>${_nfBlank('')} ~ ${_nfBlank('')}</div>
+<div class="nf-clause"><div class="nf-clause-title">2. Wage / 임금</div>Monthly: <strong>${emp?.salary?emp.salary.toLocaleString()+' KRW':_nfBlank('')}</strong></div>
+<div class="nf-clause"><div class="nf-clause-title">3. Social Insurance / 사회보험</div>All 4 insurances applied / 4대보험 모두 가입</div>
+${sig('Employer / 사업주','Worker / 근로자')}`,
+
+    lc_foreign_agri: ()=>`<h1>STANDARD LABOR CONTRACT</h1>
+<p class="nf-center" style="margin-bottom:6pt;font-size:14pt;font-weight:700">표 준 근 로 계 약 서</p>
+<p class="nf-center" style="margin-bottom:12pt;color:#6B7280;font-size:10pt">For Agriculture, Livestock, Fishery / 농축어업</p>
+${ct}
+<table>
+<tr><th>Worker / 근로자</th><td>${_nfBlank(emp?.name)}</td><th>Industry / 업종</th><td>${_nfBlank(d.industry)}</td></tr>
+</table>
+<div class="nf-clause"><div class="nf-clause-title">Notice / 안내</div>농업·축산업·어업은 근기법 §63에 따라 근로시간·휴게·휴일 적용 제외 / Excluded from working hours, breaks, holidays per Labor Standards Act §63</div>
+${sig('Employer / 사업주','Worker / 근로자')}`,
+
+    lc_executive: ()=>`<h1>임 원 위 임 계 약 서</h1>
+${ct}${et}
+<div class="nf-clause"><div class="nf-clause-title">제1조 (임기)</div>${_nfBlank('')}부터 ${_nfBlank('')}년</div>
+<div class="nf-clause"><div class="nf-clause-title">제2조 (직무)</div>회사 정관 및 이사회 결의에 따른 임원 직무 수행</div>
+<div class="nf-clause"><div class="nf-clause-title">제3조 (보수)</div>월 ${emp?.salary?emp.salary.toLocaleString()+'원':_nfBlank('')}</div>
+<div class="nf-clause"><div class="nf-clause-title">제4조 (근로기준법 적용 제외)</div>임원은 근기법상 근로자로 보지 않으므로 근로시간·휴게·휴일·연차 규정 적용 제외</div>
+${sig('회 사','임 원')}`,
+
+    salary_contract: ()=>{
+      const annual = parseInt(d.annualSalary)||0;
+      return `<h1>연 봉 계 약 서</h1>
+${ct}${et}
+<div class="nf-clause"><div class="nf-clause-title">제1조 (연봉액)</div>연봉: <strong>${annual?annual.toLocaleString()+'원':_nfBlank('')}</strong> · 월 환산: ${annual?Math.round(annual/12).toLocaleString()+'원':_nfBlank('')}</div>
+<div class="nf-clause"><div class="nf-clause-title">제2조 (적용)</div>${_nfBlank(d.effectiveDate)}부터 1년</div>
+<div class="nf-clause"><div class="nf-clause-title">제3조 (지급)</div>매월 25일 / 12개월 균등 분할</div>
+${sig()}`;
+    },
+
+    payslip: ()=>{
+      const reg = emp?.salary||0;
+      const np = Math.round(reg*0.045);
+      const hi = Math.round(reg*0.03545);
+      const ltc = Math.round(hi*0.1295);
+      const ei = Math.round(reg*0.009);
+      const tax = Math.round(reg*0.033);
+      const insTotal = np+hi+ltc+ei;
+      const net = reg - tax - insTotal;
+      return `<h1>임 금 명 세 서</h1>
+<p class="nf-center" style="color:#6B7280;margin-bottom:12pt">${_nfBlank(d.payMonth)} 분</p>
+<table>
+<tr><th>회사명</th><td>${_nfBlank(c.name)}</td><th>지급일</th><td>${_nfBlank(d.payMonth)}-25</td></tr>
+<tr><th>성명</th><td>${_nfBlank(emp?.name)}</td><th>직위</th><td>${_nfBlank(emp?.position)}</td></tr>
+</table>
+<h2>지급 항목</h2>
+<table>
+<tr><th>구분</th><th class="nf-right">금액 (원)</th><th>비고</th></tr>
+<tr><td>기본급</td><td class="nf-right nf-bold">${reg?reg.toLocaleString():_nfBlank('')}</td><td>${_nfBlank(emp?.payType)}</td></tr>
+<tr><td>연장근로수당</td><td class="nf-right">${_nfBlank('','60pt')}</td><td>1.5배</td></tr>
+<tr><td>야간근로수당</td><td class="nf-right">${_nfBlank('','60pt')}</td><td>0.5배 가산</td></tr>
+<tr><td>휴일근로수당</td><td class="nf-right">${_nfBlank('','60pt')}</td><td>1.5배</td></tr>
+<tr style="background:#F3F4F6;font-weight:700"><td>지급 합계</td><td class="nf-right">${reg?reg.toLocaleString():_nfBlank('')}</td><td></td></tr>
+</table>
+<h2>공제 항목</h2>
+<table>
+<tr><th>구분</th><th class="nf-right">금액 (원)</th><th>비고</th></tr>
+<tr><td>국민연금</td><td class="nf-right">${reg?np.toLocaleString():_nfBlank('')}</td><td>4.5%</td></tr>
+<tr><td>건강보험</td><td class="nf-right">${reg?hi.toLocaleString():_nfBlank('')}</td><td>3.545%</td></tr>
+<tr><td>장기요양보험</td><td class="nf-right">${reg?ltc.toLocaleString():_nfBlank('')}</td><td>건강보험의 12.95%</td></tr>
+<tr><td>고용보험</td><td class="nf-right">${reg?ei.toLocaleString():_nfBlank('')}</td><td>0.9%</td></tr>
+<tr><td>소득세 (지방세 포함)</td><td class="nf-right">${reg?tax.toLocaleString():_nfBlank('')}</td><td>약 3.3%</td></tr>
+<tr style="background:#F3F4F6;font-weight:700"><td>공제 합계</td><td class="nf-right">${reg?(insTotal+tax).toLocaleString():_nfBlank('')}</td><td></td></tr>
+<tr style="background:#FFFBEB;font-weight:800"><td>실수령액</td><td class="nf-right" style="color:#0F2952">${reg?net.toLocaleString():_nfBlank('')}</td><td></td></tr>
+</table>
+<div class="nf-legal"><b>📋 근기법 §48</b> — 임금 지급 시 명세서 서면 교부 의무. 위반 시 500만원 이하 과태료.<br>※ 산재보험은 사업주 전액 부담으로 근로자 공제 X</div>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center" style="margin-top:10pt">근로자: <b>${_nfBlank(emp?.name)}</b> (인)</p>`;
+    },
+
+    wage_ledger: ()=>`<h1>임 금 대 장</h1>
+<p class="nf-center" style="color:#6B7280;margin-bottom:12pt">${_nfBlank(d.year)}년 ${_nfBlank(d.month)}월 분</p>
+${ct}
+<h2>전 직원 임금 지급 내역</h2>
+<table>
+<tr style="background:#F3F4F6"><th style="width:25pt">No.</th><th style="width:50pt">성명</th><th>주민번호</th><th>직위</th><th class="nf-right">기본급</th><th class="nf-right">실수령</th></tr>
+${(EMPS||[]).map((e,i)=>{
+  const me = nfMapEmp(e);
+  const tax = Math.round((me.salary||0)*0.1218);
+  return `<tr><td class="nf-center">${i+1}</td><td>${esc(me.name||'')}</td><td>${esc(me.rrn||'')}</td><td>${esc(me.position||'')}</td><td class="nf-right">${(me.salary||0).toLocaleString()}</td><td class="nf-right nf-bold">${((me.salary||0)-tax).toLocaleString()}</td></tr>`;
+}).join('')}
+</table>
+<div class="nf-legal"><b>📋 근기법 §48</b> — 임금대장은 3년 보관 의무</div>
+<p class="nf-right nf-bold" style="margin-top:25pt">${_nfBlank(c.name)} 대표 ${_nfBlank(c.ceo)} (인)</p>`,
+
+    leave_promo_1st: ()=>{
+      const total = parseInt(d.totalDays)||0;
+      return `<h1>연차 유급휴가 사용 촉진 통지서 (1차)</h1>
+<p style="margin-bottom:12pt"><strong>${_nfBlank(emp?.name)}</strong> 귀하</p>
+<p>근로기준법 제61조에 따라 연차 유급휴가 사용을 촉진하니 사용 계획을 제출하여 주시기 바랍니다.</p>
+<table>
+<tr><th>발생일</th><td>${_nfBlank(emp?.hireDate)}</td><th>사용 마감일</th><td>${_nfBlank(d.deadlineDate)}</td></tr>
+<tr><th>총 발생 연차</th><td>${total?total+'일':_nfBlank('')}</td><th>잔여 연차</th><td>${_nfBlank('','60pt')}</td></tr>
+</table>
+<div class="nf-clause"><div class="nf-clause-title">요청 사항</div>본 통지를 받은 날로부터 10일 이내 사용 시기를 회사에 서면 제출</div>
+<div class="nf-legal"><b>📋 근기법 §61</b> — 사용자가 촉진 절차 이행 시, 미사용 연차에 대한 금전 보상 의무 면제</div>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center">${_nfBlank(c.name)} 대표 ${_nfBlank(c.ceo)} (인)</p>`;
+    },
+
+    leave_promo_2nd: ()=>`<h1>연차 사용 촉진 통지서 (2차)</h1>
+<p style="margin-bottom:12pt"><strong>${_nfBlank(emp?.name)}</strong> 귀하</p>
+<p>1차 통지에 사용 계획을 통보하지 않으셨으므로, 회사가 사용 시기를 지정합니다.</p>
+<table>
+<tr><th>잔여 연차</th><td>${_nfBlank('','60pt')}</td><th>회사 지정일</th><td>${_nfBlank(d.designatedDate)}</td></tr>
+</table>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center">${_nfBlank(c.name)} 대표 ${_nfBlank(c.ceo)} (인)</p>`,
+
+    leave_request: ()=>`<h1>휴 가 신 청 서</h1>
+<table>
+<tr><th>성명</th><td>${_nfBlank(emp?.name)}</td><th>직위</th><td>${_nfBlank(emp?.position)}</td></tr>
+<tr><th>휴가 종류</th><td colspan="3"><strong>${_nfBlank(d.leaveType)}</strong></td></tr>
+<tr><th>시작일</th><td>${_nfBlank('')}</td><th>종료일</th><td>${_nfBlank('')}</td></tr>
+<tr><th>사유</th><td colspan="3">${_nfBlank('','300pt')}</td></tr>
+</table>
+<p class="nf-center" style="margin-top:25pt">위와 같이 휴가를 신청합니다.</p>
+<p class="nf-center nf-bold">${todayStr}</p>
+<p class="nf-center" style="margin-top:10pt">신청자: <b>${_nfBlank(emp?.name)}</b> (인)</p>`,
+
+    parental_leave: ()=>`<h1>육 아 휴 직 신 청 서</h1>
+${et}
+<h2>자녀 정보</h2>
+<table>
+<tr><th>성명</th><td>${_nfBlank(d.childName)}</td><th>생년월일</th><td>${_nfBlank('')}</td></tr>
+</table>
+<h2>휴직 기간</h2>
+<table>
+<tr><th>시작일</th><td>${_nfBlank('')}</td><th>종료일</th><td>${_nfBlank('')}</td></tr>
+</table>
+<div class="nf-legal"><b>📋 남녀고용평등법 §19</b> — 만 8세 이하 자녀 양육을 위해 최대 1년</div>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center">신청자: <b>${_nfBlank(emp?.name)}</b> (인)</p>`,
+
+    maternity_leave: ()=>`<h1>출 산 전 후 휴 가 신 청 서</h1>
+${et}
+<table>
+<tr><th>출산 예정일</th><td>${_nfBlank(d.expectedDate)}</td><th>구분</th><td>${_nfBlank('','80pt')}</td></tr>
+<tr><th>휴가 시작일</th><td>${_nfBlank('')}</td><th>휴가 종료일</th><td>${_nfBlank('')}</td></tr>
+</table>
+<div class="nf-legal"><b>📋 근기법 §74</b> — 출산 전후 90일 (다태아 120일). 출산 후 45일 이상 보장</div>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center">신청자: <b>${_nfBlank(emp?.name)}</b> (인)</p>`,
+
+    family_care: ()=>`<h1>가 족 돌 봄 휴 가 신 청 서</h1>
+${et}
+<table>
+<tr><th>돌봄 대상자</th><td>${_nfBlank(d.familyName)}</td><th>관계</th><td>${_nfBlank('','80pt')}</td></tr>
+<tr><th>사유</th><td colspan="3">${_nfBlank('','300pt')}</td></tr>
+<tr><th>시작일</th><td>${_nfBlank('')}</td><th>종료일</th><td>${_nfBlank('')}</td></tr>
+</table>
+<div class="nf-legal"><b>📋 남녀고용평등법 §22의2</b> — 연 10일 이내</div>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center">신청자: <b>${_nfBlank(emp?.name)}</b> (인)</p>`,
+
+    personnel_order: ()=>`<h1>인 사 명 령 서</h1>
+${ct}
+<table>
+<tr><th>대상자</th><td>${_nfBlank(emp?.name)}</td><th>발령 종류</th><td><strong>${_nfBlank(d.orderType)}</strong></td></tr>
+<tr><th>현 직위</th><td>${_nfBlank(emp?.position)}</td><th>변경 직위</th><td>${_nfBlank('','100pt')}</td></tr>
+<tr><th>발령일</th><td colspan="3">${_nfBlank('')}</td></tr>
+</table>
+<p style="margin:20pt 0">위와 같이 발령합니다.</p>
+<p class="nf-right nf-bold" style="margin-top:25pt">${todayStr}<br>${_nfBlank(c.name)} 대표 ${_nfBlank(c.ceo)} (인)</p>`,
+
+    resignation: ()=>`<h1>사 직 서</h1>
+<table style="margin-bottom:14pt">
+<tr><th>성명</th><td>${_nfBlank(emp?.name)}</td><th>직위</th><td>${_nfBlank(emp?.position)}</td></tr>
+<tr><th>입사일</th><td>${_nfBlank(emp?.hireDate)}</td><th>퇴사 희망일</th><td><strong>${_nfBlank(d.resignDate)}</strong></td></tr>
+</table>
+<h2>사 직 사 유</h2>
+<div class="nf-clause" style="min-height:80pt">${_nfBlank('','300pt')}</div>
+<p class="nf-center" style="margin-top:25pt">위와 같은 사유로 사직하고자 하오니 허락하여 주시기 바랍니다.</p>
+<p class="nf-center nf-bold">${todayStr}</p>
+<p class="nf-center" style="margin-top:14pt">사직인: <b>${_nfBlank(emp?.name)}</b> (인)</p>
+<p class="nf-center" style="margin-top:20pt">${_nfBlank(c.name)} 대표 귀하</p>`,
+
+    termination: ()=>`<h1>해 고 통 지 서</h1>
+<p style="margin-bottom:14pt"><strong>${_nfBlank(emp?.name)}</strong> 귀하</p>
+${ct}
+<table>
+<tr><th>대상자</th><td>${_nfBlank(emp?.name)}</td><th>직위</th><td>${_nfBlank(emp?.position)}</td></tr>
+<tr><th>통지일</th><td>${_nfBlank(d.noticeDate)}</td><th>해고 예정일</th><td>${_nfBlank('')}</td></tr>
+</table>
+<h2>해 고 사 유</h2>
+<div class="nf-clause" style="min-height:100pt">${_nfBlank('','300pt')}</div>
+<div class="nf-legal"><b>⚠️ 근로자 권리</b><br>· 부당해고 구제신청: 노동위원회 (해고 후 3개월 이내)<br>· 해고예고수당: 30일 전 통지 미이행 시 통상임금 30일분 지급 (근기법 §26)</div>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center">${_nfBlank(c.name)} 대표 ${_nfBlank(c.ceo)} (인)</p>`,
+
+    advance_termination: ()=>`<h1>해 고 예 고 적 용 제 외 통 지 서</h1>
+<p style="margin-bottom:14pt"><strong>${_nfBlank(emp?.name)}</strong> 귀하</p>
+<p>근로기준법 제26조 단서에 해당하여 30일 전 예고 없이 즉시 해고함을 통지합니다.</p>
+<table>
+<tr><th>대상자</th><td>${_nfBlank(emp?.name)}</td><th>해고일</th><td>${_nfBlank('')}</td></tr>
+</table>
+<h2>예고 제외 사유</h2>
+<div class="nf-clause" style="min-height:80pt">${_nfBlank('','300pt')}</div>
+<div class="nf-legal"><b>📋 근기법 §26 단서</b> — 천재지변·중대 귀책사유 시 적용 제외</div>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center">${_nfBlank(c.name)} 대표 ${_nfBlank(c.ceo)} (인)</p>`,
+
+    warning: ()=>`<h1>시 말 서</h1>
+<table>
+<tr><th>대상자</th><td>${_nfBlank(emp?.name)}</td><th>직위</th><td>${_nfBlank(emp?.position)}</td></tr>
+<tr><th>발생일</th><td>${_nfBlank(d.incidentDate)}</td><th>조치</th><td>${_nfBlank('','100pt')}</td></tr>
+</table>
+<h2>사 건 내 용</h2>
+<div class="nf-clause" style="min-height:100pt">${_nfBlank('','300pt')}</div>
+<p class="nf-center" style="margin-top:20pt">위 사실과 다름이 없으며, 향후 동일한 일이 재발하지 않도록 노력할 것을 약속합니다.</p>
+<p class="nf-center nf-bold">${todayStr}</p>
+<p class="nf-center">작성자: <b>${_nfBlank(emp?.name)}</b> (서명)</p>`,
+
+    discipline_notice: ()=>`<h1>징 계 처 분 통 지 서</h1>
+<p style="margin-bottom:14pt"><strong>${_nfBlank(emp?.name)}</strong> 귀하</p>
+${ct}
+<table>
+<tr><th>대상자</th><td>${_nfBlank(emp?.name)}</td><th>징계 종류</th><td><strong>${_nfBlank(d.actionType)}</strong></td></tr>
+<tr><th>의결일</th><td>${_nfBlank('')}</td><th>기간</th><td>${_nfBlank('','80pt')}</td></tr>
+</table>
+<h2>징 계 사 유</h2>
+<div class="nf-clause" style="min-height:80pt">${_nfBlank('','300pt')}</div>
+<div class="nf-clause"><div class="nf-clause-title">이의제기 절차</div>통지일로부터 7일 이내 회사에 재심 신청 가능</div>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center">${_nfBlank(c.name)} 대표 ${_nfBlank(c.ceo)} (인)</p>`,
+
+    cert_employment: ()=>`<h1>재 직 증 명 서</h1>
+<table>
+<tr><th>성명</th><td>${_nfBlank(emp?.name)}</td><th>주민번호</th><td>${_nfBlank(emp?.rrn)}</td></tr>
+<tr><th>주소</th><td colspan="3">${_nfBlank(emp?.address,"300pt")}</td></tr>
+<tr><th>회사명</th><td>${_nfBlank(c.name)}</td><th>대표</th><td>${_nfBlank(c.ceo)}</td></tr>
+<tr><th>입사일</th><td>${_nfBlank(emp?.hireDate)}</td><th>현 직위</th><td>${_nfBlank(emp?.position)}</td></tr>
+<tr><th>용도</th><td colspan="3">${_nfBlank(d.purpose,"200pt")}</td></tr>
+</table>
+<p class="nf-center" style="margin-top:30pt;line-height:2.2;font-size:14pt">위 사람은 본 회사에 재직 중임을 증명합니다.</p>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center" style="margin-top:20pt"><b>${_nfBlank(c.name)}</b><br>대표 ${_nfBlank(c.ceo)} <span style="border:1.5pt solid #DC2626;padding:4pt 12pt;border-radius:50%;color:#DC2626;font-weight:800;margin-left:8pt">직 인</span></p>`,
+
+    cert_career: ()=>`<h1>경 력 증 명 서</h1>
+${et}
+<h2>근무 경력</h2>
+<table>
+<tr><th>회사명</th><td colspan="3">${_nfBlank(c.name)}</td></tr>
+<tr><th>근무 기간</th><td colspan="3">${_nfBlank(emp?.hireDate)} ~ 현재</td></tr>
+<tr><th>최종 직위</th><td>${_nfBlank(emp?.position)}</td><th>근무 형태</th><td>${_nfBlank(emp?.workType)}</td></tr>
+</table>
+<p class="nf-center" style="margin-top:30pt;line-height:2.2;font-size:14pt">위 사람은 본 회사에서 위와 같이 근무하였음을 증명합니다.</p>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center" style="margin-top:20pt"><b>${_nfBlank(c.name)}</b><br>대표 ${_nfBlank(c.ceo)} <span style="border:1.5pt solid #DC2626;padding:4pt 12pt;border-radius:50%;color:#DC2626;font-weight:800;margin-left:8pt">직 인</span></p>
+<div class="nf-legal" style="margin-top:25pt"><b>📋 근기법 §39</b> — 사용자는 근로자 청구 시 사용 기간·업무·직위·임금 등을 즉시 증명서로 발급해야 함</div>`,
+
+    cert_resignation: ()=>`<h1>퇴 직 증 명 서</h1>
+${et}
+<table>
+<tr><th>회사명</th><td>${_nfBlank(c.name)}</td><th>대표</th><td>${_nfBlank(c.ceo)}</td></tr>
+<tr><th>입사일</th><td>${_nfBlank(emp?.hireDate)}</td><th>퇴직일</th><td><strong>${_nfBlank(d.resignDate)}</strong></td></tr>
+<tr><th>최종 직위</th><td>${_nfBlank(emp?.position)}</td><th>퇴직 사유</th><td>${_nfBlank('','100pt')}</td></tr>
+</table>
+<p class="nf-center" style="margin-top:30pt;line-height:2.2;font-size:14pt">위 사람은 본 회사에서 위와 같이 근무하다가 퇴직하였음을 증명합니다.</p>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center" style="margin-top:20pt"><b>${_nfBlank(c.name)}</b><br>대표 ${_nfBlank(c.ceo)} <span style="border:1.5pt solid #DC2626;padding:4pt 12pt;border-radius:50%;color:#DC2626;font-weight:800;margin-left:8pt">직 인</span></p>`,
+
+    ins_acquire: ()=>{
+      const wage = emp?.salary||0;
+      return `<h1>4대 사회보험 자격취득신고서</h1>
+<p class="nf-center" style="color:#6B7280;margin-bottom:12pt">국민연금 · 건강보험 · 고용보험 · 산재보험 통합신고</p>
+${ct}
+<h2>피보험자(근로자) 정보</h2>
+<table>
+<tr><th>성명</th><td>${_nfBlank(emp?.name)}</td><th>주민번호</th><td>${_nfBlank(emp?.rrn)}</td></tr>
+<tr><th>자격취득일</th><td>${_nfBlank(d.acquireDate)}</td><th>월 보수액</th><td>${wage?wage.toLocaleString()+'원':_nfBlank('')}</td></tr>
+</table>
+<h2>가입 보험 (월 보험료 예상)</h2>
+<table>
+<tr><th>구분</th><th class="nf-right">보험료 (원)</th></tr>
+<tr><td>국민연금 (4.5%)</td><td class="nf-right">${wage?Math.round(wage*0.045).toLocaleString():_nfBlank('')}</td></tr>
+<tr><td>건강보험 (3.545%)</td><td class="nf-right">${wage?Math.round(wage*0.03545).toLocaleString():_nfBlank('')}</td></tr>
+<tr><td>장기요양 (0.4591%)</td><td class="nf-right">${wage?Math.round(wage*0.004591).toLocaleString():_nfBlank('')}</td></tr>
+<tr><td>고용보험 (0.9%)</td><td class="nf-right">${wage?Math.round(wage*0.009).toLocaleString():_nfBlank('')}</td></tr>
+</table>
+<div class="nf-legal"><b>📋 신고 의무</b><br>· 신고 기한: 자격 취득일로부터 14일 이내<br>· 신고 방법: 4대사회보험 정보연계센터 (www.4insure.or.kr)</div>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center">신고인: ${_nfBlank(c.name)} 대표 ${_nfBlank(c.ceo)} (인)</p>`;
+    },
+
+    ins_loss: ()=>`<h1>4대 사회보험 자격상실신고서</h1>
+${ct}
+<h2>피보험자(근로자) 정보</h2>
+<table>
+<tr><th>성명</th><td>${_nfBlank(emp?.name)}</td><th>주민번호</th><td>${_nfBlank(emp?.rrn)}</td></tr>
+<tr><th>자격상실일</th><td>${_nfBlank(d.lossDate)}</td><th>상실 사유</th><td>${_nfBlank('','100pt')}</td></tr>
+</table>
+<div class="nf-legal"><b>📋 신고 의무</b><br>· 신고 기한: 자격 상실일이 속한 달의 다음달 15일까지<br>· 고용보험: 이직확인서 동시 제출 필수</div>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center">신고인: ${_nfBlank(c.name)} 대표 ${_nfBlank(c.ceo)} (인)</p>`,
+
+    rules_of_employment: ()=>`<h1>취 업 규 칙</h1>
+<p class="nf-center" style="color:#6B7280;margin-bottom:12pt">(${_nfBlank(d.category,"100pt")} 표준)</p>
+${ct}
+<h2>제1장 총칙</h2>
+<div class="nf-clause"><div class="nf-clause-title">제1조 (목적)</div>이 규칙은 ${_nfBlank(c.name)} 소속 근로자의 근로조건 및 복무 규율에 관한 사항을 정함을 목적으로 한다.</div>
+<div class="nf-clause"><div class="nf-clause-title">제2조 (적용 범위)</div>이 규칙은 회사에 근무하는 모든 근로자에게 적용한다.</div>
+<h2>제2장 근로시간</h2>
+<div class="nf-clause"><div class="nf-clause-title">제3조 (근로시간)</div>1주 40시간, 1일 8시간을 원칙으로 한다.</div>
+<div class="nf-clause"><div class="nf-clause-title">제4조 (휴게시간)</div>4시간마다 30분, 8시간마다 1시간 이상 부여.</div>
+<h2>제3장 휴일·휴가</h2>
+<div class="nf-clause"><div class="nf-clause-title">제5조 (주휴일)</div>1주 만근 시 1일의 유급 주휴일을 부여한다.</div>
+<div class="nf-clause"><div class="nf-clause-title">제6조 (연차유급휴가)</div>근로기준법 제60조에 따라 부여한다.</div>
+<h2>제4장 임금</h2>
+<div class="nf-clause"><div class="nf-clause-title">제7조 (임금 지급)</div>매월 25일 지급. 휴일 시 전일 지급.</div>
+<h2>제5장 퇴직</h2>
+<div class="nf-clause"><div class="nf-clause-title">제8조 (퇴직금)</div>1년 이상 근속자에게 평균임금 30일분을 1년에 대하여 지급한다.</div>
+<h2>제6장 안전·보건</h2>
+<div class="nf-clause"><div class="nf-clause-title">제9조 (안전보건교육)</div>산업안전보건법에 따라 정기 교육 실시.</div>
+<h2>제7장 직장 내 괴롭힘 및 성희롱 예방</h2>
+<div class="nf-clause"><div class="nf-clause-title">제10조 (예방)</div>회사는 직장 내 괴롭힘·성희롱을 금지하며, 발생 시 즉시 조치한다 (근기법 §76의2, 남녀고용평등법 §13).</div>
+<h2>부칙</h2>
+<p>본 규칙은 ${todayStr}부터 시행한다.</p>
+<div class="nf-legal"><b>📋 근기법 §93·§94</b> — 상시 10인 이상 근로자 사용 사업장은 작성·신고 의무</div>
+<p class="nf-right nf-bold" style="margin-top:25pt">${_nfBlank(c.name)} 대표 ${_nfBlank(c.ceo)} (인)</p>`
+  };
+  return (renderers[tpl.id] || (()=>'<p>준비 중인 양식입니다</p>'))();
+}
+
+// 미리보기/PDF용 HTML 래퍼
+function nfWrapForView(tpl, d, emp, c, autoPrint){
+  const body = nfRenderTemplateBody(tpl, d, emp, c);
+  const css = `body{font-family:"Malgun Gothic","맑은 고딕",sans-serif;max-width:780px;margin:30px auto;padding:24px;line-height:1.7;font-size:13px;color:#1A1A1A;background:#fff}
+h1{text-align:center;font-size:22px;padding-bottom:14px;border-bottom:2px solid #1A1A1A;margin-bottom:18px;letter-spacing:4px}
+h2{font-size:13px;margin:14pt 0 6pt;padding-left:8pt;border-left:3px solid #1A1A1A;font-weight:700}
+h3{font-size:12px;margin:10pt 0 4pt;font-weight:700;color:#374151}
+table{border-collapse:collapse;width:100%;font-size:12px;margin:8px 0}
+th,td{border:1px solid #999;padding:7px 9px;vertical-align:middle}
+th{background:#F3F4F6;font-weight:700;width:130px;text-align:left}
+.nf-clause{margin:10px 0;padding:9px 13px;background:#F9FAFB;border-left:3px solid #1A1A1A}
+.nf-clause-title{font-weight:700;margin-bottom:3px}
+.nf-center{text-align:center}.nf-right{text-align:right}.nf-bold{font-weight:700}
+.nf-sig-block{border:1px solid #999;padding:14px;text-align:center;width:50%;vertical-align:top}
+.nf-sig-line{border-top:1px solid #333;margin-top:50px;padding-top:5px;font-size:11px;color:#6B7280}
+.nf-legal{background:#FFFBEB;border:1px solid #FDE68A;padding:10px 12px;font-size:11px;color:#78350F;margin:12px 0}
+.nf-legal b{color:#92400E}
+.nf-actions{position:sticky;top:0;text-align:center;margin:0 0 16px;padding:12px;background:#1A1A1A;border-radius:8px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;z-index:99}
+.nf-actions button{padding:9px 18px;border:none;border-radius:6px;font-weight:700;cursor:pointer;background:#fff;color:#1A1A1A;font-size:13px;font-family:inherit}
+.nf-actions button.close{background:#6B7280;color:#fff}
+@media print{ .nf-actions{display:none} body{margin:0;padding:0;max-width:none} @page{size:A4;margin:18mm}}`;
+  return `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>${esc(tpl.name)}</title>
+<style>${css}</style></head><body>
+<div class="nf-actions">
+  <button onclick="window.print()">🖨 인쇄 / PDF로 저장</button>
+  <button onclick="window.close()" class="close">닫기</button>
+</div>
+${body}
+${autoPrint?'<script>window.addEventListener("load",function(){setTimeout(function(){window.print()},300)});<\/script>':''}
+</body></html>`;
+}
+
+// Word(.doc) Blob 빌더
+function _nfBuildWordBlob(tpl, d, emp, c){
+  const body = nfRenderTemplateBody(tpl, d, emp, c);
+  const wordHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:w="urn:schemas-microsoft-com:office:word"
+  xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><title>${esc(tpl.name)}</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
+<style>
+@page WordSection1 { size: 595.3pt 841.9pt; margin: 70pt 70pt 70pt 70pt; }
+div.WordSection1 { page: WordSection1; }
+body { font-family: "Malgun Gothic", "맑은 고딕", sans-serif; font-size: 11pt; line-height: 1.7; color: #1A1A1A; }
+h1 { text-align: center; font-size: 20pt; font-weight: 700; padding-bottom: 10pt; margin-bottom: 14pt; border-bottom: 2pt solid #1A1A1A; letter-spacing: 4pt; }
+h2 { font-size: 12pt; margin: 14pt 0 6pt; padding-left: 8pt; border-left: 3pt solid #1A1A1A; font-weight: 700; }
+h3 { font-size: 11pt; margin: 8pt 0 4pt; font-weight: 700; color: #374151; }
+table { border-collapse: collapse; width: 100%; margin: 6pt 0; font-size: 10.5pt; }
+th, td { border: 0.75pt solid #999; padding: 6pt 8pt; vertical-align: middle; }
+th { background: #F3F4F6; font-weight: 700; width: 110pt; text-align: left; }
+.nf-clause { margin: 8pt 0; padding: 7pt 11pt; background: #F9FAFB; border-left: 2.5pt solid #1A1A1A; }
+.nf-clause-title { font-weight: 700; margin-bottom: 3pt; font-size: 11pt; }
+.nf-center { text-align: center; } .nf-right { text-align: right; } .nf-bold { font-weight: 700; }
+.nf-sig-block { border: 0.75pt solid #999; padding: 14pt; text-align: center; width: 50%; vertical-align: top; }
+.nf-sig-line { border-top: 0.75pt solid #333; margin-top: 50pt; padding-top: 4pt; font-size: 10pt; color: #6B7280; }
+.nf-legal { background: #FFFBEB; border: 0.75pt solid #FDE68A; padding: 8pt 10pt; font-size: 9.5pt; color: #78350F; margin: 12pt 0; }
+.nf-legal b { color: #92400E; }
+ol, ul { margin: 6pt 0; padding-left: 20pt; } li { margin: 3pt 0; font-size: 10.5pt; } p { margin: 5pt 0; }
+</style></head><body><div class="WordSection1">${body}</div></body></html>`;
+  return new Blob(['﻿'+wordHtml], { type:'application/msword;charset=utf-8' });
+}
+// Blob 다운로드 헬퍼
+function _nfDownloadBlob(blob, fileName){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fileName;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 200);
+}
+
+// ══ 회사 양식 업로드/다운로드/삭제 ══
+let _nfSelectedFile = null;
+
+function openCustomDocUpload(){
+  _nfSelectedFile = null;
+  document.getElementById('nf-modal-body').innerHTML = `
+    <div class="nf-form-row">
+      <div class="nf-form-label">양식 이름 <span style="color:#DC2626">*</span></div>
+      <input class="nf-form-input" id="nf-cd-name" placeholder="예: ○○회사 출장 신청서">
+    </div>
+    <div class="nf-form-row">
+      <div class="nf-form-label">설명 <span class="opt">(선택)</span></div>
+      <input class="nf-form-input" id="nf-cd-desc" placeholder="예: 해외 출장 시 사용하는 양식">
+    </div>
+    <div class="nf-form-row">
+      <div class="nf-form-label">파일 첨부 <span style="color:#DC2626">*</span></div>
+      <div>
+        <div class="nf-upload-zone" id="nf-cd-zone" onclick="document.getElementById('nf-cd-file').click()">
+          <div class="nf-upload-icon">📎</div>
+          <div class="nf-upload-text">파일을 드래그하거나 클릭해서 업로드</div>
+          <div class="nf-upload-sub">워드(.doc/.docx) · PDF · HWP · 엑셀 · 이미지 · 최대 5MB</div>
+        </div>
+        <input type="file" id="nf-cd-file" style="display:none" accept=".doc,.docx,.pdf,.hwp,.hwpx,.xls,.xlsx,.png,.jpg,.jpeg" onchange="_nfHandleFileSelect(event)">
+        <div id="nf-cd-preview" style="margin-top:10px"></div>
       </div>
-      ${files.length > 0 ? files.map(file=>`
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid rgba(0,0,0,.04);transition:background .1s"
-          onmouseover="this.style.background='var(--nbg)'" onmouseout="this.style.background=''">
-          <span style="font-size:20px;flex-shrink:0">${getFileIcon(file.type)}</span>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${file.name}</div>
-            <div style="font-size:10px;color:var(--ink3)">${fmtSize(file.size)} · ${file.date}</div>
+    </div>
+    <div class="nf-info-tip warn">
+      <strong>💡 안내</strong> 업로드한 양식은 [회사 양식] 탭에 저장됩니다. 다운로드 후 워드/한글에서 직접 수정하세요.
+    </div>`;
+  document.getElementById('nf-modal-foot').innerHTML = `
+    <button class="nf-modal-btn" onclick="closeNfModal()">취소</button>
+    <button class="nf-modal-btn primary" onclick="saveCustomDoc()">+ 업로드</button>
+  `;
+  openNfModal('회사 양식 추가', '워드/PDF/HWP 등 자체 양식 업로드');
+  // 드래그앤드롭
+  setTimeout(()=>{
+    const zone = document.getElementById('nf-cd-zone');
+    if(!zone) return;
+    zone.addEventListener('dragover', e=>{ e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', ()=>zone.classList.remove('dragover'));
+    zone.addEventListener('drop', e=>{
+      e.preventDefault(); zone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0]; if(file) _nfHandleFile(file);
+    });
+  }, 50);
+}
+function _nfHandleFileSelect(e){ const f = e.target.files[0]; if(f) _nfHandleFile(f); }
+function _nfHandleFile(file){
+  if(file.size > 5*1024*1024){
+    if(typeof showSyncToast==='function') showSyncToast('파일은 5MB 이하여야 합니다','warn');
+    return;
+  }
+  _nfSelectedFile = file;
+  document.getElementById('nf-cd-preview').innerHTML = `
+    <div class="nf-file-preview">
+      <div class="nf-file-preview-icon">${getFileIcon(file.name)}</div>
+      <div class="nf-file-preview-info">
+        <div class="nf-file-preview-name">${esc(file.name)}</div>
+        <div class="nf-file-preview-size">${fmtSize(file.size)}</div>
+      </div>
+      <button class="nf-file-preview-clear" onclick="_nfClearFile()">✕</button>
+    </div>`;
+}
+function _nfClearFile(){
+  _nfSelectedFile = null;
+  const f = document.getElementById('nf-cd-file');
+  if(f) f.value = '';
+  const p = document.getElementById('nf-cd-preview');
+  if(p) p.innerHTML = '';
+}
+
+async function saveCustomDoc(){
+  const name = (document.getElementById('nf-cd-name')?.value||'').trim();
+  const desc = (document.getElementById('nf-cd-desc')?.value||'').trim();
+  if(!name){ if(typeof showSyncToast==='function') showSyncToast('양식 이름을 입력해주세요','warn'); return; }
+  if(!_nfSelectedFile){ if(typeof showSyncToast==='function') showSyncToast('파일을 첨부해주세요','warn'); return; }
+
+  if(typeof showSyncToast==='function') showSyncToast('업로드 중...','info');
+  try {
+    const res = await uploadFileToStorage(_nfSelectedFile, 'custom-doc', 'general');
+    CUSTOM_DOCS.push({
+      id: 'c_'+Date.now(),
+      name, desc,
+      fileName: _nfSelectedFile.name,
+      size: res.size || _nfSelectedFile.size,
+      type: _nfSelectedFile.type,
+      storagePath: res.path,
+      uploadedAt: new Date().toISOString()
+    });
+    saveCustomDocs();
+    closeNfModal();
+    if(typeof showSyncToast==='function') showSyncToast(`✓ '${name}' 업로드 완료`,'ok');
+    folderState.docTab = 'custom';
+    folderState.search = '';
+    renderFolderHome();
+  } catch(e){
+    console.error('Custom doc upload failed:', e);
+    if(typeof showSyncToast==='function') showSyncToast('업로드 실패: '+(e.message||''),'warn');
+  }
+}
+
+async function downloadCustomDoc(id){
+  const doc = (CUSTOM_DOCS||[]).find(d=>d.id===id);
+  if(!doc){ if(typeof showSyncToast==='function') showSyncToast('파일을 찾을 수 없습니다','warn'); return; }
+  if(!doc.storagePath){ if(typeof showSyncToast==='function') showSyncToast('파일 경로 누락','warn'); return; }
+  try {
+    const urls = await getFileUrls([doc.storagePath]);
+    const url = urls[doc.storagePath];
+    if(!url) throw new Error('서명 URL 발급 실패');
+    const a = document.createElement('a');
+    a.href = url; a.download = doc.fileName; a.target = '_blank';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    if(typeof showSyncToast==='function') showSyncToast(`${doc.fileName} 다운로드`,'ok');
+  } catch(e){
+    if(typeof showSyncToast==='function') showSyncToast('다운로드 실패','warn');
+  }
+}
+
+function deleteCustomDoc(id){
+  const doc = (CUSTOM_DOCS||[]).find(d=>d.id===id);
+  if(!doc) return;
+  if(!confirm(`"${doc.name}" 양식을 삭제할까요?\n원본 파일도 함께 삭제됩니다.`)) return;
+  if(doc.storagePath) deleteFileFromStorage(doc.storagePath);
+  CUSTOM_DOCS = CUSTOM_DOCS.filter(d=>d.id!==id);
+  saveCustomDocs();
+  if(typeof showSyncToast==='function') showSyncToast('삭제 완료','ok');
+  renderFolderCustomGrid();
+}
+
+// ══ 회사 양식 (Phase 3에서 업로드/다운로드 활성) ══
+function renderFolderCustom(){
+  const area = document.getElementById('nf-docs-area');
+  if(!area) return;
+  area.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+      <div class="nf-search-bar" style="flex:1;margin:0;min-width:240px">
+        🔍 <input type="text" id="nf-search" placeholder="회사 양식 검색..." value="${esc(folderState.search)}">
+      </div>
+      <button class="nf-btn-pill" onclick="openCustomDocUpload()">+ 양식 추가</button>
+    </div>
+    <div class="nf-info-box">
+      <strong>📋 회사 양식</strong> · 회사가 자체 사용하는 워드(.doc/.docx)·PDF·HWP·엑셀 파일을 보관할 수 있어요. 시스템이 자동 인식하지 않으니, 다운받아 직접 사용하세요.
+    </div>
+    <div id="nf-custom-grid"></div>`;
+  const inp = document.getElementById('nf-search');
+  if(inp) inp.addEventListener('input', e=>{ folderState.search=e.target.value; renderFolderCustomGrid(); });
+  renderFolderCustomGrid();
+}
+function renderFolderCustomGrid(){
+  const el = document.getElementById('nf-custom-grid');
+  if(!el) return;
+  const all = CUSTOM_DOCS||[];
+  let docs = all;
+  if(folderState.search){
+    const q = folderState.search.toLowerCase();
+    docs = docs.filter(d=>(d.name||'').toLowerCase().includes(q));
+  }
+  if(docs.length===0){
+    el.className = '';
+    if(folderState.search && all.length>0){
+      el.innerHTML = `<div class="nf-empty"><div class="nf-empty-icon">📭</div><div class="nf-empty-title">"${esc(folderState.search)}" 검색 결과가 없어요</div><div class="nf-empty-sub">다른 키워드로 검색해보세요</div></div>`;
+    } else {
+      el.innerHTML = `<div class="nf-empty"><div class="nf-empty-icon">📋</div><div class="nf-empty-title">회사 양식이 없어요</div><div class="nf-empty-sub" style="margin-bottom:14px">[+ 양식 추가] 버튼으로 워드·PDF·HWP 파일을 업로드해보세요</div><button class="nf-btn-pill" onclick="openCustomDocUpload()">+ 양식 추가</button></div>`;
+    }
+    return;
+  }
+  el.className = 'nf-doc-grid';
+  el.innerHTML = docs.map(d=>{
+    const ext = ((d.fileName||'').split('.').pop()||'').toUpperCase();
+    return `
+      <div class="nf-doc-card" onclick="downloadCustomDoc('${d.id}')">
+        <div class="nf-doc-head">
+          <div class="nf-doc-icon custom">${getFileIcon(d.fileName||'')}</div>
+          <div class="nf-doc-info">
+            <div class="nf-doc-name">${esc(d.name||'')}</div>
+            <div class="nf-doc-en">${esc(d.fileName||'')} · ${fmtSize(d.size||0)}</div>
           </div>
-          <button class="btn btn-xs" onclick="previewFile(${currentFolderId},${file.id})" title="미리보기">👁️</button>
-          <button class="btn btn-xs" onclick="downloadFile(${currentFolderId},${file.id})" title="다운로드">⬇️</button>
-          <button class="btn btn-xs" onclick="deleteFile(${currentFolderId},${file.id})" style="color:var(--rose)" title="삭제">✕</button>
+        </div>
+        <div class="nf-doc-desc">${esc(d.desc||'회사 자체 양식')}</div>
+        <div class="nf-doc-meta">
+          <span class="nf-doc-tag custom">회사 양식</span>
+          <span class="nf-doc-tag file">${esc(ext)}</span>
+        </div>
+        <div class="nf-doc-actions">
+          <button class="nf-doc-btn primary" onclick="event.stopPropagation();downloadCustomDoc('${d.id}')">📥 다운로드</button>
+          <button class="nf-doc-btn danger" onclick="event.stopPropagation();deleteCustomDoc('${d.id}')" title="삭제">🗑</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+// 회사 양식 업로드/다운로드/삭제는 아래 ══ 회사 양식 ══ 섹션에서 정의
+
+// ══ 사용자 폴더 진입 (단일 단계) ══
+function openUserFolder(id){
+  folderState.view = 'userFolder';
+  folderState.folderId = id;
+  renderFolder();
+}
+
+function renderUserFolderView(folder){
+  const body = document.getElementById('folder-body');
+  if(!body) return;
+  const files = folder.files||[];
+  body.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="nf-btn-pill outline" onclick="goFolderHome()">← 폴더 관리</button>
+      <button class="nf-btn-pill" onclick="uploadFile(${folder.id})">⬆️ 파일 업로드</button>
+      <button class="nf-btn-pill outline" onclick="renameFolder(${folder.id})">✏️ 이름변경</button>
+      <button class="nf-btn-pill outline" onclick="deleteFolder(${folder.id})" style="color:#B91C1C;border-color:#FCA5A5">🗑 폴더 삭제</button>
+    </div>
+    <div class="nf-file-list">
+      <div class="nf-file-head">
+        <span class="nf-file-head-title">파일 ${files.length}개</span>
+      </div>
+      ${files.length>0 ? files.map(file=>`
+        <div class="nf-file-row">
+          <span class="nf-file-icon">${getFileIcon(file.type)}</span>
+          <div class="nf-file-info">
+            <div class="nf-file-name">${esc(file.name)}</div>
+            <div class="nf-file-meta">${fmtSize(file.size)} · ${esc(file.date||'')}</div>
+          </div>
+          <button class="nf-folder-act" onclick="previewFile(${folder.id},${file.id})" title="미리보기">👁️</button>
+          <button class="nf-folder-act" onclick="downloadFile(${folder.id},${file.id})" title="다운로드">⬇️</button>
+          <button class="nf-folder-act danger" onclick="deleteFile(${folder.id},${file.id})" title="삭제">✕</button>
         </div>`).join('') : `
-        <div style="text-align:center;padding:24px;color:var(--ink4);font-size:12px">
-          파일을 업로드하세요
+        <div style="text-align:center;padding:32px 20px;color:var(--ink3);font-size:12.5px">
+          이 폴더가 비어 있어요. 파일을 업로드해보세요.
         </div>`}
-    </div>` : ''
-  body.innerHTML = breadcrumbHtml + foldersHtml + filesHtml;
+    </div>`;
 }
 
 
@@ -11149,6 +12489,10 @@ async function sbSaveAll(companyId) {
     {key:'pol_snapshots', value:POL_SNAPSHOTS||{}},
     {key:'pay_snapshots', value:PAY_SNAPSHOTS||{}},
     {key:'bk_snapshots', value:BK_SNAPSHOTS||{}},
+    // 📁 폴더탭 — Phase 4 도입 (PROTECTED 아님 — 가드 영향 없음)
+    {key:'company_info', value: typeof COMPANY_INFO!=='undefined' ? (COMPANY_INFO||{}) : {}},
+    {key:'custom_docs', value: typeof CUSTOM_DOCS!=='undefined' ? (CUSTOM_DOCS||[]) : []},
+    {key:'saved_forms', value: typeof SAVED_FORMS!=='undefined' ? (SAVED_FORMS||[]) : []},
   ];
   // 대형 키: 각각 별도 저장 (타임아웃 방지 + old_value 감사로그 저장)
   const largeItems = [
@@ -11801,6 +13145,10 @@ async function sbLoadAll(companyId) {
   if('pol_snapshots' in map)   { POL_SNAPSHOTS = map.pol_snapshots || {}; localStorage.setItem('npm5_pol_snapshots', JSON.stringify(POL_SNAPSHOTS)); }
   if('pay_snapshots' in map)   { PAY_SNAPSHOTS = map.pay_snapshots || {}; localStorage.setItem('npm5_pay_snapshots', JSON.stringify(PAY_SNAPSHOTS)); }
   if('bk_snapshots' in map)    { BK_SNAPSHOTS = map.bk_snapshots || {}; localStorage.setItem('npm5_bk_snapshots', JSON.stringify(BK_SNAPSHOTS)); }
+  // 📁 폴더탭 — 새 키 (Phase 4 도입). 반드시 `if('key' in map)` 패턴 (CLAUDE.md 규칙)
+  if('company_info' in map)    { COMPANY_INFO = map.company_info || {}; localStorage.setItem('npm5_company_info', JSON.stringify(COMPANY_INFO)); }
+  if('custom_docs' in map)     { CUSTOM_DOCS = map.custom_docs || []; localStorage.setItem('npm5_custom_docs', JSON.stringify(CUSTOM_DOCS)); }
+  if('saved_forms' in map)     { SAVED_FORMS = map.saved_forms || []; localStorage.setItem('npm5_saved_forms', JSON.stringify(SAVED_FORMS)); }
 
   // 최초 1회: POL_SNAPSHOTS가 비어있고 REC 데이터가 있으면 현재 POL을 과거 달에 복사해 시작점 확보
   try {

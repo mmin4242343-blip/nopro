@@ -17,7 +17,7 @@ export const handler = async (event) => {
     const keys = body.keys; // 다중 키 fetch (폴링 경량화용)
 
     // data-save와 동일한 키 화이트리스트 적용
-    const ALLOWED_KEYS = ['emps','pol','bk','tbk','rec','bonus','allow','tax','leave_settings','leave_overrides','folders','safety','pol_snapshots','pay_snapshots','bk_snapshots'];
+    const ALLOWED_KEYS = ['emps','pol','bk','tbk','rec','bonus','allow','tax','leave_settings','leave_overrides','folders','safety','pol_snapshots','pay_snapshots','bk_snapshots','company_info','custom_docs','saved_forms'];
     if (key && !ALLOWED_KEYS.includes(key)) {
       return err(400, '허용되지 않은 데이터 키입니다', event);
     }
@@ -65,7 +65,7 @@ export const handler = async (event) => {
     // 🏷️ 빌드 버전 — 클라가 옛 캐시된 JS 사용 중이면 감지 후 새로고침 안내
     // 배포 시 이 fallback 값을 js/app.js의 CLIENT_BUILD와 동일하게 갱신 필수
     // (Netlify env var SERVER_BUILD가 있으면 그것이 우선, 없으면 fallback 사용)
-    map._serverBuild = process.env.SERVER_BUILD || '2026-05-06-9';
+    map._serverBuild = process.env.SERVER_BUILD || '2026-05-07-1';
 
     return ok(map, event);
 
