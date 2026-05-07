@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-07-3';
+const CLIENT_BUILD = '2026-05-07-4';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -2920,6 +2920,22 @@ function renderMonthly(){
     if(_polSwapped) POL = _origPOL;
   }
 }
+// 공제시간 chip 생성 (monthSummary의 dedShortMins 누적 조건과 100% 동일)
+// → 일별 chip 합 = 합계 컬럼(s.dedShortH)이 일치하도록 보장
+function _nfDedChip(c, autoH, mode, emp){
+  if(!c) return '';
+  if(mode==='monthly' || mode==='hourly') return '';   // monthSummary line 1511과 동일
+  if(POL.dedMode!=='hour') return '';
+  if(autoH) return '';
+  const sot = (emp && emp.sot) || POL.sot || 209;
+  // monthSummary line 1437과 동일한 dailyStd 계산
+  const dailyStdH = (mode==='fixed' || mode==='monthly') ? 8 : sot/4.345/5;
+  const dailyStdM = dailyStdH * 60;
+  const dedShMin = dailyStdM - c.work;
+  if(dedShMin <= 10) return '';
+  return `<span class="tch" style="background:#FEE2E2;color:#B91C1C" title="소정근로 ${dailyStdH.toFixed(2)}h 미달분 (시급 차감)">공${m2h(dedShMin).toFixed(2)}h</span>`;
+}
+
 function renderCal(){
   const emp=EMPS.find(e=>e.id===vEid);if(!emp)return'';
   const s=monthSummary(vEid,vY,vM),days=dim(vY,vM);
@@ -2977,19 +2993,22 @@ function renderCal(){
     else if(isAl)inner+=`<div style="font-size:9px;color:var(--green);font-weight:700">연차</div>`;
     else if(isHalf){
       inner+=`<div style="font-size:9px;color:#0891B2;font-weight:700">반차</div>`;
-      if(c){inner+=`<div class="cti">${rec.start}~${rec.end}</div><div class="cwk">${fmtH(c.work)}</div>`;}
-      else{inner+=`<div style="font-size:8px;color:#0891B2">0.5일</div>`;}
+      if(c){
+        inner+=`<div class="cti">${rec.start}~${rec.end}</div><div class="cwk">${fmtH(c.work)}</div>`;
+        // 반차 + 출퇴근 있으면 monthSummary는 공제 누적함 → 일별 표시도 동일하게
+        const _dedChip = _nfDedChip(c, autoH, calEmpMode, emp);
+        if(_dedChip) inner += `<div>${_dedChip}</div>`;
+      } else {
+        inner+=`<div style="font-size:8px;color:#0891B2">0.5일</div>`;
+      }
     } else if(c){
       inner+=`<div class="cti">${rec.start}~${rec.end}</div><div class="cwk">${fmtH(c.work)}</div><div>`;
       if(c.crossed)inner+=`<span class="tch" style="background:var(--gbg);color:#065F46">익일</span>`;
       if(c.nightM>30)inner+=`<span class="tch" style="background:var(--abg);color:#92400E">야${m2h(c.nightM).toFixed(2)}h</span>`;
       if(c.ot>0)inner+=`<span class="tch" style="background:#EDE9FE;color:#4C1D95">연${m2h(c.ot).toFixed(2)}h</span>`;
       if(autoH)inner+=`<span class="tch" style="background:#FED7AA;color:#9A3412">휴</span>`;
-      // 공제시간(소정근로 미달분) — 통상임금제 + 시간단위 공제 모드에서만 발생
-      if(calEmpMode==='fixed' && POL.dedMode==='hour' && !autoH){
-        const _dedShMin = 480 - c.work;
-        if(_dedShMin > 10) inner += `<span class="tch" style="background:#FEE2E2;color:#B91C1C" title="소정근로 8h 미달분 (시급 차감)">공${m2h(_dedShMin).toFixed(2)}h</span>`;
-      }
+      // 공제시간 chip — monthSummary와 동일 조건 (fixed/pohal + dedMode==='hour' + !autoH + 8h or sot 기반)
+      inner += _nfDedChip(c, autoH, calEmpMode, emp);
       inner+=`</div>`;
     }
     h+=`<div class="${cls}" onclick="jumpDay(${vY},${vM},${d})">${inner}</div>`;
