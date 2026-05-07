@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-07-15';
+const CLIENT_BUILD = '2026-05-07-16';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1509,8 +1509,9 @@ function monthSummary(eid,y,m){
     // 반차일은 4시간(240분) 인정 → 기준 시간에서 차감 (반차 4h + 출근 c.work ≥ 8h이면 공제 없음)
     const _adjStdM = dailyStd*60 - (rec.halfAnnual ? 240 : 0);
     const _shMins = _adjStdM - c.work;
-    // 📊 표시용 공제시간: 무조건 소정(8h) 미달이면 누적 (모든 모드 + dedMode 무관 + 휴일 무관 + 1분 이상)
-    if(_shMins > 0){
+    // 📊 표시용 공제시간: 평일에 소정(8h) 미달이면 누적 (휴일 제외 — 정기휴일·법정공휴일은 특근 개념)
+    // autoH=true: 주간직원의 토/일, 야간직원의 금/토, 법정공휴일 (subWork=true면 평일 처리됨)
+    if(!autoH && _shMins > 0){
       dedShortHByDay += +m2h(_shMins).toFixed(2);
     }
     // 💰 결근차감 금액 + 분 단위 정밀 누적: 기존 조건 (통상/포괄임금제 + 시간단위 공제 모드 + 평일만)
@@ -2928,11 +2929,14 @@ function renderMonthly(){
   }
 }
 // 일별 공제시간 (분 단위) 계산 — 표시 전용
-// 정책: 모든 모드 + dedMode 무관 + 휴일 무관 — 무조건 8h(소정) 미달이면 표시
+// 정책: 평일에만 잡음. 휴일(정기휴일·법정공휴일)은 특근 개념이라 공제 없음.
+// 주간 직원: 토/일 휴일 / 야간 직원: 금/토 휴일 / 모든 직원: 법정공휴일.
+// subWork(대체근무) 체크 시 autoH=false → 평일처럼 공제 검사.
 // monthSummary의 dedShortHByDay와 동일 조건 (모든 화면 일치)
 // isHalf: 반차일은 4h(240분) 인정 → 기준 시간에서 차감
 function _nfDedMin(c, autoH, mode, emp, isHalf){
   if(!c) return 0;
+  if(autoH) return 0;  // 휴일 제외
   const sot = (emp && emp.sot) || POL.sot || 209;
   const dailyStdH = (mode==='fixed' || mode==='monthly') ? 8 : sot/4.345/5;
   const adjStdM = dailyStdH*60 - (isHalf ? 240 : 0);
