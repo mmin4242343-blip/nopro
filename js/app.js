@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-07-6';
+const CLIENT_BUILD = '2026-05-07-7';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -2922,21 +2922,27 @@ function renderMonthly(){
     if(_polSwapped) POL = _origPOL;
   }
 }
-// 공제시간 chip 생성 (monthSummary의 dedShortMins 누적 조건과 100% 동일)
-// → 일별 chip 합 = 합계 컬럼(s.dedShortH)이 일치하도록 보장
+// 일별 공제시간 (분 단위) 계산 — monthSummary의 dedShortMins 누적 조건과 100% 동일
+// 모든 표시(일별 chip / 엑셀 / 캘린더 카드)가 같은 함수를 쓰도록 통일
 // isHalf: 반차일은 4h(240분) 인정 → 기준 시간에서 차감
-function _nfDedChip(c, autoH, mode, emp, isHalf){
-  if(!c) return '';
-  if(mode==='monthly' || mode==='hourly') return '';   // monthSummary line 1511과 동일
-  if(POL.dedMode!=='hour') return '';
-  if(autoH) return '';
+function _nfDedMin(c, autoH, mode, emp, isHalf){
+  if(!c) return 0;
+  if(mode==='monthly' || mode==='hourly') return 0;
+  if(POL.dedMode!=='hour') return 0;
+  if(autoH) return 0;
   const sot = (emp && emp.sot) || POL.sot || 209;
-  // monthSummary line 1437과 동일한 dailyStd 계산
   const dailyStdH = (mode==='fixed' || mode==='monthly') ? 8 : sot/4.345/5;
-  // 반차일은 4시간 인정 → 기준 시간에서 차감 (반차 4h + 출근 c.work ≥ 8h이면 공제 없음)
   const adjStdM = dailyStdH*60 - (isHalf ? 240 : 0);
   const dedShMin = adjStdM - c.work;
-  if(dedShMin <= 10) return '';
+  return dedShMin > 10 ? dedShMin : 0;
+}
+
+// 공제시간 chip (캘린더 일별 셀용) — _nfDedMin 결과를 HTML로 래핑
+function _nfDedChip(c, autoH, mode, emp, isHalf){
+  const dedShMin = _nfDedMin(c, autoH, mode, emp, isHalf);
+  if(dedShMin === 0) return '';
+  const sot = (emp && emp.sot) || POL.sot || 209;
+  const dailyStdH = (mode==='fixed' || mode==='monthly') ? 8 : sot/4.345/5;
   const tipBase = isHalf ? `반차 4h + 출근 ${m2h(c.work).toFixed(2)}h` : `소정 ${dailyStdH.toFixed(2)}h`;
   return `<span class="tch" style="background:#FEE2E2;color:#B91C1C" title="${tipBase}이 8h 미달 (시급 차감)">공${m2h(dedShMin).toFixed(2)}h</span>`;
 }
@@ -10760,9 +10766,9 @@ function exportMonthlyExcel(){
     R++;
     R++; // 공백행
 
-    // 테이블 헤더 (휴게(h) 칼럼 신설)
-    const tHdrs=['날짜','요일','출근','퇴근','휴게(h)','실근무(h)','야간(h)','연장(h)','휴일(h)','연차/결근','비고'];
-    const tBgs=[C.navy,C.navy,C.navy2,C.navy2,'2D6A4F',C.teal2,C.purple2,C.blue,C.orange2,'2E7D32',C.gray];
+    // 테이블 헤더 (실근무 옆에 공제(h) 칼럼 추가 → 12열)
+    const tHdrs=['날짜','요일','출근','퇴근','휴게(h)','실근무(h)','공제(h)','야간(h)','연장(h)','휴일(h)','연차/결근','비고'];
+    const tBgs=[C.navy,C.navy,C.navy2,C.navy2,'2D6A4F',C.teal2,C.rose,C.purple2,C.blue,C.orange2,'2E7D32',C.gray];
     tHdrs.forEach((h,ci)=>{
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),h,S.mainHdr(tBgs[ci],'FFFFFF','center'));
     });
@@ -10792,7 +10798,7 @@ function exportMonthlyExcel(){
 
       // 퇴사일 이후 날짜는 빈 행 (REC 무시, 퇴사일 당일은 정상 집계)
       if(empLeaveDate2 && empLeaveDate2<new Date(vY,vM-1,d)){
-        [2,3,4,5,6,7,8,9,10].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty('F5F5F5')));
+        [2,3,4,5,6,7,8,9,10,11].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty('F5F5F5')));
         ws['!rows'].push({hpt:18});
         R++;
         continue;
@@ -10808,24 +10814,28 @@ function exportMonthlyExcel(){
         const noteFg=rec.absent?C.rose:rec.annual?C.green:rec.halfAnnual?C.blue:C.gray;
         const bkH = c2 && c2.bkMins ? +m2h(c2.bkMins).toFixed(2) : 0;
         if(c2 && c2.bkMins) totalBk += c2.bkMins;
+        // 일별 공제(h) — _nfDedMin과 동일 로직 (반차일은 4h 인정 차감)
+        const _dedMin = c2 ? _nfDedMin(c2, autoH, getEmpPayMode(emp), emp, !!rec.halfAnnual) : 0;
+        const _dedH = _dedMin > 0 ? +m2h(_dedMin).toFixed(2) : 0;
 
         xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),rec.start||'',S.cell(C.navy,rec.start?C.teal4:rowBg,!!rec.start,'center'));
         xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),rec.end||'',S.cell(C.navy,rec.end?C.teal4:rowBg,!!rec.end,'center'));
         xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),bkH,S.numDec('2D6A4F',bkH>0?'E8F5E9':rowBg,bkH>0));
         xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),c2?+m2h(c2.work).toFixed(2):0,S.numDec(c2?.work>=480?C.green:C.navy,c2?.work>=480?C.green4:rowBg,c2?.work>=480));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),c2&&c2.nightM>0?+m2h(c2.nightM).toFixed(2):0,S.numDec(C.purple2,c2?.nightM>0?C.purple4:rowBg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),c2&&c2.ot>0?+m2h(c2.ot).toFixed(2):0,S.numDec(C.blue,c2?.ot>0?C.blue4:rowBg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),autoH&&c2?+m2h(c2.work).toFixed(2):0,S.numDec(C.orange2,autoH&&c2?C.orange4:rowBg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),note,S.accent(noteFg,noteBg,!!note));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),_dedH,S.numDec(C.rose, _dedH>0?C.rose3:rowBg, _dedH>0));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),c2&&c2.nightM>0?+m2h(c2.nightM).toFixed(2):0,S.numDec(C.purple2,c2?.nightM>0?C.purple4:rowBg));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),c2&&c2.ot>0?+m2h(c2.ot).toFixed(2):0,S.numDec(C.blue,c2?.ot>0?C.blue4:rowBg));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),autoH&&c2?+m2h(c2.work).toFixed(2):0,S.numDec(C.orange2,autoH&&c2?C.orange4:rowBg));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),note,S.accent(noteFg,noteBg,!!note));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
       } else {
-        [2,3,4,5,6,7,8,9,10].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty(rowBg)));
+        [2,3,4,5,6,7,8,9,10,11].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty(rowBg)));
       }
       ws['!rows'].push({hpt:18});
       R++;
     }
 
-    // 합계행 (휴게 칼럼 추가로 인한 인덱스 shift)
+    // 합계행 (공제 칼럼 추가로 인덱스 shift: 야간 6→7, 연장 7→8, 휴일 8→9, 연차 9→10, 비고 10→11)
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),'합 계',S.mainHdr(C.teal,'FFFFFF','center'));
     xlsMerge(ws,R,0,R,3);
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),'',S.mainHdr(C.teal));
@@ -10833,15 +10843,16 @@ function exportMonthlyExcel(){
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),'',S.mainHdr(C.teal));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),+m2h(totalBk).toFixed(2),XLS.S.total('FFFFFF','2D6A4F'));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),+s.twkH.toFixed(2),XLS.S.total('FFFFFF',C.teal));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),+(s.tNightH||0).toFixed(2),XLS.S.total('FFFFFF',C.purple));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),XLS.S.total('FFFFFF',C.blue));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),+((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0)).toFixed(2),XLS.S.total('FFFFFF',C.orange2));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),+s.aldays.toFixed(1),XLS.S.total('FFFFFF',C.green));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),'',S.mainHdr(C.gray));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),+(s.dedShortH||0).toFixed(2),XLS.S.total('FFFFFF',C.rose));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),+(s.tNightH||0).toFixed(2),XLS.S.total('FFFFFF',C.purple));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),XLS.S.total('FFFFFF',C.blue));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),+((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0)).toFixed(2),XLS.S.total('FFFFFF',C.orange2));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),+s.aldays.toFixed(1),XLS.S.total('FFFFFF',C.green));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),'',S.mainHdr(C.gray));
     ws['!rows'].push({hpt:24});
 
-    ws['!cols']=[{wch:7},{wch:6},{wch:7},{wch:7},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},{wch:8},{wch:16}];
-    xlsRange(ws,0,0,R,10);
+    ws['!cols']=[{wch:7},{wch:6},{wch:7},{wch:7},{wch:8},{wch:10},{wch:9},{wch:8},{wch:8},{wch:8},{wch:8},{wch:16}];
+    xlsRange(ws,0,0,R,11);
     XLSX.utils.book_append_sheet(wb,ws,emp.name.slice(0,8));
   });
 
@@ -10907,9 +10918,9 @@ function exportMonthlyExcelOne(empId){
   ws['!rows']=[{hpt:28},{hpt:16},{hpt:28}];
   R++; R++;
 
-  // 테이블 헤더
-  const tHdrs=['날짜','요일','출근','퇴근','휴게(h)','실근무(h)','야간(h)','연장(h)','휴일(h)','연차/결근','비고'];
-  const tBgs=[C.navy,C.navy,C.navy2,C.navy2,'2D6A4F',C.teal2,C.purple2,C.blue,C.orange2,'2E7D32',C.gray];
+  // 테이블 헤더 (실근무 옆에 공제(h) 칼럼 추가 → 12열)
+  const tHdrs=['날짜','요일','출근','퇴근','휴게(h)','실근무(h)','공제(h)','야간(h)','연장(h)','휴일(h)','연차/결근','비고'];
+  const tBgs=[C.navy,C.navy,C.navy2,C.navy2,'2D6A4F',C.teal2,C.rose,C.purple2,C.blue,C.orange2,'2E7D32',C.gray];
   tHdrs.forEach((h,ci)=>{
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),h,S.mainHdr(tBgs[ci],'FFFFFF','center'));
   });
@@ -10934,7 +10945,7 @@ function exportMonthlyExcelOne(empId){
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),dateStr,S.cell(C.navy,rowBg,false,'center'));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),phName||dowLabel,S.cell(autoH?C.rose:dowColor,rowBg,autoH||isSun||isSat,'center'));
     if(empLeaveDate && empLeaveDate<new Date(vY,vM-1,d)){
-      [2,3,4,5,6,7,8,9,10].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty('F5F5F5')));
+      [2,3,4,5,6,7,8,9,10,11].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty('F5F5F5')));
       ws['!rows'].push({hpt:18}); R++; continue;
     }
     const rec=_recForAutoH2;
@@ -10947,23 +10958,27 @@ function exportMonthlyExcelOne(empId){
       const noteFg=rec.absent?C.rose:rec.annual?C.green:rec.halfAnnual?C.blue:C.gray;
       const bkH = c2 && c2.bkMins ? +m2h(c2.bkMins).toFixed(2) : 0;
       if(c2 && c2.bkMins) totalBk += c2.bkMins;
+      // 일별 공제(h) — _nfDedMin과 동일 로직 (반차일은 4h 인정 차감)
+      const _dedMin = c2 ? _nfDedMin(c2, autoH, getEmpPayMode(emp), emp, !!rec.halfAnnual) : 0;
+      const _dedH = _dedMin > 0 ? +m2h(_dedMin).toFixed(2) : 0;
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),rec.start||'',S.cell(C.navy,rec.start?C.teal4:rowBg,!!rec.start,'center'));
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),rec.end||'',S.cell(C.navy,rec.end?C.teal4:rowBg,!!rec.end,'center'));
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),bkH,S.numDec('2D6A4F',bkH>0?'E8F5E9':rowBg,bkH>0));
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),c2?+m2h(c2.work).toFixed(2):0,S.numDec(c2?.work>=480?C.green:C.navy,c2?.work>=480?C.green4:rowBg,c2?.work>=480));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),c2&&c2.nightM>0?+m2h(c2.nightM).toFixed(2):0,S.numDec(C.purple2,c2?.nightM>0?C.purple4:rowBg));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),c2&&c2.ot>0?+m2h(c2.ot).toFixed(2):0,S.numDec(C.blue,c2?.ot>0?C.blue4:rowBg));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),autoH&&c2?+m2h(c2.work).toFixed(2):0,S.numDec(C.orange2,autoH&&c2?C.orange4:rowBg));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),note,S.accent(noteFg,noteBg,!!note));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),_dedH,S.numDec(C.rose, _dedH>0?C.rose3:rowBg, _dedH>0));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),c2&&c2.nightM>0?+m2h(c2.nightM).toFixed(2):0,S.numDec(C.purple2,c2?.nightM>0?C.purple4:rowBg));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),c2&&c2.ot>0?+m2h(c2.ot).toFixed(2):0,S.numDec(C.blue,c2?.ot>0?C.blue4:rowBg));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),autoH&&c2?+m2h(c2.work).toFixed(2):0,S.numDec(C.orange2,autoH&&c2?C.orange4:rowBg));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),note,S.accent(noteFg,noteBg,!!note));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
     } else {
-      [2,3,4,5,6,7,8,9,10].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty(rowBg)));
+      [2,3,4,5,6,7,8,9,10,11].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty(rowBg)));
     }
     ws['!rows'].push({hpt:18});
     R++;
   }
 
-  // 합계행
+  // 합계행 (공제 칼럼 추가로 인덱스 shift: 야간 6→7, 연장 7→8, 휴일 8→9, 연차 9→10, 비고 10→11)
   xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),'합 계',S.mainHdr(C.teal,'FFFFFF','center'));
   xlsMerge(ws,R,0,R,3);
   xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),'',S.mainHdr(C.teal));
@@ -10971,14 +10986,15 @@ function exportMonthlyExcelOne(empId){
   xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),'',S.mainHdr(C.teal));
   xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),+m2h(totalBk).toFixed(2),XLS.S.total('FFFFFF','2D6A4F'));
   xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),+s.twkH.toFixed(2),XLS.S.total('FFFFFF',C.teal));
-  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),+(s.tNightH||0).toFixed(2),XLS.S.total('FFFFFF',C.purple));
-  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),XLS.S.total('FFFFFF',C.blue));
-  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),+((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0)).toFixed(2),XLS.S.total('FFFFFF',C.orange2));
-  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),+s.aldays.toFixed(1),XLS.S.total('FFFFFF',C.green));
-  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),'',S.mainHdr(C.gray));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),+(s.dedShortH||0).toFixed(2),XLS.S.total('FFFFFF',C.rose));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),+(s.tNightH||0).toFixed(2),XLS.S.total('FFFFFF',C.purple));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),XLS.S.total('FFFFFF',C.blue));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),+((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0)).toFixed(2),XLS.S.total('FFFFFF',C.orange2));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),+s.aldays.toFixed(1),XLS.S.total('FFFFFF',C.green));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),'',S.mainHdr(C.gray));
   ws['!rows'].push({hpt:24});
-  ws['!cols']=[{wch:7},{wch:6},{wch:7},{wch:7},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},{wch:8},{wch:16}];
-  xlsRange(ws,0,0,R,10);
+  ws['!cols']=[{wch:7},{wch:6},{wch:7},{wch:7},{wch:8},{wch:10},{wch:9},{wch:8},{wch:8},{wch:8},{wch:8},{wch:16}];
+  xlsRange(ws,0,0,R,11);
 
   XLSX.utils.book_append_sheet(wb,ws,(emp.name||'직원').slice(0,8));
   // 파일명: 안전 문자만
