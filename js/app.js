@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-07-11';
+const CLIENT_BUILD = '2026-05-07-12';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1423,7 +1423,7 @@ function monthSummary(eid,y,m){
   const _prorateDays=Math.max(0, _proEnd - _proStart + 1);
   const _prorate=days>0 ? (_prorateDays/days) : 1;
   const _isPartialMonth=_prorate<1;
-  let wdays=0,adays=0,aldays=0,tBase=0,tNightPay=0,tOtDayPay=0,tOtNightPay=0,tHolDayPay=0,tHolNightPay=0,tHolDayOtPay=0,tHolNightOtPay=0,deduction=0,dedShortMins=0;
+  let wdays=0,adays=0,aldays=0,tBase=0,tNightPay=0,tOtDayPay=0,tOtNightPay=0,tHolDayPay=0,tHolNightPay=0,tHolDayOtPay=0,tHolNightOtPay=0,deduction=0,dedShortMins=0,dedShortHByDay=0;
   let tExtraWorkPay=0,tHolPayNew=0;
   let tMonthlyHolStdPay=0,tMonthlyHolOtPay=0;
   // 시간(hours) 합산: 매일 m2h 변환 후 누적 (출퇴근 기록 소수점 그대로 합산)
@@ -1512,7 +1512,13 @@ function monthSummary(eid,y,m){
     // 임계값 0: 1분 부족도 다 누적 (소정시간 미달은 모두 공제)
     const _adjStdM = dailyStd*60 - (rec.halfAnnual ? 240 : 0);
     if(empPayMode!=='monthly' && empPayMode!=='hourly' && POL.dedMode==='hour' && c.work<_adjStdM && !autoH){
-      const sh=_adjStdM-c.work; if(sh>0){deduction+=r10(rate*m2h(sh)); dedShortMins+=sh;}
+      const sh=_adjStdM-c.work;
+      if(sh>0){
+        deduction+=r10(rate*m2h(sh));
+        dedShortMins+=sh;
+        // 일별 표시값(둘째자리)을 그대로 누적 → 화면/엑셀/급여관리 모두 동일한 합 사용
+        dedShortHByDay += +m2h(sh).toFixed(2);
+      }
     }
   }
   // ── 누적 시간(hours) × 시급 → r10 한 번 (엑셀 방식) ──
@@ -1625,7 +1631,7 @@ function monthSummary(eid,y,m){
     tBase,tNightPay,tOtDayPay,tOtNightPay,tHolDayPay,tHolNightPay,tHolDayOtPay,tHolNightOtPay,
     tExtraWorkH:rh(tFixExtraH),tExtraWorkPay,tHolPayNew,tTotalBonus,
     tMonthlyHolStdPay,tMonthlyHolOtPay,
-    annualPay,wkly,bonus,allowances,totalAllowance,deduction,dedShortH:dedShortMins/60,total,
+    annualPay,wkly,bonus,allowances,totalAllowance,deduction,dedShortH:dedShortHByDay,total,
     prorateDays:_prorateDays,prorateMonthDays:days,isPartialMonth:_isPartialMonth};
   } finally {
     if(_polSwapped) POL = _origPOL;
