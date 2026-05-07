@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-07-16';
+const CLIENT_BUILD = '2026-05-07-17';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1619,8 +1619,9 @@ function monthSummary(eid,y,m){
     : tNightPay + tOtDayPay + tOtNightPay + (tHolDayPay||0) + (tHolNightPay||0) + (tHolDayOtPay||0) + (tHolNightOtPay||0);
   // 결근차감: 통상시급(= 기본시급 + '통상' 체크된 수당만 반영) 기준으로 재계산
   // 근로기준법상 결근 1일=통상임금 1일분 공제
+  // 표시 공제시간(dedShortHByDay) 그대로 사용 → 표시 × 통상시급 = 차감 금액 정확히 일치 (사용자 요구)
   if(empPayMode!=='monthly' && empPayMode!=='hourly'){
-    deduction = Math.round(ordRate * (adays * dailyStd + m2h(dedShortMins)) / 10 + FP_EPS) * 10;
+    deduction = Math.round(ordRate * (adays * dailyStd + dedShortHByDay) / 10 + FP_EPS) * 10;
   }
   // 총급여 = 기본급 + 수당 + 주휴 + 연차 + 총가산수당 + 월급제휴일 + 상여 - 결근차감
   const total=r10((tBase+totalAllowance) + wkly + annualPay + tTotalBonus + tMonthlyHolStdPay + tMonthlyHolOtPay + bonus - deduction);
