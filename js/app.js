@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-07-8';
+const CLIENT_BUILD = '2026-05-07-9';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -10845,7 +10845,7 @@ function exportMonthlyExcel(){
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),'',S.mainHdr(C.teal));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),+m2h(totalBk).toFixed(2),XLS.S.total('FFFFFF','2D6A4F'));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),+s.twkH.toFixed(2),XLS.S.total('FFFFFF',C.teal));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),+(s.dedShortH||0).toFixed(2),XLS.S.total('FFFFFF',C.rose));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),+(s.dedShortH||0).toFixed(2),{...XLS.S.total('FFFFFF',C.rose),numFmt:'#,##0.00'});
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),+(s.tNightH||0).toFixed(2),XLS.S.total('FFFFFF',C.purple));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),XLS.S.total('FFFFFF',C.blue));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),+((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0)).toFixed(2),XLS.S.total('FFFFFF',C.orange2));
@@ -10988,7 +10988,7 @@ function exportMonthlyExcelOne(empId){
   xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),'',S.mainHdr(C.teal));
   xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),+m2h(totalBk).toFixed(2),XLS.S.total('FFFFFF','2D6A4F'));
   xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),+s.twkH.toFixed(2),XLS.S.total('FFFFFF',C.teal));
-  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),+(s.dedShortH||0).toFixed(2),XLS.S.total('FFFFFF',C.rose));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),+(s.dedShortH||0).toFixed(2),{...XLS.S.total('FFFFFF',C.rose),numFmt:'#,##0.00'});
   xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),+(s.tNightH||0).toFixed(2),XLS.S.total('FFFFFF',C.purple));
   xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),XLS.S.total('FFFFFF',C.blue));
   xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),+((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0)).toFixed(2),XLS.S.total('FFFFFF',C.orange2));
