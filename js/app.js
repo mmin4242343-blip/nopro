@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-07-10';
+const CLIENT_BUILD = '2026-05-07-11';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -10779,6 +10779,7 @@ function exportMonthlyExcel(){
 
     const empLeaveDate2 = emp.leave ? parseEmpDate(emp.leave) : null;
     let totalBk = 0;
+    let totalDedH = 0;  // 일별 표시값(둘째자리) 누적 → 합계와 정확히 일치
     for(let d=1;d<=days;d++){
       const _recForAutoH=REC[rk(emp.id,vY,vM,d)];
       // 대체근무 체크 시 휴일성 무력화 (배경색·요일색·계산 모두 평일로)
@@ -10819,6 +10820,7 @@ function exportMonthlyExcel(){
         // 일별 공제(h) — _nfDedMin과 동일 로직 (반차일은 4h 인정 차감)
         const _dedMin = c2 ? _nfDedMin(c2, autoH, getEmpPayMode(emp), emp, !!rec.halfAnnual) : 0;
         const _dedH = _dedMin > 0 ? +m2h(_dedMin).toFixed(2) : 0;
+        totalDedH += _dedH;  // 일별 표시값 그대로 누적 → 합계와 100% 일치
 
         xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),rec.start||'',S.cell(C.navy,rec.start?C.teal4:rowBg,!!rec.start,'center'));
         xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),rec.end||'',S.cell(C.navy,rec.end?C.teal4:rowBg,!!rec.end,'center'));
@@ -10845,8 +10847,8 @@ function exportMonthlyExcel(){
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),'',S.mainHdr(C.teal));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),+m2h(totalBk).toFixed(2),XLS.S.total('FFFFFF','2D6A4F'));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),+s.twkH.toFixed(2),XLS.S.total('FFFFFF',C.teal));
-    // 공제 합계: 화면에 보이는 그대로(소수점 둘째자리)를 표시하기 위해 문자열로 입력
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),(s.dedShortH||0).toFixed(2),XLS.S.total('FFFFFF',C.rose));
+    // 공제 합계: 일별 표시값(둘째자리)의 정확한 합 → 화면 합과 100% 일치 (반올림 차이 제거)
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),totalDedH.toFixed(2),XLS.S.total('FFFFFF',C.rose));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),+(s.tNightH||0).toFixed(2),XLS.S.total('FFFFFF',C.purple));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),XLS.S.total('FFFFFF',C.blue));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),+((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0)).toFixed(2),XLS.S.total('FFFFFF',C.orange2));
@@ -10932,6 +10934,7 @@ function exportMonthlyExcelOne(empId){
 
   const empLeaveDate = emp.leave ? parseEmpDate(emp.leave) : null;
   let totalBk = 0;
+  let totalDedH = 0;  // 일별 표시값(둘째자리) 누적 → 합계와 정확히 일치
   for(let d=1;d<=days;d++){
     const _recForAutoH2=REC[rk(emp.id,vY,vM,d)];
     // 대체근무 체크 시 휴일성 무력화
@@ -10964,6 +10967,7 @@ function exportMonthlyExcelOne(empId){
       // 일별 공제(h) — _nfDedMin과 동일 로직 (반차일은 4h 인정 차감)
       const _dedMin = c2 ? _nfDedMin(c2, autoH, getEmpPayMode(emp), emp, !!rec.halfAnnual) : 0;
       const _dedH = _dedMin > 0 ? +m2h(_dedMin).toFixed(2) : 0;
+      totalDedH += _dedH;  // 일별 표시값 그대로 누적 → 합계와 100% 일치
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),rec.start||'',S.cell(C.navy,rec.start?C.teal4:rowBg,!!rec.start,'center'));
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),rec.end||'',S.cell(C.navy,rec.end?C.teal4:rowBg,!!rec.end,'center'));
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),bkH,S.numDec('2D6A4F',bkH>0?'E8F5E9':rowBg,bkH>0));
@@ -10989,8 +10993,8 @@ function exportMonthlyExcelOne(empId){
   xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),'',S.mainHdr(C.teal));
   xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),+m2h(totalBk).toFixed(2),XLS.S.total('FFFFFF','2D6A4F'));
   xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),+s.twkH.toFixed(2),XLS.S.total('FFFFFF',C.teal));
-  // 공제 합계: 화면에 보이는 그대로(소수점 둘째자리)를 표시하기 위해 문자열로 입력
-  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),(s.dedShortH||0).toFixed(2),XLS.S.total('FFFFFF',C.rose));
+  // 공제 합계: 일별 표시값(둘째자리)의 정확한 합 → 화면 합과 100% 일치 (반올림 차이 제거)
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),totalDedH.toFixed(2),XLS.S.total('FFFFFF',C.rose));
   xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),+(s.tNightH||0).toFixed(2),XLS.S.total('FFFFFF',C.purple));
   xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),XLS.S.total('FFFFFF',C.blue));
   xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),+((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0)).toFixed(2),XLS.S.total('FFFFFF',C.orange2));
