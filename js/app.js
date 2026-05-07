@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-07-2';
+const CLIENT_BUILD = '2026-05-07-3';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -2985,6 +2985,11 @@ function renderCal(){
       if(c.nightM>30)inner+=`<span class="tch" style="background:var(--abg);color:#92400E">야${m2h(c.nightM).toFixed(2)}h</span>`;
       if(c.ot>0)inner+=`<span class="tch" style="background:#EDE9FE;color:#4C1D95">연${m2h(c.ot).toFixed(2)}h</span>`;
       if(autoH)inner+=`<span class="tch" style="background:#FED7AA;color:#9A3412">휴</span>`;
+      // 공제시간(소정근로 미달분) — 통상임금제 + 시간단위 공제 모드에서만 발생
+      if(calEmpMode==='fixed' && POL.dedMode==='hour' && !autoH){
+        const _dedShMin = 480 - c.work;
+        if(_dedShMin > 10) inner += `<span class="tch" style="background:#FEE2E2;color:#B91C1C" title="소정근로 8h 미달분 (시급 차감)">공${m2h(_dedShMin).toFixed(2)}h</span>`;
+      }
       inner+=`</div>`;
     }
     h+=`<div class="${cls}" onclick="jumpDay(${vY},${vM},${d})">${inner}</div>`;
@@ -2995,7 +3000,7 @@ function renderOv(){
   const days=dim(vY,vM);
   let th=`<th style="position:sticky;left:0;z-index:2;background:var(--navy);min-width:76px">직원</th>`;
   for(let d=1;d<=days;d++){const dow=(fdow(vY,vM)+d-1)%7;const ph=getPhName(vY,vM,d);const autoH=isAutoHol(vY,vM,d);th+=`<th style="${dow===0||autoH?'color:#FCA5A5':dow===6?'color:#93C5FD':''}" title="${ph||''}">${d}<br><span style="font-weight:400;font-size:8px;opacity:.7">${ph||DOW[dow]}</span></th>`;}
-  th+=`<th style="background:#0E4D2E">근무일</th><th style="background:#0E4D2E">연차</th><th style="background:#0E4D2E">실근무</th><th style="background:#0E4D2E">월급여</th>`;
+  th+=`<th style="background:#0E4D2E">근무일</th><th style="background:#0E4D2E">연차</th><th style="background:#0E4D2E">실근무</th><th style="background:#0E4D2E" title="소정근로(보통 8h) 미달분 합계 — 통상임금제 + 시간단위 공제 모드에서만 발생">공제<br><span style="font-size:8px;opacity:.7">(h)</span></th><th style="background:#0E4D2E">월급여</th>`;
   const mvEmps = EMPS.filter(e=>{
     // 🗑️ 휴지통 제외
     if(e.deletedAt) return false;
@@ -3034,7 +3039,7 @@ function renderOv(){
       else tr+=`<td class="mt">-</td>`;
     }
     const s=monthSummary(emp.id,vY,vM);
-    tr+=`<td class="sm">${s.wdays}일</td><td class="sm" style="background:var(--gbg);color:var(--green)">${s.aldays}일</td><td class="sm">${s.twkH.toFixed(2)}h</td><td class="sm">${Math.round(s.total/10000)}만</td>`;
+    tr+=`<td class="sm">${s.wdays}일</td><td class="sm" style="background:var(--gbg);color:var(--green)">${s.aldays}일</td><td class="sm">${s.twkH.toFixed(2)}h</td><td class="sm" style="${(s.dedShortH||0)>0?'color:#FCA5A5;font-weight:700':'color:var(--ink3);opacity:.5'}">${(s.dedShortH||0)>0?s.dedShortH.toFixed(2)+'h':'-'}</td><td class="sm">${Math.round(s.total/10000)}만</td>`;
     return`<tr>${tr}</tr>`;
   }).join('');
   return`<div class="ov-scroll-top" id="ov-scroll-top"><div class="ov-scroll-spacer" id="ov-scroll-spacer"></div></div>
