@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-07-4';
+const CLIENT_BUILD = '2026-05-07-5';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -2941,11 +2941,13 @@ function renderCal(){
   const s=monthSummary(vEid,vY,vM),days=dim(vY,vM);
   const curBonus=getMonthBonus(vEid,vY,vM);
   const al=calcAnnualLeave(emp);
-  let h=`<div class="sg5">
+  let h=`<div class="sg5" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr))">
     <div class="sc"><div class="sc-l">근무일</div><div class="sc-v">${s.wdays}<span class="sc-u">일</span></div></div>
     <div class="sc"><div class="sc-l">연차사용</div><div class="sc-v" style="color:var(--green)">${s.aldays}<span class="sc-u">일</span></div></div>
     <div class="sc"><div class="sc-l">야간</div><div class="sc-v">${(s.tNightH||0).toFixed(2)}<span class="sc-u">h</span></div></div>
     <div class="sc"><div class="sc-l">연장</div><div class="sc-v">${((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2)}<span class="sc-u">h</span></div></div>
+    <div class="sc"><div class="sc-l">실근무</div><div class="sc-v">${(s.twkH||0).toFixed(2)}<span class="sc-u">h</span></div></div>
+    <div class="sc" title="소정근로 미달분 (시급 차감) — 통상임금제·시간단위 공제 모드만"><div class="sc-l">공제시간</div><div class="sc-v" style="color:${(s.dedShortH||0)>0?'var(--rose)':'var(--ink3)'}">${(s.dedShortH||0).toFixed(2)}<span class="sc-u">h</span></div></div>
     <div class="sc ok"><div class="sc-l">월 급여</div><div class="sc-v" style="font-size:15px;color:var(--green)">${Math.round(s.total/10000)}<span class="sc-u">만원</span></div></div>
   </div>
   <div style="background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:11px 15px;margin-bottom:11px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 3px rgba(0,0,0,.05)">
