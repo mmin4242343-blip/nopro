@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-07-5';
+const CLIENT_BUILD = '2026-05-07-6';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1506,10 +1506,12 @@ function monthSummary(eid,y,m){
       tHolNightOtH+=m2h(c.otNight);
     }
     wdays++;
-    // 월급제·시급제는 시��기준 공제 없음
-    // 시급제: 실��무시간 기��� 계산이라 별도 공제 불필요
-    if(empPayMode!=='monthly' && empPayMode!=='hourly' && POL.dedMode==='hour'&&c.work<dailyStd*60&&!autoH){
-      const sh=dailyStd*60-c.work;if(sh>10){deduction+=r10(rate*m2h(sh));dedShortMins+=sh;}
+    // 월급제·시급제는 시간기준 공제 없음
+    // 시급제: 실근무시간 기준 계산이라 별도 공제 불필요
+    // 반차일은 4시간(240분) 인정 → 기준 시간에서 차감 (반차 4h + 출근 c.work ≥ 8h이면 공제 없음)
+    const _adjStdM = dailyStd*60 - (rec.halfAnnual ? 240 : 0);
+    if(empPayMode!=='monthly' && empPayMode!=='hourly' && POL.dedMode==='hour' && c.work<_adjStdM && !autoH){
+      const sh=_adjStdM-c.work; if(sh>10){deduction+=r10(rate*m2h(sh)); dedShortMins+=sh;}
     }
   }
   // ── 누적 시간(hours) × 시급 → r10 한 번 (엑셀 방식) ──
@@ -2922,7 +2924,8 @@ function renderMonthly(){
 }
 // 공제시간 chip 생성 (monthSummary의 dedShortMins 누적 조건과 100% 동일)
 // → 일별 chip 합 = 합계 컬럼(s.dedShortH)이 일치하도록 보장
-function _nfDedChip(c, autoH, mode, emp){
+// isHalf: 반차일은 4h(240분) 인정 → 기준 시간에서 차감
+function _nfDedChip(c, autoH, mode, emp, isHalf){
   if(!c) return '';
   if(mode==='monthly' || mode==='hourly') return '';   // monthSummary line 1511과 동일
   if(POL.dedMode!=='hour') return '';
@@ -2930,10 +2933,12 @@ function _nfDedChip(c, autoH, mode, emp){
   const sot = (emp && emp.sot) || POL.sot || 209;
   // monthSummary line 1437과 동일한 dailyStd 계산
   const dailyStdH = (mode==='fixed' || mode==='monthly') ? 8 : sot/4.345/5;
-  const dailyStdM = dailyStdH * 60;
-  const dedShMin = dailyStdM - c.work;
+  // 반차일은 4시간 인정 → 기준 시간에서 차감 (반차 4h + 출근 c.work ≥ 8h이면 공제 없음)
+  const adjStdM = dailyStdH*60 - (isHalf ? 240 : 0);
+  const dedShMin = adjStdM - c.work;
   if(dedShMin <= 10) return '';
-  return `<span class="tch" style="background:#FEE2E2;color:#B91C1C" title="소정근로 ${dailyStdH.toFixed(2)}h 미달분 (시급 차감)">공${m2h(dedShMin).toFixed(2)}h</span>`;
+  const tipBase = isHalf ? `반차 4h + 출근 ${m2h(c.work).toFixed(2)}h` : `소정 ${dailyStdH.toFixed(2)}h`;
+  return `<span class="tch" style="background:#FEE2E2;color:#B91C1C" title="${tipBase}이 8h 미달 (시급 차감)">공${m2h(dedShMin).toFixed(2)}h</span>`;
 }
 
 function renderCal(){
@@ -2997,8 +3002,8 @@ function renderCal(){
       inner+=`<div style="font-size:9px;color:#0891B2;font-weight:700">반차</div>`;
       if(c){
         inner+=`<div class="cti">${rec.start}~${rec.end}</div><div class="cwk">${fmtH(c.work)}</div>`;
-        // 반차 + 출퇴근 있으면 monthSummary는 공제 누적함 → 일별 표시도 동일하게
-        const _dedChip = _nfDedChip(c, autoH, calEmpMode, emp);
+        // 반차일은 4h 인정 → 4h+c.work가 8h 미달이면 공제 (isHalf=true)
+        const _dedChip = _nfDedChip(c, autoH, calEmpMode, emp, true);
         if(_dedChip) inner += `<div>${_dedChip}</div>`;
       } else {
         inner+=`<div style="font-size:8px;color:#0891B2">0.5일</div>`;
@@ -3009,8 +3014,8 @@ function renderCal(){
       if(c.nightM>30)inner+=`<span class="tch" style="background:var(--abg);color:#92400E">야${m2h(c.nightM).toFixed(2)}h</span>`;
       if(c.ot>0)inner+=`<span class="tch" style="background:#EDE9FE;color:#4C1D95">연${m2h(c.ot).toFixed(2)}h</span>`;
       if(autoH)inner+=`<span class="tch" style="background:#FED7AA;color:#9A3412">휴</span>`;
-      // 공제시간 chip — monthSummary와 동일 조건 (fixed/pohal + dedMode==='hour' + !autoH + 8h or sot 기반)
-      inner += _nfDedChip(c, autoH, calEmpMode, emp);
+      // 공제시간 chip — monthSummary와 동일 조건 (반차 아님)
+      inner += _nfDedChip(c, autoH, calEmpMode, emp, false);
       inner+=`</div>`;
     }
     h+=`<div class="${cls}" onclick="jumpDay(${vY},${vM},${d})">${inner}</div>`;
