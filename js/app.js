@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-07-1';
+const CLIENT_BUILD = '2026-05-07-2';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -6579,17 +6579,52 @@ function openTemplateForm(id){
     </div>`;
   }
 
-  // 양식별 입력 필드
-  if(tpl.fields && tpl.fields.length>0){
-    html += `<div style="font-size:12px;font-weight:800;color:var(--ink);margin:6px 0 10px;letter-spacing:.3px">📝 양식 정보</div>`;
-    html += tpl.fields.map(f=>{
+  // 직원 정보 직접 입력 섹션 — 양식이 employee 필드를 사용하면 표시
+  const usesEmployee = (tpl.fields||[]).some(f=>f.type==='employee');
+  if(usesEmployee){
+    html += `<div style="font-size:12px;font-weight:800;color:var(--ink);margin:14px 0 6px;letter-spacing:.3px;display:flex;align-items:center;gap:6px">
+      👤 직원 정보 <span style="font-size:10.5px;color:var(--ink3);font-weight:600">(직접 입력 가능 · 등록 직원 선택 시 자동 채움)</span>
+    </div>
+    <div class="nf-form-row">
+      <div class="nf-form-label">성명 <span class="opt">(선택)</span></div>
+      <div><input class="nf-form-input" type="text" id="nf-emp-name" list="nf-dl-emps"
+        placeholder="등록된 직원 선택 또는 직접 입력" autocomplete="off"
+        oninput="_nfFillEmpFromName()">
+      <datalist id="nf-dl-emps">${(EMPS||[]).filter(e=>e.name).map(e=>`<option value="${esc(e.name)}">`).join('')}</datalist></div>
+    </div>
+    <div class="nf-form-row">
+      <div class="nf-form-label">주민번호 <span class="opt">(선택)</span></div>
+      <div><input class="nf-form-input" type="text" id="nf-emp-rrn" placeholder="예: 950101-1234567"></div>
+    </div>
+    <div class="nf-form-row">
+      <div class="nf-form-label">주소 <span class="opt">(선택)</span></div>
+      <div><input class="nf-form-input" type="text" id="nf-emp-address" placeholder="예: 서울시 강남구 ○○로 123"></div>
+    </div>
+    <div class="nf-form-row">
+      <div class="nf-form-label">연락처 <span class="opt">(선택)</span></div>
+      <div><input class="nf-form-input" type="text" id="nf-emp-phone" placeholder="예: 010-1234-5678"></div>
+    </div>
+    <div class="nf-form-row">
+      <div class="nf-form-label">직위 <span class="opt">(선택)</span></div>
+      <div><input class="nf-form-input" type="text" id="nf-emp-position" placeholder="예: 사원, 주임, 대리..."></div>
+    </div>
+    <div class="nf-form-row">
+      <div class="nf-form-label">월급여 (원) <span class="opt">(선택)</span></div>
+      <div><input class="nf-form-input" type="number" id="nf-emp-salary" placeholder="예: 2500000"></div>
+    </div>
+    <div class="nf-form-row">
+      <div class="nf-form-label">입사일 <span class="opt">(선택)</span></div>
+      <div><input class="nf-form-input" type="date" id="nf-emp-hireDate"></div>
+    </div>`;
+  }
+
+  // 양식별 추가 입력 필드 (employee 타입 제외 — 위 섹션에서 처리)
+  const otherFields = (tpl.fields||[]).filter(f=>f.type!=='employee');
+  if(otherFields.length>0){
+    html += `<div style="font-size:12px;font-weight:800;color:var(--ink);margin:14px 0 6px;letter-spacing:.3px">📝 양식 정보</div>`;
+    html += otherFields.map(f=>{
       let input = '';
-      if(f.type==='employee'){
-        // 등록된 직원 이름 자동완성용 datalist
-        const dl = `nf-dl-emps`;
-        input = `<input class="nf-form-input" type="text" id="nf-f-${f.key}" list="${dl}" placeholder="직원 이름을 입력하세요" autocomplete="off">
-          <datalist id="${dl}">${(EMPS||[]).filter(e=>e.name).map(e=>`<option value="${esc(e.name)}">`).join('')}</datalist>`;
-      } else if(f.type==='select'){
+      if(f.type==='select'){
         input = `<select class="nf-form-input" id="nf-f-${f.key}">
           <option value="">— 선택 안 함 (다운로드 후 입력) —</option>
           ${(f.options||[]).map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join('')}
@@ -6614,7 +6649,25 @@ function openTemplateForm(id){
   openNfModal(tpl.name, tpl.nameEn);
 }
 
-// 양식 데이터 수집 (회사정보 + 직원 + 필드)
+// 등록된 직원 이름 입력 시 다른 필드 자동 채움 (사용자가 수정 가능)
+function _nfFillEmpFromName(){
+  const name = (document.getElementById('nf-emp-name')?.value||'').trim();
+  if(!name) return;
+  const e = (EMPS||[]).find(x=>x.name===name);
+  if(!e) return; // 매칭 안 되면 사용자가 직접 입력
+  const setIfEmpty = (id, val) => {
+    const el = document.getElementById(id);
+    if(el && !el.value && val) el.value = val;
+  };
+  setIfEmpty('nf-emp-rrn', e.rrnFront ? `${e.rrnFront}-*******` : '');
+  setIfEmpty('nf-emp-phone', e.phone||'');
+  setIfEmpty('nf-emp-position', e.role||e.dept||'');
+  const sal = Number(e.monthly) || (e.rate ? Number(e.rate)*209 : 0);
+  setIfEmpty('nf-emp-salary', sal||'');
+  setIfEmpty('nf-emp-hireDate', e.join||'');
+}
+
+// 양식 데이터 수집 (회사정보 + 직원 + 양식별 필드)
 function _nfCollectFormData(tpl){
   const useCompany = document.getElementById('nf-use-company')?.checked;
   const company = useCompany
@@ -6623,11 +6676,39 @@ function _nfCollectFormData(tpl){
     : { name:'', ceo:'', address:'', bizNumber:'', phone:'' };
   const data = {};
   let emp = null;
+
+  // 직원 정보 — 직접 입력 섹션이 있으면 그 값을 우선 사용
+  const empNameEl = document.getElementById('nf-emp-name');
+  if(empNameEl){
+    const empName = (empNameEl.value||'').trim();
+    if(empName){
+      emp = {
+        name: empName,
+        rrn: (document.getElementById('nf-emp-rrn')?.value||'').trim(),
+        phone: (document.getElementById('nf-emp-phone')?.value||'').trim(),
+        address: (document.getElementById('nf-emp-address')?.value||'').trim(),
+        position: (document.getElementById('nf-emp-position')?.value||'').trim(),
+        salary: parseInt(document.getElementById('nf-emp-salary')?.value)||0,
+        hireDate: (document.getElementById('nf-emp-hireDate')?.value||'').trim(),
+        workType: '',
+        payType: ''
+      };
+      // 등록 직원이면 workType/payType 보충
+      const matched = (EMPS||[]).find(x=>x.name===empName);
+      if(matched){
+        const mapped = nfMapEmp(matched);
+        emp.workType = mapped.workType||'';
+        emp.payType = mapped.payType||'';
+      }
+    }
+  }
+
+  // 양식별 추가 필드 (employee 타입 제외)
   (tpl.fields||[]).forEach(f=>{
+    if(f.type==='employee') return;
     const el = document.getElementById(`nf-f-${f.key}`);
     const val = el ? el.value : '';
     data[f.key] = val;
-    if(f.type==='employee' && val) emp = nfMapEmp(val);
   });
   return { company, data, emp };
 }
