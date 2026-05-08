@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-07-17';
+const CLIENT_BUILD = '2026-05-08-1';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1425,6 +1425,8 @@ function monthSummary(eid,y,m){
   const _isPartialMonth=_prorate<1;
   let wdays=0,adays=0,aldays=0,tBase=0,tNightPay=0,tOtDayPay=0,tOtNightPay=0,tHolDayPay=0,tHolNightPay=0,tHolDayOtPay=0,tHolNightOtPay=0,deduction=0,dedShortMins=0,dedShortHByDay=0;
   let tExtraWorkPay=0,tHolPayNew=0;
+  // 특근: 직접 입력된 누적 가산 결과물(최대 250%) — 일별 합산
+  let tSpecialDays=0,tSpecialPay=0;
   let tMonthlyHolStdPay=0,tMonthlyHolOtPay=0;
   // 시간(hours) 합산: 매일 m2h 변환 후 누적 (출퇴근 기록 소수점 그대로 합산)
   let twkH=0,tAllNightH=0,tAllOtDayH=0,tAllOtNightH=0;
@@ -1480,6 +1482,11 @@ function monthSummary(eid,y,m){
     const bks=getActiveBk(y,m,d,emp);
     const msBks = rec.customBk ? (rec.customBkList||[]) : bks;
     const c=rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,msBks,rec.outTimes||[],empPayMode,ordRate):null;
+    // 특근: 출퇴근 유무와 관계없이 체크되고 금액이 있으면 합산 (외부 계산 결과물 입력 방식)
+    if(rec.specialWork && (+rec.specialPay||0) > 0){
+      tSpecialDays++;
+      tSpecialPay += +rec.specialPay||0;
+    }
     if(!c)continue;
     // 매일 m2h 변환 후 시간(hours) 누적 (출퇴근 기록 소수점 그대로 합산)
     twkH+=m2h(c.work); tAllNightH+=m2h(c.nightM); tAllOtDayH+=m2h(c.otDay); tAllOtNightH+=m2h(c.otNight);
@@ -1623,14 +1630,15 @@ function monthSummary(eid,y,m){
   if(empPayMode!=='monthly' && empPayMode!=='hourly'){
     deduction = Math.round(ordRate * (adays * dailyStd + dedShortHByDay) / 10 + FP_EPS) * 10;
   }
-  // 총급여 = 기본급 + 수당 + 주휴 + 연차 + 총가산수당 + 월급제휴일 + 상여 - 결근차감
-  const total=r10((tBase+totalAllowance) + wkly + annualPay + tTotalBonus + tMonthlyHolStdPay + tMonthlyHolOtPay + bonus - deduction);
+  // 총급여 = 기본급 + 수당 + 주휴 + 연차 + 총가산수당 + 월급제휴일 + 상여 + 특근수당 - 결근차감
+  const total=r10((tBase+totalAllowance) + wkly + annualPay + tTotalBonus + tMonthlyHolStdPay + tMonthlyHolOtPay + bonus + tSpecialPay - deduction);
 
   const rh=v=>Math.round(v*100 + FP_EPS)/100; // 시간 소수점 2자리 (FP 보정)
   return{wdays,adays,aldays,twkH:rh(twkH),tNightH:rh(tAllNightH),tOtDayH:rh(tAllOtDayH),tOtNightH:rh(tAllOtNightH),tHolDayH:rh(tHolDayH),tHolNightH:rh(tHolNightH),tHolDayOtH:rh(tHolDayOtH),tHolNightOtH:rh(tHolNightOtH),
     tBase,tNightPay,tOtDayPay,tOtNightPay,tHolDayPay,tHolNightPay,tHolDayOtPay,tHolNightOtPay,
     tExtraWorkH:rh(tFixExtraH),tExtraWorkPay,tHolPayNew,tTotalBonus,
     tMonthlyHolStdPay,tMonthlyHolOtPay,
+    tSpecialDays,tSpecialPay,
     annualPay,wkly,bonus,allowances,totalAllowance,deduction,dedShortH:dedShortHByDay,total,
     prorateDays:_prorateDays,prorateMonthDays:days,isPartialMonth:_isPartialMonth};
   } finally {
@@ -1905,7 +1913,7 @@ function calcOutMins(outTimes){
 function handleTimeInput(eid,field,raw){
   const parsed=parseTimeInput(raw);
   const k=rk(eid,cY,cM,cD);
-  if(!REC[k])REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
+  if(!REC[k])REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[],specialWork:false,specialPay:0};
   REC[k][field]=parsed;
   saveLS();
   // input 값 즉시 반영 (포커스가 이미 떠난 상태에서만)
@@ -1971,13 +1979,15 @@ function setR(eid,f,v){
   if(f==='customBk'&&v&&!REC[k].customBkList?.length){
     REC[k].customBkList=[{s:'',e:''}];
   }
+  // 특근 해제 시 금액도 0으로 (잘못된 누적 방지)
+  if(f==='specialWork'&&!v) REC[k].specialPay=0;
   saveLS();
   // 비고(note)는 시각 변화 없음 → 재렌더 생략 (한글 IME 조합 깨짐·입력 유실 방지).
   // input.value는 사용자가 친 그대로 DOM에 살아있고, 다음 자연스러운 재렌더에 REC 값으로 그려짐.
   if(f==='note') return;
   renderTable();
-  // 연차/반차/대체근무 변경 시 관련 탭도 즉시 갱신 (휴일→평일 전환은 급여 재계산 필요)
-  if(f==='annual'||f==='halfAnnual'||f==='absent'||f==='subWork'){
+  // 연차/반차/대체근무/특근 변경 시 관련 탭도 즉시 갱신
+  if(f==='annual'||f==='halfAnnual'||f==='absent'||f==='subWork'||f==='specialWork'){
     const lvPage=document.getElementById('pg-leave');
     if(lvPage&&lvPage.classList.contains('on')) renderLeave();
     const mvPage=document.getElementById('pg-monthly');
@@ -1985,6 +1995,18 @@ function setR(eid,f,v){
     const pvPage=document.getElementById('pg-payroll');
     if(pvPage&&pvPage.classList.contains('on')) renderPayroll();
   }
+}
+
+// 특근수당 금액 입력
+function setSpecialPay(eid,raw){
+  const k=rk(eid,cY,cM,cD);
+  if(!REC[k])REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[],specialWork:false,specialPay:0};
+  const num=+(String(raw||'').replace(/,/g,''))||0;
+  REC[k].specialPay=Math.max(0,num);
+  saveLS();
+  // 급여관리/근태가 켜져 있으면 갱신 (총급여 반영)
+  const pvPage=document.getElementById('pg-payroll');
+  if(pvPage&&pvPage.classList.contains('on')) renderPayroll();
 }
 
 // ══ 공통 필터 상태 ══
@@ -2319,9 +2341,21 @@ function renderTable(){
             <label style="font-size:10px;color:#7C3AED;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600" title="휴일이지만 평일 대체근무로 처리 (휴일가산 미적용, 기본 근무로 산정)">
               <input type="checkbox" ${rec.subWork?'checked':''} onchange="setR(${emp.id},'subWork',this.checked)">대체근무
             </label>
+            <label style="font-size:10px;color:#B91C1C;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:700" title="특근 체크 시 입력한 금액(누적 가산 결과)이 총급여에 추가 지급됩니다">
+              <input type="checkbox" ${rec.specialWork?'checked':''} onchange="setR(${emp.id},'specialWork',this.checked)">특근
+            </label>
             <button class="out-btn ${(rec.outTimes&&rec.outTimes.length>0)?'active':''}" onclick="addOutTime(${emp.id})">+ 외출</button>
             <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" oninput="setR(${emp.id},'note',this.value)">
           </div>
+          ${rec.specialWork?`<div style="margin-top:4px;padding:5px 8px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;font-weight:700;color:#B91C1C">특근수당</span>
+            <input type="text" inputmode="numeric" value="${rec.specialPay?Number(rec.specialPay).toLocaleString():''}" placeholder="0"
+              style="width:110px;padding:3px 6px;font-size:11px;border:1px solid #FECACA;border-radius:5px;text-align:right;font-weight:700;color:#B91C1C"
+              oninput="formatNumInput(this)"
+              onblur="setSpecialPay(${emp.id},this.value)"
+              onkeydown="if(event.key==='Enter')this.blur()">
+            <span style="font-size:10px;color:#7F1D1D">원</span>
+          </div>`:''}
           ${pohalOutUI}
           ${pohalBkUI}
         </td>
@@ -2389,9 +2423,21 @@ function renderTable(){
             <label style="font-size:10px;color:#7C3AED;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600" title="휴일이지만 평일 대체근무로 처리 (휴일가산 미적용, 기본 근무로 산정)">
               <input type="checkbox" ${rec.subWork?'checked':''} onchange="setR(${emp.id},'subWork',this.checked)">대체근무
             </label>
+            <label style="font-size:10px;color:#B91C1C;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:700" title="특근 체크 시 입력한 금액(누적 가산 결과)이 총급여에 추가 지급됩니다">
+              <input type="checkbox" ${rec.specialWork?'checked':''} onchange="setR(${emp.id},'specialWork',this.checked)">특근
+            </label>
             <button class="out-btn ${(rec.outTimes&&rec.outTimes.length>0)?'active':''}" onclick="addOutTime(${emp.id})">+ 외출</button>
             <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" oninput="setR(${emp.id},'note',this.value)">
           </div>
+          ${rec.specialWork?`<div style="margin-top:4px;padding:5px 8px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;font-weight:700;color:#B91C1C">특근수당</span>
+            <input type="text" inputmode="numeric" value="${rec.specialPay?Number(rec.specialPay).toLocaleString():''}" placeholder="0"
+              style="width:110px;padding:3px 6px;font-size:11px;border:1px solid #FECACA;border-radius:5px;text-align:right;font-weight:700;color:#B91C1C"
+              oninput="formatNumInput(this)"
+              onblur="setSpecialPay(${emp.id},this.value)"
+              onkeydown="if(event.key==='Enter')this.blur()">
+            <span style="font-size:10px;color:#7F1D1D">원</span>
+          </div>`:''}
           ${monthlyOutUI}
           ${monthlyBkUI}
         </td>
@@ -2449,9 +2495,21 @@ function renderTable(){
           <label style="font-size:10px;color:#7C3AED;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600" title="휴일이지만 평일 대체근무로 처리 (휴일가산 미적용, 기본 근무로 산정)">
             <input type="checkbox" ${rec.subWork?'checked':''} onchange="setR(${emp.id},'subWork',this.checked)">대체근무
           </label>
+          <label style="font-size:10px;color:#B91C1C;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:700" title="특근 체크 시 입력한 금액(누적 가산 결과)이 총급여에 추가 지급됩니다">
+            <input type="checkbox" ${rec.specialWork?'checked':''} onchange="setR(${emp.id},'specialWork',this.checked)">특근
+          </label>
           <button class="out-btn ${(rec.outTimes&&rec.outTimes.length>0)?'active':''}" onclick="addOutTime(${emp.id})">+ 외출</button>
           <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" oninput="setR(${emp.id},'note',this.value)">
         </div>
+        ${rec.specialWork?`<div style="margin-top:4px;padding:5px 8px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;display:flex;align-items:center;gap:6px">
+          <span style="font-size:10px;font-weight:700;color:#B91C1C">특근수당</span>
+          <input type="text" inputmode="numeric" value="${rec.specialPay?Number(rec.specialPay).toLocaleString():''}" placeholder="0"
+            style="width:110px;padding:3px 6px;font-size:11px;border:1px solid #FECACA;border-radius:5px;text-align:right;font-weight:700;color:#B91C1C"
+            oninput="formatNumInput(this)"
+            onblur="setSpecialPay(${emp.id},this.value)"
+            onkeydown="if(event.key==='Enter')this.blur()">
+          <span style="font-size:10px;color:#7F1D1D">원</span>
+        </div>`:''}
         ${outUI}
         ${customBkUI}
       </td>
@@ -3391,6 +3449,7 @@ function renderPayroll(){
           return addPay>0?`<div class="pr"><span class="prl">추가수당</span><span class="prv" style="color:#3C3489">${fmt$(addPay)}원</span></div>`:'';
         })()}
         ${s.annualPay>0?`<div class="pr"><span class="prl">연차수당</span><span class="prv" style="color:var(--green)">${fmt$(s.annualPay)}원<span class="prx">${s.aldays}일</span></span></div>`:''}
+        ${(s.tSpecialPay||0)>0?`<div class="pr"><span class="prl" style="color:#B91C1C;font-weight:700">특근수당</span><span class="prv" style="color:#B91C1C;font-weight:700">${fmt$(s.tSpecialPay)}원<span class="prx">${s.tSpecialDays||0}일</span></span></div>`:''}
         <div class="pr">
           <span class="prl">상여금</span>
           <span style="display:flex;align-items:center;gap:5px">
@@ -3495,6 +3554,8 @@ function renderXlPreview(){
     <th style="min-width:46px;background:#854F0B;color:#FAC775">초과휴일<br>시간(h)<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
     <th style="min-width:46px">결근<br>일수</th>
     <th style="min-width:56px">공제시간<br><span style="font-size:9px;opacity:.7">(h) ×1.0</span></th>
+    <th style="min-width:50px;background:#B91C1C;color:#FECACA">특근<br>일수</th>
+    <th style="min-width:80px;background:#B91C1C;color:#FECACA">특근수당<br><span style="font-size:8px;opacity:.8">최대 250%</span></th>
     <th style="min-width:80px;background:#1565C0;color:#fff">소정근로외<br>실근무수당<br><span style="font-size:8px;opacity:.8">×1.0</span></th>
     <th style="min-width:72px;background:#0C447C;color:#B5D4F4">야간<br>수당<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
     <th style="min-width:72px;background:#534AB7;color:#EEEDFE">초과연장<br>수당<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
@@ -3555,8 +3616,8 @@ function renderXlPreview(){
       </td>`;
     }).join('');
 
-    // 총급여 = 급여 + 주휴수당 + 연차수당 + 총가산수당 + 상여금 - 결근차감
-    const totalPay = basePay + (s.wkly||0) + s.annualPay + (s.tTotalBonus||0) + (s.tMonthlyHolStdPay||0) + (s.tMonthlyHolOtPay||0) - s.deduction + s.bonus;
+    // 총급여 = 급여 + 주휴수당 + 연차수당 + 총가산수당 + 상여금 + 특근수당 - 결근차감
+    const totalPay = basePay + (s.wkly||0) + s.annualPay + (s.tTotalBonus||0) + (s.tMonthlyHolStdPay||0) + (s.tMonthlyHolOtPay||0) + (s.tSpecialPay||0) - s.deduction + s.bonus;
     const incomeTax = tx.incomeTax||0;
     const localTax = tx.localTax||0;
     const pension4 = +(tx.pension)||0;
@@ -3601,6 +3662,8 @@ function renderXlPreview(){
       <td class="num" style="${((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0))>0?'color:#854F0B;font-weight:500':''}">${((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0))>0?((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0)).toFixed(2):''}</td>
       <td class="num">${s.adays>0?s.adays:''}</td>
       <td class="num" style="${s.dedShortH>0?'color:#A32D2D;font-weight:500':''}">${s.dedShortH>0?s.dedShortH.toFixed(2):''}</td>
+      <td class="num" style="${(s.tSpecialDays||0)>0?'color:#B91C1C;font-weight:700':''}">${(s.tSpecialDays||0)>0?s.tSpecialDays:''}</td>
+      <td class="num" style="${(s.tSpecialPay||0)>0?'color:#B91C1C;font-weight:700;background:#FEF2F2':''}">${(s.tSpecialPay||0)>0?fmt$(s.tSpecialPay):''}</td>
       <td class="num" style="${(s.tExtraWorkPay||0)>0?'color:#1565C0;font-weight:700':''}">${(s.tExtraWorkPay||0)>0?fmt$(s.tExtraWorkPay):''}</td>
       <td class="num" style="${s.tNightPay>0?'color:#0C447C;font-weight:700':''}">${s.tNightPay>0?fmt$(s.tNightPay):''}</td>
       <td class="num" style="${((s.tOtDayPay||0)+(s.tOtNightPay||0))>0?'color:#534AB7;font-weight:700':''}">${((s.tOtDayPay||0)+(s.tOtNightPay||0))>0?fmt$((s.tOtDayPay||0)+(s.tOtNightPay||0)):''}</td>
@@ -8126,6 +8189,7 @@ function exportExcel(){
       ...allowList.map(a=>a.name),
       '급여',
       '실근무(h)','소정근로외(h)','야간(h)','초과연장(h)','초과휴일(h)','결근일수','공제시간(h)',
+      '특근일수','특근수당',
       '소정근로외수당','야간수당','초과연장수당','초과휴일수당',
       '월급제휴일수당','월급제휴일초과','총가산수당','결근차감',
       '상여금(선지급)','총급여',
@@ -8145,6 +8209,7 @@ function exportExcel(){
       if(h==='야간수당') return S.mainHdr('0C447C','B5D4F4','center');
       if(h==='초과연장수당') return S.mainHdr('534AB7','EEEDFE','center');
       if(h==='초과휴일수당'||h.includes('월급제')) return S.mainHdr('854F0B','FAC775','center');
+      if(h==='특근일수'||h==='특근수당') return S.mainHdr('B91C1C','FECACA','center');
       if(h==='총가산수당') return S.mainHdr('065F46','D1FAE5','center');
       if(h.includes('상여금')) return S.mainHdr(C.orange2,'FFFFFF','center');
       if(h==='총급여') return S.mainHdr('0D47A1','FFFFFF','center');
@@ -8170,7 +8235,7 @@ function exportExcel(){
       let deductTotal=0;
       deductList.forEach(a=>{deductTotal+=(s.allowances[a.id]||0);});
       const basePay = s.tBase + allowTotal;
-      const totalPay = basePay + (s.wkly||0) + s.annualPay + (s.tTotalBonus||0) + (s.tMonthlyHolStdPay||0) + (s.tMonthlyHolOtPay||0) - s.deduction + s.bonus;
+      const totalPay = basePay + (s.wkly||0) + s.annualPay + (s.tTotalBonus||0) + (s.tMonthlyHolStdPay||0) + (s.tMonthlyHolOtPay||0) + (s.tSpecialPay||0) - s.deduction + s.bonus;
       const itax=parseFloat(tx.incomeTax)||0;
       const ltax=parseFloat(tx.localTax)||0;
       const bonusDed=s.bonus;
@@ -8227,6 +8292,9 @@ function exportExcel(){
       W(ci++,holH>0?+holH.toFixed(2):'',holH>0?S.numDec(C.orange2,bg):S.empty(bg));
       W(ci++,s.adays||'',s.adays?S.num(C.rose,bg):S.empty(bg));
       W(ci++,s.dedShortH>0?+s.dedShortH.toFixed(2):'',s.dedShortH>0?S.numDec(C.rose,bg):S.empty(bg));
+      // 특근일수 / 특근수당
+      W(ci++,(s.tSpecialDays||0)>0?s.tSpecialDays:'',(s.tSpecialDays||0)>0?S.num('B91C1C',bg,true):S.empty(bg));
+      W(ci++,(s.tSpecialPay||0)>0?Math.round(s.tSpecialPay):'',(s.tSpecialPay||0)>0?S.num('B91C1C','FEF2F2',true):S.empty(bg));
 
       // 수당 금액
       W(ci++,Math.round(s.tExtraWorkPay)||'',(s.tExtraWorkPay||0)?S.num('1565C0',bg):S.empty(bg));
