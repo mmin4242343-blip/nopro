@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-08-4';
+const CLIENT_BUILD = '2026-05-08-5';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1624,18 +1624,19 @@ function monthSummary(eid,y,m){
     allowances[a.id]=effectiveV;
     totalAllowance+=effectiveV;
   });
-  // 총 가산수당 합계
-  const tTotalBonus = empPayMode==='fixed'
+  // 총 가산수당 합계 (고정특근수당 포함 — tSpecialPay는 여기에만 합산되고, total 합산식에서는 별도 가산하지 않음)
+  const tTotalBonus = (empPayMode==='fixed'
     ? tExtraWorkPay + tNightPay + tOtDayPay + tOtNightPay + tHolPayNew
-    : tNightPay + tOtDayPay + tOtNightPay + (tHolDayPay||0) + (tHolNightPay||0) + (tHolDayOtPay||0) + (tHolNightOtPay||0);
+    : tNightPay + tOtDayPay + tOtNightPay + (tHolDayPay||0) + (tHolNightPay||0) + (tHolDayOtPay||0) + (tHolNightOtPay||0)
+  ) + tSpecialPay;
   // 결근차감: 통상시급(= 기본시급 + '통상' 체크된 수당만 반영) 기준으로 재계산
   // 근로기준법상 결근 1일=통상임금 1일분 공제
   // 표시 공제시간(dedShortHByDay) 그대로 사용 → 표시 × 통상시급 = 차감 금액 정확히 일치 (사용자 요구)
   if(empPayMode!=='monthly' && empPayMode!=='hourly'){
     deduction = Math.round(ordRate * (adays * dailyStd + dedShortHByDay) / 10 + FP_EPS) * 10;
   }
-  // 총급여 = 기본급 + 수당 + 주휴 + 연차 + 총가산수당 + 월급제휴일 + 상여 + 특근수당 - 결근차감
-  const total=r10((tBase+totalAllowance) + wkly + annualPay + tTotalBonus + tMonthlyHolStdPay + tMonthlyHolOtPay + bonus + tSpecialPay - deduction);
+  // 총급여 = 기본급 + 수당 + 주휴 + 연차 + 총가산수당(고정특근수당 포함) + 월급제휴일 + 상여 - 결근차감
+  const total=r10((tBase+totalAllowance) + wkly + annualPay + tTotalBonus + tMonthlyHolStdPay + tMonthlyHolOtPay + bonus - deduction);
 
   const rh=v=>Math.round(v*100 + FP_EPS)/100; // 시간 소수점 2자리 (FP 보정)
   return{wdays,adays,aldays,twkH:rh(twkH),tNightH:rh(tAllNightH),tOtDayH:rh(tAllOtDayH),tOtNightH:rh(tAllOtNightH),tHolDayH:rh(tHolDayH),tHolNightH:rh(tHolNightH),tHolDayOtH:rh(tHolDayOtH),tHolNightOtH:rh(tHolNightOtH),
@@ -3465,9 +3466,10 @@ function renderPayroll(){
           const _pm2=getEmpPayMode(emp);
           if(_pm2==='monthly') return ''; // 월급제: 가산수당 없음 (휴일수당은 위에서 처리)
           const _isFixed=_pm2==='fixed';
-          const addPay=_isFixed
+          const addPay=(_isFixed
             ? (s.tExtraWorkPay||0)+(s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolPayNew||0)
-            : (s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0);
+            : (s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0)
+          )+(s.tSpecialPay||0);
           return addPay>0?`<div class="pr"><span class="prl">추가수당</span><span class="prv" style="color:#3C3489">${fmt$(addPay)}원</span></div>`:'';
         })()}
         ${s.annualPay>0?`<div class="pr"><span class="prl">연차수당</span><span class="prv" style="color:var(--green)">${fmt$(s.annualPay)}원<span class="prx">${s.aldays}일</span></span></div>`:''}
@@ -3638,8 +3640,8 @@ function renderXlPreview(){
       </td>`;
     }).join('');
 
-    // 총급여 = 급여 + 주휴수당 + 연차수당 + 총가산수당 + 상여금 + 특근수당 - 결근차감
-    const totalPay = basePay + (s.wkly||0) + s.annualPay + (s.tTotalBonus||0) + (s.tMonthlyHolStdPay||0) + (s.tMonthlyHolOtPay||0) + (s.tSpecialPay||0) - s.deduction + s.bonus;
+    // 총급여 = 급여 + 주휴수당 + 연차수당 + 총가산수당(고정특근수당 포함) + 상여금 - 결근차감
+    const totalPay = basePay + (s.wkly||0) + s.annualPay + (s.tTotalBonus||0) + (s.tMonthlyHolStdPay||0) + (s.tMonthlyHolOtPay||0) - s.deduction + s.bonus;
     const incomeTax = tx.incomeTax||0;
     const localTax = tx.localTax||0;
     const pension4 = +(tx.pension)||0;
@@ -3692,7 +3694,7 @@ function renderXlPreview(){
       <td class="num" style="${(s.tHolPayNew||0)>0?'color:#854F0B;font-weight:700':''}">${(s.tHolPayNew||0)>0?fmt$(s.tHolPayNew):''}</td>
       <td class="num" style="${(s.tMonthlyHolStdPay||0)>0?'color:#854F0B;font-weight:700':''}">${(s.tMonthlyHolStdPay||0)>0?fmt$(s.tMonthlyHolStdPay):''}</td>
       <td class="num" style="${(s.tMonthlyHolOtPay||0)>0?'color:#993C1D;font-weight:700':''}">${(s.tMonthlyHolOtPay||0)>0?fmt$(s.tMonthlyHolOtPay):''}</td>
-      <td class="num" style="font-weight:700;color:#065F46;background:#ECFDF5">${((s.tTotalBonus||0)+(s.tSpecialPay||0))>0?fmt$((s.tTotalBonus||0)+(s.tSpecialPay||0)):''}</td>
+      <td class="num" style="font-weight:700;color:#065F46;background:#ECFDF5">${(s.tTotalBonus||0)>0?fmt$(s.tTotalBonus):''}</td>
       <td class="num" style="${s.deduction>0?'color:#A32D2D;font-weight:700':''}">${s.deduction>0?'-'+fmt$(s.deduction):''}</td>
       <td style="padding:2px 4px;background:#FEF3C7">
         <input type="text" inputmode="numeric" data-xl-inp="1" value="${s.bonus?Number(s.bonus).toLocaleString():''}" placeholder="0"
@@ -8257,7 +8259,7 @@ function exportExcel(){
       let deductTotal=0;
       deductList.forEach(a=>{deductTotal+=(s.allowances[a.id]||0);});
       const basePay = s.tBase + allowTotal;
-      const totalPay = basePay + (s.wkly||0) + s.annualPay + (s.tTotalBonus||0) + (s.tMonthlyHolStdPay||0) + (s.tMonthlyHolOtPay||0) + (s.tSpecialPay||0) - s.deduction + s.bonus;
+      const totalPay = basePay + (s.wkly||0) + s.annualPay + (s.tTotalBonus||0) + (s.tMonthlyHolStdPay||0) + (s.tMonthlyHolOtPay||0) - s.deduction + s.bonus;
       const itax=parseFloat(tx.incomeTax)||0;
       const ltax=parseFloat(tx.localTax)||0;
       const bonusDed=s.bonus;
@@ -8325,10 +8327,8 @@ function exportExcel(){
       W(ci++,Math.round(s.tHolPayNew||0)||'',(s.tHolPayNew||0)?S.num(C.orange2,C.orange4):S.empty(bg));
       W(ci++,Math.round(s.tMonthlyHolStdPay||0)||'',(s.tMonthlyHolStdPay||0)?S.num(C.orange2,C.orange4):S.empty(bg));
       W(ci++,Math.round(s.tMonthlyHolOtPay||0)||'',(s.tMonthlyHolOtPay||0)?S.num(C.rose,C.rose4):S.empty(bg));
-      // 헤더 순서(총가산수당 → 결근차감)에 맞춰 데이터도 동일 순서로 작성
-      // 총가산수당 = tTotalBonus + tSpecialPay (고정특근수당 포함 표시)
-      const _totalBonusWithSpecial = (s.tTotalBonus||0)+(s.tSpecialPay||0);
-      W(ci++,Math.round(_totalBonusWithSpecial)||'',_totalBonusWithSpecial?S.num('065F46','ECFDF5',true):S.empty(bg));
+      // 헤더 순서(총가산수당 → 결근차감)에 맞춰 데이터도 동일 순서로 작성 (tTotalBonus는 고정특근수당 포함)
+      W(ci++,Math.round(s.tTotalBonus||0)||'',(s.tTotalBonus||0)?S.num('065F46','ECFDF5',true):S.empty(bg));
       W(ci++,s.deduction>0?-Math.round(s.deduction):'',s.deduction?S.num(C.rose,C.rose4):S.empty(bg));
 
       // 상여금 + 총급여
@@ -11611,9 +11611,10 @@ function renderCompany() {
     const rows=months.map((_,mi)=>{
       const m=mi+1;
       const s=monthSummary(emp.id,companyYear,m);
-      const addPay=_isFixed2
+      const addPay=(_isFixed2
         ? (s.tExtraWorkPay||0)+(s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolPayNew||0)
-        : (s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0);
+        : (s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0)
+      )+(s.tSpecialPay||0);
       return{m,s,addPay};
     });
     const totBase=rows.reduce((a,r)=>a+r.s.tBase,0);
