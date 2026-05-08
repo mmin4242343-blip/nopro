@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-08-3';
+const CLIENT_BUILD = '2026-05-08-4';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1484,9 +1484,12 @@ function monthSummary(eid,y,m){
     const msBks = rec.customBk ? (rec.customBkList||[]) : bks;
     const c=rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,msBks,rec.outTimes||[],empPayMode,ordRate):null;
     // 특근: 출퇴근 유무와 관계없이 체크되고 금액이 있으면 합산 (외부 계산 결과물 입력 방식)
+    // 입력 금액이 그 날의 모든 가산(소정근로외/야간/연장/휴일) 대체 — 이중 합산 방지
     if(rec.specialWork && (+rec.specialPay||0) > 0){
       tSpecialDays++;
       tSpecialPay += +rec.specialPay||0;
+      if(c) wdays++; // 출퇴근 기록 있으면 근무일로 카운트
+      continue;      // 그 날의 자동 가산 누적은 스킵 (이중 합산 방지)
     }
     if(!c)continue;
     // 매일 m2h 변환 후 시간(hours) 누적 (출퇴근 기록 소수점 그대로 합산)
@@ -2361,7 +2364,7 @@ function renderTable(){
             <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" oninput="setR(${emp.id},'note',this.value)">
           </div>
           ${rec.specialWork?`<div style="margin-top:4px;padding:5px 8px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;display:flex;align-items:center;gap:6px">
-            <span style="font-size:10px;font-weight:700;color:#B91C1C">특근수당</span>
+            <span style="font-size:10px;font-weight:700;color:#B91C1C">고정특근수당</span>
             <input type="text" inputmode="numeric" value="${rec.specialPay?Number(rec.specialPay).toLocaleString():''}" placeholder="0"
               style="width:110px;padding:3px 6px;font-size:11px;border:1px solid #FECACA;border-radius:5px;text-align:right;font-weight:700;color:#B91C1C"
               oninput="formatNumInput(this)"
@@ -2446,7 +2449,7 @@ function renderTable(){
             <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" oninput="setR(${emp.id},'note',this.value)">
           </div>
           ${rec.specialWork?`<div style="margin-top:4px;padding:5px 8px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;display:flex;align-items:center;gap:6px">
-            <span style="font-size:10px;font-weight:700;color:#B91C1C">특근수당</span>
+            <span style="font-size:10px;font-weight:700;color:#B91C1C">고정특근수당</span>
             <input type="text" inputmode="numeric" value="${rec.specialPay?Number(rec.specialPay).toLocaleString():''}" placeholder="0"
               style="width:110px;padding:3px 6px;font-size:11px;border:1px solid #FECACA;border-radius:5px;text-align:right;font-weight:700;color:#B91C1C"
               oninput="formatNumInput(this)"
@@ -2521,7 +2524,7 @@ function renderTable(){
           <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" oninput="setR(${emp.id},'note',this.value)">
         </div>
         ${rec.specialWork?`<div style="margin-top:4px;padding:5px 8px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;display:flex;align-items:center;gap:6px">
-          <span style="font-size:10px;font-weight:700;color:#B91C1C">특근수당</span>
+          <span style="font-size:10px;font-weight:700;color:#B91C1C">고정특근수당</span>
           <input type="text" inputmode="numeric" value="${rec.specialPay?Number(rec.specialPay).toLocaleString():''}" placeholder="0"
             style="width:110px;padding:3px 6px;font-size:11px;border:1px solid #FECACA;border-radius:5px;text-align:right;font-weight:700;color:#B91C1C"
             oninput="formatNumInput(this)"
@@ -3468,7 +3471,7 @@ function renderPayroll(){
           return addPay>0?`<div class="pr"><span class="prl">추가수당</span><span class="prv" style="color:#3C3489">${fmt$(addPay)}원</span></div>`:'';
         })()}
         ${s.annualPay>0?`<div class="pr"><span class="prl">연차수당</span><span class="prv" style="color:var(--green)">${fmt$(s.annualPay)}원<span class="prx">${s.aldays}일</span></span></div>`:''}
-        ${(s.tSpecialPay||0)>0?`<div class="pr"><span class="prl" style="color:#B91C1C;font-weight:700">특근수당</span><span class="prv" style="color:#B91C1C;font-weight:700">${fmt$(s.tSpecialPay)}원<span class="prx">${s.tSpecialDays||0}일</span></span></div>`:''}
+        ${(s.tSpecialPay||0)>0?`<div class="pr"><span class="prl" style="color:#B91C1C;font-weight:700">고정특근수당</span><span class="prv" style="color:#B91C1C;font-weight:700">${fmt$(s.tSpecialPay)}원<span class="prx">${s.tSpecialDays||0}일</span></span></div>`:''}
         <div class="pr">
           <span class="prl">상여금</span>
           <span style="display:flex;align-items:center;gap:5px">
@@ -3574,7 +3577,7 @@ function renderXlPreview(){
     <th style="min-width:46px">결근<br>일수</th>
     <th style="min-width:56px">공제시간<br><span style="font-size:9px;opacity:.7">(h) ×1.0</span></th>
     <th style="min-width:50px;background:#B91C1C;color:#FECACA">특근<br>일수</th>
-    <th style="min-width:80px;background:#B91C1C;color:#FECACA">특근수당<br><span style="font-size:8px;opacity:.8">최대 250%</span></th>
+    <th style="min-width:80px;background:#B91C1C;color:#FECACA">고정특근수당<br><span style="font-size:8px;opacity:.8">최대 250%</span></th>
     <th style="min-width:80px;background:#1565C0;color:#fff">소정근로외<br>실근무수당<br><span style="font-size:8px;opacity:.8">×1.0</span></th>
     <th style="min-width:72px;background:#0C447C;color:#B5D4F4">야간<br>수당<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
     <th style="min-width:72px;background:#534AB7;color:#EEEDFE">초과연장<br>수당<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
@@ -3689,7 +3692,7 @@ function renderXlPreview(){
       <td class="num" style="${(s.tHolPayNew||0)>0?'color:#854F0B;font-weight:700':''}">${(s.tHolPayNew||0)>0?fmt$(s.tHolPayNew):''}</td>
       <td class="num" style="${(s.tMonthlyHolStdPay||0)>0?'color:#854F0B;font-weight:700':''}">${(s.tMonthlyHolStdPay||0)>0?fmt$(s.tMonthlyHolStdPay):''}</td>
       <td class="num" style="${(s.tMonthlyHolOtPay||0)>0?'color:#993C1D;font-weight:700':''}">${(s.tMonthlyHolOtPay||0)>0?fmt$(s.tMonthlyHolOtPay):''}</td>
-      <td class="num" style="font-weight:700;color:#065F46;background:#ECFDF5">${(s.tTotalBonus||0)>0?fmt$(s.tTotalBonus):''}</td>
+      <td class="num" style="font-weight:700;color:#065F46;background:#ECFDF5">${((s.tTotalBonus||0)+(s.tSpecialPay||0))>0?fmt$((s.tTotalBonus||0)+(s.tSpecialPay||0)):''}</td>
       <td class="num" style="${s.deduction>0?'color:#A32D2D;font-weight:700':''}">${s.deduction>0?'-'+fmt$(s.deduction):''}</td>
       <td style="padding:2px 4px;background:#FEF3C7">
         <input type="text" inputmode="numeric" data-xl-inp="1" value="${s.bonus?Number(s.bonus).toLocaleString():''}" placeholder="0"
@@ -8208,7 +8211,7 @@ function exportExcel(){
       ...allowList.map(a=>a.name),
       '급여',
       '실근무(h)','소정근로외(h)','야간(h)','초과연장(h)','초과휴일(h)','결근일수','공제시간(h)',
-      '특근일수','특근수당',
+      '특근일수','고정특근수당',
       '소정근로외수당','야간수당','초과연장수당','초과휴일수당',
       '월급제휴일수당','월급제휴일초과','총가산수당','결근차감',
       '상여금(선지급)','총급여',
@@ -8228,7 +8231,7 @@ function exportExcel(){
       if(h==='야간수당') return S.mainHdr('0C447C','B5D4F4','center');
       if(h==='초과연장수당') return S.mainHdr('534AB7','EEEDFE','center');
       if(h==='초과휴일수당'||h.includes('월급제')) return S.mainHdr('854F0B','FAC775','center');
-      if(h==='특근일수'||h==='특근수당') return S.mainHdr('B91C1C','FECACA','center');
+      if(h==='특근일수'||h==='고정특근수당') return S.mainHdr('B91C1C','FECACA','center');
       if(h==='총가산수당') return S.mainHdr('065F46','D1FAE5','center');
       if(h.includes('상여금')) return S.mainHdr(C.orange2,'FFFFFF','center');
       if(h==='총급여') return S.mainHdr('0D47A1','FFFFFF','center');
@@ -8323,7 +8326,9 @@ function exportExcel(){
       W(ci++,Math.round(s.tMonthlyHolStdPay||0)||'',(s.tMonthlyHolStdPay||0)?S.num(C.orange2,C.orange4):S.empty(bg));
       W(ci++,Math.round(s.tMonthlyHolOtPay||0)||'',(s.tMonthlyHolOtPay||0)?S.num(C.rose,C.rose4):S.empty(bg));
       // 헤더 순서(총가산수당 → 결근차감)에 맞춰 데이터도 동일 순서로 작성
-      W(ci++,Math.round(s.tTotalBonus||0)||'',(s.tTotalBonus||0)?S.num('065F46','ECFDF5',true):S.empty(bg));
+      // 총가산수당 = tTotalBonus + tSpecialPay (고정특근수당 포함 표시)
+      const _totalBonusWithSpecial = (s.tTotalBonus||0)+(s.tSpecialPay||0);
+      W(ci++,Math.round(_totalBonusWithSpecial)||'',_totalBonusWithSpecial?S.num('065F46','ECFDF5',true):S.empty(bg));
       W(ci++,s.deduction>0?-Math.round(s.deduction):'',s.deduction?S.num(C.rose,C.rose4):S.empty(bg));
 
       // 상여금 + 총급여
