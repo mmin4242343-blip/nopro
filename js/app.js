@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-08-1';
+const CLIENT_BUILD = '2026-05-08-2';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -2113,7 +2113,13 @@ function makeFilterBar(tab){
         `</div>`;
     })()}
     ${(()=>{
-      const depts=[...new Set(EMPS.map(e=>(e.dept||'').trim()).filter(d=>d))].sort();
+      // 인천본점 항상 맨 앞 → 아웃소싱 → 그 외 가나다순 (본점 우선 정렬)
+      const _deptRank = s => s==='인천본점' ? 0 : (s==='아웃소싱' ? 1 : 2);
+      const depts=[...new Set(EMPS.map(e=>(e.dept||'').trim()).filter(d=>d))].sort((a,b)=>{
+        const ra=_deptRank(a), rb=_deptRank(b);
+        if(ra!==rb) return ra-rb;
+        return a.localeCompare(b);
+      });
       if(!depts.length) return '';
       const cur=f.dept||'all';
       return '<div class="filter-group" style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:2px;">'
@@ -10683,15 +10689,15 @@ function exportMonthlyExcel(){
   // ── 시트1: 전체 현황표 ──
   {
     const ws = {}; let R=0;
-    const colCount = days+10;
+    const colCount = days+6;
 
     // 타이틀 블록
     R = xlsTitleBlock(ws, `📊 ${monthStr} 근태 전체 현황`, `출력일: ${new Date().toLocaleDateString('ko-KR')} · 총 ${(()=>{return EMPS.filter(e=>{if(mvFilter!=='all'&&(e.payMode||'fixed')!==mvFilter)return false;if(MF.shift!=='all'&&(e.shift||'day')!==MF.shift)return false;const isFor=e.nation==='foreign'||e.foreigner===true;if(MF.nation==='korean'&&isFor)return false;if(MF.nation==='foreign'&&!isFor)return false;if(MF.dept!=='all'&&(e.dept||'').trim()!==MF.dept)return false;if(MF.deptCat!=='all'){const ec=(e.deptCat||'').trim();if(MF.deptCat==='none'){if(ec)return false;}else if(ec!==MF.deptCat)return false;}return !e.leave;}).length})()}명`, colCount, R);
     ws['!rows'] = [{hpt:28},{hpt:16}];
 
-    // 헤더행
+    // 헤더행 (사용자 요청: 근무일/연차/실근무/월급여 컬럼 제외)
     const fixedHdrs = ['직원','직종/직급'];
-    const tailHdrs = ['출근','결근','연차','총h','야간h','연장h','급여'];
+    const tailHdrs = ['결근','야간h','연장h'];
     const allHdrs = [...fixedHdrs, ...Array.from({length:days},(_,i)=>`${i+1}`), ...tailHdrs];
 
     // 헤더 스타일
@@ -10707,7 +10713,7 @@ function exportMonthlyExcel(){
       const label=`${d}\n${dowKo[dow]}`;
       xlsWrite(ws, XLSX.utils.encode_cell({r:R,c:ci}), label, S.mainHdr(bg,'FFFFFF','center'));
     }
-    const tailBgs=[C.teal,C.rose,'2E7D32','1565C0',C.purple2,'4527A0','0F2952'];
+    const tailBgs=[C.rose,C.purple2,'4527A0'];
     tailHdrs.forEach((h,i)=>{
       xlsWrite(ws, XLSX.utils.encode_cell({r:R,c:days+2+i}), h, S.mainHdr(tailBgs[i],'FFFFFF','center'));
     });
@@ -10765,21 +10771,16 @@ function exportMonthlyExcel(){
           isNum?S.numDec(val>=8?C.green:val>0?C.navy:C.gray,cellBg):S.accent(fg,cellBg,true));
       }
 
-      // 집계
-      const totalPay=Math.round(monthSummary(emp.id,vY,vM).tBase);
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+2}),s.wdays,S.num(C.green,ei%2===0?C.green4:'E8F5E9',true));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+3}),s.adays,S.num(s.adays>0?C.rose:C.gray,s.adays>0?(ei%2===0?C.rose4:'FFEBEE'):bg,s.adays>0));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+4}),+s.aldays.toFixed(1),S.numDec(C.orange2,ei%2===0?C.orange4:'FFF3E0'));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+5}),+s.twkH.toFixed(2),S.numDec(C.navy,bg,true));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+6}),+(s.tNightH||0).toFixed(2),S.numDec(C.purple2,ei%2===0?C.purple4:'F3E5F5'));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+7}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),S.numDec(C.blue,ei%2===0?C.blue4:'E3F2FD'));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+8}),totalPay,S.num('FFFFFF','0F2952',true));
+      // 집계 (사용자 요청: 근무일·연차·실근무·월급여 제외)
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+2}),s.adays,S.num(s.adays>0?C.rose:C.gray,s.adays>0?(ei%2===0?C.rose4:'FFEBEE'):bg,s.adays>0));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+3}),+(s.tNightH||0).toFixed(2),S.numDec(C.purple2,ei%2===0?C.purple4:'F3E5F5'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+4}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),S.numDec(C.blue,ei%2===0?C.blue4:'E3F2FD'));
       ws['!rows'].push({hpt:20});
       R++;
     });
 
-    ws['!cols']=[{wch:10},{wch:10},...Array(days).fill({wch:5.5}),...[{wch:6},{wch:6},{wch:6},{wch:7},{wch:7},{wch:7},{wch:11}]];
-    xlsRange(ws,0,0,R-1,days+8);
+    ws['!cols']=[{wch:10},{wch:10},...Array(days).fill({wch:5.5}),...[{wch:6},{wch:7},{wch:7}]];
+    xlsRange(ws,0,0,R-1,days+4);
     XLSX.utils.book_append_sheet(wb,ws,`전체현황`);
   }
 
@@ -11229,7 +11230,6 @@ function exportEmpsExcel(){
 // ══════════════════════════════════════════════════════
 // 📊 직원현황 엑셀 - 프리미엄
 // ══════════════════════════════════════════════════════
-let companyFilter = 'all';
 function exportCompanyExcel(){
   const wb = XLSX.utils.book_new();
   const ws = {}; let R=0;
@@ -11277,7 +11277,6 @@ function exportCompanyExcel(){
 
   // ── 데이터 ──
   const emps=EMPS.filter(e=>{
-    if(companyFilter!=='all'){const ep=e.payMode||'fixed';if(companyFilter==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}else{if(ep!==companyFilter)return false;}}
     if(!e.join||parseEmpDate(e.join)>new Date(companyYear,11,31)) return false;
     return true;
   });
@@ -11385,24 +11384,36 @@ function exportCompanyExcel(){
     });
     const directCount    = activeEmps.filter(e=>!isOutsource(e)).length;
     const outsourceCount = activeEmps.filter(e=> isOutsource(e)).length;
-    const newCount  = EMPS.filter(e=>e.join  && parseEmpDate(e.join).getFullYear()===companyYear  && parseEmpDate(e.join).getMonth()+1===m).length;
-    const leftCount = EMPS.filter(e=>e.leave && parseEmpDate(e.leave).getFullYear()===companyYear && parseEmpDate(e.leave).getMonth()+1===m).length;
+    const _newEmps  = EMPS.filter(e=>e.join  && parseEmpDate(e.join).getFullYear()===companyYear  && parseEmpDate(e.join).getMonth()+1===m);
+    const _leftEmps = EMPS.filter(e=>e.leave && parseEmpDate(e.leave).getFullYear()===companyYear && parseEmpDate(e.leave).getMonth()+1===m);
+    const newCount  = _newEmps.length;
+    const leftCount = _leftEmps.length;
+    const newDirect    = _newEmps.filter(e=>!isOutsource(e)).length;
+    const newOutsource = _newEmps.filter(e=> isOutsource(e)).length;
+    const leftDirect    = _leftEmps.filter(e=>!isOutsource(e)).length;
+    const leftOutsource = _leftEmps.filter(e=> isOutsource(e)).length;
     let totalPay=0, totalWorkDays=0;
     activeEmps.forEach(e=>{ const s=monthSummary(e.id,companyYear,m); totalPay+=s.total; totalWorkDays+=s.wdays; });
     let weekDays=0;
     const dim2=dim(companyYear,m);
     for(let d=1;d<=dim2;d++) if(!isAutoHol(companyYear,m,d)) weekDays++;
-    md.push({activeCount:activeEmps.length, directCount, outsourceCount, newCount, leftCount, totalPay, totalWorkDays, weekDays});
+    md.push({activeCount:activeEmps.length, directCount, outsourceCount,
+      newCount, newDirect, newOutsource, leftCount, leftDirect, leftOutsource,
+      totalPay, totalWorkDays, weekDays});
   }
   const sum = k => md.reduce((s,x)=>s+x[k],0);
 
   // 행 정의 (화면과 동일 순서)
   const sheetRows = [
     { label:'재직 직원 수',         key:'activeCount',    fg:C.navy,    bg:'EEF2FF', sub:false, agg:'-' },
-    { label:'　ㄴ 직접고용',          key:'directCount',    fg:C.teal,    bg:'F0FDFA', sub:true,  agg:'-' },
+    { label:'　ㄴ 인천본점',          key:'directCount',    fg:C.teal,    bg:'F0FDFA', sub:true,  agg:'-' },
     { label:'　ㄴ 아웃소싱',          key:'outsourceCount', fg:C.purple2||'7C3AED', bg:'F5F3FF', sub:true, agg:'-' },
     { label:'입사 직원 수',         key:'newCount',       fg:C.teal,    bg:'F0FDFA', agg:sum('newCount') },
+    { label:'　ㄴ 인천본점',          key:'newDirect',      fg:C.teal,    bg:'F0FDFA', sub:true, agg:sum('newDirect') },
+    { label:'　ㄴ 아웃소싱',          key:'newOutsource',   fg:C.purple2||'7C3AED', bg:'F5F3FF', sub:true, agg:sum('newOutsource') },
     { label:'퇴사 직원 수',         key:'leftCount',      fg:C.rose,    bg:'FEF2F2', agg:sum('leftCount') },
+    { label:'　ㄴ 인천본점',          key:'leftDirect',     fg:C.rose,    bg:'FEF2F2', sub:true, agg:sum('leftDirect') },
+    { label:'　ㄴ 아웃소싱',          key:'leftOutsource',  fg:C.purple2||'7C3AED', bg:'F5F3FF', sub:true, agg:sum('leftOutsource') },
     { label:'급여지급액(만원)',      key:'totalPayMan',    fg:C.purple2||'7C3AED', bg:'F5F3FF', agg:Math.round(sum('totalPay')/10000) },
     { label:'직원 총 근무일수',     key:'totalWorkDays',  fg:C.gray2,   bg:'F8FAFC', agg:sum('totalWorkDays') },
     { label:'평일 영업일수',        key:'weekDays',       fg:C.navy2,   bg:'EFF6FF', agg:sum('weekDays') },
@@ -11565,13 +11576,6 @@ function setCompanyTab(t) {
 }
 
 
-function setCompanyFilter(f){
-  companyFilter = f;
-  document.querySelectorAll('.cpf-btn').forEach(b=>{
-    b.classList.toggle('on', b.dataset.f===f);
-  });
-  renderCompany();
-}
 function renderCompany() {
   document.getElementById('company-year-disp').textContent = companyYear;
   const cpYrEl=document.getElementById('cp-year'); if(cpYrEl) cpYrEl.textContent=companyYear;
@@ -11673,13 +11677,17 @@ function renderCompany() {
       return true;
     });
 
-    // 고용형태 분리: 소속(dept)에 아웃소싱 키워드 있으면 아웃소싱, 그 외(빈값 포함) 직접고용
+    // 고용형태 분리: 소속(dept)에 아웃소싱 키워드 있으면 아웃소싱, 그 외(빈값 포함) 인천본점
     const directCount    = activeEmps.filter(e => !isOutsource(e)).length;
     const outsourceCount = activeEmps.filter(e =>  isOutsource(e)).length;
 
-    // 입사/퇴사
-    const newEmps  = EMPS.filter(emp => emp.join  && parseEmpDate(emp.join).getFullYear()===companyYear  && parseEmpDate(emp.join).getMonth()+1===m);
-    const leftEmps = EMPS.filter(emp => emp.leave && parseEmpDate(emp.leave).getFullYear()===companyYear && parseEmpDate(emp.leave).getMonth()+1===m);
+    // 입사/퇴사 (인천본점/아웃소싱 분리)
+    const newEmps   = EMPS.filter(emp => emp.join  && parseEmpDate(emp.join).getFullYear()===companyYear  && parseEmpDate(emp.join).getMonth()+1===m);
+    const leftEmps  = EMPS.filter(emp => emp.leave && parseEmpDate(emp.leave).getFullYear()===companyYear && parseEmpDate(emp.leave).getMonth()+1===m);
+    const newDirect    = newEmps.filter(e => !isOutsource(e)).length;
+    const newOutsource = newEmps.filter(e =>  isOutsource(e)).length;
+    const leftDirect    = leftEmps.filter(e => !isOutsource(e)).length;
+    const leftOutsource = leftEmps.filter(e =>  isOutsource(e)).length;
 
     // 급여 합계
     let totalPay = 0, totalWorkDays = 0;
@@ -11708,17 +11716,22 @@ function renderCompany() {
     }
 
     return { activeCount: activeEmps.length, directCount, outsourceCount,
-      newCount: newEmps.length, leftCount: leftEmps.length,
+      newCount: newEmps.length, newDirect, newOutsource,
+      leftCount: leftEmps.length, leftDirect, leftOutsource,
       totalPay, totalWorkDays, weekDays, holWorkDays };
   });
 
-  // 합계 (재직/직접/아웃소싱은 월별 스냅샷이라 연간 합산이 무의미 → '-')
+  // 합계 (재직/인천본점/아웃소싱은 월별 스냅샷이라 연간 합산이 무의미 → '-')
   const totals = {
     activeCount: '-',
     directCount: '-',
     outsourceCount: '-',
     newCount:      monthData.reduce((s,d)=>s+d.newCount,0),
+    newDirect:     monthData.reduce((s,d)=>s+d.newDirect,0),
+    newOutsource:  monthData.reduce((s,d)=>s+d.newOutsource,0),
     leftCount:     monthData.reduce((s,d)=>s+d.leftCount,0),
+    leftDirect:    monthData.reduce((s,d)=>s+d.leftDirect,0),
+    leftOutsource: monthData.reduce((s,d)=>s+d.leftOutsource,0),
     totalPay:      monthData.reduce((s,d)=>s+d.totalPay,0),
     totalWorkDays: monthData.reduce((s,d)=>s+d.totalWorkDays,0),
     weekDays:      monthData.reduce((s,d)=>s+d.weekDays,0),
@@ -11727,10 +11740,14 @@ function renderCompany() {
 
   const rows = [
     { label:'재직 직원 수',         key:'activeCount',    fmt:v=>v==='-'?'-':`${v}명`, cls:'var(--navy)' },
-    { label:'　ㄴ 직접고용',         key:'directCount',    fmt:v=>v==='-'?'-':(v?`${v}명`:'-'), cls:'var(--teal)',   sub:true },
+    { label:'　ㄴ 인천본점',         key:'directCount',    fmt:v=>v==='-'?'-':(v?`${v}명`:'-'), cls:'var(--teal)',   sub:true },
     { label:'　ㄴ 아웃소싱',         key:'outsourceCount', fmt:v=>v==='-'?'-':(v?`${v}명`:'-'), cls:'var(--purple)', sub:true },
     { label:'입사 직원 수',         key:'newCount',       fmt:v=>v?`+${v}명`:'-',      cls:'var(--teal)' },
+    { label:'　ㄴ 인천본점',         key:'newDirect',      fmt:v=>v?`+${v}명`:'-',      cls:'var(--teal)',   sub:true },
+    { label:'　ㄴ 아웃소싱',         key:'newOutsource',   fmt:v=>v?`+${v}명`:'-',      cls:'var(--purple)', sub:true },
     { label:'퇴사 직원 수',         key:'leftCount',      fmt:v=>v?`${v}명`:'-',       cls:'var(--rose)' },
+    { label:'　ㄴ 인천본점',         key:'leftDirect',     fmt:v=>v?`${v}명`:'-',       cls:'var(--rose)',   sub:true },
+    { label:'　ㄴ 아웃소싱',         key:'leftOutsource',  fmt:v=>v?`${v}명`:'-',       cls:'var(--purple)', sub:true },
     { label:'급여지급액(세전)',      key:'totalPay',       fmt:v=>v?`${Math.round(v/10000).toLocaleString()}만원`:'-', cls:'var(--purple)' },
     { label:'직원 총 근무일수',     key:'totalWorkDays',  fmt:v=>v?`${v}일`:'-',       cls:'var(--ink2)' },
     { label:'평일 영업일수',        key:'weekDays',       fmt:v=>`${v}일`,             cls:'var(--navy2)', bg:'#EFF6FF' },
