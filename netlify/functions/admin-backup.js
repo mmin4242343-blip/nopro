@@ -1,11 +1,14 @@
 import { supabase } from './_shared/supabase.js';
-import { requireAdmin, ok, err, options } from './_shared/auth.js';
+import { requireAdmin, ok, err, options, cors } from './_shared/auth.js';
+import zlib from 'zlib';
 
 // 관리자 전용 — 단일 회사 전체 데이터 백업
 // companies(비밀번호 제외) + company_data(전체 키) + audit_log(전체) 포함
 // 주민번호는 AES 암호화된 상태 그대로 (복호화 안 함)
-// 응답 크기가 Netlify 6MB 제한 / 10초 타임아웃 가능성 있어 단일 회사 단위로만 지원.
-// 전체 회사 백업은 프론트에서 회사 목록 받아 순차 호출.
+//
+// 응답 6MB 제한 회피: 본문을 gzip 압축 + base64 인코딩 + Content-Encoding:gzip 헤더로 전송.
+// 브라우저가 자동 해제하므로 프론트 변경 불필요. JSON 응답 형식은 v1.0 그대로.
+// 압축 후에도 6MB 초과 시 별도 분할 호출 구조 도입 검토.
 
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return options(event);
@@ -61,7 +64,21 @@ export const handler = async (event) => {
       }
     };
 
-    return ok(payload, event);
+    // gzip 압축으로 6MB 한도 회피. 큰 audit_log를 가진 회사에서 502 방지.
+    // 브라우저가 Content-Encoding 헤더 보고 자동 해제 → 프론트 변경 불필요.
+    const json = JSON.stringify(payload);
+    try {
+      const gz = zlib.gzipSync(json, { level: 6 });
+      return {
+        statusCode: 200,
+        headers: { ...cors(event), 'Content-Encoding': 'gzip' },
+        body: gz.toString('base64'),
+        isBase64Encoded: true,
+      };
+    } catch (zerr) {
+      // 압축 실패 시 평문 폴백 (작은 회사는 그대로 통과)
+      return ok(payload, event);
+    }
 
   } catch (e) {
     if (e.message?.includes('관리자')) return err(403, '관리자 권한이 필요합니다', event);
