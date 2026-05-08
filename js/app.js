@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-08-2';
+const CLIENT_BUILD = '2026-05-08-3';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1462,7 +1462,8 @@ function monthSummary(eid,y,m){
       adays++;
       if(empPayMode==='monthly'){
         // 월급제: 주말/공휴일 결근은 공제 안 함 (원래 안 나와도 되는 날) — 대체근무 무관 (결근이라 가산 자체 없음)
-        const isHolDay = isAutoHol(y,m,d,emp);
+        // 대체공휴일 체크 시도 휴일 취급 → 차감 안 함
+        const isHolDay = isAutoHol(y,m,d,emp) || rec.subHol;
         if(!isHolDay && (POL.dedMonthly??true)){
           const monthlyBase=getEmpMonthlyAt(emp, y, m, 1);
           const workDaysInMonth=Array.from({length:days},(_,i)=>i+1).filter(dd=>{
@@ -1477,8 +1478,8 @@ function monthSummary(eid,y,m){
       }
       continue;
     }
-    // 대체근무 체크 시 휴일성 무력화 → 평일처럼 산정
-    const autoH=isAutoHol(y,m,d,emp) && !rec.subWork;
+    // 대체근무 체크 시 휴일성 무력화 → 평일처럼 산정. 대체공휴일은 평일을 휴일로 강제.
+    const autoH=(isAutoHol(y,m,d,emp) && !rec.subWork) || rec.subHol;
     const bks=getActiveBk(y,m,d,emp);
     const msBks = rec.customBk ? (rec.customBkList||[]) : bks;
     const c=rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,msBks,rec.outTimes||[],empPayMode,ordRate):null;
@@ -1597,7 +1598,7 @@ function monthSummary(eid,y,m){
         const bks=getActiveBk(y,m,d,emp);
         const _whActiveBks = rec.customBk ? (rec.customBkList||[]) : bks;
         const c=rec.start&&rec.end
-          ?calcSession(rec.start,rec.end,rate,isAutoHol(y,m,d,emp)&&!rec.subWork,_whActiveBks,rec.outTimes||[],empPayMode,ordRate)
+          ?calcSession(rec.start,rec.end,rate,(isAutoHol(y,m,d,emp)&&!rec.subWork)||rec.subHol,_whActiveBks,rec.outTimes||[],empPayMode,ordRate)
           :null;
         if(c&&c.work>0) weekWork+=c.work;
       }
@@ -1913,7 +1914,7 @@ function calcOutMins(outTimes){
 function handleTimeInput(eid,field,raw){
   const parsed=parseTimeInput(raw);
   const k=rk(eid,cY,cM,cD);
-  if(!REC[k])REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[],specialWork:false,specialPay:0};
+  if(!REC[k])REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[],specialWork:false,specialPay:0,subWork:false,subHol:false};
   REC[k][field]=parsed;
   saveLS();
   // input 값 즉시 반영 (포커스가 이미 떠난 상태에서만)
@@ -1951,8 +1952,8 @@ function _updateDailyRowCells(eid){
   if(rec.absent||rec.annual) return;
   const emp=EMPS.find(e=>e.id===eid);
   if(!emp) return;
-  // 대체근무 체크 시 휴일성 무력화
-  const autoH=isAutoHol(cY,cM,cD,emp) && !rec.subWork;
+  // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제
+  const autoH=(isAutoHol(cY,cM,cD,emp) && !rec.subWork) || rec.subHol;
   const bks=getActiveBk(cY,cM,cD,emp);
   const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
   try{
@@ -1974,6 +1975,9 @@ function setR(eid,f,v){
   if(f==='annual'&&v){REC[k].absent=false;REC[k].halfAnnual=false;}
   if(f==='halfAnnual'&&v){REC[k].absent=false;REC[k].annual=false;}
   if(f==='absent'&&v){REC[k].annual=false;REC[k].halfAnnual=false;}
+  // 대체근무 ↔ 대체공휴일 상호 배타 (한 날에 둘 다 켜는 건 의미 모순)
+  if(f==='subWork'&&v) REC[k].subHol=false;
+  if(f==='subHol'&&v) REC[k].subWork=false;
   REC[k][f]=v;
   // customBk 체크 시 customBkList 자동 초기화
   if(f==='customBk'&&v&&!REC[k].customBkList?.length){
@@ -1986,8 +1990,8 @@ function setR(eid,f,v){
   // input.value는 사용자가 친 그대로 DOM에 살아있고, 다음 자연스러운 재렌더에 REC 값으로 그려짐.
   if(f==='note') return;
   renderTable();
-  // 연차/반차/대체근무/특근 변경 시 관련 탭도 즉시 갱신
-  if(f==='annual'||f==='halfAnnual'||f==='absent'||f==='subWork'||f==='specialWork'){
+  // 연차/반차/대체근무/대체공휴일/특근 변경 시 관련 탭도 즉시 갱신
+  if(f==='annual'||f==='halfAnnual'||f==='absent'||f==='subWork'||f==='subHol'||f==='specialWork'){
     const lvPage=document.getElementById('pg-leave');
     if(lvPage&&lvPage.classList.contains('on')) renderLeave();
     const mvPage=document.getElementById('pg-monthly');
@@ -2249,8 +2253,8 @@ function renderTable(){
     const prevKey = rk(emp.id,prevD.getFullYear(),prevD.getMonth()+1,prevD.getDate());
     // 저장된 기록만 사용 (자동 채우기 없음 - 최근 데이터 불러오기 버튼으로만 적용)
     const rec=REC[k]||{empId:emp.id,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
-    // 대체근무 체크 시 휴일성 무력화 (UI 휴일 배지·계산 모두 평일로 처리)
-    const autoH=isAutoHol(cY,cM,cD,emp) && !rec.subWork;
+    // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제 (UI 휴일 배지·계산 모두 일치)
+    const autoH=(isAutoHol(cY,cM,cD,emp) && !rec.subWork) || rec.subHol;
     const rate=getEmpRate(emp);
     const al=calcAnnualLeave(emp);
     const empPayMode=getEmpPayMode(emp);
@@ -2347,6 +2351,9 @@ function renderTable(){
             <label style="font-size:10px;color:#7C3AED;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600" title="휴일이지만 평일 대체근무로 처리 (휴일가산 미적용, 기본 근무로 산정)">
               <input type="checkbox" ${rec.subWork?'checked':''} onchange="setR(${emp.id},'subWork',this.checked)">대체근무
             </label>
+            <label style="font-size:10px;color:#D97706;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:700" title="평일이지만 공휴일로 처리 (휴일가산 적용)">
+              <input type="checkbox" ${rec.subHol?'checked':''} onchange="setR(${emp.id},'subHol',this.checked)">대체공휴일
+            </label>
             <label style="font-size:10px;color:#B91C1C;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:700" title="특근 체크 시 입력한 금액(누적 가산 결과)이 총급여에 추가 지급됩니다">
               <input type="checkbox" ${rec.specialWork?'checked':''} onchange="setR(${emp.id},'specialWork',this.checked)">특근
             </label>
@@ -2429,6 +2436,9 @@ function renderTable(){
             <label style="font-size:10px;color:#7C3AED;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600" title="휴일이지만 평일 대체근무로 처리 (휴일가산 미적용, 기본 근무로 산정)">
               <input type="checkbox" ${rec.subWork?'checked':''} onchange="setR(${emp.id},'subWork',this.checked)">대체근무
             </label>
+            <label style="font-size:10px;color:#D97706;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:700" title="평일이지만 공휴일로 처리 (휴일가산 적용)">
+              <input type="checkbox" ${rec.subHol?'checked':''} onchange="setR(${emp.id},'subHol',this.checked)">대체공휴일
+            </label>
             <label style="font-size:10px;color:#B91C1C;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:700" title="특근 체크 시 입력한 금액(누적 가산 결과)이 총급여에 추가 지급됩니다">
               <input type="checkbox" ${rec.specialWork?'checked':''} onchange="setR(${emp.id},'specialWork',this.checked)">특근
             </label>
@@ -2500,6 +2510,9 @@ function renderTable(){
           </label>
           <label style="font-size:10px;color:#7C3AED;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600" title="휴일이지만 평일 대체근무로 처리 (휴일가산 미적용, 기본 근무로 산정)">
             <input type="checkbox" ${rec.subWork?'checked':''} onchange="setR(${emp.id},'subWork',this.checked)">대체근무
+          </label>
+          <label style="font-size:10px;color:#D97706;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:700" title="평일이지만 공휴일로 처리 (휴일가산 적용)">
+            <input type="checkbox" ${rec.subHol?'checked':''} onchange="setR(${emp.id},'subHol',this.checked)">대체공휴일
           </label>
           <label style="font-size:10px;color:#B91C1C;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:700" title="특근 체크 시 입력한 금액(누적 가산 결과)이 총급여에 추가 지급됩니다">
             <input type="checkbox" ${rec.specialWork?'checked':''} onchange="setR(${emp.id},'specialWork',this.checked)">특근
@@ -2634,8 +2647,8 @@ function updateRowCalc(eid){
   if(!rec || !rec.start || !rec.end) return;
   const emp = EMPS.find(e=>e.id===eid);
   if(!emp) return;
-  // 대체근무 체크 시 휴일성 무력화
-  const autoH = isAutoHol(cY, cM, cD) && !rec.subWork;
+  // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제
+  const autoH = (isAutoHol(cY, cM, cD) && !rec.subWork) || rec.subHol;
   const bks = getActiveBk(cY, cM, cD, emp);
   const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
   const c = calcSession(rec.start, rec.end, getEmpRate(emp), autoH, activeBks, rec.outTimes||[], getEmpPayMode(emp), getOrdinaryRate(emp,cY,cM));
@@ -3062,8 +3075,8 @@ function renderCal(){
         continue;
       }
     }
-    // 대체근무 체크 시 휴일성 무력화 (캘린더 셀 색·계산 모두 평일로)
-    const autoH=isAutoHol(vY,vM,d,emp) && !(rec&&rec.subWork),phName=getPhName(vY,vM,d);
+    // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제 (캘린더 셀 색·계산 모두 일치)
+    const autoH=(isAutoHol(vY,vM,d,emp) && !(rec&&rec.subWork))||(rec&&rec.subHol),phName=getPhName(vY,vM,d);
     const rate=getEmpRate(emp);
     const isAl=rec&&rec.annual;
     const isHalf=rec&&rec.halfAnnual;
@@ -3128,8 +3141,8 @@ function renderOv(){
         if(ovLeaveDate<curDate){ tr+=`<td class="mt" style="background:var(--rose-dim,#FEE2E2);color:var(--rose);opacity:.5">-</td>`; continue; }
       }
       const rec=REC[rk(emp.id,vY,vM,d)];
-      // 대체근무 체크 시 휴일성 무력화
-      const autoH=isAutoHol(vY,vM,d) && !(rec&&rec.subWork);
+      // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제
+      const autoH=(isAutoHol(vY,vM,d) && !(rec&&rec.subWork))||(rec&&rec.subHol);
       const isAl=rec&&rec.annual;
       const _ovBks=getActiveBk(vY,vM,d,emp);
       const _ovActiveBks = rec && rec.customBk ? (rec.customBkList||[]) : _ovBks;
@@ -8441,8 +8454,8 @@ function exportDailyExcel(){
   activeDayEmps.forEach((emp,ei)=>{
     const k=rk(emp.id,cY,cM,cD);
     const rec=REC[k]||{start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
-    // 대체근무 체크 시 휴일성 무력화
-    const autoH=isAutoHol(cY,cM,cD,emp) && !rec.subWork;
+    // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제
+    const autoH=(isAutoHol(cY,cM,cD,emp) && !rec.subWork) || rec.subHol;
     const rate=getEmpRate(emp);
     const empPayMode=getEmpPayMode(emp);
     // 직원 shift별 휴게세트
@@ -8610,7 +8623,7 @@ function _buildRangeExcel(sd, ed, skipEmpty){
     activeEmps.forEach((emp,ei)=>{
       const k=rk(emp.id,y,m,d);
       const rec=REC[k]||{start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
-      const autoH=isAutoHol(y,m,d,emp) && !rec.subWork;
+      const autoH=(isAutoHol(y,m,d,emp) && !rec.subWork) || rec.subHol;
       const rate=getEmpRate(emp);
       const empPayMode=getEmpPayMode(emp);
       const bks=getActiveBk(y,m,d,emp);
@@ -10750,8 +10763,8 @@ function exportMonthlyExcel(){
           continue;
         }
         const rec=REC[rk(emp.id,vY,vM,d)];
-        // 대체근무 체크 시 휴일성 무력화
-        const autoH=isAutoHol(vY,vM,d) && !(rec&&rec.subWork);
+        // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제
+        const autoH=(isAutoHol(vY,vM,d) && !(rec&&rec.subWork))||(rec&&rec.subHol);
         let val='', cellBg=bg, fg=C.gray;
         if(autoH||isWe) cellBg=ei%2===0?'FFEBEE':'FFCDD2';
         if(rec){
@@ -10857,8 +10870,8 @@ function exportMonthlyExcel(){
     let totalDedH = 0;  // 일별 표시값(둘째자리) 누적 → 합계와 정확히 일치
     for(let d=1;d<=days;d++){
       const _recForAutoH=REC[rk(emp.id,vY,vM,d)];
-      // 대체근무 체크 시 휴일성 무력화 (배경색·요일색·계산 모두 평일로)
-      const autoH=isAutoHol(vY,vM,d) && !(_recForAutoH&&_recForAutoH.subWork);
+      // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제 (배경색·요일색·계산 모두 일치)
+      const autoH=(isAutoHol(vY,vM,d) && !(_recForAutoH&&_recForAutoH.subWork))||(_recForAutoH&&_recForAutoH.subHol);
       const dow=new Date(vY,vM-1,d).getDay();
       const isSun=dow===0; const isSat=dow===6;
       const phName=getPhName&&getPhName(vY,vM,d)||'';
@@ -11019,8 +11032,8 @@ function exportMonthlyExcelOne(empId){
   let totalDedH = 0;  // 일별 표시값(둘째자리) 누적 → 합계와 정확히 일치
   for(let d=1;d<=days;d++){
     const _recForAutoH2=REC[rk(emp.id,vY,vM,d)];
-    // 대체근무 체크 시 휴일성 무력화
-    const autoH=isAutoHol(vY,vM,d) && !(_recForAutoH2&&_recForAutoH2.subWork);
+    // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제
+    const autoH=(isAutoHol(vY,vM,d) && !(_recForAutoH2&&_recForAutoH2.subWork))||(_recForAutoH2&&_recForAutoH2.subHol);
     const dow=new Date(vY,vM-1,d).getDay();
     const isSun=dow===0, isSat=dow===6;
     const phName=getPhName&&getPhName(vY,vM,d)||'';
@@ -13629,9 +13642,9 @@ function fillNormalAttend(empIds){
     const emp=EMPS.find(e=>e.id===id);
     if(!emp||!emp.workStart||!emp.workEnd)return;
     const k=rk(id,cY,cM,cD);
-    // 대체근무 체크된 직원은 휴일이라도 통과 (대체근무 = 평일처럼 처리)
+    // 대체근무 체크된 직원은 휴일이라도 통과 (평일처럼 처리) / 대체공휴일은 평일을 휴일로 강제
     const existingRec=REC[k];
-    const autoH=isAutoHol(cY,cM,cD,emp) && !(existingRec&&existingRec.subWork);
+    const autoH=(isAutoHol(cY,cM,cD,emp) && !(existingRec&&existingRec.subWork))||(existingRec&&existingRec.subHol);
     if(autoH){blocked.push(emp.name);return;}
     if(!REC[k])REC[k]={empId:id,start:'',end:'',absent:false,annual:false,note:'',outTimes:[]};
     REC[k].start=emp.workStart;REC[k].end=emp.workEnd;
