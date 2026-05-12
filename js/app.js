@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-12-6';
+const CLIENT_BUILD = '2026-05-12-7';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1248,9 +1248,11 @@ function calcNightBkMins(sMin,eMin,bks){
   return n;
 }
 
-function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate){
+function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate,halfDayBaseM){
   // premiumRate: 통상시급 (가산수당 계산용). 미지정 시 rate 사용
+  // halfDayBaseM: 반차로 이미 채워진 기본근로시간(분). 기본 0. 반차 시 240 전달 → OT 임계값을 240으로 낮춤
   const pRate=premiumRate||rate;
+  const _halfBase = +halfDayBaseM || 0;
   const s=pT(start),eR=pT(end);if(s===null||eR===null)return null;
   const e=rEnd(s,eR);
   const gross=e-s;
@@ -1260,12 +1262,14 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate){
   const work=Math.max(0,gross-deduct);
   const nightM=calcNightMins(s,e,bks,outTimes); // 22~06 야간 분
   const dayM=Math.max(0,work-nightM);
-  const ot=Math.max(0,work-480);
+  // 8h(480분) 기준 OT 임계값. 반차일에는 반차로 채워진 분(_halfBase=240)만큼 낮춰 4h 초과 OT 처리
+  const _otThresh = Math.max(0, 480 - _halfBase);
+  const ot=Math.max(0,work-_otThresh);
   const crossed=eR<=s;
   const mode=empMode||POL.basePayMode;
 
-  // 연장 구간 분리 (야간/주간)
-  const otNight=Math.max(0, nightM - Math.max(0, 480-dayM));
+  // 연장 구간 분리 (야간/주간) — 임계값 반영
+  const otNight=Math.max(0, nightM - Math.max(0, _otThresh-dayM));
   const otDay=Math.max(0, ot-otNight);
 
   if(mode==='pohal'){
@@ -1482,7 +1486,9 @@ function monthSummary(eid,y,m){
     const autoH=(isAutoHol(y,m,d,emp) && !rec.subWork) || rec.subHol;
     const bks=getActiveBk(y,m,d,emp);
     const msBks = rec.customBk ? (rec.customBkList||[]) : bks;
-    const c=rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,msBks,rec.outTimes||[],empPayMode,ordRate):null;
+    // 🎯 반차 + 출퇴근 → 반차 4h가 이미 채워진 것으로 간주 → OT 임계 240분 (시급제·통상임금제만 의미 있음)
+    const _halfBaseM = (rec.halfAnnual && !autoH && (empPayMode==='hourly'||empPayMode==='fixed')) ? 240 : 0;
+    const c=rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,msBks,rec.outTimes||[],empPayMode,ordRate,_halfBaseM):null;
     // 특근: 출퇴근 유무와 관계없이 체크되고 금액이 있으면 합산 (외부 계산 결과물 입력 방식)
     // 입력 금액이 그 날의 모든 가산(소정근로외/야간/연장/휴일) 대체 — 이중 합산 방지
     if(rec.specialWork && (+rec.specialPay||0) > 0){
@@ -1495,12 +1501,17 @@ function monthSummary(eid,y,m){
     // 매일 m2h 변환 후 시간(hours) 누적 (출퇴근 기록 소수점 그대로 합산)
     twkH+=m2h(c.work); tAllNightH+=m2h(c.nightM); tAllOtDayH+=m2h(c.otDay); tAllOtNightH+=m2h(c.otNight);
     if(empPayMode==='fixed'){
-      tFixExtraH += m2h(autoH ? c.work : Math.max(0,c.work-480));
+      // 🎯 반차일은 임계 240분(=4h) — 반차 4h + 실근무 4h 초과시 1.0x 소정근로외 + 0.5x 연장가산
+      const fixedThresh = (rec.halfAnnual && !autoH) ? 240 : 480;
+      tFixExtraH += m2h(autoH ? c.work : Math.max(0, c.work - fixedThresh));
       if(autoH) tFixHolWorkH += m2h(c.work);
     }
     if(empPayMode==='hourly' && !autoH){
       const dayM = Math.max(0, c.work - c.nightM);
-      tHrBaseH += m2h(Math.min(dayM, 480) + Math.min(c.nightM, 480));
+      // 🎯 반차일: 반차 4h를 base에 추가 + 실근무 4h 초과는 OT (c.otDay/otNight이 240 임계로 산출됨)
+      const hourlyThresh = rec.halfAnnual ? 240 : 480;
+      if(rec.halfAnnual) tHrBaseH += 4; // 반차 4h 시급 기본급 시간 가산 (월급 대신)
+      tHrBaseH += m2h(Math.min(dayM, hourlyThresh) + Math.min(c.nightM, hourlyThresh));
       tHrNightH += m2h(Math.min(c.nightM, 480));
       tHrOtDayH += m2h(c.otDay);
       tHrOtNightH += m2h(c.otNight);
@@ -1962,8 +1973,11 @@ function _updateDailyRowCells(eid){
   const autoH=(isAutoHol(cY,cM,cD,emp) && !rec.subWork) || rec.subHol;
   const bks=getActiveBk(cY,cM,cD,emp);
   const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
+  const _pm = getEmpPayMode(emp);
+  // 🎯 반차 + 출퇴근 → 시급제·통상임금제는 4h를 base로 인정해 OT 임계 240
+  const _halfBaseM = (rec.halfAnnual && !autoH && (_pm==='hourly'||_pm==='fixed')) ? 240 : 0;
   try{
-    const c=calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,cY,cM));
+    const c=calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],_pm,getOrdinaryRate(emp,cY,cM),_halfBaseM);
     if(!c) return;
     if(tdW){
       const d=tdW.querySelector('div')||tdW;
@@ -2276,9 +2290,10 @@ function renderTable(){
     if(rec.annual){
       c={work:480,nightM:0,ot:0,crossed:false,basePay:rate*8,nightPay:0,otPay:0,holPay:0,totalPay:rate*8};
     } else if(rec.halfAnnual){
-      // 반차: 4h 기본 지급, 출퇴근 있으면 실근무 추가 계산
+      // 반차: 4h 기본 지급, 출퇴근 있으면 실근무 추가 계산 (시급제·통상임금제는 4h+work 8h초과 1.5x 연장)
       if(rec.start&&rec.end){
-        c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,cY,cM));
+        const _halfBaseM = (!autoH && (empPayMode==='hourly'||empPayMode==='fixed')) ? 240 : 0;
+        c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,cY,cM),_halfBaseM);
       } else {
         c={work:240,nightM:0,ot:0,crossed:false,basePay:rate*4,nightPay:0,otPay:0,holPay:0,totalPay:rate*4};
       }
@@ -9929,8 +9944,20 @@ function leaveYearNav(d){ leaveYear += d; renderLeave(); }
 // calcMode: 'fiscal' (회계연도 기준, 기본) / 'joinDate' (입사일 기준)
 function calcLeaveForYear(emp, year) {
   const mode = leaveSettings.calcMode || 'fiscal';
-  if (mode === 'joinDate') return calcLeaveByJoinDate(emp, year);
-  return calcLeaveByFiscal(emp, year);
+  const result = (mode === 'joinDate') ? calcLeaveByJoinDate(emp, year) : calcLeaveByFiscal(emp, year);
+  // 🎯 총연차 수동 override: 사용자가 연차관리에서 직접 입력한 값으로 교체
+  // ov.manualTotal이 있으면 자동 계산값을 무시하고 그 값을 총연차로 사용. 잔여 = manualTotal - used
+  const ov = (leaveOverrides[emp.id] && leaveOverrides[emp.id][year]) || null;
+  if (ov && ov.manualTotal !== undefined && ov.manualTotal !== null) {
+    const newTotal = +ov.manualTotal;
+    return {
+      ...result,
+      total: newTotal,
+      accrued: newTotal,
+      remain: Math.round((newTotal - result.used) * 10) / 10,
+    };
+  }
+  return result;
 }
 
 // ── 회계연도(1/1~12/31) 기준 ──
@@ -10285,8 +10312,18 @@ function renderLeave() {
       </td>
       <td style="padding:10px 8px;font-size:11px;text-align:center;color:var(--ink3)">${emp.join||'-'}</td>
       <td style="padding:10px 8px;text-align:center">
-        <span style="font-size:15px;font-weight:700;color:var(--navy)">${lv.total}</span>
-        <span style="font-size:9px;color:var(--ink3)">개</span>
+        <div style="display:flex;align-items:center;gap:2px;justify-content:center">
+          <input type="number"
+            value="${leaveOverrides[emp.id]&&leaveOverrides[emp.id][leaveYear]&&leaveOverrides[emp.id][leaveYear].manualTotal!==undefined?leaveOverrides[emp.id][leaveYear].manualTotal:''}"
+            placeholder="${lv.total}" min="0" max="50" step="0.5"
+            style="width:50px;padding:3px;font-size:13px;border:1px solid var(--bd2);border-radius:5px;text-align:center;font-weight:700;color:var(--navy)"
+            onchange="overrideLeaveTotal(${emp.id},${leaveYear},this.value===''?null:+this.value)"
+            title="비워두면 자동계산. 직접 입력 시 해당값을 총연차로 사용">
+          ${leaveOverrides[emp.id]&&leaveOverrides[emp.id][leaveYear]&&leaveOverrides[emp.id][leaveYear].manualTotal!==undefined
+            ?`<button onclick="overrideLeaveTotal(${emp.id},${leaveYear},null)" style="width:14px;height:14px;border-radius:50%;background:var(--rose);color:#fff;border:none;cursor:pointer;font-size:9px;line-height:14px;text-align:center" title="자동계산으로 복귀">×</button>`
+            :''}
+          <span style="font-size:9px;color:var(--ink3)">개</span>
+        </div>
       </td>
       <td style="padding:10px 8px;text-align:center;background:var(--gbg)">
         <span style="font-size:15px;font-weight:700;color:var(--green)">${lv.used}</span>
@@ -10380,6 +10417,24 @@ function overrideLeaveUsed(empId, year, val) {
   }
   localStorage.setItem('npm5_leave_overrides', JSON.stringify(leaveOverrides));
   saveLS(); // Supabase DB 동기화
+  renderLeave();
+}
+
+// 🎯 총연차 수동 override. null이면 제거 → 자동 계산값 복귀.
+function overrideLeaveTotal(empId, year, val) {
+  if (!leaveOverrides[empId]) leaveOverrides[empId] = {};
+  if (!leaveOverrides[empId][year]) leaveOverrides[empId][year] = {};
+  if (val === null) {
+    delete leaveOverrides[empId][year].manualTotal;
+    if (Object.keys(leaveOverrides[empId][year]).length === 0) {
+      delete leaveOverrides[empId][year];
+      if (Object.keys(leaveOverrides[empId]).length === 0) delete leaveOverrides[empId];
+    }
+  } else {
+    leaveOverrides[empId][year].manualTotal = val;
+  }
+  localStorage.setItem('npm5_leave_overrides', JSON.stringify(leaveOverrides));
+  saveLS();
   renderLeave();
 }
 
