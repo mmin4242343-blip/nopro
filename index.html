@@ -1949,7 +1949,7 @@ noprohr.netlify.app/tbm_sign.html
         <div class="sr" id="sr-base-rate">
           <div><div class="sl">기본 시급 (전체)</div><div class="ss">직원 관리에서 개별 수정 가능</div></div>
           <div style="display:flex;align-items:center;gap:4px">
-            <input class="ni" type="text" inputmode="numeric" id="inp-base-rate" value="11,750" style="width:88px;text-align:right" oninput="formatNumInput(this)">
+            <input class="ni" type="text" inputmode="numeric" id="inp-base-rate" value="11,750" style="width:88px;text-align:right" oninput="formatNumInput(this)" onchange="POL.baseRate=+this.value.replace(/,/g,'')||0;saveLS();renderPayroll()">
             <span style="font-size:11px;color:var(--ink3)">원</span>
           </div>
         </div>
@@ -2289,7 +2289,7 @@ noprohr.netlify.app/tbm_sign.html
 </div>
 
 </div></div></div>
-<script src="/js/app.js?v=2026-05-12-3"></script>
+<script src="/js/app.js?v=2026-05-12-4"></script>
 <!-- 인라인 핸들러용 unsafe-inline은 추후 단계적 제거 예정 -->
 <script>
 // placeholder - app.js에서 모든 로직 처리

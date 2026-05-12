@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-12-3';
+const CLIENT_BUILD = '2026-05-12-4';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -3592,8 +3592,8 @@ function renderXlPreview(){
     <th style="min-width:72px;background:#0C447C;color:#B5D4F4">야간<br>수당<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
     <th style="min-width:72px;background:#534AB7;color:#EEEDFE">초과연장<br>수당<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
     <th style="min-width:72px;background:#854F0B;color:#FAC775">초과휴일<br>수당<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
-    <th style="min-width:72px;background:#854F0B;color:#FAC775">월급제<br>휴일수당<br><span style="font-size:8px;opacity:.8">8h이내×1.5</span></th>
-    <th style="min-width:72px;background:#993C1D;color:#F5C4B3">월급제<br>휴일초과<br><span style="font-size:8px;opacity:.8">8h초과×2.0</span></th>
+    <th style="min-width:72px;background:#854F0B;color:#FAC775">포괄임금제<br>휴일수당<br><span style="font-size:8px;opacity:.8">8h이내×1.5</span></th>
+    <th style="min-width:72px;background:#993C1D;color:#F5C4B3">포괄임금제<br>휴일초과<br><span style="font-size:8px;opacity:.8">8h초과×2.0</span></th>
     <th style="min-width:90px;background:#065F46;color:#D1FAE5">총 가산수당 <button class="tip-btn" style="background:rgba(255,255,255,.2);border:none;cursor:pointer;font-size:11px;padding:0 3px;border-radius:50%;color:#fff" onclick="showBonusTip()">💡</button></th>
     <th style="min-width:72px;background:#A32D2D;color:#F7C1C1">결근차감</th>
     <th class="yw" style="min-width:80px">상여금<br>(선지급)</th>
@@ -5616,13 +5616,13 @@ function setBasePay(m){
     if(infoEl){infoEl.textContent='시급제: 실근무×시급 / 야간 ×1.5배 전체';infoEl.className='info';}
     const rr2=document.getElementById('sr-base-rate');if(rr2)rr2.style.display='flex';
   } else if(m==='monthly'){
-    if(badge){badge.className='mode-badge mode-pohal';badge.textContent='월급제';}
+    if(badge){badge.className='mode-badge mode-pohal';badge.textContent='포괄임금제';}
     if(sotRow)sotRow.style.display='none';
     if(juhyuTgl)juhyuTgl.classList.add('dis');
-    if(juhyuSs){juhyuSs.textContent='월급제: 주휴 월급에 포함';juhyuSs.style.color='var(--amber)';}
+    if(juhyuSs){juhyuSs.textContent='포괄임금제: 주휴 월급에 포함';juhyuSs.style.color='var(--amber)';}
     if(prem)prem.style.display='block';if(pohalInfo)pohalInfo.style.display='none';
     if(monthlyRow)monthlyRow.style.display='flex';
-    if(infoEl){infoEl.textContent='월급제: 월급 고정 / 휴일출근 시 1.5배(8h이내)·2배(초과)';infoEl.className='info green';}
+    if(infoEl){infoEl.textContent='포괄임금제: 월급 고정 / 휴일출근 시 1.5배(8h이내)·2배(초과)';infoEl.className='info green';}
     const rr4=document.getElementById('sr-base-rate');if(rr4)rr4.style.display='none';
     const mr=document.getElementById('sr-base-monthly');if(mr)mr.style.display='flex';
   } else {
@@ -8227,7 +8227,7 @@ function exportExcel(){
       '실근무(h)','소정근로외(h)','야간(h)','초과연장(h)','초과휴일(h)','결근일수','공제시간(h)',
       '특근일수','고정특근수당',
       '소정근로외수당','야간수당','초과연장수당','초과휴일수당',
-      '월급제휴일수당','월급제휴일초과','총가산수당','결근차감',
+      '포괄임금제휴일수당','포괄임금제휴일초과','총가산수당','결근차감',
       '상여금(선지급)','총급여',
       ...deductList.map(a=>a.name),
       '국민연금','건강보험','고용보험','소득세','주민세','총공제액','실지급액'
@@ -8244,7 +8244,7 @@ function exportExcel(){
       if(h==='소정근로외수당') return S.mainHdr('1565C0','FFFFFF','center');
       if(h==='야간수당') return S.mainHdr('0C447C','B5D4F4','center');
       if(h==='초과연장수당') return S.mainHdr('534AB7','EEEDFE','center');
-      if(h==='초과휴일수당'||h.includes('월급제')) return S.mainHdr('854F0B','FAC775','center');
+      if(h==='초과휴일수당'||h.includes('포괄임금제')) return S.mainHdr('854F0B','FAC775','center');
       if(h==='특근일수'||h==='고정특근수당') return S.mainHdr('B91C1C','FECACA','center');
       if(h==='총가산수당') return S.mainHdr('065F46','D1FAE5','center');
       if(h.includes('상여금')) return S.mainHdr(C.orange2,'FFFFFF','center');
@@ -8468,7 +8468,7 @@ function exportDailyExcel(){
     return true;
   }), 'daily', dayDate2);
 
-  const payModeLabel={fixed:'통상임금제',hourly:'시급제',monthly:'월급제',pohal:'포괄임금'};
+  const payModeLabel={fixed:'통상임금제',hourly:'시급제',monthly:'포괄임금제',pohal:'포괄임금제'};
 
   activeDayEmps.forEach((emp,ei)=>{
     const k=rk(emp.id,cY,cM,cD);
@@ -8600,7 +8600,7 @@ function _buildRangeExcel(sd, ed, skipEmpty){
   const C=XLS.C, S=XLS.S;
   const wb=XLSX.utils.book_new();
   const dowNames=['일','월','화','수','목','금','토'];
-  const payModeLabel={fixed:'통상임금제',hourly:'시급제',monthly:'월급제',pohal:'포괄임금'};
+  const payModeLabel={fixed:'통상임금제',hourly:'시급제',monthly:'포괄임금제',pohal:'포괄임금제'};
   const hdrs=['순번','이름','급여형태','출근','퇴근','근무시간','휴게h','야간h','연장h','휴일h','상태','급여','비고'];
   let totalSheets=0, totalEmpRows=0, totalWorkH=0, totalPay=0;
   const cur=new Date(sd);
@@ -9449,7 +9449,7 @@ function sfInitDeptChips(){
 function sfPmLabel(e){
   const m=e.payMode||'fixed';
   if(m==='pohal')  return{t:'포괄임금',c:'#7C3AED',bg:'#F5F3FF'};
-  if(m==='monthly')return{t:'월급제',  c:'#854F0B',bg:'#FEF3C7'};
+  if(m==='monthly')return{t:'포괄임금제',c:'#854F0B',bg:'#FEF3C7'};
   if(m==='hourly') return{t:'시급제',  c:'#0891B2',bg:'#CFFAFE'};
   return               {t:'통상임금제',c:'#059669',bg:'#ECFDF5'};
 }
