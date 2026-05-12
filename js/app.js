@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-12-2';
+const CLIENT_BUILD = '2026-05-12-3';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -4494,8 +4494,10 @@ const BULK_COLS = [
   { key:'dept',    label:'소속 *',   type:'text',   w:80  },
   { key:'rrnFront',label:'주민번호(앞)',type:'text', w:80  },
   { key:'rrnBack', label:'주민번호(뒤)',type:'text', w:80  },
-  { key:'payMode', label:'급여방식', type:'select', w:88,
-    opts:[{v:'fixed',l:'통상임금제'},{v:'hourly',l:'시급'},{v:'monthly',l:'월급제'},{v:'pohal',l:'포괄임금'}] },
+  { key:'payMode', label:'급여방식', type:'select', w:96,
+    // 인라인 UI(통상임금제/시급제/포괄임금제)와 통일. 월급제·포괄임금 라벨 제거.
+    // 기존 monthly/pohal 직원 데이터는 그대로 유지됨 (calcSession이 두 분기 모두 처리).
+    opts:[{v:'fixed',l:'통상임금제'},{v:'hourly',l:'시급제'},{v:'monthly',l:'포괄임금제'}] },
   { key:'rate',    label:'시급/월급',type:'number', w:96  },
   { key:'join',    label:'입사일',   type:'date',   w:116 },
   { key:'gender',  label:'성별',     type:'select', w:72,
@@ -4904,9 +4906,11 @@ function bulkPasteText(text){
       else if(key === 'gender') bulkData[r+ri][key] = (trimVal==='여'||trimVal==='female') ? 'female' : trimVal ? 'male' : '';
       else if(key === 'nation') bulkData[r+ri][key] = (trimVal==='외국인'||trimVal==='foreign') ? 'foreign' : trimVal ? 'local' : '';
       else if(key === 'payMode'){
-        if(trimVal==='시급'||trimVal==='hourly') bulkData[r+ri][key]='hourly';
-        else if(trimVal==='월급제'||trimVal==='monthly') bulkData[r+ri][key]='monthly';
-        else if(trimVal==='포괄임금'||trimVal==='pohal') bulkData[r+ri][key]='pohal';
+        if(trimVal==='시급'||trimVal==='시급제'||trimVal==='hourly') bulkData[r+ri][key]='hourly';
+        // 포괄임금제·월급제·포괄임금 모두 monthly로 통합 (인라인 UI와 일치)
+        else if(trimVal==='포괄임금제'||trimVal==='포괄임금'||trimVal==='월급제'||trimVal==='monthly') bulkData[r+ri][key]='monthly';
+        // 명시적 'pohal' 문자열만 pohal 값 유지 (레거시 호환)
+        else if(trimVal==='pohal') bulkData[r+ri][key]='pohal';
         else if(trimVal) bulkData[r+ri][key]='fixed';
         else bulkData[r+ri][key]='';
       }
