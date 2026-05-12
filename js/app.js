@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-12-8';
+const CLIENT_BUILD = '2026-05-12-9';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -5936,9 +5936,12 @@ function renderAllowanceList(){
     const rightBtn = isFixed
       ? '<span style="font-size:9px;color:var(--ink3);padding:2px 6px;background:var(--surf);border-radius:4px;white-space:nowrap">기본</span>'
       : '<button class="bk-del" onclick="delAllowance(' + i + ')">×</button>';
-    const deductCtrl = isDeduct
-      ? '<button class="tip-btn" onclick="showTip(' + "'공제 항목'" + ',' + "'" + tipMsg + "'" + ')" style="background:var(--rbg);color:var(--rose);width:22px;height:22px">💡</button>'
-      : '<label style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--ink3);cursor:pointer;white-space:nowrap"><input type="checkbox"' + (isDeduct ? ' checked' : '') + ' onchange="POL.allowances[' + i + '].isDeduct=this.checked;saveLS();renderAllowanceList();renderPayroll()">공제</label>';
+    // 🎯 공제 체크박스 양방향 토글 — 공제로 체크된 항목도 다시 수당으로 풀 수 있게.
+    // 기존: 공제면 💡만 보이고 체크박스 사라져서 복귀 불가 → 능력수당이 공제로 잘못 들어가도 못 풀던 버그.
+    const deductTipBtn = isDeduct
+      ? '<button class="tip-btn" onclick="showTip(' + "'공제 항목'" + ',' + "'" + tipMsg + "'" + ')" style="background:var(--rbg);color:var(--rose);width:22px;height:22px;margin-left:2px">💡</button>'
+      : '';
+    const deductCtrl = '<label style="display:flex;align-items:center;gap:3px;font-size:10px;color:' + (isDeduct ? 'var(--rose);font-weight:700' : 'var(--ink3)') + ';cursor:pointer;white-space:nowrap"><input type="checkbox"' + (isDeduct ? ' checked' : '') + ' onchange="POL.allowances[' + i + '].isDeduct=this.checked;saveLS();renderAllowanceList();renderPayroll()">공제</label>' + deductTipBtn;
     return '<div class="allowance-item" style="' + bgStyle + '">'
       + '<input class="allowance-name" value="' + a.name + '" placeholder="수당 이름" style="' + nameColor + '" onchange="POL.allowances[' + i + '].name=this.value;saveLS();renderPayroll()">'
       + deductCtrl
