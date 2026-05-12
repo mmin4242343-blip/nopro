@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-12-11';
+const CLIENT_BUILD = '2026-05-12-12';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -9971,6 +9971,17 @@ function leaveYearNav(d){ leaveYear += d; renderLeave(); }
 function calcLeaveForYear(emp, year) {
   const mode = leaveSettings.calcMode || 'fiscal';
   const result = (mode === 'joinDate') ? calcLeaveByJoinDate(emp, year) : calcLeaveByFiscal(emp, year);
+  // [GUARD] REC의 annual/halfAnnual이 있는데 used에 반영 안 됐으면 경고 (재발 방지)
+  try {
+    const recUsed = countUsedLeave(emp.id, year, 1);
+    if (recUsed > 0 && result.used < recUsed) {
+      const msg = `[연차 invariant 위반] emp=${emp.id} year=${year} REC=${recUsed} used=${result.used}`;
+      console.warn(msg);
+      if (typeof reportError === 'function') {
+        reportError({ level:'guard', source:'calcLeaveForYear', message:msg, meta:{ empId:emp.id, year, recUsed, used:result.used } });
+      }
+    }
+  } catch(_){}
   // 🎯 총연차 수동 override: 사용자가 연차관리에서 직접 입력한 값으로 교체
   // ov.manualTotal이 있으면 자동 계산값을 무시하고 그 값을 총연차로 사용. 잔여 = manualTotal - used
   const ov = (leaveOverrides[emp.id] && leaveOverrides[emp.id][year]) || null;
@@ -10004,10 +10015,13 @@ function hadFullAttendance(emp, year, month) {
   return true;
 }
 
+// [INVARIANT] 사용연차(used) 계산 시 출퇴근 기록(REC)의 annual/halfAnnual은 절대 무시 금지.
+// 어떤 override가 있어도 countUsedLeave() 결과는 반드시 합산되어야 함.
+// 수동값 단독 반환(used = ov.used)은 영구 금지 — 2026-05-12 재발 방지 결정.
 function calcLeaveByFiscal(emp, year) {
   const r2 = v => Math.round(v * 10) / 10;
   // Override: 엑셀 기반 {baselineTotal, baselineRemain, untilMonth}
-  // OR 수동 사용 override {used} — 엑셀 미업로드 시 사용자가 직접 입력한 사용일수
+  // OR 수동 사용 override {used} — 엑셀 미업로드 시 사용자가 직접 입력한 사용일수(베이스라인)
   const ov = (leaveOverrides[emp.id] && leaveOverrides[emp.id][year]) || null;
   const hasBaseline = ov && ov.baselineTotal !== undefined && ov.untilMonth;
 
@@ -10097,16 +10111,19 @@ function calcLeaveByFiscal(emp, year) {
       return sum + mv.count;
     }, 0);
     const tTotal = ov.baselineTotal + postAccrued;
-    // 수동 used가 있으면 우선. 없으면 엑셀 사용분(baselineTotal-baselineRemain) + 이후 REC 사용분.
+    // 수동 used가 있으면 베이스라인으로 사용 + 엑셀 기준월 이후 REC 누적
+    // 없으면 엑셀 사용분(baselineTotal-baselineRemain) + 이후 REC 사용분
+    const postRec = countUsedLeave(emp.id, year, ov.untilMonth + 1);
     const tUsed = (ov.used !== undefined && ov.used !== null)
-      ? ov.used
-      : (ov.baselineTotal - ov.baselineRemain) + countUsedLeave(emp.id, year, ov.untilMonth + 1);
+      ? ov.used + postRec
+      : (ov.baselineTotal - ov.baselineRemain) + postRec;
     const tRemain = tTotal - tUsed;
     return { total: r2(tTotal), accrued: r2(tTotal), used: r2(tUsed), remain: r2(tRemain), monthly };
   }
   // 2) 수동 used override (Excel 없이 사용자가 직접 수정한 값)
+  //    수동값은 베이스라인으로 사용 + 출퇴근 기록의 연차/반차 누적
   if (ov && ov.used !== undefined && ov.used !== null) {
-    const used = ov.used;
+    const used = ov.used + countUsedLeave(emp.id, year, 1);
     return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(total - used), monthly };
   }
   // 3) 자동계산 (override 없음)
@@ -10118,6 +10135,7 @@ function calcLeaveByFiscal(emp, year) {
 // 입사 첫해: 입사 다음달부터 매월 1개씩 (최대 11개)
 // 1년차(입사기념일): 15일 일괄 발생
 // 2년차 이후: 15개 + 2년마다 1개 추가 (최대 25개), 입사기념일에 일괄 발생
+// [INVARIANT] calcLeaveByFiscal과 동일 — 사용연차에서 REC 무시 금지.
 function calcLeaveByJoinDate(emp, year) {
   const r2 = v => Math.round(v * 10) / 10;
   const ov = (leaveOverrides[emp.id] && leaveOverrides[emp.id][year]) || null;
@@ -10198,15 +10216,17 @@ function calcLeaveByJoinDate(emp, year) {
       return sum + mv.count;
     }, 0);
     const tTotal = ov.baselineTotal + postAccrued;
+    // 수동 used = 베이스라인 + 엑셀 기준월 이후 REC 누적
+    const postRec = countUsedLeave(emp.id, year, ov.untilMonth + 1);
     const tUsed = (ov.used !== undefined && ov.used !== null)
-      ? ov.used
-      : (ov.baselineTotal - ov.baselineRemain) + countUsedLeave(emp.id, year, ov.untilMonth + 1);
+      ? ov.used + postRec
+      : (ov.baselineTotal - ov.baselineRemain) + postRec;
     const tRemain = tTotal - tUsed;
     return { total: r2(tTotal), accrued: r2(tTotal), used: r2(tUsed), remain: r2(tRemain), monthly };
   }
-  // 2) 수동 used override
+  // 2) 수동 used override — 수동값은 베이스라인, REC가 그 위에 누적
   if (ov && ov.used !== undefined && ov.used !== null) {
-    const used = ov.used;
+    const used = ov.used + countUsedLeave(emp.id, year, 1);
     return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(total - used), monthly };
   }
   // 3) 자동계산
