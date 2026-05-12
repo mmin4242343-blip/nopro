@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-12-9';
+const CLIENT_BUILD = '2026-05-12-10';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1048,11 +1048,13 @@ const FIXED_ALLOWS = ['능력수당','직급수당','경력수당','교통비','
 if(!POL.allowances||POL.allowances.length===0){
   POL.allowances=[...DEF_POL.allowances];
 } else {
-  // 기본 수당 중 없는 것만 앞에 추가
+  // 기본 수당 중 없는 것만 앞에 추가 + 🛡️ 기본 항목 isDeduct는 default 값으로 강제 동기화.
+  // 사용자가 실수로 능력수당 등의 공제 체크박스를 눌러도 페이지 로드 시 자동 복구.
+  // (사용자 본인이 의도적으로 변경하려고 해도 막힘 → UI에서도 disable 처리)
   DEF_POL.allowances.forEach(da=>{
     const existing = POL.allowances.find(a=>a.id===da.id);
     if(!existing) POL.allowances.unshift({...da});
-    else if(existing.isDeduct===undefined) existing.isDeduct=da.isDeduct||false;
+    else existing.isDeduct = da.isDeduct;  // 항상 default로 강제 (보호 장치)
   });
   // 기존 수당에 isDeduct 없으면 false 기본값
   POL.allowances.forEach(a=>{ if(a.isDeduct===undefined) a.isDeduct=false; });
@@ -5936,12 +5938,19 @@ function renderAllowanceList(){
     const rightBtn = isFixed
       ? '<span style="font-size:9px;color:var(--ink3);padding:2px 6px;background:var(--surf);border-radius:4px;white-space:nowrap">기본</span>'
       : '<button class="bk-del" onclick="delAllowance(' + i + ')">×</button>';
-    // 🎯 공제 체크박스 양방향 토글 — 공제로 체크된 항목도 다시 수당으로 풀 수 있게.
-    // 기존: 공제면 💡만 보이고 체크박스 사라져서 복귀 불가 → 능력수당이 공제로 잘못 들어가도 못 풀던 버그.
+    // 🎯 공제 체크박스 — 양방향 토글 + 기본 항목은 disabled (실수 방지).
+    // 기본 항목(능력/직급/경력/교통/차량/식대/기타공제)의 공제 여부는 코드 default로 고정.
+    // 커스텀 항목(custom_xxx)만 자유롭게 변경 가능.
+    const isFixedId = DEF_ALLOW_IDS.includes(a.id);
     const deductTipBtn = isDeduct
       ? '<button class="tip-btn" onclick="showTip(' + "'공제 항목'" + ',' + "'" + tipMsg + "'" + ')" style="background:var(--rbg);color:var(--rose);width:22px;height:22px;margin-left:2px">💡</button>'
       : '';
-    const deductCtrl = '<label style="display:flex;align-items:center;gap:3px;font-size:10px;color:' + (isDeduct ? 'var(--rose);font-weight:700' : 'var(--ink3)') + ';cursor:pointer;white-space:nowrap"><input type="checkbox"' + (isDeduct ? ' checked' : '') + ' onchange="POL.allowances[' + i + '].isDeduct=this.checked;saveLS();renderAllowanceList();renderPayroll()">공제</label>' + deductTipBtn;
+    const cbAttrs = (isDeduct ? ' checked' : '')
+      + (isFixedId ? ' disabled title="기본 수당 항목 — 공제 여부 변경 불가 (실수 방지)"' : '')
+      + ' onchange="POL.allowances[' + i + '].isDeduct=this.checked;saveLS();renderAllowanceList();renderPayroll()"';
+    const labelStyle = 'display:flex;align-items:center;gap:3px;font-size:10px;color:' + (isDeduct ? 'var(--rose);font-weight:700' : 'var(--ink3)') + ';white-space:nowrap'
+      + (isFixedId ? ';cursor:not-allowed;opacity:.6' : ';cursor:pointer');
+    const deductCtrl = '<label style="' + labelStyle + '"><input type="checkbox"' + cbAttrs + '>공제</label>' + deductTipBtn;
     return '<div class="allowance-item" style="' + bgStyle + '">'
       + '<input class="allowance-name" value="' + a.name + '" placeholder="수당 이름" style="' + nameColor + '" onchange="POL.allowances[' + i + '].name=this.value;saveLS();renderPayroll()">'
       + deductCtrl
