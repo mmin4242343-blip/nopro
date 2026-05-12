@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-12-1';
+const CLIENT_BUILD = '2026-05-12-2';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -2724,7 +2724,10 @@ function applyRecentAll() {
       end: prev.end,
       absent: false, annual: false, halfAnnual: false,
       note: '', outTimes: [],
-      customBk: false, customBkList: []
+      // 개별휴게 설정도 함께 복사 — 직전 기록에서 개별휴게 쓰던 직원이
+      // 최근데이터 불러오기 후 표준 휴게로 돌아가던 버그 수정
+      customBk: !!prev.customBk,
+      customBkList: prev.customBkList ? JSON.parse(JSON.stringify(prev.customBkList)) : []
     };
     __recWrite('applyRecentAll', emp.id, k, {start:prev.start, end:prev.end, name:emp.name});
     cnt++;
@@ -8405,7 +8408,9 @@ function exportExcel(){
   // ⚠️ refDate를 반드시 그 달 1일로 전달. 안 넘기면 applyCommonFilter가 오늘 기준으로 동작 →
   //    과거월 엑셀에서 그 달에 재직했던 퇴사자가 누락됨 (카드/XL뷰와 결과 어긋남).
   const getEmps = mode => applyCommonFilter(EMPS.filter(e=>{
-    const ep = e.payMode || 'fixed';
+    // 화면 로직(getEmpPayMode)과 통일 — 비표준 payMode 값도 'fixed'로 정규화되어
+    // 통상임금제 시트에 포함됨. 직접 비교 시 누락되던 4명 등 엑셀 인원 불일치 버그 수정.
+    const ep = getEmpPayMode(e);
     if(mode==='monthly'){ if(ep!=='monthly' && ep!=='pohal') return false; }
     else { if(ep!==mode) return false; }
     if(e.join&&parseEmpDate(e.join)>new Date(pY,pM,0)) return false;
