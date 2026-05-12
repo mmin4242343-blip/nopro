@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-12-7';
+const CLIENT_BUILD = '2026-05-12-8';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -10303,7 +10303,7 @@ function renderLeave() {
       (_ov.used !== undefined && _ov.used !== null)
     );
 
-    return `<tr style="border-bottom:1px solid var(--bd);${emp.leave ? 'opacity:.55;background:var(--rose-dim)' : ''}">
+    return `<tr id="leave-row-${emp.id}" style="border-bottom:1px solid var(--bd);${emp.leave ? 'opacity:.55;background:var(--rose-dim)' : ''}">
       <td style="padding:10px 14px;font-size:12px;font-weight:700">
         <div style="display:flex;align-items:center;gap:6px">
           <div class="av" style="width:26px;height:26px;font-size:11px;background:${safeColor(emp.color,'#DBEAFE')};color:${safeColor(emp.tc,'#1E3A5F')}">${esc(emp.name)[0]}</div>
@@ -10388,15 +10388,6 @@ function renderLeave() {
 function setLeaveType(empId, type) {
   leaveSettings['type_' + empId] = type;
   localStorage.setItem('npm5_leave_settings', JSON.stringify(leaveSettings));
-  saveLS(); // Supabase DB 동기화
-  renderLeave();
-}
-
-function overrideLeaveTotal(empId, year, val) {
-  if (!leaveOverrides[empId]) leaveOverrides[empId] = {};
-  if (!leaveOverrides[empId][year]) leaveOverrides[empId][year] = {};
-  leaveOverrides[empId][year].total = val;
-  localStorage.setItem('npm5_leave_overrides', JSON.stringify(leaveOverrides));
   saveLS(); // Supabase DB 동기화
   renderLeave();
 }
@@ -10674,38 +10665,79 @@ function leaveUploadCancel(){
   _leaveUploadWB=null;_leaveUploadMatches=[];
 }
 
+// 🎯 인라인 토글: 클릭한 직원 행 바로 아래에 상세 펼침. 같은 직원 재클릭 시 접힘.
 function toggleLeaveDetail(empId) {
   const emp = EMPS.find(e => e.id === empId);
   if (!emp) return;
-  const panel = document.getElementById('leave-monthly-detail');
-  const grid = document.getElementById('leave-monthly-grid');
-  const title = document.getElementById('leave-detail-title');
-  panel.style.display = 'block';
-  title.textContent = `${emp.name} — ${leaveYear}년 월별 연차 현황`;
-
-  const lv = calcLeaveForYear(emp, leaveYear);
-  const months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-
-  grid.innerHTML = `<div style="display:grid;grid-template-columns:repeat(12,1fr);gap:6px">
-    ${lv.monthly.map((mv, i) => {
-      // 해당 월 사용 연차 수
-      const usedM = countUsedLeaveMonth(empId, leaveYear, i+1);
-      return `<div style="background:${mv.count?'#EFF6FF':'var(--surf)'};border:1px solid ${mv.count?'#BFDBFE':'var(--bd)'};border-radius:8px;padding:7px;text-align:center">
-        <div style="font-size:10px;font-weight:700;color:var(--ink3)">${months[i]}</div>
-        <div style="font-size:14px;font-weight:700;color:${mv.count?'var(--navy2)':'var(--ink3)'};margin:3px 0">${mv.count||0}</div>
-        <div style="font-size:8px;color:var(--ink3)">적립</div>
-        ${usedM > 0 ? `<div style="font-size:11px;font-weight:700;color:var(--rose);margin-top:2px">-${usedM}</div><div style="font-size:8px;color:var(--rose)">사용</div>` : ''}
-      </div>`;
-    }).join('')}
-  </div>
-  <div style="margin-top:8px;display:flex;gap:16px;font-size:11px;color:var(--ink2)">
-    <span>총 연차: <strong>${lv.total}개</strong></span>
-    <span>사용: <strong style="color:var(--rose)">${lv.used}일</strong></span>
-    <span>잔여: <strong style="color:var(--navy2)">${lv.remain}일</strong></span>
-    <span>연차수당(1일): <strong style="color:var(--purple)">${Math.round(getLeavePayAmount(emp,leaveYear)).toLocaleString()}원</strong></span>
-  </div>`;
+  const detailId = `leave-detail-${empId}`;
+  const existing = document.getElementById(detailId);
+  if(existing){ existing.remove(); return; }
+  const row = document.getElementById(`leave-row-${empId}`);
+  if(!row) return;
+  // 컬럼 수 자동 산정 (현재 행의 td 개수)
+  const colspan = row.querySelectorAll('td').length || 11;
+  const tr = document.createElement('tr');
+  tr.id = detailId;
+  tr.style.background = 'linear-gradient(180deg,#F8FAFC 0%,#F1F5F9 100%)';
+  const td = document.createElement('td');
+  td.colSpan = colspan;
+  td.style.padding = '12px 16px';
+  td.style.borderBottom = '1px solid var(--bd)';
+  td.innerHTML = _renderLeaveDetail(emp);
+  tr.appendChild(td);
+  row.parentNode.insertBefore(tr, row.nextSibling);
 }
 
+// 상세 패널 HTML 빌더 — 1~12월 그리드 + 정확한 사용 일자 + 하단 요약
+function _renderLeaveDetail(emp) {
+  const lv = calcLeaveForYear(emp, leaveYear);
+  const months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  return `
+    <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px">
+      ${esc(emp.name)} — ${leaveYear}년 월별 연차 현황
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:6px">
+      ${lv.monthly.map((mv, i) => {
+        const dates = getUsedLeaveDates(emp.id, leaveYear, i+1);
+        const fullDates = dates.filter(x => x.type === 'full').map(x => x.day);
+        const halfDates = dates.filter(x => x.type === 'half').map(x => x.day);
+        const usedM = fullDates.length + halfDates.length * 0.5;
+        const hasUse = dates.length > 0;
+        return `<div style="background:${mv.count?'#EFF6FF':hasUse?'#FFF1F2':'var(--surf)'};border:1px solid ${mv.count?'#BFDBFE':hasUse?'#FECACA':'var(--bd)'};border-radius:8px;padding:7px;text-align:center;min-height:70px">
+          <div style="font-size:10px;font-weight:700;color:var(--ink3)">${months[i]}</div>
+          <div style="font-size:14px;font-weight:700;color:${mv.count?'var(--navy2)':'var(--ink3)'};margin:3px 0">${mv.count||0}</div>
+          <div style="font-size:8px;color:var(--ink3)">적립</div>
+          ${hasUse ? `
+            <div style="font-size:11px;font-weight:700;color:var(--rose);margin-top:3px">-${usedM}</div>
+            <div style="font-size:8px;color:var(--rose);margin-bottom:2px">사용</div>
+            <div style="font-size:9px;color:var(--rose);line-height:1.3;font-weight:600">
+              ${fullDates.map(d => `${i+1}/${d}`).join(', ')}${fullDates.length && halfDates.length ? ', ' : ''}${halfDates.map(d => `${i+1}/${d}<span style="font-size:7px;color:#9333EA">(반)</span>`).join(', ')}
+            </div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="margin-top:10px;display:flex;gap:16px;font-size:11px;color:var(--ink2);flex-wrap:wrap">
+      <span>총 연차: <strong>${lv.total}개</strong></span>
+      <span>사용: <strong style="color:var(--rose)">${lv.used}일</strong></span>
+      <span>잔여: <strong style="color:var(--navy2)">${lv.remain}일</strong></span>
+      <span>연차수당(1일): <strong style="color:var(--purple)">${Math.round(getLeavePayAmount(emp,leaveYear)).toLocaleString()}원</strong></span>
+    </div>`;
+}
+
+// 해당 월의 연차 사용 일자 반환: [{day, type:'full'|'half'}]
+function getUsedLeaveDates(empId, year, month) {
+  const out = [];
+  const days = dim(year, month);
+  for (let d = 1; d <= days; d++) {
+    const rec = REC[rk(empId, year, month, d)];
+    if (!rec) continue;
+    if (rec.annual) out.push({day: d, type: 'full'});
+    else if (rec.halfAnnual) out.push({day: d, type: 'half'});
+  }
+  return out;
+}
+
+// 기존 함수 호환 유지 (다른 곳에서 호출될 수 있음)
 function countUsedLeaveMonth(empId, year, month) {
   let used = 0;
   const days = dim(year, month);
