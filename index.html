@@ -1078,9 +1078,10 @@
       <div class="pt-s" id="daily-sub">날짜를 선택하세요</div>
     </div>
     <div style="display:flex;gap:6px;align-items:center">
+      <span id="daily-sel-badge" style="display:none;background:#1565C0;color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:12px;align-items:center;gap:5px"></span>
       <button class="btn btn-sm" onclick="fillNormalAttend()" style="color:var(--navy);border-color:var(--navy);">✅ 전체 정상출퇴근</button>
       <button class="btn btn-sm" onclick="fillNormalAttendSelected()" style="color:var(--teal);border-color:var(--teal);">☑ 선택 정상출퇴근</button>
-      <button class="btn btn-sm" onclick="applyRecentAll()" title="직원별 가장 최근 출퇴근 기록을 오늘에 불러옵니다" style="color:var(--purple);border-color:var(--purple)">📋 최근 데이터 불러오기</button>
+      <button class="btn btn-sm" onclick="applyRecentAll()" title="체크된 직원만 또는 전체 — 직원별 가장 최근 출퇴근 기록을 오늘에 불러옵니다" style="color:var(--purple);border-color:var(--purple)">📋 최근 데이터 불러오기</button>
       <div style="position:relative;display:inline-block">
         <button class="btn btn-sm" onclick="toggleDailyExcelMenu(event)" style="color:#065F46;border-color:#065F46;">⬇ 엑셀 ▾</button>
         <div id="daily-excel-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--card);border:1px solid var(--bd2);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:50;min-width:140px;overflow:hidden">
@@ -2289,7 +2290,7 @@ noprohr.netlify.app/tbm_sign.html
 </div>
 
 </div></div></div>
-<script src="/js/app.js?v=2026-05-12-4"></script>
+<script src="/js/app.js?v=2026-05-12-5"></script>
 <!-- 인라인 핸들러용 unsafe-inline은 추후 단계적 제거 예정 -->
 <script>
 // placeholder - app.js에서 모든 로직 처리

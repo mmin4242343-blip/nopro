@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-12-4';
+const CLIENT_BUILD = '2026-05-12-5';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -2297,7 +2297,7 @@ function renderTable(){
     const phName=getPhName(cY,cM,cD);
     const holTag=autoH?`<span style="font-size:9px;color:#9A3412;background:#FED7AA;padding:1px 5px;border-radius:5px;font-weight:700;margin-left:3px">${esc(phName)||'휴일'}</span>`:'';
     const cbTd=`<td style="width:32px;text-align:center;">
-  <input type="checkbox" class="daily-row-cb" data-eid="${emp.id}" style="accent-color:var(--navy);">
+  <input type="checkbox" class="daily-row-cb" data-eid="${emp.id}" style="accent-color:var(--navy);" onchange="dailyUpdateSelCount()">
 </td>`;
     const nameTd=`<td class="td-nm">
       <div style="display:flex;align-items:center;gap:5px">
@@ -2548,6 +2548,8 @@ function renderTable(){
   }
   // 🛡️ 활성 input 복원 (raw 값 + 캐럿 + 포커스)
   _restoreInputIn(document.getElementById('daily-tbody'), _focusSnap);
+  // 🎯 체크박스 카운트 배지 초기화 (날짜 이동·재렌더 시 체크 리셋되므로 0으로 시작)
+  if(typeof dailyUpdateSelCount === 'function') dailyUpdateSelCount();
 }
 
 // ══ Tab 키 네비게이션 ══
@@ -2690,7 +2692,17 @@ function getPrevDayRec(empId) {
   return null;
 }
 function applyRecentAll() {
-  const empsToApply = activeDayEmpsForCopy();
+  // 🎯 체크된 직원이 있으면 그들만, 없으면 화면 필터 전체 적용 (하위 호환)
+  const checkedIds = [...document.querySelectorAll('.daily-row-cb:checked')].map(c=>parseInt(c.dataset.eid));
+  let empsToApply;
+  let isCheckedMode = false;
+  if(checkedIds.length > 0){
+    const idSet = new Set(checkedIds);
+    empsToApply = EMPS.filter(e => idSet.has(e.id));
+    isCheckedMode = true;
+  } else {
+    empsToApply = activeDayEmpsForCopy();
+  }
   if(empsToApply.length===0){
     const toast=document.createElement('div');
     toast.style.cssText='position:fixed;bottom:24px;right:24px;background:#B45309;color:#fff;padding:10px 18px;border-radius:9px;font-size:12px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2)';
@@ -2705,9 +2717,11 @@ function applyRecentAll() {
   const pgActive=fd.shift!=='all'||fd.nation!=='all'||fd.pay!=='all'||(fd.dept&&fd.dept!=='all')||(fd.deptCat&&fd.deptCat!=='all')||!!fd.search;
   const filterActive=sbActive||pgActive;
   const preview=empsToApply.slice(0,5).map(e=>e.name).join(', ')+(empsToApply.length>5?` 외 ${empsToApply.length-5}명`:'');
-  const headLine=filterActive
-    ? `📋 현재 필터링된 ${empsToApply.length}명만 ${dateStr}에 최근 출퇴근 기록을 불러오겠습니까?`
-    : `📋 ${dateStr}에 직원 ${empsToApply.length}명의 가장 최근 출퇴근 기록을 복사합니다.`;
+  const headLine = isCheckedMode
+    ? `📋 체크된 ${empsToApply.length}명에게만 ${dateStr}에 최근 출퇴근 기록을 불러오겠습니까?`
+    : filterActive
+      ? `📋 현재 필터링된 ${empsToApply.length}명만 ${dateStr}에 최근 출퇴근 기록을 불러오겠습니까?`
+      : `📋 ${dateStr}에 직원 ${empsToApply.length}명의 가장 최근 출퇴근 기록을 복사합니다.`;
   const msg=`${headLine}\n\n대상: ${preview}\n\n※ 이미 기록이 있는 직원은 건너뜁니다.`;
   if(!confirm(msg)) return;
 
@@ -13646,6 +13660,27 @@ function toggleSmDay(el){
 // ══ 출퇴근 기록 체크박스 + 정상출퇴근 ══
 function dailySelectAll(cb){
   document.querySelectorAll('.daily-row-cb').forEach(c=>c.checked=cb.checked);
+  dailyUpdateSelCount();
+}
+// 체크된 직원 수에 따라 상단 배지 표시/숨김
+function dailyUpdateSelCount(){
+  const n = document.querySelectorAll('.daily-row-cb:checked').length;
+  const badge = document.getElementById('daily-sel-badge');
+  if(!badge) return;
+  if(n > 0){
+    badge.textContent = '☑ ' + n + '명 선택됨';
+    badge.style.display = 'inline-flex';
+  } else {
+    badge.style.display = 'none';
+  }
+  // 전체 선택 체크박스 상태 동기화 — 모두 체크면 ON, 일부만이면 indeterminate, 0이면 OFF
+  const all = document.getElementById('daily-all-cb');
+  if(all){
+    const total = document.querySelectorAll('.daily-row-cb').length;
+    if(n === 0){ all.checked = false; all.indeterminate = false; }
+    else if(n === total){ all.checked = true; all.indeterminate = false; }
+    else { all.checked = false; all.indeterminate = true; }
+  }
 }
 function fillNormalAttendSelected(){
   const checked=[...document.querySelectorAll('.daily-row-cb:checked')].map(c=>parseInt(c.dataset.eid));
