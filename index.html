@@ -1082,6 +1082,8 @@
       <button class="btn btn-sm" onclick="fillNormalAttend()" style="color:var(--navy);border-color:var(--navy);">✅ 전체 정상출퇴근</button>
       <button class="btn btn-sm" onclick="fillNormalAttendSelected()" style="color:var(--teal);border-color:var(--teal);">☑ 선택 정상출퇴근</button>
       <button class="btn btn-sm" onclick="applyRecentAll()" title="체크된 직원만 또는 전체 — 직원별 가장 최근 출퇴근 기록을 오늘에 불러옵니다" style="color:var(--purple);border-color:var(--purple)">📋 최근 데이터 불러오기</button>
+      <button class="btn btn-sm" onclick="copyDailyRecords()" title="이 날짜의 출퇴근 기록을 메모리에 복사 (체크된 직원만 또는 전체)" style="color:#0891B2;border-color:#0891B2">📋 복사</button>
+      <button class="btn btn-sm" onclick="pasteDailyRecords()" title="복사된 기록을 지금 보는 날짜에 적용 (기존 기록 있는 직원은 건너뜀)" style="color:#1B5E20;border-color:#1B5E20">📌 붙여놓기</button>
       <div style="position:relative;display:inline-block">
         <button class="btn btn-sm" onclick="toggleDailyExcelMenu(event)" style="color:#065F46;border-color:#065F46;">⬇ 엑셀 ▾</button>
         <div id="daily-excel-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--card);border:1px solid var(--bd2);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:50;min-width:140px;overflow:hidden">
@@ -2290,7 +2292,7 @@ noprohr.netlify.app/tbm_sign.html
 </div>
 
 </div></div></div>
-<script src="/js/app.js?v=2026-05-12-5"></script>
+<script src="/js/app.js?v=2026-05-12-6"></script>
 <!-- 인라인 핸들러용 unsafe-inline은 추후 단계적 제거 예정 -->
 <script>
 // placeholder - app.js에서 모든 로직 처리

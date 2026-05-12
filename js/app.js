@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-12-5';
+const CLIENT_BUILD = '2026-05-12-6';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -2758,6 +2758,125 @@ function applyRecentAll() {
   }
   document.body.appendChild(toast);
   setTimeout(()=>toast.remove(), 3200);
+}
+
+// ══════════════════════════════════════
+// 📋 출퇴근 복사/붙여놓기 (메모리 클립보드)
+// ══════════════════════════════════════
+// 클립보드 구조: { sourceDate:'YYYY-MM-DD', items:[{empId, name, snapshot:{start,end,customBk,customBkList,outTimes,subWork,subHol,specialWork,specialPay}}] }
+// 세션 내 유지. 페이지 새로고침·로그아웃 시 초기화.
+let _recClipboard = null;
+
+function copyDailyRecords(){
+  // 체크된 직원 우선 → 없으면 화면 필터 전체
+  const checkedIds = [...document.querySelectorAll('.daily-row-cb:checked')].map(c=>parseInt(c.dataset.eid));
+  let srcEmps;
+  if(checkedIds.length > 0){
+    const idSet = new Set(checkedIds);
+    srcEmps = EMPS.filter(e => idSet.has(e.id));
+  } else {
+    srcEmps = activeDayEmpsForCopy();
+  }
+  if(srcEmps.length === 0){
+    if(typeof showSyncToast === 'function') showSyncToast('복사할 직원이 없습니다 (체크 또는 화면 필터 확인)','warn',3000);
+    return;
+  }
+  // 출퇴근 시간이 입력된 직원만 복사 — 빈 행 복사 의미 없음
+  const items = [];
+  srcEmps.forEach(emp => {
+    const k = rk(emp.id, cY, cM, cD);
+    const rec = REC[k];
+    if(!rec || (!rec.start && !rec.end)) return; // 출퇴근 시간 없으면 스킵
+    if(rec.absent || rec.annual || rec.halfAnnual) return; // 결근·연차는 일자별 상태 → 스킵
+    items.push({
+      empId: emp.id,
+      name: emp.name,
+      snapshot: {
+        start: rec.start || '',
+        end: rec.end || '',
+        customBk: !!rec.customBk,
+        customBkList: rec.customBkList ? JSON.parse(JSON.stringify(rec.customBkList)) : [],
+        outTimes: rec.outTimes ? JSON.parse(JSON.stringify(rec.outTimes)) : [],
+        subWork: !!rec.subWork,
+        subHol: !!rec.subHol,
+        specialWork: !!rec.specialWork,
+        specialPay: +rec.specialPay || 0,
+      }
+    });
+  });
+  if(items.length === 0){
+    if(typeof showSyncToast === 'function') showSyncToast('복사할 출퇴근 기록이 없습니다','warn',3000);
+    return;
+  }
+  const dateStr = `${cY}-${pad(cM)}-${pad(cD)}`;
+  _recClipboard = { sourceDate: dateStr, items };
+  if(typeof showSyncToast === 'function'){
+    const preview = items.slice(0,3).map(i=>i.name).join(', ') + (items.length>3 ? ` 외 ${items.length-3}명` : '');
+    showSyncToast(`📋 ${dateStr} ${items.length}명 복사됨\n${preview}\n→ 다른 날짜로 이동 후 [붙여놓기]`, 'ok', 4000);
+  }
+}
+
+function pasteDailyRecords(){
+  if(!_recClipboard || !_recClipboard.items || _recClipboard.items.length === 0){
+    if(typeof showSyncToast === 'function') showSyncToast('클립보드가 비어있습니다. 먼저 [복사]를 누르세요.','warn',3000);
+    return;
+  }
+  const dateStr = `${cY}-${pad(cM)}-${pad(cD)}`;
+  if(_recClipboard.sourceDate === dateStr){
+    if(typeof showSyncToast === 'function') showSyncToast('같은 날짜에는 붙여놓기 불가. 다른 날로 이동 후 시도하세요.','warn',3000);
+    return;
+  }
+  let applied = 0, skipped = 0, missing = 0;
+  const appliedNames = [];
+  _recClipboard.items.forEach(item => {
+    const emp = EMPS.find(e => e.id === item.empId);
+    if(!emp){ missing++; return; }
+    // 입퇴사일 범위 체크
+    const dayDate = new Date(cY, cM-1, cD);
+    if(emp.join){ const jd = parseEmpDate(emp.join); if(jd > dayDate){ missing++; return; } }
+    if(emp.leave){ const ld = parseEmpDate(emp.leave); if(ld < dayDate){ missing++; return; } }
+    const k = rk(item.empId, cY, cM, cD);
+    const existing = REC[k];
+    // 기존 데이터 있으면 건너뜀 — 사용자 답변 "건너뛰기 (추천)"
+    if(existing && (existing.start || existing.end || existing.absent || existing.annual || existing.halfAnnual)){
+      skipped++;
+      return;
+    }
+    const s = item.snapshot;
+    REC[k] = {
+      empId: item.empId,
+      start: s.start, end: s.end,
+      absent: false, annual: false, halfAnnual: false,
+      note: '',
+      outTimes: s.outTimes ? JSON.parse(JSON.stringify(s.outTimes)) : [],
+      customBk: !!s.customBk,
+      customBkList: s.customBkList ? JSON.parse(JSON.stringify(s.customBkList)) : [],
+      subWork: !!s.subWork,
+      subHol: !!s.subHol,
+      specialWork: !!s.specialWork,
+      specialPay: s.specialPay || 0,
+    };
+    if(typeof __recWrite === 'function') __recWrite('pasteDailyRecords', item.empId, k, {start:s.start, end:s.end, name:emp.name, source:_recClipboard.sourceDate});
+    applied++;
+    appliedNames.push(emp.name);
+  });
+  if(applied > 0){
+    saveLS();
+    if(typeof renderTable === 'function') renderTable();
+  }
+  if(typeof showSyncToast === 'function'){
+    if(applied > 0){
+      const preview = appliedNames.slice(0,3).join(', ') + (appliedNames.length>3 ? ` 외 ${appliedNames.length-3}명` : '');
+      let msg = `📌 ${_recClipboard.sourceDate} → ${dateStr}\n${applied}명 붙여넣음\n${preview}`;
+      if(skipped > 0) msg += `\n(기존 기록 ${skipped}명 유지)`;
+      if(missing > 0) msg += `\n(대상 누락 ${missing}명)`;
+      showSyncToast(msg, 'ok', 4500);
+    } else if(skipped > 0){
+      showSyncToast(`이미 기록 있는 직원 ${skipped}명 — 모두 건너뜀`, 'warn', 3500);
+    } else {
+      showSyncToast('붙여넣을 직원이 없습니다','warn',3000);
+    }
+  }
 }
 
 function activeDayEmpsForCopy(){
