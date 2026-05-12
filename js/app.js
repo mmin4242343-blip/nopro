@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-08-5';
+const CLIENT_BUILD = '2026-05-12-1';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1939,6 +1939,7 @@ function _updateDailyRowCells(eid){
   }
   if(!targetTr) return;
   const tdW=targetTr.querySelector('.td-w');
+  const tdBk=targetTr.querySelector('.td-bk');
   const tdNt=targetTr.querySelector('.td-nt');
   const tdOt=targetTr.querySelector('.td-ot');
   const tdHol=targetTr.querySelector('.td-hol');
@@ -1947,6 +1948,7 @@ function _updateDailyRowCells(eid){
   if(!rec || (!rec.start || !rec.end)){
     if(!rec || (!rec.absent && !rec.annual && !rec.halfAnnual)){
       if(tdW){ const d=tdW.querySelector('div')||tdW; d.textContent=''; }
+      if(tdBk) tdBk.innerHTML='';
       if(tdNt) tdNt.textContent='';
       if(tdOt) tdOt.textContent='';
       if(tdHol) tdHol.textContent='';
@@ -1967,6 +1969,9 @@ function _updateDailyRowCells(eid){
       const d=tdW.querySelector('div')||tdW;
       d.textContent=c.work>0?fmtH(c.work):'';
     }
+    if(tdBk) tdBk.innerHTML = c.bkMins>0
+      ? fmtH(c.bkMins)+(c.nightBkMins>0?`<div style="font-size:8px;color:#7C3AED;margin-top:1px">야간${fmtH(c.nightBkMins)}</div>`:'')
+      : '';
     if(tdNt) tdNt.textContent=c.nightM>30?fmtH(c.nightM):'';
     if(tdOt) tdOt.textContent=c.ot>0?fmtH(c.ot):'';
     if(tdHol) tdHol.textContent=autoH&&c.work>0?fmtH(c.work):'';
