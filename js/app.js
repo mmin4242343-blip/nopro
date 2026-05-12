@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-12-10';
+const CLIENT_BUILD = '2026-05-12-11';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -2679,7 +2679,10 @@ function updateRowCalc(eid){
   const autoH = (isAutoHol(cY, cM, cD) && !rec.subWork) || rec.subHol;
   const bks = getActiveBk(cY, cM, cD, emp);
   const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
-  const c = calcSession(rec.start, rec.end, getEmpRate(emp), autoH, activeBks, rec.outTimes||[], getEmpPayMode(emp), getOrdinaryRate(emp,cY,cM));
+  const _pm = getEmpPayMode(emp);
+  // 🎯 반차 + 출퇴근 → 시급제·통상임금제는 4h를 base로 인정해 OT 임계 240
+  const _halfBaseM = (rec.halfAnnual && !autoH && (_pm==='hourly'||_pm==='fixed')) ? 240 : 0;
+  const c = calcSession(rec.start, rec.end, getEmpRate(emp), autoH, activeBks, rec.outTimes||[], _pm, getOrdinaryRate(emp,cY,cM), _halfBaseM);
   if(!c) return;
   // 해당 행의 수치 셀 업데이트
   const rows = document.querySelectorAll('#daily-tbody tr');
@@ -3244,7 +3247,9 @@ function renderCal(){
     const isHalf=rec&&rec.halfAnnual;
     const _calBks=getActiveBk(vY,vM,d,emp);
     const _calActiveBks = rec && rec.customBk ? (rec.customBkList||[]) : _calBks;
-    const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,_calActiveBks,rec.outTimes||[],calEmpMode,getOrdinaryRate(emp,vY,vM)):null;
+    // 🎯 반차 + 출퇴근 → 시급제·통상임금제는 OT 임계 240
+    const _calHalfBaseM = (isHalf && !autoH && (calEmpMode==='hourly'||calEmpMode==='fixed')) ? 240 : 0;
+    const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,_calActiveBks,rec.outTimes||[],calEmpMode,getOrdinaryRate(emp,vY,vM),_calHalfBaseM):null;
     const isSel=vY===cY&&vM===cM&&d===cD;
     let cls='cdc '+(rec&&rec.absent?'abd':isAl?'ald':isHalf?'ald':phName?'phd':c?'hd':'')+(isSel?' sel':'');
     let inner=`<div class="cdn ${dow===0?'su':dow===6?'sa':phName?'ph':''}">${d}</div>`;
@@ -3308,7 +3313,10 @@ function renderOv(){
       const isAl=rec&&rec.annual;
       const _ovBks=getActiveBk(vY,vM,d,emp);
       const _ovActiveBks = rec && rec.customBk ? (rec.customBkList||[]) : _ovBks;
-      const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,_ovActiveBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM)):null;
+      const _ovPm = getEmpPayMode(emp);
+      // 🎯 반차 + 출퇴근 → 시급제·통상임금제는 OT 임계 240
+      const _ovHalfBaseM = (rec && rec.halfAnnual && !autoH && (_ovPm==='hourly'||_ovPm==='fixed')) ? 240 : 0;
+      const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,_ovActiveBks,rec.outTimes||[],_ovPm,getOrdinaryRate(emp,vY,vM),_ovHalfBaseM):null;
       const ph=getPhName(vY,vM,d);
       if(rec&&rec.absent)tr+=`<td class="ab2">결근</td>`;
       else if(isAl)tr+=`<td class="al2">연차</td>`;
@@ -8646,7 +8654,9 @@ function exportDailyExcel(){
       c={work:480,nightM:0,ot:0,basePay:rate*8,nightPay:0,otPay:0,holPay:0,totalPay:rate*8};
     } else if(rec.halfAnnual){
       if(rec.start&&rec.end){
-        c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],empPayMode,getOrdinaryRate(emp,pY,pM));
+        // 🎯 반차 + 출퇴근 → 시급제·통상임금제는 OT 임계 240 (화면과 동일)
+        const _xlHalfBaseM = (!autoH && (empPayMode==='hourly'||empPayMode==='fixed')) ? 240 : 0;
+        c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],empPayMode,getOrdinaryRate(emp,pY,pM),_xlHalfBaseM);
       } else {
         c={work:240,nightM:0,ot:0,basePay:rate*4,nightPay:0,otPay:0,holPay:0,totalPay:rate*4};
       }
@@ -8811,7 +8821,11 @@ function _buildRangeExcel(sd, ed, skipEmpty){
       if(rec.annual){
         c={work:480,nightM:0,ot:0,bkMins:0,nightBkMins:0,basePay:rate*8,nightPay:0,otPay:0,holPay:0,totalPay:rate*8};
       } else if(rec.halfAnnual){
-        if(rec.start&&rec.end) c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],empPayMode,getOrdinaryRate(emp,y,m));
+        if(rec.start&&rec.end){
+          // 🎯 반차 + 출퇴근 → 시급제·통상임금제는 OT 임계 240 (화면과 동일)
+          const _pHalfBaseM = (!autoH && (empPayMode==='hourly'||empPayMode==='fixed')) ? 240 : 0;
+          c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],empPayMode,getOrdinaryRate(emp,y,m),_pHalfBaseM);
+        }
         else c={work:240,nightM:0,ot:0,bkMins:0,nightBkMins:0,basePay:rate*4,nightPay:0,otPay:0,holPay:0,totalPay:rate*4};
       } else if(!rec.absent&&rec.start&&rec.end){
         c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],empPayMode,getOrdinaryRate(emp,y,m));
@@ -11156,7 +11170,10 @@ function exportMonthlyExcel(){
         } else {
           const bks=getActiveBk(vY,vM,d,emp);
           const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
-          const c2=rec.start&&rec.end?calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM)):null;
+          // 🎯 반차 + 출퇴근 → 시급제·통상임금제는 OT 임계 240 (화면과 동일)
+          const _xlPm = getEmpPayMode(emp);
+          const _xlHalfBaseM = (rec.halfAnnual && !autoH && (_xlPm==='hourly'||_xlPm==='fixed')) ? 240 : 0;
+          const c2=rec.start&&rec.end?calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],_xlPm,getOrdinaryRate(emp,vY,vM),_xlHalfBaseM):null;
           const note=rec.absent?'결근':rec.halfAnnual?'반차':'';
           const noteBg=rec.absent?C.rose3:rec.halfAnnual?C.blue3:rowBg;
           const noteFg=rec.absent?C.rose:rec.halfAnnual?C.blue:C.gray;
@@ -11310,7 +11327,10 @@ function exportMonthlyExcelOne(empId){
       } else {
         const bks=getActiveBk(vY,vM,d,emp);
         const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
-        const c2=rec.start&&rec.end?calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM)):null;
+        // 🎯 반차 + 출퇴근 → 시급제·통상임금제는 OT 임계 240 (화면과 동일)
+        const _xlPm2 = getEmpPayMode(emp);
+        const _xlHalfBaseM2 = (rec.halfAnnual && !autoH && (_xlPm2==='hourly'||_xlPm2==='fixed')) ? 240 : 0;
+        const c2=rec.start&&rec.end?calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],_xlPm2,getOrdinaryRate(emp,vY,vM),_xlHalfBaseM2):null;
         const note=rec.absent?'결근':rec.halfAnnual?'반차':'';
         const noteBg=rec.absent?C.rose3:rec.halfAnnual?C.blue3:rowBg;
         const noteFg=rec.absent?C.rose:rec.halfAnnual?C.blue:C.gray;
