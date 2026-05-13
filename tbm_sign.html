@@ -84,7 +84,7 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif;backg
 
 <script>
 const params=new URLSearchParams(location.search);
-const C=params.get('c'),T=params.get('t'),D=params.get('d');
+const C=params.get('c'),T=params.get('t'),D=params.get('d'),E=params.get('e')||'';
 const API=location.origin+'/api/tbm-sign';
 let DATA=null,selectedEmp=null,lang='ko';
 let agrees=[false,false,false,false];
@@ -147,7 +147,8 @@ async function init(){
   const app=document.getElementById('app');
   if(!C||!T||!D){app.innerHTML='<div class="error-box">유효하지 않은 링크입니다.<br>Invalid link.</div>';return;}
   try{
-    const res=await fetch(`${API}?c=${C}&t=${T}&d=${D}`);
+    const eduParam=E?`&e=${E}`:'';
+    const res=await fetch(`${API}?c=${C}&t=${T}&d=${D}${eduParam}`);
     const json=await res.json();
     if(!res.ok){
       const hint=json.hint?`<br><small style="color:#94A3B8">${json.hint}</small>`:'';
@@ -343,7 +344,7 @@ async function doSign(){
   const btn=document.getElementById('btn-submit');
   btn.disabled=true;btn.textContent=lang==='ko'?'처리중...':'Signing...';
   try{
-    const res=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({c:C,t:T,d:D,empId:selectedEmp.id})});
+    const res=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({c:C,t:T,d:D,empId:selectedEmp.id,e:E||undefined})});
     const json=await res.json();
     if(json.signs)DATA.signs=json.signs;
     showSuccess();
@@ -376,7 +377,8 @@ function showSuccess(){
 
 async function pollSigns(){
   try{
-    const res=await fetch(`${API}?c=${C}&t=${T}&d=${D}`);if(!res.ok)return;
+    const eduParam=E?`&e=${E}`:'';
+    const res=await fetch(`${API}?c=${C}&t=${T}&d=${D}${eduParam}`);if(!res.ok)return;
     const json=await res.json();
     if(json.signs){
       const oldCount=Object.keys(DATA.signs||{}).length;
