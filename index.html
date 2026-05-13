@@ -423,17 +423,16 @@
 
 <nav class="lp-nav">
   <div class="wrap nav-inner">
-    <a class="logo" onclick="event.preventDefault();window.scrollTo({top:0,behavior:'smooth'})">nopro</a>
+    <a class="logo" onclick="event.preventDefault();window.scrollTo({top:0,behavior:'smooth'})" aria-label="nopro 홈"></a>
     <div class="nav-links">
-      <a onclick="document.getElementById('lp-why').scrollIntoView({behavior:'smooth'})">왜 노프로</a>
-      <a onclick="document.getElementById('lp-features').scrollIntoView({behavior:'smooth'})">제품</a>
-      <a onclick="document.getElementById('lp-showcase').scrollIntoView({behavior:'smooth'})">화면</a>
-      <a onclick="document.getElementById('lp-pricing').scrollIntoView({behavior:'smooth'})">요금제</a>
-      <a onclick="document.getElementById('lp-contact').scrollIntoView({behavior:'smooth'})">도입 문의</a>
+      <a onclick="document.getElementById('lp-why').scrollIntoView({behavior:'smooth'})">회사 소개</a>
+      <a onclick="document.getElementById('lp-contact').scrollIntoView({behavior:'smooth'})">고객센터</a>
+      <a onclick="document.getElementById('lp-faq').scrollIntoView({behavior:'smooth'})">자주 묻는 질문</a>
+      <a onclick="alert('채용 페이지는 준비 중입니다')">채용</a>
     </div>
     <div class="nav-cta">
       <button class="btn btn-ghost" onclick="showAuthModal('login')">로그인</button>
-      <button class="btn btn-primary" onclick="showAuthModal()">무료로 시작하기</button>
+      <button class="btn btn-primary" onclick="showAuthModal()">도입 문의하기</button>
     </div>
   </div>
 </nav>
@@ -744,7 +743,7 @@
 </section>
 
 <!-- FAQ -->
-<section class="faq">
+<section class="faq" id="lp-faq">
   <div class="wrap">
     <div class="section-head">
       <span class="section-label reveal">FAQ</span>

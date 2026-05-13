@@ -768,29 +768,52 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
 #landing-overlay .wrap{max-width:1200px;margin:0 auto;padding:0 32px}
 @media (max-width:640px){#landing-overlay .wrap{padding:0 20px}}
 
-/* ─── Navigation ─── */
 #landing-overlay .lp-nav{
   position:sticky;top:0;z-index:100;
   background:rgba(255,255,255,.72);
   backdrop-filter:saturate(180%) blur(20px);
   -webkit-backdrop-filter:saturate(180%) blur(20px);
   border-bottom:.5px solid var(--lp-line);
-  padding:14px 0;
+  padding:12px 0;
 }
-#landing-overlay .nav-inner{display:flex;align-items:center;justify-content:space-between;gap:28px}
+#landing-overlay .nav-inner{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:24px;
+}
 #landing-overlay .logo{
-  font-size:0;                    /* 기존 "nopro" 텍스트 숨김 */
+  font-size:0;
   display:inline-block;
-  width:110px;                    /* 로고 너비 — 필요시 조정 */
-  height:32px;                    /* 로고 높이 — 필요시 조정 */
+  width:36px;
+  height:36px;
   background:url('images/Frame%201.png') no-repeat center/contain;
   cursor:pointer;
   vertical-align:middle;
+  flex-shrink:0;
+  transition:opacity .2s var(--lp-ease);
 }
-#landing-overlay .nav-links{display:flex;gap:32px;font-size:13.5px;color:var(--lp-ink-2);font-weight:500;letter-spacing:-.01em}
-#landing-overlay .nav-links a{transition:color .2s var(--lp-ease);cursor:pointer}
+#landing-overlay .logo:hover{opacity:.7}
+#landing-overlay .nav-links{
+  display:flex;
+  gap:32px;
+  font-size:13.5px;
+  color:var(--lp-ink-2);
+  font-weight:500;
+  letter-spacing:-.01em;
+}
+#landing-overlay .nav-links a{
+  transition:color .2s var(--lp-ease);
+  cursor:pointer;
+  padding:4px 0;
+}
 #landing-overlay .nav-links a:hover{color:var(--lp-primary)}
-#landing-overlay .nav-cta{display:flex;gap:8px;align-items:center}
+#landing-overlay .nav-cta{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex-shrink:0;
+}
 
 /* ─── Buttons ─── */
 #landing-overlay .btn{
@@ -803,9 +826,17 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
   white-space:nowrap;cursor:pointer;
   line-height:1;
 }
-#landing-overlay .btn-ghost{color:var(--lp-ink-2)}
-#landing-overlay .btn-ghost:hover{color:var(--lp-primary);background:var(--lp-bg-soft)}
-#landing-overlay .btn-primary{
+
+#landing-overlay .btn-ghost{
+  border:.5px solid var(--lp-line-2);
+  background:#fff;
+  color:var(--lp-ink);
+  box-shadow:var(--lp-shadow-sm);
+}
+#landing-overlay .btn-ghost:hover{
+  border-color:var(--lp-ink);
+  background:var(--lp-bg-soft);
+}
   background:var(--lp-primary);color:#fff;
   box-shadow:0 1px 2px rgba(0,0,0,.15), 0 4px 12px rgba(0,0,0,.08);
 }
