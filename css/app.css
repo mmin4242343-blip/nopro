@@ -863,17 +863,48 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
 
 /* ─── Hero ─── */
 #landing-overlay .hero{
-  padding:120px 0 110px;
-  background:linear-gradient(180deg,#FAFAFC 0%,#FFFFFF 100%);
+  padding:140px 0 130px;
   position:relative;overflow:hidden;
+  background-image:
+    linear-gradient(180deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,.4) 50%, rgba(0,0,0,.65) 100%),
+    url('/images/ref.jpg');
+  background-size:cover;
+  background-position:center;
+  background-repeat:no-repeat;
+  color:#fff;
 }
-#landing-overlay .hero::before{
-  content:'';position:absolute;
-  top:-350px;right:-250px;
-  width:800px;height:800px;
-  background:radial-gradient(circle,rgba(29,29,31,.04),transparent 65%);
-  border-radius:50%;pointer-events:none;
+#landing-overlay .hero::before{display:none}
+
+/* hero 안 텍스트 흰색으로 */
+#landing-overlay .hero h1{color:#fff}
+#landing-overlay .hero h1 .highlight{color:#fff}
+#landing-overlay .hero-sub{color:rgba(255,255,255,.92)}
+#landing-overlay .hero-note{color:rgba(255,255,255,.7)}
+#landing-overlay .hero-tag{
+  background:rgba(255,255,255,.15);
+  color:#fff;
+  border-color:rgba(255,255,255,.25);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  box-shadow:none;
 }
+
+/* hero 안 버튼 — 흰 배경 외곽선 → 글래스모피즘 */
+#landing-overlay .hero .btn-outline{
+  background:rgba(255,255,255,.1);
+  border-color:rgba(255,255,255,.4);
+  color:#fff;
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  box-shadow:none;
+}
+#landing-overlay .hero .btn-outline:hover{
+  background:#fff;
+  color:var(--lp-primary);
+  border-color:#fff;
+}
+
+/* hero btn-primary는 그대로 검은색 유지 (대비) */
 #landing-overlay .hero-inner{text-align:center;position:relative;z-index:1}
 #landing-overlay .hero-tag{
   display:inline-block;
