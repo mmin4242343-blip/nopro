@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-13-11';
+const CLIENT_BUILD = '2026-05-13-12';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -10450,13 +10450,8 @@ function sfV4DailyHTML() {
           ${sfV4IsLegal()&&!sfV4AllChecked()?'<div class="sfv4-warn sfv4-warn-a">⚠ 법정 교육은 모든 필수 항목이 포함되어야 노동부 점검에서 인정됩니다</div>':''}
         </div>
 
-        <div class="sfv4-card">
-          <p class="sfv4-h3">🔗 전자서명 · 사진 · 카카오 공유</p>
-          <div style="padding:14px;background:#F9FAFB;border-radius:6px;font-size:12px;color:#6B7280;text-align:center">
-            <strong>3단계에서 통합 예정</strong><br>
-            <span style="font-size:11px">기존 TBM 서명 링크 / 사진 업로드 / 카카오 복사 기능을 v4 구조로 통합합니다</span>
-          </div>
-        </div>
+        ${sfV4LinkCardHTML()}
+        ${sfV4PhotoCardHTML()}
       </div>
 
       <div>
@@ -10502,6 +10497,188 @@ function sfV4DailyHTML() {
     </div>
   </div>
   `;
+}
+
+// ──────────────────────────────────────
+// 3a: 전자서명 링크 + 카카오 + 사진 통합
+// ──────────────────────────────────────
+
+// 서명 링크 카드 — 교육별로 별도 토큰 보관
+function sfV4LinkCardHTML() {
+  const e = sfV4GetEdu();
+  const r = sfV4GetRec();
+  const sess = JSON.parse(localStorage.getItem('nopro_session') || 'null');
+  const cid = sess?.companyId || '';
+  const dk = sfV4DateKey();
+  const tok = r.token || '';
+  // URL은 기존 tbm_sign.html 패턴 그대로 (외부 페이지 호환). edu 파라미터 추가로 교육 구분.
+  const url = (tok && cid) ? `noprohr.netlify.app/tbm_sign.html?c=${cid}&t=${tok}&d=${dk}&e=${sfV4State.edu}` : '';
+  const kakaoMsg = url ? `[노프로 ${esc(e.short || e.name)} 서명]\n${sfV4State.date.m}월 ${sfV4State.date.d}일 ${esc(e.name)} 서명 부탁드립니다.\n링크 클릭 → 이름 선택 → 동의 → 서명\n\nhttps://${url}\n\n외국인분들도 영어 버튼 누르면 됩니다.` : '';
+  return `
+    <div class="sfv4-card">
+      <p class="sfv4-h3">🔗 전자서명 링크 <span style="font-size:10px;color:#0D7377;font-weight:600;margin-left:6px">${esc(e.name)}</span></p>
+      <p style="font-size:10px;color:#6B7280;margin-bottom:8px">📌 교육·날짜별 별도 링크 · 직원이 이름 선택 후 동의·서명</p>
+      <div style="display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap">
+        <input class="sfv4-input" id="sfv4-link-url" style="flex:1;min-width:200px;background:#F9FAFB;font-family:monospace;font-size:10px" readonly value="${esc(url || '↻ 재생성 버튼으로 링크 만들기')}">
+        <button class="sfv4-btn" onclick="sfV4GenLink()">↻ 재생성</button>
+        <button class="sfv4-btn sfv4-btn-d" onclick="sfV4CopyLink()">🔗 복사</button>
+      </div>
+      <div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:5px;padding:8px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div style="min-width:0;flex:1">
+          <p style="font-size:11px;font-weight:600;color:#92400E">📱 카카오 단톡방 공유</p>
+          <p style="font-size:10px;color:#78350F;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${url ? '자동 생성된 안내 문구' : '먼저 ↻ 재생성'}</p>
+        </div>
+        <button class="sfv4-btn" style="background:#FEE066;border-color:#F59E0B;color:#78350F;font-weight:600" onclick="sfV4CopyKakao()" ${url?'':'disabled'}>카카오 복사</button>
+      </div>
+      <textarea id="sfv4-kakao-msg" style="display:none">${esc(kakaoMsg)}</textarea>
+    </div>
+  `;
+}
+
+// 사진 카드 — (날짜, 교육)별 사진 저장
+function sfV4PhotoCardHTML() {
+  const e = sfV4GetEdu();
+  const r = sfV4GetRec();
+  const photos = r.photos || [];
+  return `
+    <div class="sfv4-card">
+      <div class="sfv4-row" style="margin-bottom:6px">
+        <p class="sfv4-h3" style="margin:0">📷 현장 교육 사진 <span style="font-size:10px;color:#0D7377;font-weight:600;margin-left:6px">${esc(e.name)}</span></p>
+        <span style="font-size:10px;color:#6B7280">${photos.length}장</span>
+      </div>
+      <p style="font-size:10px;color:#6B7280;margin-bottom:8px">📌 교육별로 사진이 분리 저장됩니다</p>
+      <label style="display:block;border:2px dashed #D1D5DB;border-radius:6px;padding:18px;text-align:center;cursor:pointer;background:#F9FAFB" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='#F9FAFB'">
+        <input type="file" accept="image/*" multiple style="display:none" onchange="sfV4HandlePhotos(this.files);this.value=''">
+        <p style="font-size:12px;color:#6B7280;font-weight:500">교육 사진 드래그 또는 클릭</p>
+        <p style="font-size:10px;color:#9CA3AF;margin-top:3px">JPG · PNG · HEIC · 여러 장 동시 가능</p>
+      </label>
+      ${photos.length > 0 ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(85px,1fr));gap:6px;margin-top:8px">${photos.map((p,i)=>`<div style="position:relative;aspect-ratio:1;border-radius:5px;overflow:hidden;border:1px solid #E5E7EB"><img src="${p.data || ''}" data-spath="${esc(p.storagePath||'')}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in" onclick="sfV4ZoomPhoto('${p.id}')" alt="사진${i+1}"><button onclick="sfV4DelPhoto('${p.id}')" style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;border:none;background:rgba(0,0,0,0.6);color:white;cursor:pointer;font-size:11px;line-height:1">×</button></div>`).join('')}</div>` : ''}
+    </div>
+  `;
+}
+
+async function sfV4GenLink() {
+  const sess = JSON.parse(localStorage.getItem('nopro_session') || 'null');
+  if (!sess || !sess.companyId) { alert('로그인이 필요합니다.'); return; }
+  // 24자 토큰
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const rnd = new Uint8Array(24); crypto.getRandomValues(rnd);
+  let tok = ''; for (let i=0; i<24; i++) tok += chars[rnd[i]%chars.length];
+  sfV4SetRecField('token', tok);
+  saveSafetyRecordsV4();
+  // 외부 tbm_sign.html 호환을 위해 기존 SAFETY_REC[date+'_token']에도 저장 (v4 첫번째 교육이 TBM일 때 외부 검증용)
+  if (sfV4State.edu === 'tbm') {
+    SAFETY_REC[sfV4DateKey() + '_token'] = tok;
+    if (typeof sfSave === 'function') sfSave();
+    const safetyValue = (() => { const s = {}; Object.entries(SAFETY_REC).forEach(([k,v])=>{ s[k] = Array.isArray(v) ? v.map(({data,...r})=>r) : v; }); return s; })();
+    try { await safeItemSave('safety', safetyValue); } catch(e) { console.warn('safety 호환 저장 실패:', e); }
+  }
+  renderSafetyV4();
+}
+
+function sfV4CopyLink() {
+  const r = sfV4GetRec();
+  const sess = JSON.parse(localStorage.getItem('nopro_session') || 'null');
+  const cid = sess?.companyId || '';
+  if (!r.token || !cid) { alert('먼저 ↻ 재생성 버튼을 눌러 링크를 생성해주세요.'); return; }
+  const url = `https://noprohr.netlify.app/tbm_sign.html?c=${cid}&t=${r.token}&d=${sfV4DateKey()}&e=${sfV4State.edu}`;
+  if (navigator.clipboard) navigator.clipboard.writeText(url);
+  // 토스트
+  if (typeof showSyncToast === 'function') showSyncToast('✓ 링크 복사됨', 'ok');
+  else alert('✓ 링크가 복사되었습니다.\n\n' + url);
+}
+
+function sfV4CopyKakao() {
+  const msg = (document.getElementById('sfv4-kakao-msg') || {}).value || '';
+  if (!msg) { alert('먼저 ↻ 재생성 버튼을 눌러 링크를 생성해주세요.'); return; }
+  if (navigator.clipboard) navigator.clipboard.writeText(msg);
+  if (typeof showSyncToast === 'function') showSyncToast('✓ 카카오 메시지 복사됨', 'ok');
+  else alert('✓ 카카오톡 공유 문구가 복사되었습니다.');
+}
+
+// 사진 업로드 (v4 — safetyRecords[date][edu].photos에 저장)
+async function sfV4HandlePhotos(files) {
+  if (!files || files.length === 0) return;
+  const fileArr = Array.from(files);
+  const imgExts = /\.(jpg|jpeg|png|gif|webp|heic|heif|bmp|tiff?)$/i;
+  const imageFiles = fileArr.filter(f => f.type.startsWith('image/') || imgExts.test(f.name) || (!f.type && f.size > 0));
+  if (!imageFiles.length) return;
+  if (typeof showSyncToast === 'function') showSyncToast('사진 업로드 중... (' + imageFiles.length + '장)', 'info');
+
+  const dk = sfV4DateKey();
+  if (!safetyRecords[dk]) safetyRecords[dk] = {};
+  if (!safetyRecords[dk][sfV4State.edu]) safetyRecords[dk][sfV4State.edu] = {};
+  if (!safetyRecords[dk][sfV4State.edu].photos) safetyRecords[dk][sfV4State.edu].photos = [];
+
+  let success = 0;
+  for (const file of imageFiles) {
+    try {
+      const b64 = await fileToBase64(file);
+      const entry = {
+        id: 'sfv4_' + Date.now() + '_' + Math.random().toString(36).slice(2),
+        name: file.name, data: b64, ts: Date.now()
+      };
+      // 서버 업로드 (기존 uploadFileToStorage 재사용)
+      try {
+        if (typeof uploadFileToStorage === 'function') {
+          const res = await uploadFileToStorage(file, 'safety', dk + '_' + sfV4State.edu);
+          entry.storagePath = res.path;
+        }
+      } catch (e2) { console.warn('[v4 사진] 서버 업로드 실패 (로컬 유지):', e2.message); }
+      safetyRecords[dk][sfV4State.edu].photos.push(entry);
+      success++;
+    } catch (e) { console.error('[v4 사진] 처리 실패:', file.name, e); }
+  }
+  if (success > 0) {
+    // 서버 저장 시에는 data 필드(base64) 제외 — 용량 절감
+    const slim = JSON.parse(JSON.stringify(safetyRecords));
+    Object.values(slim).forEach(byDate => Object.values(byDate).forEach(rec => {
+      if (Array.isArray(rec.photos)) rec.photos = rec.photos.map(({data, ...rest}) => rest);
+    }));
+    try { await safeItemSave('safety_records', slim); }
+    catch(e) { console.warn('safety_records 서버 저장 실패:', e); }
+    if (typeof showSyncToast === 'function') showSyncToast(success + '장 업로드 완료', 'ok');
+  }
+  renderSafetyV4();
+}
+
+function sfV4DelPhoto(photoId) {
+  if (!confirm('이 사진을 삭제할까요?')) return;
+  const dk = sfV4DateKey();
+  const rec = safetyRecords[dk]?.[sfV4State.edu];
+  if (!rec || !Array.isArray(rec.photos)) return;
+  const idx = rec.photos.findIndex(p => p.id === photoId);
+  if (idx < 0) return;
+  const p = rec.photos[idx];
+  rec.photos.splice(idx, 1);
+  // 서버 저장 (data 제거 후)
+  const slim = JSON.parse(JSON.stringify(safetyRecords));
+  Object.values(slim).forEach(byDate => Object.values(byDate).forEach(r => {
+    if (Array.isArray(r.photos)) r.photos = r.photos.map(({data, ...rest}) => rest);
+  }));
+  safeItemSave('safety_records', slim).catch(e => console.warn('사진 삭제 저장 실패:', e));
+  // Storage 파일도 삭제 시도
+  if (p.storagePath && typeof deleteFileFromStorage === 'function') {
+    deleteFileFromStorage(p.storagePath).catch(()=>{});
+  }
+  renderSafetyV4();
+}
+
+function sfV4ZoomPhoto(photoId) {
+  const dk = sfV4DateKey();
+  const rec = safetyRecords[dk]?.[sfV4State.edu];
+  if (!rec || !Array.isArray(rec.photos)) return;
+  const p = rec.photos.find(x => x.id === photoId);
+  if (!p) return;
+  // 간단한 모달
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+  ov.onclick = () => ov.remove();
+  const img = document.createElement('img');
+  img.src = p.data || '';
+  img.style.cssText = 'max-width:90vw;max-height:90vh;object-fit:contain';
+  ov.appendChild(img);
+  document.body.appendChild(ov);
 }
 
 // v4 인터랙션
