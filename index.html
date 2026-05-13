@@ -868,12 +868,12 @@
       <div style="font-size:13px;color:#86868B;font-family:'Pretendard Variable','Pretendard',-apple-system,sans-serif;letter-spacing:-.01em;font-weight:400">스마트 노무관리 솔루션</div>
     </div>
 
-    <!-- 탭 -->
-    <div style="display:flex;background:#F5F5F7;border-radius:12px;padding:3px;margin-bottom:24px;border:.5px solid #E5E5E7">
-      <button id="auth-tab-login" onclick="authTab('login')" style="flex:1;padding:11px;border-radius:10px;border:none;cursor:pointer;font-size:13.5px;font-weight:600;font-family:'Pretendard Variable','Pretendard',-apple-system,sans-serif;background:#fff;color:#1D1D1F;transition:all .25s cubic-bezier(.25,.1,.25,1);letter-spacing:-.01em;box-shadow:0 1px 2px rgba(0,0,0,.04)">로그인</button>
-      <button id="auth-tab-signup" onclick="authTab('signup')" style="flex:1;padding:11px;border-radius:10px;border:none;cursor:pointer;font-size:13.5px;font-weight:500;font-family:'Pretendard Variable','Pretendard',-apple-system,sans-serif;background:transparent;color:#86868B;transition:all .25s cubic-bezier(.25,.1,.25,1);letter-spacing:-.01em">회원가입</button>
+  <!-- 탭 — 숨김 (하단 링크로만 전환) -->
+    <div style="display:none">
+      <button id="auth-tab-login" onclick="authTab('login')">로그인</button>
+      <button id="auth-tab-signup" onclick="authTab('signup')">회원가입</button>
     </div>
-
+    
     <!-- 로그인 폼 -->
     <div id="auth-login-form" style="background:#fff;border:.5px solid #E5E5E7;border-radius:20px;padding:32px 28px;box-shadow:0 8px 32px rgba(0,0,0,.04),0 2px 8px rgba(0,0,0,.03)">
       <div style="margin-bottom:18px">
