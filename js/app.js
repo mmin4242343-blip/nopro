@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-13-2';
+const CLIENT_BUILD = '2026-05-13-3';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -2333,9 +2333,9 @@ function renderTable(){
       const pohalBkUI = rec.customBk ? `<div style="margin-top:4px;padding:5px 8px;background:var(--gbg);border:1px solid #BBF7D0;border-radius:6px">
         <div style="font-size:9px;font-weight:700;color:var(--green);margin-bottom:3px">개인 휴게시간</div>
         ${(rec.customBkList||[{s:'',e:''}]).map((b,bi)=>`<div style="display:flex;align-items:center;gap:3px;margin-bottom:2px">
-          <input class="out-time" value="${b.s||''}" placeholder="1200" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'s',this.value)" onkeydown="if(event.key==='Enter')setCustomBk(${emp.id},${bi},'s',this.value)">
+          <input class="out-time" value="${b.s||''}" placeholder="1200" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'s',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
           <span style="font-size:10px;color:var(--ink3)">~</span>
-          <input class="out-time" value="${b.e||''}" placeholder="1300" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'e',this.value)" onkeydown="if(event.key==='Enter')setCustomBk(${emp.id},${bi},'e',this.value)">
+          <input class="out-time" value="${b.e||''}" placeholder="1300" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'e',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
           <button class="out-x" onclick="delCustomBk(${emp.id},${bi})" style="color:#065F46">×</button>
         </div>`).join('')}
         <button class="bk-add" onclick="addCustomBk(${emp.id})" style="font-size:9px;margin-top:2px;padding:2px 8px">+ 세트 추가</button>
@@ -2344,9 +2344,9 @@ function renderTable(){
       const pohalOutUI=(rec.outTimes&&rec.outTimes.length>0)?`<div style="margin-top:4px;padding:5px 7px;background:var(--abg);border-radius:6px;border:1px solid #FCD34D">
         ${(rec.outTimes||[]).map((o,oi)=>`<div class="out-row">
           <span style="font-size:9px;font-weight:700;color:var(--amber)">외출${oi+1}</span>
-          <input class="out-time" value="${o.s||''}" placeholder="0900" onblur="setOutTime(${emp.id},${oi},'s',this.value)" onkeydown="if(event.key==='Enter')setOutTime(${emp.id},${oi},'s',this.value)">
+          <input class="out-time" value="${o.s||''}" placeholder="0900" onblur="setOutTime(${emp.id},${oi},'s',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
           <span style="font-size:11px;color:var(--ink3)">~</span>
-          <input class="out-time" value="${o.e||''}" placeholder="1000" onblur="setOutTime(${emp.id},${oi},'e',this.value)" onkeydown="if(event.key==='Enter')setOutTime(${emp.id},${oi},'e',this.value)">
+          <input class="out-time" value="${o.e||''}" placeholder="1000" onblur="setOutTime(${emp.id},${oi},'e',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
           <button class="out-x" onclick="delOutTime(${emp.id},${oi})">×</button>
         </div>`).join('')}
       </div>`:'';
@@ -2417,9 +2417,9 @@ function renderTable(){
       const monthlyBkUI = rec.customBk ? `<div style="margin-top:4px;padding:5px 8px;background:var(--gbg);border:1px solid #BBF7D0;border-radius:6px">
         <div style="font-size:9px;font-weight:700;color:var(--green);margin-bottom:3px">개인 휴게시간</div>
         ${(rec.customBkList||[{s:'',e:''}]).map((b,bi)=>`<div style="display:flex;align-items:center;gap:3px;margin-bottom:2px">
-          <input class="out-time" value="${b.s||''}" placeholder="1200" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'s',this.value)" onkeydown="if(event.key==='Enter')setCustomBk(${emp.id},${bi},'s',this.value)">
+          <input class="out-time" value="${b.s||''}" placeholder="1200" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'s',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
           <span style="font-size:10px;color:var(--ink3)">~</span>
-          <input class="out-time" value="${b.e||''}" placeholder="1300" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'e',this.value)" onkeydown="if(event.key==='Enter')setCustomBk(${emp.id},${bi},'e',this.value)">
+          <input class="out-time" value="${b.e||''}" placeholder="1300" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'e',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
           <button class="out-x" onclick="delCustomBk(${emp.id},${bi})" style="color:#065F46">×</button>
         </div>`).join('')}
         <button class="bk-add" onclick="addCustomBk(${emp.id})" style="font-size:9px;margin-top:2px;padding:2px 8px">+ 세트 추가</button>
@@ -2428,9 +2428,9 @@ function renderTable(){
       const monthlyOutUI=(rec.outTimes&&rec.outTimes.length>0)?`<div style="margin-top:4px;padding:5px 7px;background:var(--abg);border-radius:6px;border:1px solid #FCD34D">
         ${(rec.outTimes||[]).map((o,oi)=>`<div class="out-row">
           <span style="font-size:9px;font-weight:700;color:var(--amber)">외출${oi+1}</span>
-          <input class="out-time" value="${o.s||''}" placeholder="0900" onblur="setOutTime(${emp.id},${oi},'s',this.value)" onkeydown="if(event.key==='Enter')setOutTime(${emp.id},${oi},'s',this.value)">
+          <input class="out-time" value="${o.s||''}" placeholder="0900" onblur="setOutTime(${emp.id},${oi},'s',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
           <span style="font-size:11px;color:var(--ink3)">~</span>
-          <input class="out-time" value="${o.e||''}" placeholder="1000" onblur="setOutTime(${emp.id},${oi},'e',this.value)" onkeydown="if(event.key==='Enter')setOutTime(${emp.id},${oi},'e',this.value)">
+          <input class="out-time" value="${o.e||''}" placeholder="1000" onblur="setOutTime(${emp.id},${oi},'e',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
           <button class="out-x" onclick="delOutTime(${emp.id},${oi})">×</button>
         </div>`).join('')}
       </div>`:'';
@@ -2493,18 +2493,18 @@ function renderTable(){
     const outUI=(rec.outTimes&&rec.outTimes.length>0)?`<div style="margin-top:4px;padding:5px 7px;background:var(--abg);border-radius:6px;border:1px solid #FCD34D">
       ${(rec.outTimes||[]).map((o,oi)=>`<div class="out-row">
         <span style="font-size:9px;font-weight:700;color:var(--amber)">외출${oi+1}</span>
-        <input class="out-time" value="${o.s||''}" placeholder="0900" onblur="setOutTime(${emp.id},${oi},'s',this.value)" onkeydown="if(event.key==='Enter')setOutTime(${emp.id},${oi},'s',this.value)">
+        <input class="out-time" value="${o.s||''}" placeholder="0900" onblur="setOutTime(${emp.id},${oi},'s',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
         <span style="font-size:11px;color:var(--ink3)">~</span>
-        <input class="out-time" value="${o.e||''}" placeholder="1000" onblur="setOutTime(${emp.id},${oi},'e',this.value)" onkeydown="if(event.key==='Enter')setOutTime(${emp.id},${oi},'e',this.value)">
+        <input class="out-time" value="${o.e||''}" placeholder="1000" onblur="setOutTime(${emp.id},${oi},'e',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
         <button class="out-x" onclick="delOutTime(${emp.id},${oi})">×</button>
       </div>`).join('')}
     </div>`:'';
     const customBkUI = rec.customBk ? `<div style="margin-top:4px;padding:5px 8px;background:var(--gbg);border:1px solid #BBF7D0;border-radius:6px">
       <div style="font-size:9px;font-weight:700;color:var(--green);margin-bottom:3px">개인 휴게시간</div>
       ${(rec.customBkList||[{s:'',e:''}]).map((b,bi)=>`<div style="display:flex;align-items:center;gap:3px;margin-bottom:2px">
-        <input class="out-time" value="${b.s||''}" placeholder="1200" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'s',this.value)" onkeydown="if(event.key==='Enter')setCustomBk(${emp.id},${bi},'s',this.value)">
+        <input class="out-time" value="${b.s||''}" placeholder="1200" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'s',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
         <span style="font-size:10px;color:var(--ink3)">~</span>
-        <input class="out-time" value="${b.e||''}" placeholder="1300" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'e',this.value)" onkeydown="if(event.key==='Enter')setCustomBk(${emp.id},${bi},'e',this.value)">
+        <input class="out-time" value="${b.e||''}" placeholder="1300" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'e',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
         <button class="out-x" onclick="delCustomBk(${emp.id},${bi})" style="color:#065F46">×</button>
       </div>`).join('')}
       <button class="bk-add" onclick="addCustomBk(${emp.id})" style="font-size:9px;margin-top:2px;padding:2px 8px">+ 세트 추가</button>
