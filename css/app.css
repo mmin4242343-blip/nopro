@@ -774,7 +774,7 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
   backdrop-filter:saturate(180%) blur(20px);
   -webkit-backdrop-filter:saturate(180%) blur(20px);
   border-bottom:.5px solid var(--lp-line);
-  padding:12px 0;
+  padding:10px 0;
 }
 #landing-overlay .nav-inner{
   display:flex;
