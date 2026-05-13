@@ -876,27 +876,64 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
 #landing-overlay .hero::before{display:none}
 
 /* hero 안 텍스트 흰색으로 */
-#landing-overlay .hero h1{color:#fff}
-#landing-overlay .hero h1 .highlight{color:#fff}
-#landing-overlay .hero-sub{color:rgba(255,255,255,.92)}
-#landing-overlay .hero-note{color:rgba(255,255,255,.7)}
-#landing-overlay .hero-tag{
-  background:rgba(255,255,255,.15);
+##landing-overlay .hero{
+  padding:140px 0 130px;
+  position:relative;overflow:hidden;
+  background-image:url('/images/ref.jpg');
+  background-size:cover;
+  background-position:center;
+  background-repeat:no-repeat;
   color:#fff;
-  border-color:rgba(255,255,255,.25);
-  backdrop-filter:blur(10px);
-  -webkit-backdrop-filter:blur(10px);
-  box-shadow:none;
+}
+#landing-overlay .hero::before{display:none}
+
+/* hero-inner — 왼쪽 정렬 + 좁은 너비 */
+#landing-overlay .hero-inner{
+  text-align:left;
+  max-width:580px;
+  margin-left:0;
+  position:relative;
+  z-index:2;
 }
 
-/* hero 안 버튼 — 흰 배경 외곽선 → 글래스모피즘 */
-#landing-overlay .hero .btn-outline{
-  background:rgba(255,255,255,.1);
-  border-color:rgba(255,255,255,.4);
+/* hero 안 텍스트 — 흰색 + 그림자로 가독성 확보 */
+#landing-overlay .hero h1{
   color:#fff;
-  backdrop-filter:blur(10px);
-  -webkit-backdrop-filter:blur(10px);
-  box-shadow:none;
+  text-shadow:0 2px 24px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.2);
+}
+#landing-overlay .hero h1 .highlight{color:#fff}
+
+#landing-overlay .hero-sub{
+  color:rgba(255,255,255,.95);
+  text-shadow:0 1px 16px rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.25);
+  margin-left:0;margin-right:0;
+}
+
+#landing-overlay .hero-note{
+  color:rgba(255,255,255,.85);
+  text-shadow:0 1px 8px rgba(0,0,0,.3);
+}
+
+#landing-overlay .hero-tag{
+  background:rgba(255,255,255,.18);
+  color:#fff;
+  border-color:rgba(255,255,255,.3);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  box-shadow:0 2px 12px rgba(0,0,0,.15);
+}
+
+/* CTA 버튼 왼쪽 정렬 */
+#landing-overlay .hero-ctas{justify-content:flex-start}
+
+/* btn-outline — 글래스모피즘 */
+#landing-overlay .hero .btn-outline{
+  background:rgba(255,255,255,.15);
+  border-color:rgba(255,255,255,.5);
+  color:#fff;
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  box-shadow:0 2px 12px rgba(0,0,0,.2);
 }
 #landing-overlay .hero .btn-outline:hover{
   background:#fff;
@@ -904,7 +941,15 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
   border-color:#fff;
 }
 
-/* hero btn-primary는 그대로 검은색 유지 (대비) */
+/* btn-primary — 검은색 그대로 (대비 강조) */
+#landing-overlay .hero .btn-primary{
+  box-shadow:0 4px 20px rgba(0,0,0,.35);
+}
+
+/* 모바일에서는 좁아도 좌측 정렬 유지 */
+@media (max-width:640px){
+  #landing-overlay .hero-inner{max-width:100%}
+}
 #landing-overlay .hero-inner{text-align:center;position:relative;z-index:1}
 #landing-overlay .hero-tag{
   display:inline-block;
