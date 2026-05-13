@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-13-5';
+const CLIENT_BUILD = '2026-05-13-8';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1503,14 +1503,20 @@ function monthSummary(eid,y,m){
     // 매일 m2h 변환 후 시간(hours) 누적 (출퇴근 기록 소수점 그대로 합산)
     twkH+=m2h(c.work); tAllNightH+=m2h(c.nightM); tAllOtDayH+=m2h(c.otDay); tAllOtNightH+=m2h(c.otNight);
     if(empPayMode==='fixed'){
-      // 🎯 OT 임계는 반차여도 480분(8h) 유지 — 실근무 자체가 8h 초과해야 0.5x 연장가산
-      const fixedThresh = 480;
+      // 🎯 통상임금제 소정근로외 실근무 임계 (1배 추가 지급)
+      // - 반차일: 240분(4h) — 반차 4h가 이미 소정의 절반을 채워 출근 4h 초과는 소정근로외
+      // - 일반일: 480분(8h) — 실근무 8h 초과만 소정근로외
+      // 별도로 c.otDay (0.5배 연장 가산)는 _halfBaseM=0이라 항상 480분 기준
+      // → 반차+9h: tFixExtraH=5h(1배), c.otDay=1h(0.5배)
+      // → 반차+5h: tFixExtraH=1h(1배), c.otDay=0h(0.5배 없음)
+      const fixedThresh = (rec.halfAnnual && !autoH) ? 240 : 480;
       tFixExtraH += m2h(autoH ? c.work : Math.max(0, c.work - fixedThresh));
       if(autoH) tFixHolWorkH += m2h(c.work);
     }
     if(empPayMode==='hourly' && !autoH){
       const dayM = Math.max(0, c.work - c.nightM);
-      // 🎯 반차일: 반차 4h를 base에 추가 + 실근무 8h 초과만 OT 처리 (임계는 480분 유지)
+      // 🎯 시급제: 모든 시간이 시급으로 지급되므로 임계 480 유지 (반차도 동일)
+      // 시급제는 '기본급 209' 개념이 없어 '소정근로외 실근무' 분리 불필요
       const hourlyThresh = 480;
       if(rec.halfAnnual) tHrBaseH += 4; // 반차 4h 시급 기본급 시간 가산 (월급 대신)
       tHrBaseH += m2h(Math.min(dayM, hourlyThresh) + Math.min(c.nightM, hourlyThresh));
@@ -12355,7 +12361,8 @@ function enterAdmin(){
   document.getElementById('admin-overlay').style.display='block';
   document.querySelector('.app').style.display='none';
   admPage('dashboard');
-  setTimeout(admUpdateAlertBadge, 300);
+  // 서버에서 unread 카운트 가져와 뱃지 표시
+  setTimeout(()=>{ if(typeof admRefreshAlertBadge==='function') admRefreshAlertBadge(); }, 300);
 }
 
 function admLogout(){
@@ -12466,12 +12473,11 @@ function admPage(page){
     admRenderCompanies(users);
   }
   else if(page==='alerts'){
-    const alerts = JSON.parse(localStorage.getItem('nopro_admin_alerts')||'[]').reverse();
     cont.innerHTML=`
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">
         <div>
           <div style="font-size:22px;font-weight:800;color:#fff;margin-bottom:4px;">🔔 알림</div>
-          <div style="font-size:13px;color:rgba(240,244,255,.35);">회원가입 및 정보 변경 알림</div>
+          <div style="font-size:13px;color:rgba(240,244,255,.35);">회원가입 및 정보 변경 알림 (서버 보관, 영구)</div>
         </div>
         <button onclick="admClearAlerts()"
           style="padding:7px 14px;border-radius:8px;border:1px solid rgba(239,68,68,.3);
@@ -12479,29 +12485,48 @@ function admPage(page){
           전체 삭제
         </button>
       </div>
-      <div style="display:flex;flex-direction:column;gap:10px;">
-        ${alerts.length ? alerts.map(a=>`
-          <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,${a.type==='signup'?'.12':'.07'});
-                      border-radius:14px;padding:16px 20px;display:flex;gap:14px;align-items:flex-start;">
+      <div id="adm-alerts-list" style="display:flex;flex-direction:column;gap:10px;">
+        <div style="text-align:center;padding:60px;color:#64748B;font-size:13px;">불러오는 중...</div>
+      </div>`;
+    // 비동기로 서버에서 알림 조회 후 렌더
+    (async () => {
+      const res = await admFetchAlerts({ limit: 100 });
+      const list = document.getElementById('adm-alerts-list');
+      if(!list) return;
+      const alerts = res.rows || [];
+      if(alerts.length === 0){
+        list.innerHTML = '<div style="text-align:center;padding:60px;color:#64748B;font-size:14px;">알림이 없습니다</div>';
+      } else {
+        list.innerHTML = alerts.map(a => {
+          const isSignup = a.type === 'signup';
+          const timeStr = new Date(a.created_at).toLocaleString('ko-KR');
+          const isUnread = !a.read_at;
+          return `
+          <div style="background:rgba(255,255,255,${isUnread?'.06':'.03'});border:1px solid rgba(255,255,255,${isSignup?'.12':'.07'});
+                      border-radius:14px;padding:16px 20px;display:flex;gap:14px;align-items:flex-start;
+                      ${isUnread?'box-shadow:inset 3px 0 0 #60A5FA;':''}">
             <div style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-                        font-size:16px;flex-shrink:0;background:${a.type==='signup'?'rgba(16,185,129,.15)':'rgba(245,158,11,.15)'};">
-              ${a.type==='signup'?'🏢':'✏️'}
+                        font-size:16px;flex-shrink:0;background:${isSignup?'rgba(16,185,129,.15)':'rgba(245,158,11,.15)'};">
+              ${isSignup?'🏢':'✏️'}
             </div>
             <div style="flex:1;">
-              <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:4px;">${a.title}</div>
-              <div style="font-size:12px;color:#94A3B8;line-height:1.6;">${a.body}</div>
-              <div style="font-size:10px;color:#64748B;margin-top:6px;">${a.time}</div>
+              <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:4px;">${esc(a.title)}</div>
+              <div style="font-size:12px;color:#94A3B8;line-height:1.6;">${esc(a.body||'')}</div>
+              <div style="font-size:10px;color:#64748B;margin-top:6px;">${timeStr}${isUnread?' · <span style="color:#60A5FA;font-weight:700">NEW</span>':''}</div>
             </div>
             <span style="padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;
-                         background:${a.type==='signup'?'rgba(16,185,129,.15)':'rgba(245,158,11,.15)'};
-                         color:${a.type==='signup'?'#6EE7B7':'#FCD34D'};">
-              ${a.type==='signup'?'신규 가입':'정보 변경'}
+                         background:${isSignup?'rgba(16,185,129,.15)':'rgba(245,158,11,.15)'};
+                         color:${isSignup?'#6EE7B7':'#FCD34D'};">
+              ${isSignup?'신규 가입':'정보 변경'}
             </span>
-          </div>`).join('')
-        : '<div style="text-align:center;padding:60px;color:#64748B;font-size:14px;">알림이 없습니다</div>'}
-      </div>`;
-    localStorage.setItem('nopro_admin_alert_unread','0');
-    admUpdateAlertBadge();
+          </div>`;
+        }).join('');
+      }
+      // 페이지 진입 시 전체 읽음 처리
+      await admMarkAllRead();
+      _admAlertCache.unreadCount = 0;
+      admUpdateAlertBadge();
+    })();
   }
   else if(page==='users'){
     cont.innerHTML=`
@@ -12544,7 +12569,7 @@ async function admRenderMonitoring(){
     <div style="font-size:12px;color:#94A3B8;margin-bottom:24px">시스템 에러·가드 트리거 추적 (자체 로깅, 외부 서비스 미사용)</div>
     <div id="adm-mon-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px"></div>
     <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-      <select id="adm-mon-level" onchange="admMonChange()" style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:12px;font-family:inherit">
+      <select id="adm-mon-level" onchange="admMonChange()" style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:12px;font-family:inherit;color-scheme:light">
         <option value="" style="color:#1F2937;background:#fff">전체 레벨</option>
         <option value="error" style="color:#1F2937;background:#fff">🔴 error</option>
         <option value="warn" style="color:#1F2937;background:#fff">🟡 warn</option>
@@ -12553,7 +12578,7 @@ async function admRenderMonitoring(){
       </select>
       <input id="adm-mon-source" placeholder="🔍 source 필터 (예: pollForUpdates)" oninput="admMonChange()"
         style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:12px;width:280px;font-family:inherit">
-      <select id="adm-mon-since" onchange="admMonChange()" style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:12px;font-family:inherit">
+      <select id="adm-mon-since" onchange="admMonChange()" style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:12px;font-family:inherit;color-scheme:light">
         <option value="1" style="color:#1F2937;background:#fff">최근 24시간</option>
         <option value="7" selected style="color:#1F2937;background:#fff">최근 7일</option>
         <option value="30" style="color:#1F2937;background:#fff">최근 30일</option>
@@ -14607,43 +14632,65 @@ async function miSaveField(){
   }
 }
 
-// ══ 관리자 알림 ══
-function admPushAlert(type, title, body){
-  const alerts = JSON.parse(localStorage.getItem('nopro_admin_alerts')||'[]');
-  alerts.push({type, title, body, time: new Date().toLocaleString('ko-KR')});
-  localStorage.setItem('nopro_admin_alerts', JSON.stringify(alerts));
-  const unread = parseInt(localStorage.getItem('nopro_admin_alert_unread')||'0') + 1;
-  localStorage.setItem('nopro_admin_alert_unread', String(unread));
-  admUpdateAlertBadge();
+// ══ 관리자 알림 (서버 admin_notifications 테이블 기반) ══
+// 이전 localStorage 방식은 알림이 가입자 PC에만 저장되어 어드민이 영영 못 봤음.
+// 이제 서버 저장 → 어드민이 어떤 PC에서 접속해도 동일하게 보임.
+
+let _admAlertCache = { rows: [], total: 0, unreadCount: 0 };
+
+async function admFetchAlerts(opts = {}){
+  try {
+    const params = new URLSearchParams();
+    params.set('limit', String(opts.limit || 100));
+    params.set('offset', String(opts.offset || 0));
+    if(opts.unreadOnly) params.set('unread', '1');
+    const res = await apiFetch('/admin-notifications?' + params.toString(), 'GET');
+    _admAlertCache = res || { rows: [], total: 0, unreadCount: 0 };
+    return _admAlertCache;
+  } catch(e){
+    console.warn('[adm-alert] fetch 실패:', e?.message || e);
+    return _admAlertCache;
+  }
 }
 
-function admClearAlerts(){
-  localStorage.setItem('nopro_admin_alerts','[]');
-  localStorage.setItem('nopro_admin_alert_unread','0');
-  admUpdateAlertBadge();
-  admPage('alerts');
+async function admMarkAllRead(){
+  try { await apiFetch('/admin-notifications-action', 'POST', { action: 'mark_read_all' }); }
+  catch(e){ console.warn('[adm-alert] mark_read_all 실패:', e?.message || e); }
+}
+
+async function admClearAlerts(){
+  if(!confirm('모든 알림을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
+  try {
+    await apiFetch('/admin-notifications-action', 'POST', { action: 'delete_all' });
+    _admAlertCache = { rows: [], total: 0, unreadCount: 0 };
+    admUpdateAlertBadge();
+    admPage('alerts');
+  } catch(e){
+    alert('삭제 실패: ' + (e?.message || e));
+  }
 }
 
 function admUpdateAlertBadge(){
   const badge = document.getElementById('adm-alert-badge');
   if(!badge) return;
-  const unread = parseInt(localStorage.getItem('nopro_admin_alert_unread')||'0');
-  badge.textContent = unread;
+  const unread = _admAlertCache.unreadCount || 0;
+  badge.textContent = unread > 99 ? '99+' : String(unread);
   badge.style.display = unread > 0 ? 'inline' : 'none';
 }
 
+// admin 진입 시 알림 카운트 동기화 (사이드바 뱃지용)
+async function admRefreshAlertBadge(){
+  try {
+    const res = await apiFetch('/admin-notifications?limit=1&unread=1', 'GET');
+    _admAlertCache.unreadCount = res?.unreadCount || 0;
+    admUpdateAlertBadge();
+  } catch(e){}
+}
+
+// 옛 호환: 호출되어도 서버에서 자동 알림이 발생하므로 no-op
 function admSendNotify(type, data){
-  if(type==='signup'){
-    admPushAlert('signup',
-      `새 회원 가입: ${data.company}`,
-      `담당자: ${data.name} | 이메일: ${data.email} | 연락처: ${data.phone} | 직원수: ${data.size}`
-    );
-  } else if(type==='profile_change'){
-    admPushAlert('change',
-      `회원 정보 변경: ${data.company}`,
-      `변경 항목: ${data.fields} | 이메일: ${data.email}`
-    );
-  }
+  // 서버(auth-signup.js, auth-update.js)에서 자동으로 admin_notifications에 insert.
+  // 프론트 코드는 더 이상 알림을 직접 push하지 않음. 호출 자체는 안전하게 무시.
 }
 
 // ── 랜딩 서비스 화면 탭 (랜딩페이지 inline script로 이동됨) ──
