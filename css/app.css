@@ -783,7 +783,7 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
   display:inline-block;
   width:110px;                    /* 로고 너비 — 필요시 조정 */
   height:32px;                    /* 로고 높이 — 필요시 조정 */
-  background:url('/Frame_1.png') no-repeat center/contain;
+  background:url('images/nopro-logo.png') no-repeat center/contain;
   cursor:pointer;
   vertical-align:middle;
 }
