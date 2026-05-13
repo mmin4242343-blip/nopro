@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-13-3';
+const CLIENT_BUILD = '2026-05-13-4';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1488,8 +1488,8 @@ function monthSummary(eid,y,m){
     const autoH=(isAutoHol(y,m,d,emp) && !rec.subWork) || rec.subHol;
     const bks=getActiveBk(y,m,d,emp);
     const msBks = rec.customBk ? (rec.customBkList||[]) : bks;
-    // 🎯 반차 + 출퇴근 → 반차 4h가 이미 채워진 것으로 간주 → OT 임계 240분 (시급제·통상임금제만 의미 있음)
-    const _halfBaseM = (rec.halfAnnual && !autoH && (empPayMode==='hourly'||empPayMode==='fixed')) ? 240 : 0;
+    // 🎯 반차 + 출퇴근 → OT 임계는 항상 480분(8h) 유지 — 실근무 8h 초과해야 1.5배 가산 (반차 4h는 base 임계에 포함 안 함)
+    const _halfBaseM = 0;
     const c=rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,msBks,rec.outTimes||[],empPayMode,ordRate,_halfBaseM):null;
     // 특근: 출퇴근 유무와 관계없이 체크되고 금액이 있으면 합산 (외부 계산 결과물 입력 방식)
     // 입력 금액이 그 날의 모든 가산(소정근로외/야간/연장/휴일) 대체 — 이중 합산 방지
@@ -1503,15 +1503,15 @@ function monthSummary(eid,y,m){
     // 매일 m2h 변환 후 시간(hours) 누적 (출퇴근 기록 소수점 그대로 합산)
     twkH+=m2h(c.work); tAllNightH+=m2h(c.nightM); tAllOtDayH+=m2h(c.otDay); tAllOtNightH+=m2h(c.otNight);
     if(empPayMode==='fixed'){
-      // 🎯 반차일은 임계 240분(=4h) — 반차 4h + 실근무 4h 초과시 1.0x 소정근로외 + 0.5x 연장가산
-      const fixedThresh = (rec.halfAnnual && !autoH) ? 240 : 480;
+      // 🎯 OT 임계는 반차여도 480분(8h) 유지 — 실근무 자체가 8h 초과해야 0.5x 연장가산
+      const fixedThresh = 480;
       tFixExtraH += m2h(autoH ? c.work : Math.max(0, c.work - fixedThresh));
       if(autoH) tFixHolWorkH += m2h(c.work);
     }
     if(empPayMode==='hourly' && !autoH){
       const dayM = Math.max(0, c.work - c.nightM);
-      // 🎯 반차일: 반차 4h를 base에 추가 + 실근무 4h 초과는 OT (c.otDay/otNight이 240 임계로 산출됨)
-      const hourlyThresh = rec.halfAnnual ? 240 : 480;
+      // 🎯 반차일: 반차 4h를 base에 추가 + 실근무 8h 초과만 OT 처리 (임계는 480분 유지)
+      const hourlyThresh = 480;
       if(rec.halfAnnual) tHrBaseH += 4; // 반차 4h 시급 기본급 시간 가산 (월급 대신)
       tHrBaseH += m2h(Math.min(dayM, hourlyThresh) + Math.min(c.nightM, hourlyThresh));
       tHrNightH += m2h(Math.min(c.nightM, 480));
@@ -1976,8 +1976,8 @@ function _updateDailyRowCells(eid){
   const bks=getActiveBk(cY,cM,cD,emp);
   const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
   const _pm = getEmpPayMode(emp);
-  // 🎯 반차 + 출퇴근 → 시급제·통상임금제는 4h를 base로 인정해 OT 임계 240
-  const _halfBaseM = (rec.halfAnnual && !autoH && (_pm==='hourly'||_pm==='fixed')) ? 240 : 0;
+  // 🎯 반차여도 실근무 8h 임계 유지 (반차 4h는 OT 임계에 영향 X, 기본급 지급은 별도)
+  const _halfBaseM = 0;
   try{
     const c=calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],_pm,getOrdinaryRate(emp,cY,cM),_halfBaseM);
     if(!c) return;
@@ -2294,7 +2294,7 @@ function renderTable(){
     } else if(rec.halfAnnual){
       // 반차: 4h 기본 지급, 출퇴근 있으면 실근무 추가 계산 (시급제·통상임금제는 4h+work 8h초과 1.5x 연장)
       if(rec.start&&rec.end){
-        const _halfBaseM = (!autoH && (empPayMode==='hourly'||empPayMode==='fixed')) ? 240 : 0;
+        const _halfBaseM = 0;
         c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,cY,cM),_halfBaseM);
       } else {
         c={work:240,nightM:0,ot:0,crossed:false,basePay:rate*4,nightPay:0,otPay:0,holPay:0,totalPay:rate*4};
@@ -2681,8 +2681,8 @@ function updateRowCalc(eid){
   const bks = getActiveBk(cY, cM, cD, emp);
   const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
   const _pm = getEmpPayMode(emp);
-  // 🎯 반차 + 출퇴근 → 시급제·통상임금제는 4h를 base로 인정해 OT 임계 240
-  const _halfBaseM = (rec.halfAnnual && !autoH && (_pm==='hourly'||_pm==='fixed')) ? 240 : 0;
+  // 🎯 반차여도 실근무 8h 임계 유지 (반차 4h는 OT 임계에 영향 X, 기본급 지급은 별도)
+  const _halfBaseM = 0;
   const c = calcSession(rec.start, rec.end, getEmpRate(emp), autoH, activeBks, rec.outTimes||[], _pm, getOrdinaryRate(emp,cY,cM), _halfBaseM);
   if(!c) return;
   // 해당 행의 수치 셀 업데이트
@@ -3248,8 +3248,8 @@ function renderCal(){
     const isHalf=rec&&rec.halfAnnual;
     const _calBks=getActiveBk(vY,vM,d,emp);
     const _calActiveBks = rec && rec.customBk ? (rec.customBkList||[]) : _calBks;
-    // 🎯 반차 + 출퇴근 → 시급제·통상임금제는 OT 임계 240
-    const _calHalfBaseM = (isHalf && !autoH && (calEmpMode==='hourly'||calEmpMode==='fixed')) ? 240 : 0;
+    // 🎯 반차여도 실근무 8h 임계 유지 (반차 4h는 OT 임계에 영향 X)
+    const _calHalfBaseM = 0;
     const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,_calActiveBks,rec.outTimes||[],calEmpMode,getOrdinaryRate(emp,vY,vM),_calHalfBaseM):null;
     const isSel=vY===cY&&vM===cM&&d===cD;
     let cls='cdc '+(rec&&rec.absent?'abd':isAl?'ald':isHalf?'ald':phName?'phd':c?'hd':'')+(isSel?' sel':'');
@@ -3316,8 +3316,8 @@ function renderOv(){
       const _ovBks=getActiveBk(vY,vM,d,emp);
       const _ovActiveBks = rec && rec.customBk ? (rec.customBkList||[]) : _ovBks;
       const _ovPm = getEmpPayMode(emp);
-      // 🎯 반차 + 출퇴근 → 시급제·통상임금제는 OT 임계 240
-      const _ovHalfBaseM = (rec && rec.halfAnnual && !autoH && (_ovPm==='hourly'||_ovPm==='fixed')) ? 240 : 0;
+      // 🎯 반차여도 실근무 8h 임계 유지 (반차 4h는 OT 임계에 영향 X)
+      const _ovHalfBaseM = 0;
       const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,_ovActiveBks,rec.outTimes||[],_ovPm,getOrdinaryRate(emp,vY,vM),_ovHalfBaseM):null;
       const ph=getPhName(vY,vM,d);
       if(rec&&rec.absent)tr+=`<td class="ab2">결근</td>`;
@@ -8659,8 +8659,8 @@ function exportDailyExcel(){
       c={work:480,nightM:0,ot:0,basePay:rate*8,nightPay:0,otPay:0,holPay:0,totalPay:rate*8};
     } else if(rec.halfAnnual){
       if(rec.start&&rec.end){
-        // 🎯 반차 + 출퇴근 → 시급제·통상임금제는 OT 임계 240 (화면과 동일)
-        const _xlHalfBaseM = (!autoH && (empPayMode==='hourly'||empPayMode==='fixed')) ? 240 : 0;
+        // 🎯 반차여도 실근무 8h 임계 유지 (반차 4h는 OT 임계에 영향 X) (화면과 동일)
+        const _xlHalfBaseM = 0;
         c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],empPayMode,getOrdinaryRate(emp,pY,pM),_xlHalfBaseM);
       } else {
         c={work:240,nightM:0,ot:0,basePay:rate*4,nightPay:0,otPay:0,holPay:0,totalPay:rate*4};
@@ -8827,8 +8827,8 @@ function _buildRangeExcel(sd, ed, skipEmpty){
         c={work:480,nightM:0,ot:0,bkMins:0,nightBkMins:0,basePay:rate*8,nightPay:0,otPay:0,holPay:0,totalPay:rate*8};
       } else if(rec.halfAnnual){
         if(rec.start&&rec.end){
-          // 🎯 반차 + 출퇴근 → 시급제·통상임금제는 OT 임계 240 (화면과 동일)
-          const _pHalfBaseM = (!autoH && (empPayMode==='hourly'||empPayMode==='fixed')) ? 240 : 0;
+          // 🎯 반차여도 실근무 8h 임계 유지 (반차 4h는 OT 임계에 영향 X) (화면과 동일)
+          const _pHalfBaseM = 0;
           c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],empPayMode,getOrdinaryRate(emp,y,m),_pHalfBaseM);
         }
         else c={work:240,nightM:0,ot:0,bkMins:0,nightBkMins:0,basePay:rate*4,nightPay:0,otPay:0,holPay:0,totalPay:rate*4};
@@ -11197,9 +11197,9 @@ function exportMonthlyExcel(){
         } else {
           const bks=getActiveBk(vY,vM,d,emp);
           const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
-          // 🎯 반차 + 출퇴근 → 시급제·통상임금제는 OT 임계 240 (화면과 동일)
+          // 🎯 반차여도 실근무 8h 임계 유지 (반차 4h는 OT 임계에 영향 X) (화면과 동일)
           const _xlPm = getEmpPayMode(emp);
-          const _xlHalfBaseM = (rec.halfAnnual && !autoH && (_xlPm==='hourly'||_xlPm==='fixed')) ? 240 : 0;
+          const _xlHalfBaseM = 0;
           const c2=rec.start&&rec.end?calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],_xlPm,getOrdinaryRate(emp,vY,vM),_xlHalfBaseM):null;
           const note=rec.absent?'결근':rec.halfAnnual?'반차':'';
           const noteBg=rec.absent?C.rose3:rec.halfAnnual?C.blue3:rowBg;
@@ -11355,9 +11355,9 @@ function exportMonthlyExcelOne(empId){
       } else {
         const bks=getActiveBk(vY,vM,d,emp);
         const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
-        // 🎯 반차 + 출퇴근 → 시급제·통상임금제는 OT 임계 240 (화면과 동일)
+        // 🎯 반차여도 실근무 8h 임계 유지 (반차 4h는 OT 임계에 영향 X) (화면과 동일)
         const _xlPm2 = getEmpPayMode(emp);
-        const _xlHalfBaseM2 = (rec.halfAnnual && !autoH && (_xlPm2==='hourly'||_xlPm2==='fixed')) ? 240 : 0;
+        const _xlHalfBaseM2 = 0;
         const c2=rec.start&&rec.end?calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],_xlPm2,getOrdinaryRate(emp,vY,vM),_xlHalfBaseM2):null;
         const note=rec.absent?'결근':rec.halfAnnual?'반차':'';
         const noteBg=rec.absent?C.rose3:rec.halfAnnual?C.blue3:rowBg;
