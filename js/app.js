@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-13-5';
+const CLIENT_BUILD = '2026-05-13-6';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -12544,7 +12544,7 @@ async function admRenderMonitoring(){
     <div style="font-size:12px;color:#94A3B8;margin-bottom:24px">시스템 에러·가드 트리거 추적 (자체 로깅, 외부 서비스 미사용)</div>
     <div id="adm-mon-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px"></div>
     <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-      <select id="adm-mon-level" onchange="admMonChange()" style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:12px;font-family:inherit">
+      <select id="adm-mon-level" onchange="admMonChange()" style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:12px;font-family:inherit;color-scheme:light">
         <option value="" style="color:#1F2937;background:#fff">전체 레벨</option>
         <option value="error" style="color:#1F2937;background:#fff">🔴 error</option>
         <option value="warn" style="color:#1F2937;background:#fff">🟡 warn</option>
@@ -12553,7 +12553,7 @@ async function admRenderMonitoring(){
       </select>
       <input id="adm-mon-source" placeholder="🔍 source 필터 (예: pollForUpdates)" oninput="admMonChange()"
         style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:12px;width:280px;font-family:inherit">
-      <select id="adm-mon-since" onchange="admMonChange()" style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:12px;font-family:inherit">
+      <select id="adm-mon-since" onchange="admMonChange()" style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:12px;font-family:inherit;color-scheme:light">
         <option value="1" style="color:#1F2937;background:#fff">최근 24시간</option>
         <option value="7" selected style="color:#1F2937;background:#fff">최근 7일</option>
         <option value="30" style="color:#1F2937;background:#fff">최근 30일</option>
