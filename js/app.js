@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-13-9';
+const CLIENT_BUILD = '2026-05-13-10';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -8945,7 +8945,251 @@ function exportFile(){
 }
 
 // ══════════════════════════════════════
-// 안전교육 일지 v2
+// 안전교육 v4 — 데이터 구조 (1단계 기반 설계, 2026-05-13)
+// ══════════════════════════════════════
+// 7개 법정/권장/자율 교육 정의 (v4 프로토타입 동일)
+const SAFETY_EDU = {
+  tbm: { name: "TBM", short: "TBM", badge: "자율", bc: "t", color: "0D7377",
+    law: "자율 (의무 아님)", cycle: "수시 (작업 전 매일 권장)",
+    minTime: 10, timeLabel: "10분 이상 권장", keepYears: 1,
+    items: ["당일 작업 내용 공유", "주요 위험요인 식별", "안전 수칙 재확인"],
+    placeholder: "예: 고소작업 안전수칙, 개인보호구 착용, 화기작업 허가절차" },
+  safety: { name: "산업안전보건교육 (정기)", short: "산업안전보건", badge: "법정", bc: "l", color: "1E40AF",
+    law: "산업안전보건법 §29", cycle: "분기 1회 (연 4회)",
+    minTime: 180, timeLabel: "사무직 3시간 / 비사무직 6시간", keepYears: 2,
+    items: ["산업안전 및 사고 사례", "위험성 평가에 관한 사항", "건강증진 및 질병예방",
+            "유해·위험 작업환경 관리", "산업안전보건법령 및 일반관리", "직무스트레스 예방 및 관리"],
+    fine: "미실시 시 과태료 사업장당 최대 500만원",
+    placeholder: "예: 1분기 정기 안전보건교육 - 화학물질 취급 안전, 보호구 사용",
+    required: 4 },
+  harassment: { name: "직장 내 성희롱 예방교육", short: "성희롱 예방", badge: "법정", bc: "l", color: "BE185D",
+    law: "남녀고용평등법 §13", cycle: "연 1회",
+    minTime: 60, timeLabel: "1시간 이상", keepYears: 3,
+    items: ["성희롱에 관한 법령", "발생 시 처리 절차", "피해자 고충상담 및 구제 절차", "그 밖에 예방에 필요한 사항"],
+    fine: "미실시 시 과태료 최대 500만원",
+    placeholder: "예: 2026년 직장 내 성희롱 예방교육",
+    required: 1 },
+  disability: { name: "장애인 인식개선교육", short: "장애인 인식", badge: "법정", bc: "l", color: "7C3AED",
+    law: "장애인고용촉진법 §5의2", cycle: "연 1회",
+    minTime: 60, timeLabel: "1시간 이상", keepYears: 3,
+    items: ["장애 정의 및 유형 이해", "직장 내 장애인 인권·차별금지·정당한 편의제공",
+            "장애인고용촉진 및 직업재활 법·제도", "그 밖에 인식개선에 필요한 사항"],
+    fine: "미실시 시 과태료 최대 300만원",
+    note: "50인 이상 사업장은 노동부 지정 강사 또는 위탁 필수",
+    placeholder: "예: 2026년 장애인 인식개선 교육",
+    required: 1 },
+  privacy: { name: "개인정보보호 교육", short: "개인정보", badge: "법정", bc: "l", color: "DC2626",
+    law: "개인정보보호법 §28", cycle: "연 1회",
+    minTime: 60, timeLabel: "1시간 권장", keepYears: 3,
+    items: ["개인정보 안전한 처리", "유출 사고 대응 절차", "처리 위탁 시 유의사항"],
+    placeholder: "예: 개인정보 처리방침 및 안전조치 교육",
+    required: 1 },
+  bully: { name: "직장 내 괴롭힘 예방교육", short: "괴롭힘 예방", badge: "권장", bc: "r", color: "B45309",
+    law: "근로기준법 §76의2", cycle: "연 1회 권장",
+    minTime: 60, timeLabel: "1시간 권장", keepYears: 3,
+    items: ["괴롭힘의 정의 및 유형", "발생 시 처리 절차", "피해자 보호 및 가해자 조치", "사내 신고 채널 안내"],
+    placeholder: "예: 직장 내 괴롭힘 예방 및 대응",
+    required: 1 },
+  pension: { name: "퇴직연금 교육", short: "퇴직연금", badge: "법정", bc: "l", color: "047857",
+    law: "근로자퇴직급여보장법 §32", cycle: "연 1회",
+    minTime: 60, timeLabel: "1시간 권장", keepYears: 3,
+    items: ["퇴직연금제도의 종류 및 특성", "운용 방법 및 위험관리", "수익률 및 수수료", "수급요건 및 절차"],
+    placeholder: "예: DB/DC형 퇴직연금 운용 교육",
+    required: 1 }
+};
+
+// 8개 업종 프리셋
+const SAFETY_INDUSTRY = {
+  manufacturing: { name: "제조업", icon: "🏭",
+    desc: "공장·생산직 사업장. 화학·기계·분진 위험 강조",
+    eduFocus: ["tbm","safety","harassment","disability","privacy"],
+    extraItems: {
+      safety: ["기계·기구 안전수칙","화학물질 취급 및 MSDS","분진·소음 작업환경","지게차·크레인 안전"],
+      tbm: ["당일 사용 기계 점검","보호구 (안전모·안전화·보안경) 착용 확인"] },
+    customEdu: [{ name: "MSDS 교육", short: "MSDS", required: 1,
+      items: ["화학물질 분류 및 표시","물질안전보건자료 활용","응급 대응 절차"] }] },
+  construction: { name: "건설업", icon: "🏗",
+    desc: "건설현장. TBM 매일 + 추락·붕괴·전기 안전 강조",
+    eduFocus: ["tbm","safety","harassment","disability"],
+    extraItems: {
+      safety: ["추락 방지 (안전대·안전난간)","굴착 작업 안전","전기 작업 안전","고소작업 절차"],
+      tbm: ["당일 작업구역 위험요소","기상 상태 확인","장비 일일 점검"] },
+    customEdu: [{ name: "특별안전교육 (위험작업)", short: "특별안전", required: 1,
+      items: ["고소작업 안전수칙","밀폐공간 작업","화기작업 (용접·절단)","추락 방지 시스템"] }] },
+  food: { name: "음식·숙박업", icon: "🍴",
+    desc: "식당·카페·호텔. 위생·화재·전기 안전 강조",
+    eduFocus: ["tbm","safety","harassment","privacy"],
+    extraItems: {
+      safety: ["주방 화재 예방 (가스·기름)","미끄럼·낙상 방지","칼·조리도구 안전","식중독·위생 관리"] },
+    customEdu: [{ name: "식품위생 교육", short: "식품위생", required: 1,
+      items: ["개인위생 (손씻기·복장)","식자재 보관 및 유통기한","교차오염 방지"] }] },
+  transport: { name: "운수업", icon: "🚛",
+    desc: "운송·물류. 차량 안전 + 음주·졸음운전 + 적재 안전",
+    eduFocus: ["tbm","safety","harassment","disability"],
+    extraItems: {
+      safety: ["방어운전·안전운전","음주·졸음운전 예방","차량 일상점검","화물 적재·결박"],
+      tbm: ["당일 운행 노선","차량 상태 확인","기상·도로 상황"] },
+    customEdu: [{ name: "차량 안전 교육", short: "차량안전", required: 4,
+      items: ["사각지대 점검","후진·주차 안전","타이어 공기압·마모도","악천후 운행 요령"] }] },
+  medical: { name: "의료·복지업", icon: "🏥",
+    desc: "병원·요양시설. 감염 예방 + 환자 응대 + 개인정보 보호",
+    eduFocus: ["safety","harassment","disability","privacy","bully"],
+    extraItems: {
+      safety: ["감염병 예방 및 표준주의","주사침 자상 방지","근골격계 질환 예방"],
+      privacy: ["환자 의료정보 보호","EMR 접근 통제","유출 사고 대응"] },
+    customEdu: [{ name: "감염 관리 교육", short: "감염관리", required: 2,
+      items: ["손위생","개인보호구 착용·탈의","격리 절차","의료폐기물 처리"] }] },
+  office: { name: "사무직", icon: "🏢",
+    desc: "일반 사무 사업장. 분기별 교육시간 절반 (3시간)",
+    eduFocus: ["safety","harassment","disability","privacy","bully","pension"],
+    extraItems: {
+      safety: ["VDT 증후군 예방","근골격계 질환 (목·허리)","사무실 화재 대응","직무 스트레스 관리"] },
+    customEdu: [] },
+  retail: { name: "판매·서비스업", icon: "🛒",
+    desc: "매장·소매업. 고객 응대 + 화재 + 감정노동",
+    eduFocus: ["safety","harassment","disability","privacy","bully"],
+    extraItems: {
+      safety: ["매장 화재 대응","고객 응대 안전","감정노동 스트레스 관리","절도·강도 대응"] },
+    customEdu: [{ name: "감정노동자 보호 교육", short: "감정노동", required: 1,
+      items: ["고객 폭언·폭행 대응","스트레스 관리","회사 보호조치 안내"] }] },
+  general: { name: "일반/기타", icon: "📋",
+    desc: "기본 교육 항목만. 업종별 추가 없음",
+    eduFocus: ["tbm","safety","harassment","disability","privacy","bully","pension"],
+    extraItems: {}, customEdu: [] }
+};
+
+// 회사 안전교육 설정 (data_key: 'safety_config')
+// { industry, customEdu, hiddenEdu, migrated }
+let safetyConfig = { industry: 'general', customEdu: [], hiddenEdu: [], migrated: null };
+
+// 안전교육 기록 (data_key: 'safety_records')
+// { 'YYYY-MM-DD': { 'tbm': { content, content_en, checks, duration, instructor, token, signs, photos, savedAt }, 'safety': {...}, ... } }
+let safetyRecords = {};
+
+// 안전교육 데이터 로드/저장 (sbLoadAll/sbSaveAll에서 호출됨)
+function loadSafetyV4(map) {
+  if (map && 'safety_config' in map) {
+    try { Object.assign(safetyConfig, map.safety_config || {}); } catch(e) {}
+  }
+  if (map && 'safety_records' in map) {
+    try { safetyRecords = map.safety_records || {}; } catch(e) { safetyRecords = {}; }
+  }
+}
+function saveSafetyConfigV4() {
+  if (typeof safeItemSave === 'function') {
+    safeItemSave('safety_config', safetyConfig).catch(e => console.warn('safety_config 저장 실패:', e));
+  }
+}
+function saveSafetyRecordsV4() {
+  if (typeof safeItemSave === 'function') {
+    safeItemSave('safety_records', safetyRecords).catch(e => console.warn('safety_records 저장 실패:', e));
+  }
+}
+
+// EDU 객체에 업종 추가 항목·커스텀 교육 병합 (UI 표시용 - 원본 SAFETY_EDU는 변경하지 않음)
+function getEduList() {
+  const ind = SAFETY_INDUSTRY[safetyConfig.industry] || SAFETY_INDUSTRY.general;
+  // 1) 기본 7개 (숨김 제외) 깊은 복사
+  const result = {};
+  Object.entries(SAFETY_EDU).forEach(([key, edu]) => {
+    if (safetyConfig.hiddenEdu.includes(key) && edu.badge !== '법정') return;
+    result[key] = JSON.parse(JSON.stringify(edu));
+  });
+  // 2) 업종별 extraItems 병합
+  Object.entries(ind.extraItems || {}).forEach(([eduKey, extras]) => {
+    if (result[eduKey] && Array.isArray(extras)) {
+      result[eduKey].items = [...new Set([...result[eduKey].items, ...extras])];
+    }
+  });
+  // 3) 업종 권장 교육 추가
+  (ind.customEdu || []).forEach((c, i) => {
+    const key = `industry_${safetyConfig.industry}_${i}`;
+    if (!result[key]) {
+      result[key] = {
+        name: c.name, short: c.short, badge: "권장", bc: "r", color: "0891B2",
+        law: `업종 권장 (${ind.name})`,
+        cycle: "연 " + (c.required || 1) + "회",
+        minTime: 30, timeLabel: "30분 이상", keepYears: 1,
+        items: c.items, placeholder: `예: ${c.name}`,
+        required: c.required || 0, isIndustryPreset: true
+      };
+    }
+  });
+  // 4) 사용자 커스텀 교육 추가
+  (safetyConfig.customEdu || []).forEach(c => {
+    result[c.key] = {
+      name: c.name, short: c.short, badge: c.badge || "자율",
+      bc: c.badge === "법정" ? "l" : (c.badge === "권장" ? "r" : "t"),
+      color: c.color || "0D7377",
+      law: c.law || "사내 자율교육",
+      cycle: c.cycle || "수시",
+      minTime: c.minTime || 30, timeLabel: (c.minTime || 30) + "분 이상", keepYears: 1,
+      items: c.items || [], placeholder: `예: ${c.name}`,
+      required: c.required || 0, isCustom: true
+    };
+  });
+  return result;
+}
+
+// ──────────────────────────────────────
+// 옛 SAFETY_REC → 새 safetyRecords 마이그레이션 (수동 트리거)
+// 호출 방법: window.migrateSafetyV4() (콘솔에서)
+// 안전 장치:
+//   - safetyConfig.migrated가 이미 set이면 거부 (재실행 방지)
+//   - 옛 SAFETY_REC는 그대로 보존 (한 달 후 별도 정리)
+//   - 변환 결과 미리보기 → 사용자 확인 후 저장
+// ──────────────────────────────────────
+async function migrateSafetyV4(opts) {
+  opts = opts || {};
+  if (safetyConfig.migrated && !opts.force) {
+    return { error: `이미 ${safetyConfig.migrated}에 마이그레이션 완료. 강제 재실행하려면 {force:true} 옵션 추가.` };
+  }
+  const dryRun = !!opts.dryRun;
+  const newRec = JSON.parse(JSON.stringify(safetyRecords || {})); // 기존 새 구조 유지
+  let convertedDays = 0;
+
+  // SAFETY_REC 키 패턴 분석: 'YYYY-MM-DD_tbm', 'YYYY-MM-DD_tbm_en', 'YYYY-MM-DD_token', 'YYYY-MM-DD_signs', ...
+  const datePat = /^(\d{4}-\d{2}-\d{2})_(.+)$/;
+  Object.entries(SAFETY_REC || {}).forEach(([k, v]) => {
+    const m = k.match(datePat);
+    if (!m) return;
+    const date = m[1], suffix = m[2];
+    if (!newRec[date]) newRec[date] = {};
+    if (!newRec[date].tbm) newRec[date].tbm = {};
+    const t = newRec[date].tbm;
+    if (suffix === 'tbm') t.content = v;
+    else if (suffix === 'tbm_en') t.content_en = v;
+    else if (suffix === 'tbm_en_src') t.content_en_src = v;
+    else if (suffix === 'tbm_en_at') t.content_en_at = v;
+    else if (suffix === 'token') t.token = v;
+    else if (suffix === 'signs') t.signs = v;
+    // 그 외는 메타로 보존
+    else t['_legacy_' + suffix] = v;
+  });
+  convertedDays = Object.keys(newRec).length;
+
+  const summary = {
+    convertedDays,
+    sampleKeys: Object.keys(newRec).slice(0, 5),
+    sampleData: Object.values(newRec)[0]
+  };
+  if (dryRun) return { dryRun: true, summary };
+
+  // 실제 저장
+  safetyRecords = newRec;
+  saveSafetyRecordsV4();
+  safetyConfig.migrated = new Date().toISOString().slice(0, 10);
+  saveSafetyConfigV4();
+  return { success: true, summary };
+}
+// 콘솔에서 호출 가능
+if (typeof window !== 'undefined') {
+  window.migrateSafetyV4 = migrateSafetyV4;
+  window.previewSafetyV4 = () => migrateSafetyV4({ dryRun: true });
+}
+
+// ══════════════════════════════════════
+// 안전교육 일지 v2 (기존 — 2단계에서 v4로 교체 예정)
 // ══════════════════════════════════════
 let sfY=new Date().getFullYear(),sfM=new Date().getMonth()+1,sfD=new Date().getDate();
 const SF_KEY='npm5_safety';
@@ -13728,6 +13972,9 @@ async function sbLoadAll(companyId) {
   }
   if('folders' in map)         localStorage.setItem('npm5_folders', JSON.stringify(map.folders||[]));
   if('safety' in map)          { SAFETY_REC = map.safety || {}; localStorage.setItem('npm5_safety', JSON.stringify(SAFETY_REC)); }
+  // 🆕 안전교육 v4 (1단계 — UI 미연결, 백그라운드 로드만)
+  if('safety_config' in map)   { Object.assign(safetyConfig, map.safety_config || {}); }
+  if('safety_records' in map)  { safetyRecords = map.safety_records || {}; }
   if('pol_snapshots' in map)   { POL_SNAPSHOTS = map.pol_snapshots || {}; localStorage.setItem('npm5_pol_snapshots', JSON.stringify(POL_SNAPSHOTS)); }
   if('pay_snapshots' in map)   { PAY_SNAPSHOTS = map.pay_snapshots || {}; localStorage.setItem('npm5_pay_snapshots', JSON.stringify(PAY_SNAPSHOTS)); }
   if('bk_snapshots' in map)    { BK_SNAPSHOTS = map.bk_snapshots || {}; localStorage.setItem('npm5_bk_snapshots', JSON.stringify(BK_SNAPSHOTS)); }
