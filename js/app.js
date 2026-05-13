@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-13-8';
+const CLIENT_BUILD = '2026-05-13-9';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1437,7 +1437,8 @@ function monthSummary(eid,y,m){
   // 시간(hours) 합산: 매일 m2h 변환 후 누적 (출퇴근 기록 소수점 그대로 합산)
   let twkH=0,tAllNightH=0,tAllOtDayH=0,tAllOtNightH=0;
   let tHolDayH=0,tHolNightH=0,tHolDayOtH=0,tHolNightOtH=0;
-  let tFixExtraH=0,tFixHolWorkH=0; // 통상임금제
+  let tFixExtraH=0,tFixHolWorkH=0; // 통상임금제 (소정근로외 실근무 hour 누적, 지급액 계산용)
+  let tFixExtraDisplayH=0; // 통상임금제 소정근로외 실근무 표시용 (반차일 cap 4h, 그 초과분은 연장으로 분류)
   let tHrBaseH=0,tHrNightH=0,tHrOtDayH=0,tHrOtNightH=0; // 시급제 (비휴일, 일별 cap)
   let tMhHolStdH=0,tMhHolOtH=0; // 포괄/월급 휴일
   const empPayMode=getEmpPayModeAt(emp, y, m, 1);
@@ -1507,10 +1508,16 @@ function monthSummary(eid,y,m){
       // - 반차일: 240분(4h) — 반차 4h가 이미 소정의 절반을 채워 출근 4h 초과는 소정근로외
       // - 일반일: 480분(8h) — 실근무 8h 초과만 소정근로외
       // 별도로 c.otDay (0.5배 연장 가산)는 _halfBaseM=0이라 항상 480분 기준
-      // → 반차+9h: tFixExtraH=5h(1배), c.otDay=1h(0.5배)
-      // → 반차+5h: tFixExtraH=1h(1배), c.otDay=0h(0.5배 없음)
       const fixedThresh = (rec.halfAnnual && !autoH) ? 240 : 480;
-      tFixExtraH += m2h(autoH ? c.work : Math.max(0, c.work - fixedThresh));
+      const dayExtraM = autoH ? c.work : Math.max(0, c.work - fixedThresh);
+      tFixExtraH += m2h(dayExtraM);
+      // 표시용 분리 — 반차일 소정근로외는 최대 4h(240분)까지만 잡고 그 이후는 연장으로 분류 (사용자 정책)
+      // 일반일은 cap 없음 (기존 동작 유지). 결과:
+      //   반차+5h: 표시 소정외 1h, 연장 0h
+      //   반차+9h: 표시 소정외 4h, 연장 1h (지급액은 5×1 + 1×0.5 = 5.5x 동일)
+      //   반차+10h: 표시 소정외 4h, 연장 2h
+      const dayExtraDisplayM = (rec.halfAnnual && !autoH) ? Math.min(dayExtraM, 240) : dayExtraM;
+      tFixExtraDisplayH += m2h(dayExtraDisplayM);
       if(autoH) tFixHolWorkH += m2h(c.work);
     }
     if(empPayMode==='hourly' && !autoH){
@@ -1660,7 +1667,7 @@ function monthSummary(eid,y,m){
   const rh=v=>Math.round(v*100 + FP_EPS)/100; // 시간 소수점 2자리 (FP 보정)
   return{wdays,adays,aldays,twkH:rh(twkH),tNightH:rh(tAllNightH),tOtDayH:rh(tAllOtDayH),tOtNightH:rh(tAllOtNightH),tHolDayH:rh(tHolDayH),tHolNightH:rh(tHolNightH),tHolDayOtH:rh(tHolDayOtH),tHolNightOtH:rh(tHolNightOtH),
     tBase,tNightPay,tOtDayPay,tOtNightPay,tHolDayPay,tHolNightPay,tHolDayOtPay,tHolNightOtPay,
-    tExtraWorkH:rh(tFixExtraH),tExtraWorkPay,tHolPayNew,tTotalBonus,
+    tExtraWorkH:rh(tFixExtraDisplayH),tExtraWorkPay,tHolPayNew,tTotalBonus,
     tMonthlyHolStdPay,tMonthlyHolOtPay,
     tSpecialDays,tSpecialPay,
     annualPay,wkly,bonus,allowances,totalAllowance,deduction,dedShortH:dedShortHByDay,total,
