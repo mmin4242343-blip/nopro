@@ -2103,3 +2103,14 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
   border-radius:4px;
 }
 #sb-list::-webkit-scrollbar-thumb:hover{background:var(--ink3)}
+
+/* 네비바 도입 문의하기 — 항상 검정 박스 + 흰 글자 */
+#landing-overlay .lp-nav .btn-primary{
+  background:#1D1D1F !important;
+  color:#fff !important;
+  border:.5px solid #1D1D1F !important;
+}
+#landing-overlay .lp-nav .btn-primary:hover{
+  background:#000 !important;
+  color:#fff !important;
+}
