@@ -774,7 +774,7 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
   backdrop-filter:saturate(180%) blur(20px);
   -webkit-backdrop-filter:saturate(180%) blur(20px);
   border-bottom:.5px solid var(--lp-line);
-  padding:12px 0;
+  padding:16px 0;
 }
 #landing-overlay .nav-inner{
   display:flex;
@@ -785,8 +785,8 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
 #landing-overlay .logo{
   font-size:0;
   display:inline-block;
-  width:120px;
-  height:36px;
+  width:140px;
+  height:44px;
   background:url('/images/Frame%201.png') no-repeat left center/contain;
   cursor:pointer;
   vertical-align:middle;
