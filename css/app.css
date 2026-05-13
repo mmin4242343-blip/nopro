@@ -864,6 +864,7 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
 /* ─── Hero ─── */
 /* ─── HERO (Full Photo BG · Left Text Overlay · Apple-tone) ─── */
 /* ─── HERO (Full Photo BG · Apple-tone · Logo-aligned Text) ─── */
+/* ─── HERO (Full Photo BG · Logo-aligned Text) ─── */
 #landing-overlay .hero{
   padding:0;
   position:relative;
@@ -879,13 +880,17 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
 #landing-overlay .hero::before{display:none}
 #landing-overlay .hero::after{display:none}
 
+/* 핵심 — .wrap이 가운데 1200px 컨테이너 만들고 좌우 32px 패딩 */
 #landing-overlay .hero .wrap{
   width:100%;
+  max-width:1200px;
+  margin:0 auto;
+  padding:0 32px;
   position:relative;
   z-index:2;
 }
 
-/* 로고와 같은 라인에서 시작 — margin 0 */
+/* hero-inner — wrap 안에서 왼쪽 시작 */
 #landing-overlay .hero-inner{
   text-align:left;
   max-width:640px;
@@ -893,20 +898,20 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
   padding:80px 0;
 }
 
-/* 상단 작은 텍스트 — 소규모 사업장 어쩌고 */
+/* 상단 작은 텍스트 */
 #landing-overlay .hero-note{
   font-size:13px;
   font-weight:500;
-  color:rgba(255,255,255,.85);
-  letter-spacing:.04em;
+  color:rgba(255,255,255,.9);
+  letter-spacing:.02em;
   margin:0 0 20px 0;
-  text-shadow:0 1px 4px rgba(0,0,0,.18);
+  text-shadow:0 1px 4px rgba(0,0,0,.2);
 }
 
-/* 메인 헤드라인 — 흰색 + 아주 약한 블러그림자 */
+/* 메인 헤드라인 — 두 줄 */
 #landing-overlay .hero h1{
   font-size:clamp(40px,5vw,60px);
-  line-height:1.15;
+  line-height:1.18;
   letter-spacing:-.04em;
   font-weight:700;
   margin:0 0 24px 0;
@@ -917,7 +922,7 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
 }
 #landing-overlay .hero h1 .highlight{color:#fff}
 
-/* 서브 — 흰색 살짝 투명 */
+/* 서브 */
 #landing-overlay .hero-sub{
   font-size:16px;
   color:rgba(255,255,255,.92);
@@ -931,16 +936,15 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
     0 1px 2px rgba(0,0,0,.12);
 }
 
-/* 태블릿 */
+/* 모바일/태블릿 */
 @media (max-width:1024px){
   #landing-overlay .hero{min-height:600px}
   #landing-overlay .hero-inner{padding:60px 0}
   #landing-overlay .hero h1{font-size:clamp(34px,4.5vw,48px)}
 }
-
-/* 모바일 */
 @media (max-width:768px){
   #landing-overlay .hero{min-height:520px}
+  #landing-overlay .hero .wrap{padding:0 20px}
   #landing-overlay .hero-inner{padding:48px 0;max-width:100%}
   #landing-overlay .hero h1{font-size:clamp(28px,6vw,40px)}
   #landing-overlay .hero-sub{font-size:14px}
