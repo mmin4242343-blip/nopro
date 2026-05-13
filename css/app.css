@@ -769,12 +769,102 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
 @media (max-width:640px){#landing-overlay .wrap{padding:0 20px}}
 
 #landing-overlay .lp-nav{
-  position:sticky;top:0;z-index:100;
-  background:rgba(255,255,255,.72);
+  /* ─── 네비바 — 스크롤에 따라 투명 ↔ 흰색 전환 ─── */
+#landing-overlay .lp-nav{
+  position:fixed;
+  top:0;left:0;right:0;
+  z-index:100;
+  padding:4px 0;
+  background:transparent;
+  border-bottom:.5px solid transparent;
+  transition:
+    background .35s var(--lp-ease),
+    border-color .35s var(--lp-ease),
+    backdrop-filter .35s var(--lp-ease),
+    padding .25s var(--lp-ease);
+}
+
+/* 스크롤 시 흰색 네비바 */
+#landing-overlay .lp-nav.scrolled{
+  background:rgba(255,255,255,.85);
   backdrop-filter:saturate(180%) blur(20px);
   -webkit-backdrop-filter:saturate(180%) blur(20px);
-  border-bottom:.5px solid var(--lp-line);
+  border-bottom-color:var(--lp-line);
   padding:4px 0;
+}
+
+/* hero 아래 다른 섹션이 네비 높이만큼 가려지지 않도록 */
+#landing-overlay .hero{margin-top:0}
+
+/* ─── 로고 — 흰/검 두 버전 토글 ─── */
+#landing-overlay .logo.logo-light{
+  background-image:url('/images/logo-white.png');
+}
+#landing-overlay .lp-nav.scrolled .logo.logo-light{
+  background-image:url('/images/Frame%201.png');
+}
+
+/* ─── 네비 메뉴 링크 — 투명일 땐 흰색 ─── */
+#landing-overlay .nav-links a{
+  color:rgba(255,255,255,.92);
+  transition:color .25s var(--lp-ease);
+}
+#landing-overlay .nav-links a:hover{color:#fff}
+
+/* 스크롤 시 → 검은색 */
+#landing-overlay .lp-nav.scrolled .nav-links a{
+  color:var(--lp-ink-2);
+}
+#landing-overlay .lp-nav.scrolled .nav-links a:hover{
+  color:var(--lp-primary);
+}
+
+/* ─── 로그인 버튼 (btn-ghost) ─── */
+#landing-overlay .btn-ghost{
+  background:transparent;
+  border:.5px solid rgba(255,255,255,.45);
+  color:#fff;
+  box-shadow:none;
+  transition:all .25s var(--lp-ease);
+}
+#landing-overlay .btn-ghost:hover{
+  background:rgba(255,255,255,.12);
+  border-color:rgba(255,255,255,.7);
+}
+
+#landing-overlay .lp-nav.scrolled .btn-ghost{
+  background:#fff;
+  border-color:var(--lp-line-2);
+  color:var(--lp-ink);
+  box-shadow:var(--lp-shadow-sm);
+}
+#landing-overlay .lp-nav.scrolled .btn-ghost:hover{
+  background:var(--lp-bg-soft);
+  border-color:var(--lp-ink);
+}
+
+/* ─── 도입 문의 버튼 (btn-primary) — 색 반전 ─── */
+/* 투명일 때: 검은 박스 + 흰 글자 (flex 레퍼런스) */
+#landing-overlay .lp-nav .btn-primary{
+  background:var(--lp-primary);
+  color:#fff;
+  border:.5px solid var(--lp-primary);
+  box-shadow:0 2px 8px rgba(0,0,0,.18);
+}
+#landing-overlay .lp-nav .btn-primary:hover{
+  background:#000;
+}
+
+/* 스크롤 시: 흰 박스 + 검은 글자 + 검은 외곽선 (반전) */
+#landing-overlay .lp-nav.scrolled .btn-primary{
+  background:#fff;
+  color:var(--lp-ink);
+  border-color:var(--lp-ink);
+  box-shadow:var(--lp-shadow-sm);
+}
+#landing-overlay .lp-nav.scrolled .btn-primary:hover{
+  background:var(--lp-ink);
+  color:#fff;
 }
 #landing-overlay .nav-inner{
   display:flex;
