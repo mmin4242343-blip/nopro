@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-12-12';
+const CLIENT_BUILD = '2026-05-13-1';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -2676,7 +2676,8 @@ function updateRowCalc(eid){
   const emp = EMPS.find(e=>e.id===eid);
   if(!emp) return;
   // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제
-  const autoH = (isAutoHol(cY, cM, cD) && !rec.subWork) || rec.subHol;
+  // emp 전달: 야간근무자(POL.nightWeekend)와 주간근무자(POL.dayWeekend) 휴일 기준 분리 적용
+  const autoH = (isAutoHol(cY, cM, cD, emp) && !rec.subWork) || rec.subHol;
   const bks = getActiveBk(cY, cM, cD, emp);
   const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
   const _pm = getEmpPayMode(emp);
@@ -3309,7 +3310,8 @@ function renderOv(){
       }
       const rec=REC[rk(emp.id,vY,vM,d)];
       // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제
-      const autoH=(isAutoHol(vY,vM,d) && !(rec&&rec.subWork))||(rec&&rec.subHol);
+      // emp 전달: 야간근무자(POL.nightWeekend)와 주간근무자(POL.dayWeekend) 휴일 기준 분리 적용
+      const autoH=(isAutoHol(vY,vM,d,emp) && !(rec&&rec.subWork))||(rec&&rec.subHol);
       const isAl=rec&&rec.annual;
       const _ovBks=getActiveBk(vY,vM,d,emp);
       const _ovActiveBks = rec && rec.customBk ? (rec.customBkList||[]) : _ovBks;
@@ -11049,7 +11051,8 @@ function exportMonthlyExcel(){
         }
         const rec=REC[rk(emp.id,vY,vM,d)];
         // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제
-        const autoH=(isAutoHol(vY,vM,d) && !(rec&&rec.subWork))||(rec&&rec.subHol);
+        // emp 전달: 야간근무자(POL.nightWeekend)와 주간근무자(POL.dayWeekend) 휴일 기준 분리 적용
+        const autoH=(isAutoHol(vY,vM,d,emp) && !(rec&&rec.subWork))||(rec&&rec.subHol);
         let val='', cellBg=bg, fg=C.gray;
         if(autoH||isWe) cellBg=ei%2===0?'FFEBEE':'FFCDD2';
         if(rec){
@@ -11156,7 +11159,8 @@ function exportMonthlyExcel(){
     for(let d=1;d<=days;d++){
       const _recForAutoH=REC[rk(emp.id,vY,vM,d)];
       // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제 (배경색·요일색·계산 모두 일치)
-      const autoH=(isAutoHol(vY,vM,d) && !(_recForAutoH&&_recForAutoH.subWork))||(_recForAutoH&&_recForAutoH.subHol);
+      // emp 전달: 야간근무자(POL.nightWeekend)와 주간근무자(POL.dayWeekend) 휴일 기준 분리 적용
+      const autoH=(isAutoHol(vY,vM,d,emp) && !(_recForAutoH&&_recForAutoH.subWork))||(_recForAutoH&&_recForAutoH.subHol);
       const dow=new Date(vY,vM-1,d).getDay();
       const isSun=dow===0; const isSat=dow===6;
       const phName=getPhName&&getPhName(vY,vM,d)||'';
@@ -11321,7 +11325,8 @@ function exportMonthlyExcelOne(empId){
   for(let d=1;d<=days;d++){
     const _recForAutoH2=REC[rk(emp.id,vY,vM,d)];
     // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제
-    const autoH=(isAutoHol(vY,vM,d) && !(_recForAutoH2&&_recForAutoH2.subWork))||(_recForAutoH2&&_recForAutoH2.subHol);
+    // emp 전달: 야간근무자(POL.nightWeekend)와 주간근무자(POL.dayWeekend) 휴일 기준 분리 적용
+    const autoH=(isAutoHol(vY,vM,d,emp) && !(_recForAutoH2&&_recForAutoH2.subWork))||(_recForAutoH2&&_recForAutoH2.subHol);
     const dow=new Date(vY,vM-1,d).getDay();
     const isSun=dow===0, isSat=dow===6;
     const phName=getPhName&&getPhName(vY,vM,d)||'';
