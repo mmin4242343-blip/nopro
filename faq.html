@@ -37,18 +37,19 @@
   #faq-page .wrap{max-width:1200px;margin:0 auto;padding:0 32px}
 
   /* 네비바 */
+ /* 네비바 — 메인 페이지와 동일 */
   #faq-page .lp-nav{
     position:sticky;top:0;z-index:100;
-    background:rgba(255,255,255,.85);
+    background:rgba(255,255,255,.72);
     backdrop-filter:saturate(180%) blur(20px);
     -webkit-backdrop-filter:saturate(180%) blur(20px);
     border-bottom:.5px solid var(--lp-line);
-    padding:14px 0;
+    padding:4px 0;
   }
   #faq-page .nav-inner{display:flex;align-items:center;justify-content:space-between;gap:24px}
   #faq-page .logo{
     font-size:0;display:inline-block;
-    width:160px;height:48px;
+    width:220px;height:66px;
     background:url('/images/Frame%201.png') no-repeat left center/contain;
     cursor:pointer;flex-shrink:0;
     transition:opacity .2s var(--lp-ease);
@@ -71,11 +72,16 @@
   }
   #faq-page .btn-ghost:hover{border-color:var(--lp-ink);background:var(--lp-bg-soft)}
   #faq-page .btn-primary{
-    background:#1D1D1F;color:#fff;border:.5px solid #1D1D1F;
+    background:#1D1D1F !important;
+    color:#fff !important;
+    border:.5px solid #1D1D1F !important;
     box-shadow:0 1px 2px rgba(0,0,0,.15),0 4px 12px rgba(0,0,0,.08);
   }
-  #faq-page .btn-primary:hover{background:#000;transform:translateY(-1px)}
-
+  #faq-page .btn-primary:hover{
+    background:#000 !important;
+    color:#fff !important;
+    transform:translateY(-1px);
+  }
   /* FAQ 메인 */
   #faq-page .faq-hero{
     padding:100px 0 60px;
