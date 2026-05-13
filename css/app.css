@@ -785,9 +785,9 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
 #landing-overlay .logo{
   font-size:0;
   display:inline-block;
-  width:36px;
+  width:120px;
   height:36px;
-  background:url('images/Frame%201.png') no-repeat center/contain;
+  background:url('images/Frame%201.png') no-repeat left center/contain;
   cursor:pointer;
   vertical-align:middle;
   flex-shrink:0;
