@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-13-10';
+const CLIENT_BUILD = '2026-05-13-12';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -10175,14 +10175,606 @@ function sfStartPoll(){
 }
 function sfStopPoll(){if(sfPollTimer){clearInterval(sfPollTimer);sfPollTimer=null;}}
 
-// renderSafety (gp('safety') 호출용)
+// ══════════════════════════════════════
+// 안전교육 v4 — UI (2단계 데일리 MVP, 2026-05-13)
+// ══════════════════════════════════════
+// 화면 상태
+let sfV4State = {
+  tab: 'daily',           // daily | monthly | yearly | history
+  edu: 'tbm',             // 현재 선택된 교육 키
+  date: { y: new Date().getFullYear(), m: new Date().getMonth()+1, d: new Date().getDate() },
+  filters: { s: '전체', n: '전체', w: '전체', p: '전체', d: '전체' },
+  search: ''
+};
+
+function sfV4DateKey() {
+  const d = sfV4State.date;
+  return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+}
+
+// 현재 (날짜, 교육) 기록 — 없으면 빈 객체 반환 (저장 시 새로 생성)
+function sfV4GetRec() {
+  const dk = sfV4DateKey();
+  return (safetyRecords[dk] && safetyRecords[dk][sfV4State.edu]) || {};
+}
+function sfV4SetRecField(field, value) {
+  const dk = sfV4DateKey();
+  if (!safetyRecords[dk]) safetyRecords[dk] = {};
+  if (!safetyRecords[dk][sfV4State.edu]) safetyRecords[dk][sfV4State.edu] = {};
+  safetyRecords[dk][sfV4State.edu][field] = value;
+}
+
+// 현재 교육 정의
+function sfV4GetEdu() {
+  const list = getEduList();
+  return list[sfV4State.edu] || SAFETY_EDU.tbm;
+}
+
+// 활성 직원 (퇴사 제외) — v4 포맷으로 변환
+function sfV4GetEmps() {
+  return (EMPS || []).filter(e => !e.leave).map(e => {
+    const dk = sfV4DateKey();
+    const rec = (safetyRecords[dk] && safetyRecords[dk][sfV4State.edu]) || {};
+    const signs = rec.signs || {};
+    return {
+      id: e.id,
+      name: e.name || '',
+      w: e.shift === 'night' ? '야간' : '주간',
+      n: (e.nation === 'foreign' || e.foreigner === true) ? '외국인' : '내국인',
+      d: e.dept || '',
+      p: ({fixed:'통상임금제', hourly:'시급제', monthly:'포괄임금제', pohal:'포괄임금제'})[e.payMode||'fixed'] || '통상임금제',
+      phone: e.phone || '',
+      s: !!signs[String(e.id)]
+    };
+  });
+}
+
+function sfV4FiltEmps() {
+  const f = sfV4State.filters;
+  const q = (sfV4State.search || '').toLowerCase();
+  return sfV4GetEmps().filter(e => {
+    if (f.s === '완료' && !e.s) return false;
+    if (f.s === '미서명' && e.s) return false;
+    if (f.n !== '전체' && e.n !== f.n) return false;
+    if (f.w !== '전체' && e.w !== f.w) return false;
+    if (f.p !== '전체' && e.p !== f.p) return false;
+    if (f.d !== '전체' && e.d !== f.d) return false;
+    if (q && !e.name.toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+function sfV4IsLegal() { return sfV4GetEdu().badge === '법정'; }
+function sfV4CheckedCount() { return Object.values(sfV4GetRec().checks || {}).filter(Boolean).length; }
+function sfV4TotalReq() { return (sfV4GetEdu().items || []).length; }
+function sfV4AllChecked() { return sfV4CheckedCount() === sfV4TotalReq(); }
+function sfV4TimeOk() { const r = sfV4GetRec(); return (parseInt(r.duration||0) || 0) >= sfV4GetEdu().minTime; }
+function sfV4CanSave() {
+  const r = sfV4GetRec();
+  if (!(r.content || '').trim()) return false;
+  if (sfV4IsLegal()) return sfV4AllChecked() && sfV4TimeOk() && (r.instructor || '').trim();
+  return true;
+}
+
+// v4 메인 렌더
+function renderSafetyV4() {
+  // #pg-safety 내부에 sfv4-root 동적 삽입 + 기존 콘텐츠는 가림
+  const pg = document.getElementById('pg-safety');
+  if (!pg) return;
+  let root = document.getElementById('sfv4-root');
+  if (!root) {
+    root = document.createElement('div');
+    root.id = 'sfv4-root';
+    pg.insertBefore(root, pg.firstChild);
+    // v4 스타일 1회 주입
+    if (!document.getElementById('sfv4-style')) {
+      const st = document.createElement('style');
+      st.id = 'sfv4-style';
+      st.textContent = SFV4_CSS;
+      document.head.appendChild(st);
+    }
+  }
+  // 기존 자식들 (sfv4-root 외) 숨김
+  Array.from(pg.children).forEach(ch => { if (ch.id !== 'sfv4-root') ch.style.display = 'none'; });
+  // 데일리 렌더
+  root.innerHTML = sfV4HeaderHTML() + sfV4DailyHTML();
+}
+
+// v4 CSS (sfv4- prefix로 충돌 방지)
+const SFV4_CSS = `
+.sfv4-wrap { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", "맑은 고딕", sans-serif; color: #1A1A1A; padding: 4px 2px; }
+.sfv4-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+.sfv4-h1 { font-size: 22px; font-weight: 700; color: #0D7377; }
+.sfv4-hsub { font-size: 12px; color: #6B7280; margin-top: 3px; }
+.sfv4-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.sfv4-btn { padding: 7px 12px; font-size: 12px; cursor: pointer; border-radius: 6px; border: 1px solid #D1D5DB; background: white; color: #1A1A1A; font-weight: 500; transition: all 0.15s; }
+.sfv4-btn:hover { background: #F3F4F6; }
+.sfv4-btn-d { background: #0D7377; color: white; border: none; padding: 7px 14px; font-weight: 600; }
+.sfv4-btn-d:disabled { background: #D1D5DB; color: #9CA3AF; cursor: not-allowed; }
+.sfv4-btn-g { border-color: #10B981; color: #047857; background: #ECFDF5; }
+.sfv4-btn-r { border-color: #EF4444; color: #B91C1C; background: #FEF2F2; }
+
+.sfv4-workflow { background: linear-gradient(90deg, #F0FDFA, #ECFDF5); border-left: 3px solid #0D7377; border-radius: 5px; padding: 9px 13px; margin-bottom: 12px; font-size: 12px; color: #0F766E; }
+.sfv4-tabs { display: flex; gap: 0; border-bottom: 2px solid #E5E7EB; margin-bottom: 12px; overflow-x: auto; background: white; border-radius: 8px 8px 0 0; padding: 0 8px; }
+.sfv4-tab { padding: 10px 16px; font-size: 13px; cursor: pointer; border: none; background: transparent; color: #6B7280; border-bottom: 3px solid transparent; margin-bottom: -2px; white-space: nowrap; font-weight: 500; }
+.sfv4-tab:hover { color: #0D7377; }
+.sfv4-tab.on { color: #0D7377; border-bottom-color: #0D7377; font-weight: 700; }
+
+.sfv4-card { background: white; border: 1px solid #E5E7EB; border-radius: 9px; padding: 14px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+.sfv4-h3 { font-size: 14px; font-weight: 600; margin-bottom: 10px; color: #1A1A1A; }
+.sfv4-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+
+.sfv4-edu-tab { padding: 8px 12px; font-size: 12px; cursor: pointer; border-radius: 7px; border: 1px solid #E5E7EB; background: white; display: inline-flex; gap: 7px; align-items: center; margin: 0 5px 5px 0; transition: all 0.15s; font-weight: 500; }
+.sfv4-edu-tab:hover { background: #F9FAFB; }
+.sfv4-edu-tab.on-l { background: #EFF6FF; border-color: #3B82F6; color: #1E40AF; }
+.sfv4-edu-tab.on-t { background: #0D7377; border-color: #0D7377; color: white; }
+.sfv4-edu-tab.on-r { background: #FEF3C7; border-color: #F59E0B; color: #78350F; }
+.sfv4-badge { font-size: 10px; padding: 1px 7px; border-radius: 3px; font-weight: 600; }
+.sfv4-badge-l { background: #DBEAFE; color: #1E40AF; }
+.sfv4-badge-t { background: #F3F4F6; color: #6B7280; }
+.sfv4-badge-r { background: #FEF3C7; color: #78350F; }
+.sfv4-edu-tab.on-l .sfv4-badge-l { background: rgba(255,255,255,0.7); }
+.sfv4-edu-tab.on-t .sfv4-badge-t { background: rgba(255,255,255,0.2); color: white; }
+.sfv4-edu-tab.on-r .sfv4-badge-r { background: rgba(255,255,255,0.7); }
+
+.sfv4-meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 7px; margin-top: 12px; }
+.sfv4-meta-cell { background: #F9FAFB; border-radius: 6px; padding: 9px 10px; border: 1px solid #F3F4F6; }
+.sfv4-meta-l { font-size: 10px; color: #6B7280; margin-bottom: 2px; font-weight: 500; }
+.sfv4-meta-v { font-size: 12px; font-weight: 600; color: #1A1A1A; }
+
+.sfv4-warn { padding: 8px 12px; border-radius: 5px; font-size: 11px; margin-top: 9px; }
+.sfv4-warn-r { background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; }
+.sfv4-warn-a { background: #FEF3C7; color: #78350F; border: 1px solid #FDE68A; }
+.sfv4-warn-b { background: #EFF6FF; color: #1E40AF; border: 1px solid #BFDBFE; }
+
+.sfv4-grid-main { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+@media (max-width: 900px) { .sfv4-grid-main { grid-template-columns: 1fr; } }
+
+.sfv4-input { padding: 7px 11px; border: 1px solid #D1D5DB; border-radius: 5px; font-size: 12px; font-family: inherit; background: white; color: #1A1A1A; }
+.sfv4-input:focus { outline: none; border-color: #0D7377; box-shadow: 0 0 0 3px rgba(13,115,119,0.1); }
+.sfv4-ta { width: 100%; min-height: 72px; padding: 9px 11px; border: 1px solid #D1D5DB; border-radius: 5px; font-size: 12px; font-family: inherit; resize: vertical; background: white; color: #1A1A1A; }
+.sfv4-ta:focus { outline: none; border-color: #0D7377; box-shadow: 0 0 0 3px rgba(13,115,119,0.1); }
+
+.sfv4-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 10px; }
+.sfv4-form-l { font-size: 10px; color: #6B7280; display: block; margin-bottom: 3px; font-weight: 500; }
+.sfv4-form-l .sfv4-req { color: #EF4444; }
+
+.sfv4-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+.sfv4-stat { background: #F9FAFB; border-radius: 6px; padding: 10px; border: 1px solid #F3F4F6; }
+.sfv4-stat-l { font-size: 10px; color: #6B7280; font-weight: 500; }
+.sfv4-stat-n { font-size: 22px; font-weight: 700; margin-top: 2px; color: #0D7377; }
+.sfv4-pb { height: 4px; background: #E5E7EB; border-radius: 2px; margin-top: 3px; overflow: hidden; }
+.sfv4-pf { height: 100%; background: linear-gradient(90deg, #10B981, #14959B); }
+
+.sfv4-cb-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 9px; border-radius: 5px; cursor: pointer; font-size: 12px; }
+.sfv4-cb-row:hover { background: #F9FAFB; }
+.sfv4-cb-row input { margin-top: 2px; cursor: pointer; accent-color: #0D7377; }
+
+.sfv4-emp-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 9px; border-radius: 5px; cursor: pointer; }
+.sfv4-emp-row:hover { background: #F9FAFB; }
+.sfv4-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.sfv4-emp-name { font-size: 12px; font-weight: 500; }
+.sfv4-emp-meta { font-size: 10px; color: #9CA3AF; margin-top: 1px; }
+
+.sfv4-filter-grp { margin-bottom: 7px; }
+.sfv4-filter-l { font-size: 10px; color: #6B7280; margin-bottom: 3px; font-weight: 500; }
+.sfv4-filter-btns { display: flex; gap: 3px; flex-wrap: wrap; }
+.sfv4-fbtn { padding: 3px 9px; font-size: 10px; border: 1px solid #D1D5DB; border-radius: 3px; background: white; cursor: pointer; color: #1A1A1A; font-weight: 500; }
+.sfv4-fbtn:hover { border-color: #0D7377; }
+.sfv4-fbtn.on { background: #0D7377; color: white; border-color: #0D7377; }
+`;
+
+function sfV4HeaderHTML() {
+  const r = sfV4GetRec();
+  return `
+  <div class="sfv4-wrap">
+    <div class="sfv4-header">
+      <div>
+        <div class="sfv4-h1">🛡 안전·법정의무교육 일지</div>
+        <div class="sfv4-hsub">교육 종류 선택 · 전자서명 · 일일/월별/월간 현황 (v4 — MVP)</div>
+      </div>
+      <div class="sfv4-actions">
+        <button class="sfv4-btn sfv4-btn-g" onclick="alert('엑셀 다운로드는 3단계에서 구현 예정')">📊 엑셀</button>
+        <button class="sfv4-btn sfv4-btn-r" onclick="alert('PDF는 3단계 예정')">📄 PDF</button>
+        <button class="sfv4-btn sfv4-btn-d" onclick="sfV4Save()" ${sfV4CanSave()?'':'disabled'}>저장</button>
+      </div>
+    </div>
+    <div class="sfv4-workflow"><strong>💡 워크플로우</strong> &nbsp; ① 교육 종류 → ② 내용·강사·시간 → ③ 필수항목 체크 → ④ 링크 공유 → ⑤ 서명 → ⑥ 양식 출력</div>
+    <div class="sfv4-tabs">
+      ${[['daily','📋 일일 현황표'],['monthly','📊 월별 현황표'],['yearly','📅 월간 현황'],['history','🗂 교육 이력 (3년)']].map(([k,l])=>`<button class="sfv4-tab ${sfV4State.tab===k?'on':''}" onclick="sfV4SetTab('${k}')">${l}</button>`).join('')}
+    </div>
+  `;
+}
+
+function sfV4DailyHTML() {
+  const eduList = getEduList();
+  const e = sfV4GetEdu();
+  const r = sfV4GetRec();
+  const emps = sfV4GetEmps();
+  const t = emps.length;
+  const s = emps.filter(x=>x.s).length;
+  const f = sfV4FiltEmps();
+  const d = sfV4State.date;
+  const dn = ['일','월','화','수','목','금','토'][new Date(d.y, d.m-1, d.d).getDay()];
+  return `
+    <div class="sfv4-card" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-size:12px;color:#6B7280;font-weight:500">📅 연도</span>
+      <input class="sfv4-input" type="number" style="width:75px;text-align:center" value="${d.y}" onchange="sfV4SetDate('y',this.value)">
+      <span style="font-size:12px;color:#6B7280;font-weight:500">월</span>
+      <input class="sfv4-input" type="number" style="width:52px;text-align:center" value="${d.m}" onchange="sfV4SetDate('m',this.value)">
+      <span style="font-size:12px;color:#6B7280;font-weight:500">일</span>
+      <input class="sfv4-input" type="number" style="width:52px;text-align:center" value="${d.d}" onchange="sfV4SetDate('d',this.value)">
+      <span style="font-size:12px;color:#0D7377;font-weight:600">${dn}요일</span>
+      <span style="margin-left:auto;display:flex;gap:5px">
+        <button class="sfv4-btn" onclick="sfV4ShiftDate(-1)">‹</button>
+        <button class="sfv4-btn" onclick="sfV4GoToday()">📌 오늘</button>
+        <button class="sfv4-btn" onclick="sfV4ShiftDate(1)">›</button>
+      </span>
+    </div>
+
+    <div class="sfv4-card">
+      <div class="sfv4-row" style="margin-bottom:10px"><p class="sfv4-h3" style="margin:0">📚 교육 종류 선택</p><span style="font-size:10px;color:#6B7280">법정 교육은 양식·시간 자동 검증</span></div>
+      <div>${Object.entries(eduList).map(([k,ed])=>`<button class="sfv4-edu-tab ${sfV4State.edu===k?'on-'+ed.bc:''}" onclick="sfV4SelectEdu('${k}')">${esc(ed.name)} <span class="sfv4-badge sfv4-badge-${ed.bc}">${ed.badge}</span></button>`).join('')}</div>
+      <div class="sfv4-meta-grid">
+        <div class="sfv4-meta-cell"><div class="sfv4-meta-l">⚖️ 근거 법령</div><div class="sfv4-meta-v">${esc(e.law)}</div></div>
+        <div class="sfv4-meta-cell"><div class="sfv4-meta-l">🔄 실시 주기</div><div class="sfv4-meta-v">${esc(e.cycle)}</div></div>
+        <div class="sfv4-meta-cell"><div class="sfv4-meta-l">⏱️ 필수 시간</div><div class="sfv4-meta-v">${esc(e.timeLabel)}</div></div>
+        <div class="sfv4-meta-cell"><div class="sfv4-meta-l">📦 증빙 보관</div><div class="sfv4-meta-v">${e.keepYears}년</div></div>
+      </div>
+      ${e.fine?'<div class="sfv4-warn sfv4-warn-r">⚠ '+esc(e.fine)+'</div>':''}
+      ${e.note?'<div class="sfv4-warn sfv4-warn-b">ℹ '+esc(e.note)+'</div>':''}
+    </div>
+
+    <div class="sfv4-grid-main">
+      <div>
+        <div class="sfv4-card">
+          <p class="sfv4-h3">📋 교육 내용</p>
+          <textarea class="sfv4-ta" placeholder="${esc(e.placeholder)}" oninput="sfV4SetField('content',this.value)">${esc(r.content||'')}</textarea>
+          <div class="sfv4-form-grid">
+            <div>
+              <label class="sfv4-form-l">⏱ 교육 시간(분)${sfV4IsLegal()?' <span class="sfv4-req">*</span>':''}</label>
+              <input type="number" class="sfv4-input" style="width:100%${sfV4IsLegal()&&r.duration&&!sfV4TimeOk()?';border-color:#EF4444;background:#FEF2F2':''}" placeholder="최소 ${e.minTime}분" value="${r.duration||''}" oninput="sfV4SetField('duration',this.value)">
+              ${sfV4IsLegal()&&r.duration&&!sfV4TimeOk()?'<p style="font-size:10px;color:#B91C1C;margin-top:3px;font-weight:500">⚠ 법정 시간 미달 ('+e.minTime+'분↑)</p>':''}
+            </div>
+            <div><label class="sfv4-form-l">👨‍🏫 강사명${sfV4IsLegal()?' <span class="sfv4-req">*</span>':''}</label><input class="sfv4-input" style="width:100%" placeholder="홍길동" value="${esc(r.instructor||'')}" oninput="sfV4SetField('instructor',this.value)"></div>
+            <div><label class="sfv4-form-l">🏷 강사 자격·소속</label><input class="sfv4-input" style="width:100%" placeholder="안전관리자/외부강사" value="${esc(r.instructorRole||'')}" oninput="sfV4SetField('instructorRole',this.value)"></div>
+          </div>
+        </div>
+
+        <div class="sfv4-card">
+          <div class="sfv4-row" style="margin-bottom:8px">
+            <p class="sfv4-h3" style="margin:0">✅ ${sfV4IsLegal()?'법정 필수 포함 항목':'권장 항목'}</p>
+            <span style="font-size:11px;color:${sfV4AllChecked()?'#047857':'#6B7280'};font-weight:600">${sfV4CheckedCount()}/${sfV4TotalReq()} 완료</span>
+          </div>
+          ${(e.items||[]).map((it,i)=>`<div class="sfv4-cb-row" onclick="sfV4ToggleCheck(${i})"><input type="checkbox" ${(r.checks||{})[i]?'checked':''} onclick="event.stopPropagation();sfV4ToggleCheck(${i})"><span>${esc(it)}</span></div>`).join('')}
+          ${sfV4IsLegal()&&!sfV4AllChecked()?'<div class="sfv4-warn sfv4-warn-a">⚠ 법정 교육은 모든 필수 항목이 포함되어야 노동부 점검에서 인정됩니다</div>':''}
+        </div>
+
+        ${sfV4LinkCardHTML()}
+        ${sfV4PhotoCardHTML()}
+      </div>
+
+      <div>
+        <div class="sfv4-card">
+          <p class="sfv4-h3">📊 실시간 서명 현황</p>
+          <div class="sfv4-stat-grid">
+            <div class="sfv4-stat"><div class="sfv4-stat-l">전체</div><div class="sfv4-stat-n">${t}</div></div>
+            <div class="sfv4-stat"><div class="sfv4-stat-l">✓ 완료</div><div class="sfv4-stat-n" style="color:#047857">${s}</div></div>
+            <div class="sfv4-stat"><div class="sfv4-stat-l">⚠ 미서명</div><div class="sfv4-stat-n" style="color:#B91C1C">${t-s}</div></div>
+            <div class="sfv4-stat"><div class="sfv4-stat-l">외국인</div><div class="sfv4-stat-n">${emps.filter(x=>x.n==='외국인').length}</div></div>
+          </div>
+          ${['주간','야간','외국인'].map(k=>{
+            const tot = k==='외국인'?emps.filter(x=>x.n==='외국인').length:emps.filter(x=>x.w===k).length;
+            const cur = emps.filter(x=>x.s&&(k==='외국인'?x.n==='외국인':x.w===k)).length;
+            const pct = tot?Math.round(cur/tot*100):0;
+            return `<div style="margin-bottom:6px"><div style="display:flex;justify-content:space-between;font-size:11px;color:#374151;font-weight:500"><span>${k}</span><span>${cur}/${tot}</span></div><div class="sfv4-pb"><div class="sfv4-pf" style="width:${pct}%"></div></div></div>`;
+          }).join('')}
+        </div>
+
+        <div class="sfv4-card">
+          <p class="sfv4-h3">🔍 필터</p>
+          <input class="sfv4-input" style="width:100%;margin-bottom:8px" placeholder="이름 검색..." value="${esc(sfV4State.search)}" oninput="sfV4SetSearch(this.value)">
+          ${[['서명','s',['전체','완료','미서명']],['국적','n',['전체','내국인','외국인']],['주야간','w',['전체','주간','야간']],['급여','p',['전체','통상임금제','포괄임금제','시급제']]].map(([l,k,o])=>{
+            return `<div class="sfv4-filter-grp"><div class="sfv4-filter-l">${l}</div><div class="sfv4-filter-btns">${o.map(opt=>`<button class="sfv4-fbtn${sfV4State.filters[k]===opt?' on':''}" onclick="sfV4SetFilter('${k}','${opt}')">${opt}</button>`).join('')}</div></div>`;
+          }).join('')}
+          <div style="border-top:1px solid #E5E7EB;margin-top:8px;padding-top:8px">
+            <p style="font-size:10px;color:#6B7280;margin-bottom:5px">${f.length}명 표시 (전체 ${t}명) · 클릭으로 토글</p>
+            <div style="max-height:280px;overflow-y:auto">
+              ${f.map(emp=>`<div class="sfv4-emp-row" onclick="sfV4ToggleSign(${emp.id})">
+                <div style="display:flex;align-items:center;gap:7px;min-width:0">
+                  <span class="sfv4-dot" style="background:${emp.s?'#10B981':'#EF4444'}"></span>
+                  <div style="min-width:0">
+                    <div class="sfv4-emp-name">${esc(emp.name)}</div>
+                    <div class="sfv4-emp-meta">${emp.w} · ${emp.n} · ${esc(emp.d)}</div>
+                  </div>
+                </div>
+                <span style="font-size:10px;color:#6B7280">${emp.p}</span>
+              </div>`).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  `;
+}
+
+// ──────────────────────────────────────
+// 3a: 전자서명 링크 + 카카오 + 사진 통합
+// ──────────────────────────────────────
+
+// 서명 링크 카드 — 교육별로 별도 토큰 보관
+function sfV4LinkCardHTML() {
+  const e = sfV4GetEdu();
+  const r = sfV4GetRec();
+  const sess = JSON.parse(localStorage.getItem('nopro_session') || 'null');
+  const cid = sess?.companyId || '';
+  const dk = sfV4DateKey();
+  const tok = r.token || '';
+  // URL은 기존 tbm_sign.html 패턴 그대로 (외부 페이지 호환). edu 파라미터 추가로 교육 구분.
+  const url = (tok && cid) ? `noprohr.netlify.app/tbm_sign.html?c=${cid}&t=${tok}&d=${dk}&e=${sfV4State.edu}` : '';
+  const kakaoMsg = url ? `[노프로 ${esc(e.short || e.name)} 서명]\n${sfV4State.date.m}월 ${sfV4State.date.d}일 ${esc(e.name)} 서명 부탁드립니다.\n링크 클릭 → 이름 선택 → 동의 → 서명\n\nhttps://${url}\n\n외국인분들도 영어 버튼 누르면 됩니다.` : '';
+  return `
+    <div class="sfv4-card">
+      <p class="sfv4-h3">🔗 전자서명 링크 <span style="font-size:10px;color:#0D7377;font-weight:600;margin-left:6px">${esc(e.name)}</span></p>
+      <p style="font-size:10px;color:#6B7280;margin-bottom:8px">📌 교육·날짜별 별도 링크 · 직원이 이름 선택 후 동의·서명</p>
+      <div style="display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap">
+        <input class="sfv4-input" id="sfv4-link-url" style="flex:1;min-width:200px;background:#F9FAFB;font-family:monospace;font-size:10px" readonly value="${esc(url || '↻ 재생성 버튼으로 링크 만들기')}">
+        <button class="sfv4-btn" onclick="sfV4GenLink()">↻ 재생성</button>
+        <button class="sfv4-btn sfv4-btn-d" onclick="sfV4CopyLink()">🔗 복사</button>
+      </div>
+      <div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:5px;padding:8px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div style="min-width:0;flex:1">
+          <p style="font-size:11px;font-weight:600;color:#92400E">📱 카카오 단톡방 공유</p>
+          <p style="font-size:10px;color:#78350F;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${url ? '자동 생성된 안내 문구' : '먼저 ↻ 재생성'}</p>
+        </div>
+        <button class="sfv4-btn" style="background:#FEE066;border-color:#F59E0B;color:#78350F;font-weight:600" onclick="sfV4CopyKakao()" ${url?'':'disabled'}>카카오 복사</button>
+      </div>
+      <textarea id="sfv4-kakao-msg" style="display:none">${esc(kakaoMsg)}</textarea>
+    </div>
+  `;
+}
+
+// 사진 카드 — (날짜, 교육)별 사진 저장
+function sfV4PhotoCardHTML() {
+  const e = sfV4GetEdu();
+  const r = sfV4GetRec();
+  const photos = r.photos || [];
+  return `
+    <div class="sfv4-card">
+      <div class="sfv4-row" style="margin-bottom:6px">
+        <p class="sfv4-h3" style="margin:0">📷 현장 교육 사진 <span style="font-size:10px;color:#0D7377;font-weight:600;margin-left:6px">${esc(e.name)}</span></p>
+        <span style="font-size:10px;color:#6B7280">${photos.length}장</span>
+      </div>
+      <p style="font-size:10px;color:#6B7280;margin-bottom:8px">📌 교육별로 사진이 분리 저장됩니다</p>
+      <label style="display:block;border:2px dashed #D1D5DB;border-radius:6px;padding:18px;text-align:center;cursor:pointer;background:#F9FAFB" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='#F9FAFB'">
+        <input type="file" accept="image/*" multiple style="display:none" onchange="sfV4HandlePhotos(this.files);this.value=''">
+        <p style="font-size:12px;color:#6B7280;font-weight:500">교육 사진 드래그 또는 클릭</p>
+        <p style="font-size:10px;color:#9CA3AF;margin-top:3px">JPG · PNG · HEIC · 여러 장 동시 가능</p>
+      </label>
+      ${photos.length > 0 ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(85px,1fr));gap:6px;margin-top:8px">${photos.map((p,i)=>`<div style="position:relative;aspect-ratio:1;border-radius:5px;overflow:hidden;border:1px solid #E5E7EB"><img src="${p.data || ''}" data-spath="${esc(p.storagePath||'')}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in" onclick="sfV4ZoomPhoto('${p.id}')" alt="사진${i+1}"><button onclick="sfV4DelPhoto('${p.id}')" style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;border:none;background:rgba(0,0,0,0.6);color:white;cursor:pointer;font-size:11px;line-height:1">×</button></div>`).join('')}</div>` : ''}
+    </div>
+  `;
+}
+
+async function sfV4GenLink() {
+  const sess = JSON.parse(localStorage.getItem('nopro_session') || 'null');
+  if (!sess || !sess.companyId) { alert('로그인이 필요합니다.'); return; }
+  // 24자 토큰
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const rnd = new Uint8Array(24); crypto.getRandomValues(rnd);
+  let tok = ''; for (let i=0; i<24; i++) tok += chars[rnd[i]%chars.length];
+  sfV4SetRecField('token', tok);
+  saveSafetyRecordsV4();
+  // 외부 tbm_sign.html 호환을 위해 기존 SAFETY_REC[date+'_token']에도 저장 (v4 첫번째 교육이 TBM일 때 외부 검증용)
+  if (sfV4State.edu === 'tbm') {
+    SAFETY_REC[sfV4DateKey() + '_token'] = tok;
+    if (typeof sfSave === 'function') sfSave();
+    const safetyValue = (() => { const s = {}; Object.entries(SAFETY_REC).forEach(([k,v])=>{ s[k] = Array.isArray(v) ? v.map(({data,...r})=>r) : v; }); return s; })();
+    try { await safeItemSave('safety', safetyValue); } catch(e) { console.warn('safety 호환 저장 실패:', e); }
+  }
+  renderSafetyV4();
+}
+
+function sfV4CopyLink() {
+  const r = sfV4GetRec();
+  const sess = JSON.parse(localStorage.getItem('nopro_session') || 'null');
+  const cid = sess?.companyId || '';
+  if (!r.token || !cid) { alert('먼저 ↻ 재생성 버튼을 눌러 링크를 생성해주세요.'); return; }
+  const url = `https://noprohr.netlify.app/tbm_sign.html?c=${cid}&t=${r.token}&d=${sfV4DateKey()}&e=${sfV4State.edu}`;
+  if (navigator.clipboard) navigator.clipboard.writeText(url);
+  // 토스트
+  if (typeof showSyncToast === 'function') showSyncToast('✓ 링크 복사됨', 'ok');
+  else alert('✓ 링크가 복사되었습니다.\n\n' + url);
+}
+
+function sfV4CopyKakao() {
+  const msg = (document.getElementById('sfv4-kakao-msg') || {}).value || '';
+  if (!msg) { alert('먼저 ↻ 재생성 버튼을 눌러 링크를 생성해주세요.'); return; }
+  if (navigator.clipboard) navigator.clipboard.writeText(msg);
+  if (typeof showSyncToast === 'function') showSyncToast('✓ 카카오 메시지 복사됨', 'ok');
+  else alert('✓ 카카오톡 공유 문구가 복사되었습니다.');
+}
+
+// 사진 업로드 (v4 — safetyRecords[date][edu].photos에 저장)
+async function sfV4HandlePhotos(files) {
+  if (!files || files.length === 0) return;
+  const fileArr = Array.from(files);
+  const imgExts = /\.(jpg|jpeg|png|gif|webp|heic|heif|bmp|tiff?)$/i;
+  const imageFiles = fileArr.filter(f => f.type.startsWith('image/') || imgExts.test(f.name) || (!f.type && f.size > 0));
+  if (!imageFiles.length) return;
+  if (typeof showSyncToast === 'function') showSyncToast('사진 업로드 중... (' + imageFiles.length + '장)', 'info');
+
+  const dk = sfV4DateKey();
+  if (!safetyRecords[dk]) safetyRecords[dk] = {};
+  if (!safetyRecords[dk][sfV4State.edu]) safetyRecords[dk][sfV4State.edu] = {};
+  if (!safetyRecords[dk][sfV4State.edu].photos) safetyRecords[dk][sfV4State.edu].photos = [];
+
+  let success = 0;
+  for (const file of imageFiles) {
+    try {
+      const b64 = await fileToBase64(file);
+      const entry = {
+        id: 'sfv4_' + Date.now() + '_' + Math.random().toString(36).slice(2),
+        name: file.name, data: b64, ts: Date.now()
+      };
+      // 서버 업로드 (기존 uploadFileToStorage 재사용)
+      try {
+        if (typeof uploadFileToStorage === 'function') {
+          const res = await uploadFileToStorage(file, 'safety', dk + '_' + sfV4State.edu);
+          entry.storagePath = res.path;
+        }
+      } catch (e2) { console.warn('[v4 사진] 서버 업로드 실패 (로컬 유지):', e2.message); }
+      safetyRecords[dk][sfV4State.edu].photos.push(entry);
+      success++;
+    } catch (e) { console.error('[v4 사진] 처리 실패:', file.name, e); }
+  }
+  if (success > 0) {
+    // 서버 저장 시에는 data 필드(base64) 제외 — 용량 절감
+    const slim = JSON.parse(JSON.stringify(safetyRecords));
+    Object.values(slim).forEach(byDate => Object.values(byDate).forEach(rec => {
+      if (Array.isArray(rec.photos)) rec.photos = rec.photos.map(({data, ...rest}) => rest);
+    }));
+    try { await safeItemSave('safety_records', slim); }
+    catch(e) { console.warn('safety_records 서버 저장 실패:', e); }
+    if (typeof showSyncToast === 'function') showSyncToast(success + '장 업로드 완료', 'ok');
+  }
+  renderSafetyV4();
+}
+
+function sfV4DelPhoto(photoId) {
+  if (!confirm('이 사진을 삭제할까요?')) return;
+  const dk = sfV4DateKey();
+  const rec = safetyRecords[dk]?.[sfV4State.edu];
+  if (!rec || !Array.isArray(rec.photos)) return;
+  const idx = rec.photos.findIndex(p => p.id === photoId);
+  if (idx < 0) return;
+  const p = rec.photos[idx];
+  rec.photos.splice(idx, 1);
+  // 서버 저장 (data 제거 후)
+  const slim = JSON.parse(JSON.stringify(safetyRecords));
+  Object.values(slim).forEach(byDate => Object.values(byDate).forEach(r => {
+    if (Array.isArray(r.photos)) r.photos = r.photos.map(({data, ...rest}) => rest);
+  }));
+  safeItemSave('safety_records', slim).catch(e => console.warn('사진 삭제 저장 실패:', e));
+  // Storage 파일도 삭제 시도
+  if (p.storagePath && typeof deleteFileFromStorage === 'function') {
+    deleteFileFromStorage(p.storagePath).catch(()=>{});
+  }
+  renderSafetyV4();
+}
+
+function sfV4ZoomPhoto(photoId) {
+  const dk = sfV4DateKey();
+  const rec = safetyRecords[dk]?.[sfV4State.edu];
+  if (!rec || !Array.isArray(rec.photos)) return;
+  const p = rec.photos.find(x => x.id === photoId);
+  if (!p) return;
+  // 간단한 모달
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+  ov.onclick = () => ov.remove();
+  const img = document.createElement('img');
+  img.src = p.data || '';
+  img.style.cssText = 'max-width:90vw;max-height:90vh;object-fit:contain';
+  ov.appendChild(img);
+  document.body.appendChild(ov);
+}
+
+// v4 인터랙션
+function sfV4SetTab(t) {
+  sfV4State.tab = t;
+  if (t === 'daily') renderSafetyV4();
+  else alert(t + ' 탭은 3단계에서 구현 예정입니다 (현재 MVP는 일일 현황표만 동작)');
+}
+function sfV4SelectEdu(k) { sfV4State.edu = k; renderSafetyV4(); }
+function sfV4SetDate(field, val) {
+  const v = parseInt(val) || 0;
+  if (field === 'y' && v >= 2020 && v <= 2099) sfV4State.date.y = v;
+  if (field === 'm' && v >= 1 && v <= 12) sfV4State.date.m = v;
+  if (field === 'd' && v >= 1 && v <= 31) sfV4State.date.d = v;
+  renderSafetyV4();
+}
+function sfV4ShiftDate(d) {
+  const dt = new Date(sfV4State.date.y, sfV4State.date.m-1, sfV4State.date.d);
+  dt.setDate(dt.getDate() + d);
+  sfV4State.date = { y: dt.getFullYear(), m: dt.getMonth()+1, d: dt.getDate() };
+  renderSafetyV4();
+}
+function sfV4GoToday() {
+  const t = new Date();
+  sfV4State.date = { y: t.getFullYear(), m: t.getMonth()+1, d: t.getDate() };
+  renderSafetyV4();
+}
+function sfV4SetField(field, val) {
+  sfV4SetRecField(field, val);
+  // 저장 버튼 disabled 상태만 갱신 (전체 재렌더 X — 입력 포커스 보존)
+  const sv = document.querySelector('#sfv4-root .sfv4-btn-d');
+  if (sv) sv.disabled = !sfV4CanSave();
+}
+function sfV4ToggleCheck(i) {
+  const dk = sfV4DateKey();
+  if (!safetyRecords[dk]) safetyRecords[dk] = {};
+  if (!safetyRecords[dk][sfV4State.edu]) safetyRecords[dk][sfV4State.edu] = {};
+  const rec = safetyRecords[dk][sfV4State.edu];
+  if (!rec.checks) rec.checks = {};
+  rec.checks[i] = !rec.checks[i];
+  renderSafetyV4();
+}
+function sfV4ToggleSign(empId) {
+  const dk = sfV4DateKey();
+  if (!safetyRecords[dk]) safetyRecords[dk] = {};
+  if (!safetyRecords[dk][sfV4State.edu]) safetyRecords[dk][sfV4State.edu] = {};
+  const rec = safetyRecords[dk][sfV4State.edu];
+  if (!rec.signs) rec.signs = {};
+  const key = String(empId);
+  if (rec.signs[key]) delete rec.signs[key];
+  else rec.signs[key] = new Date().toISOString();
+  renderSafetyV4();
+}
+function sfV4SetFilter(key, val) { sfV4State.filters[key] = val; renderSafetyV4(); }
+function sfV4SetSearch(val) {
+  sfV4State.search = val;
+  // 검색은 직원 목록만 재렌더하면 좋지만 일단 전체 재렌더
+  renderSafetyV4();
+  // 검색창 포커스 복원
+  setTimeout(()=>{ const inp = document.querySelector('#sfv4-root input[placeholder="이름 검색..."]'); if (inp) { inp.focus(); inp.setSelectionRange(val.length, val.length); } }, 0);
+}
+function sfV4Save() {
+  if (!sfV4CanSave()) { alert('내용/필수 항목/시간/강사를 채워주세요'); return; }
+  sfV4SetRecField('savedAt', new Date().toISOString());
+  saveSafetyRecordsV4();
+  // 저장 토스트
+  const btn = document.querySelector('#sfv4-root .sfv4-btn-d');
+  if (btn) {
+    const orig = btn.textContent;
+    btn.textContent = '✓ 저장됨';
+    setTimeout(()=>{ btn.textContent = orig; }, 1500);
+  }
+}
+
+// renderSafety (gp('safety') 호출용) — 이제 v4 호출
 function renderSafety(){
+  renderSafetyV4();
+}
+
+// 기존 v2 함수 보존 (콘솔에서 디버그용으로만 사용 가능)
+function renderSafetyV2Legacy(){
+  // 기존 콘텐츠 다시 표시 + v4 숨김
+  const pg = document.getElementById('pg-safety');
+  if (pg) {
+    Array.from(pg.children).forEach(ch => {
+      if (ch.id === 'sfv4-root') ch.style.display = 'none';
+      else ch.style.display = '';
+    });
+  }
   sfUpdBar2();sfLoadTbm();sfInitDeptChips();sfRenderList();sfRenderRecent();
   sf2RenderPhotos();
   sfInitDrop();
   sfSwitchTab('daily');
   sfStartPoll();
 }
+if (typeof window !== 'undefined') window.renderSafetyV2Legacy = renderSafetyV2Legacy;
 
 function sfGoDate(dateStr){const[y,m,d]=dateStr.split('-').map(Number);sfY=y;sfM=m;sfD=d;renderSafety();}
 
