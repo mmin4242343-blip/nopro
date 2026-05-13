@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-13-4';
+const CLIENT_BUILD = '2026-05-13-5';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -12545,19 +12545,19 @@ async function admRenderMonitoring(){
     <div id="adm-mon-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px"></div>
     <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
       <select id="adm-mon-level" onchange="admMonChange()" style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:12px;font-family:inherit">
-        <option value="">전체 레벨</option>
-        <option value="error">🔴 error</option>
-        <option value="warn">🟡 warn</option>
-        <option value="guard">🛡️ guard</option>
-        <option value="info">ℹ️ info</option>
+        <option value="" style="color:#1F2937;background:#fff">전체 레벨</option>
+        <option value="error" style="color:#1F2937;background:#fff">🔴 error</option>
+        <option value="warn" style="color:#1F2937;background:#fff">🟡 warn</option>
+        <option value="guard" style="color:#1F2937;background:#fff">🛡️ guard</option>
+        <option value="info" style="color:#1F2937;background:#fff">ℹ️ info</option>
       </select>
       <input id="adm-mon-source" placeholder="🔍 source 필터 (예: pollForUpdates)" oninput="admMonChange()"
         style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:12px;width:280px;font-family:inherit">
       <select id="adm-mon-since" onchange="admMonChange()" style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:12px;font-family:inherit">
-        <option value="1">최근 24시간</option>
-        <option value="7" selected>최근 7일</option>
-        <option value="30">최근 30일</option>
-        <option value="90">최근 90일 (전체)</option>
+        <option value="1" style="color:#1F2937;background:#fff">최근 24시간</option>
+        <option value="7" selected style="color:#1F2937;background:#fff">최근 7일</option>
+        <option value="30" style="color:#1F2937;background:#fff">최근 30일</option>
+        <option value="90" style="color:#1F2937;background:#fff">최근 90일 (전체)</option>
       </select>
       <button onclick="admMonRefresh()" style="padding:8px 14px;border-radius:8px;border:1px solid rgba(96,165,250,.3);background:rgba(96,165,250,.1);color:#93C5FD;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">↻ 새로고침</button>
     </div>
