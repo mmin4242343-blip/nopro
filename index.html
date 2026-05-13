@@ -3,14 +3,420 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="naver-site-verification" content="cdb9a77e4a3191d9e7f226d1fe163c1412331861" />
 <title>노프로</title>
 <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/app.css?v=10">
+<style>
+  /* 🔴 새 버전 배너 표시 중일 때 본문이 가리지 않도록 padding-top 확보 */
+  body.has-version-banner { padding-top: 76px; }
+  body.has-version-banner #landing-overlay { top: 76px; }
+  @media (max-width: 600px){
+    body.has-version-banner { padding-top: 110px; }
+    body.has-version-banner #landing-overlay { top: 110px; }
+  }
+
+  /* ══════════════════════════════════
+     📁 폴더탭 전용 스타일 (.nf-* prefix로 충돌 방지)
+     노프로 디자인 시스템(--ink/--bd/--navy/--card 등) 사용
+     ══════════════════════════════════ */
+  /* 회사 정보 패널 */
+  .nf-company-panel {
+    background: var(--card); border: 1px solid var(--bd); border-radius: 12px;
+    padding: 14px 18px; margin-bottom: 16px;
+  }
+  .nf-cp-header {
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; user-select: none; gap: 12px;
+  }
+  .nf-cp-title {
+    font-size: 14px; font-weight: 800; color: var(--ink);
+    display: flex; align-items: center; gap: 8px; letter-spacing: -0.2px;
+  }
+  .nf-cp-badge {
+    background: #FEF3C7; color: #92400E; font-size: 10px;
+    padding: 2px 8px; border-radius: 100px; font-weight: 700;
+  }
+  .nf-cp-badge.saved { background: #ECFDF5; color: #047857; }
+  .nf-cp-toggle {
+    background: transparent; border: none; cursor: pointer;
+    font-size: 12px; color: var(--ink3); font-weight: 700;
+    padding: 4px 10px; border-radius: 6px; transition: background .15s;
+    font-family: inherit; white-space: nowrap;
+  }
+  .nf-cp-toggle:hover { background: var(--nbg); }
+  .nf-cp-summary { margin-top: 6px; font-size: 12px; color: var(--ink3); font-weight: 500; }
+  .nf-cp-summary strong { color: var(--ink); font-weight: 700; }
+  .nf-cp-body {
+    margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--bd);
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px;
+  }
+  .nf-cp-body.hidden { display: none; }
+  .nf-cp-row { display: flex; flex-direction: column; gap: 4px; }
+  .nf-cp-row.full { grid-column: span 2; }
+  .nf-cp-label { font-size: 11.5px; font-weight: 700; color: var(--ink2); }
+  .nf-cp-input {
+    width: 100%; padding: 9px 12px; font-size: 13px;
+    border: 1px solid var(--bd2); border-radius: 7px;
+    font-family: inherit; outline: none; transition: border .15s;
+    background: var(--card); color: var(--ink);
+  }
+  .nf-cp-input:focus { border-color: var(--navy); }
+  .nf-cp-actions {
+    grid-column: span 2; display: flex; gap: 8px; justify-content: flex-end;
+    margin-top: 4px;
+  }
+
+  /* 브레드크럼 */
+  .nf-breadcrumb {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 16px; font-size: 13px; flex-wrap: wrap;
+  }
+  .nf-bc-item {
+    display: flex; align-items: center; gap: 5px;
+    color: var(--ink3); font-weight: 600;
+    cursor: pointer; transition: color .15s; padding: 2px 4px; border-radius: 6px;
+  }
+  .nf-bc-item:hover { color: var(--ink); }
+  .nf-bc-item.active { color: var(--ink); font-weight: 700; cursor: default; }
+  .nf-bc-sep { color: var(--bd2); font-size: 12px; }
+
+  /* 메인 탭 (표준 / 회사) */
+  .nf-main-tabs {
+    display: flex; gap: 4px; margin-bottom: 18px;
+    border-bottom: 2px solid var(--bd);
+  }
+  .nf-main-tab {
+    padding: 11px 20px; background: transparent; border: none;
+    font-size: 14px; font-weight: 700; color: var(--ink3); cursor: pointer;
+    font-family: inherit; border-bottom: 3px solid transparent;
+    margin-bottom: -2px; transition: all .15s;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .nf-main-tab:hover { color: var(--ink); }
+  .nf-main-tab.on { color: var(--ink); border-bottom-color: var(--navy); font-weight: 800; }
+  .nf-main-tab .cnt {
+    background: var(--bd); color: var(--ink3); padding: 1px 9px;
+    border-radius: 100px; font-size: 11px; font-weight: 700;
+  }
+  .nf-main-tab.on .cnt { background: var(--navy); color: #fff; }
+
+  /* 카테고리 탭 (작은 알약 모양) */
+  .nf-cat-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+  .nf-cat-tab {
+    padding: 7px 14px; border-radius: 100px; border: 1px solid var(--bd);
+    background: var(--card); color: var(--ink3); font-size: 12.5px; font-weight: 600;
+    cursor: pointer; transition: all .15s; font-family: inherit;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .nf-cat-tab:hover { border-color: var(--bd2); color: var(--ink); }
+  .nf-cat-tab.on { background: var(--navy); border-color: var(--navy); color: #fff; }
+  .nf-cat-tab .cnt {
+    background: rgba(255,255,255,.2); padding: 1px 7px;
+    border-radius: 100px; font-size: 11px; font-weight: 700;
+  }
+  .nf-cat-tab:not(.on) .cnt { background: var(--nbg); color: var(--ink3); }
+
+  /* 검색바 */
+  .nf-search-bar {
+    background: var(--card); border: 1px solid var(--bd); border-radius: 100px;
+    padding: 9px 16px; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .nf-search-bar input {
+    flex: 1; border: none; outline: none; font-size: 13px;
+    font-family: inherit; background: transparent; color: var(--ink);
+  }
+
+  /* 문서 그리드 */
+  .nf-doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 10px;
+  }
+  .nf-doc-card {
+    background: var(--card); border: 1px solid var(--bd); border-radius: 10px;
+    padding: 14px 16px; cursor: pointer; transition: all .15s;
+    display: flex; flex-direction: column; gap: 8px; min-height: 150px;
+  }
+  .nf-doc-card:hover {
+    transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.06);
+    border-color: var(--navy);
+  }
+  .nf-doc-head { display: flex; align-items: flex-start; gap: 10px; }
+  .nf-doc-icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px; flex-shrink: 0;
+  }
+  .nf-doc-icon.legal { background: #F3F4F6; color: #1A1A1A; }
+  .nf-doc-icon.payroll { background: #ECFDF5; color: #047857; }
+  .nf-doc-icon.leave { background: #FEF3C7; color: #92400E; }
+  .nf-doc-icon.discipline { background: #FEE2E2; color: #B91C1C; }
+  .nf-doc-icon.cert { background: #EDE9FE; color: #5B21B6; }
+  .nf-doc-icon.insurance { background: #FCE7F3; color: #9F1239; }
+  .nf-doc-icon.policy { background: #E0E7FF; color: #3730A3; }
+  .nf-doc-icon.custom { background: #FEF3C7; color: #92400E; }
+
+  .nf-doc-info { flex: 1; min-width: 0; }
+  .nf-doc-name {
+    font-size: 13px; font-weight: 700; color: var(--ink);
+    margin-bottom: 2px; letter-spacing: -.1px; line-height: 1.3;
+  }
+  .nf-doc-en { font-size: 10.5px; color: var(--ink3); font-weight: 500; }
+  .nf-doc-desc { font-size: 12px; color: var(--ink3); line-height: 1.5; flex: 1; }
+  .nf-doc-meta { display: flex; gap: 5px; flex-wrap: wrap; }
+  .nf-doc-tag {
+    font-size: 10px; padding: 2px 7px; border-radius: 100px;
+    background: var(--nbg); color: var(--ink2); font-weight: 700;
+  }
+  .nf-doc-tag.req { background: #FEE2E2; color: #B91C1C; }
+  .nf-doc-tag.law { background: #DBEAFE; color: #1E40AF; }
+  .nf-doc-tag.govt { background: #FEF3C7; color: #92400E; }
+  .nf-doc-tag.custom { background: var(--navy); color: #fff; }
+  .nf-doc-tag.file { background: #E0E7FF; color: #3730A3; }
+
+  .nf-doc-actions {
+    display: flex; gap: 6px; margin-top: auto;
+    padding-top: 8px; border-top: 1px solid var(--bd);
+  }
+  .nf-doc-btn {
+    flex: 1; padding: 7px 10px; border-radius: 6px;
+    font-size: 11.5px; font-weight: 700; cursor: pointer;
+    border: 1px solid var(--bd); background: var(--card); color: var(--ink2);
+    transition: all .15s; font-family: inherit;
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+  }
+  .nf-doc-btn:hover { background: var(--nbg); border-color: var(--bd2); }
+  .nf-doc-btn.primary { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .nf-doc-btn.primary:hover { background: var(--navy2); }
+  .nf-doc-btn.danger:hover { background: #FEE2E2; border-color: #FCA5A5; color: #B91C1C; }
+
+  /* 폴더 그리드 (내 폴더 / 회사양식 정보 박스) */
+  .nf-section { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--bd); }
+  .nf-section-title {
+    font-size: 12px; font-weight: 800; color: var(--ink3);
+    letter-spacing: 0.4px; margin-bottom: 12px; text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .nf-section-title .count {
+    background: var(--bd); color: var(--ink3); padding: 2px 8px;
+    border-radius: 100px; font-size: 11px; text-transform: none; letter-spacing: 0;
+  }
+  .nf-folder-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+  }
+  .nf-folder-card {
+    background: var(--card); border: 1px solid var(--bd); border-radius: 10px;
+    padding: 16px 14px; cursor: pointer; transition: all .15s;
+    text-align: center; position: relative;
+  }
+  .nf-folder-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,.06);
+    border-color: var(--navy);
+  }
+  .nf-folder-icon { font-size: 32px; margin-bottom: 6px; }
+  .nf-folder-name { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 3px; line-height: 1.3; word-break: break-all; }
+  .nf-folder-meta { font-size: 11px; color: var(--ink3); font-weight: 500; }
+  .nf-folder-actions { position: absolute; top: 6px; right: 6px; display: flex; gap: 3px; opacity: 0; transition: opacity .15s; }
+  .nf-folder-card:hover .nf-folder-actions { opacity: 1; }
+  .nf-folder-act {
+    background: rgba(255,255,255,.95); border: 1px solid var(--bd);
+    width: 22px; height: 22px; border-radius: 5px; cursor: pointer;
+    font-size: 11px; padding: 0; display: flex; align-items: center; justify-content: center;
+  }
+  .nf-folder-act:hover { background: var(--nbg); }
+  .nf-folder-act.danger:hover { background: #FEE2E2; color: #B91C1C; border-color: #FCA5A5; }
+
+  /* 빈 상태 */
+  .nf-empty {
+    background: var(--card); border: 1px dashed var(--bd2); border-radius: 12px;
+    padding: 48px 20px; text-align: center; color: var(--ink3);
+  }
+  .nf-empty-icon { font-size: 48px; margin-bottom: 10px; opacity: .5; }
+  .nf-empty-title { font-size: 14px; font-weight: 700; color: var(--ink2); margin-bottom: 4px; }
+  .nf-empty-sub { font-size: 12px; color: var(--ink3); }
+
+  /* 알약 버튼 */
+  .nf-btn-pill {
+    padding: 8px 16px; border-radius: 100px;
+    background: var(--navy); color: #fff; font-size: 12.5px; font-weight: 700;
+    border: none; cursor: pointer; font-family: inherit;
+    transition: background .15s;
+  }
+  .nf-btn-pill:hover { background: var(--navy2); }
+  .nf-btn-pill.outline { background: var(--card); color: var(--ink); border: 1px solid var(--bd2); }
+  .nf-btn-pill.outline:hover { background: var(--nbg); }
+
+  /* 회사 양식 안내 박스 */
+  .nf-info-box {
+    background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 10px;
+    padding: 12px 16px; margin-bottom: 14px;
+    font-size: 12.5px; color: #78350F; line-height: 1.6;
+  }
+  .nf-info-box strong { color: #92400E; }
+
+  /* 파일 목록 (내 폴더 안에서) */
+  .nf-file-list {
+    background: var(--card); border: 1px solid var(--bd); border-radius: 12px;
+    overflow: hidden; margin-top: 12px;
+  }
+  .nf-file-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px; background: var(--nbg); border-bottom: 1px solid var(--bd);
+  }
+  .nf-file-head-title { font-size: 11px; font-weight: 800; color: var(--ink3); letter-spacing: .4px; text-transform: uppercase; }
+  .nf-file-row {
+    display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+    border-bottom: 1px solid var(--bd); transition: background .1s;
+  }
+  .nf-file-row:hover { background: var(--nbg); }
+  .nf-file-row:last-child { border-bottom: none; }
+  .nf-file-icon { font-size: 20px; flex-shrink: 0; }
+  .nf-file-info { flex: 1; min-width: 0; }
+  .nf-file-name {
+    font-size: 12.5px; font-weight: 600; color: var(--ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .nf-file-meta { font-size: 10.5px; color: var(--ink3); }
+
+  @media (max-width: 720px) {
+    .nf-doc-grid { grid-template-columns: 1fr; }
+    .nf-folder-grid { grid-template-columns: repeat(2, 1fr); }
+    .nf-cp-body { grid-template-columns: 1fr; }
+    .nf-cp-row.full { grid-column: span 1; }
+    .nf-cp-actions { grid-column: span 1; }
+  }
+
+  /* ── 양식 작성 모달 ── */
+  .nf-modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,.5);
+    backdrop-filter: blur(4px); display: none;
+    align-items: center; justify-content: center;
+    z-index: 99990; padding: 20px;
+  }
+  .nf-modal-bg.show { display: flex; animation: nfFadeIn .15s; }
+  @keyframes nfFadeIn { from { opacity: 0 } to { opacity: 1 } }
+  .nf-modal {
+    background: var(--card); border-radius: 16px;
+    width: 720px; max-width: 100%; max-height: 90vh;
+    overflow: hidden; display: flex; flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,.3);
+  }
+  .nf-modal-head {
+    padding: 18px 22px; border-bottom: 1px solid var(--bd);
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--navy); color: #fff; gap: 12px;
+  }
+  .nf-modal-title-wrap { flex: 1; min-width: 0; }
+  .nf-modal-title { font-size: 16px; font-weight: 800; margin-bottom: 2px; }
+  .nf-modal-sub { font-size: 12px; opacity: .8; }
+  .nf-modal-close {
+    background: rgba(255,255,255,.1); border: none; color: #fff;
+    width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
+    font-size: 14px; flex-shrink: 0;
+  }
+  .nf-modal-close:hover { background: rgba(255,255,255,.2); }
+  .nf-modal-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
+  .nf-form-row {
+    display: grid; grid-template-columns: 130px 1fr; gap: 14px;
+    margin-bottom: 12px; align-items: start;
+  }
+  .nf-form-label { font-size: 13px; font-weight: 700; color: var(--ink2); padding-top: 9px; }
+  .nf-form-label .opt { color: var(--ink3); font-size: 11px; font-weight: 500; margin-left: 4px; }
+  .nf-form-input {
+    width: 100%; padding: 9px 12px; font-size: 13px;
+    border: 1px solid var(--bd2); border-radius: 7px;
+    font-family: inherit; outline: none; transition: border .15s;
+    background: var(--card); color: var(--ink);
+  }
+  .nf-form-input:focus { border-color: var(--navy); }
+  select.nf-form-input { cursor: pointer; }
+  .nf-info-tip {
+    background: var(--nbg); border: 1px solid var(--bd); border-radius: 8px;
+    padding: 11px 14px; margin-bottom: 14px;
+    font-size: 12.5px; color: var(--ink2); line-height: 1.6;
+  }
+  .nf-info-tip strong { color: var(--ink); }
+  .nf-info-tip.warn { background: #FFFBEB; border-color: #FDE68A; color: #78350F; }
+  .nf-info-tip.warn strong { color: #92400E; }
+  .nf-modal-foot {
+    padding: 12px 22px; border-top: 1px solid var(--bd);
+    display: flex; gap: 8px; justify-content: flex-end;
+    background: var(--nbg); flex-wrap: wrap;
+  }
+  .nf-modal-btn {
+    padding: 9px 16px; border-radius: 8px; font-size: 13px; font-weight: 700;
+    border: 1px solid var(--bd2); background: var(--card); color: var(--ink2);
+    cursor: pointer; font-family: inherit; transition: all .15s;
+  }
+  .nf-modal-btn:hover { background: var(--nbg); border-color: var(--ink3); }
+  .nf-modal-btn.primary { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .nf-modal-btn.primary:hover { background: var(--navy2); }
+  .nf-modal-btn.danger { color: #B91C1C; border-color: #FCA5A5; }
+  .nf-modal-btn.danger:hover { background: #FEE2E2; }
+
+  /* 업로드 영역 (회사양식) */
+  .nf-upload-zone {
+    border: 2px dashed var(--bd2); border-radius: 10px;
+    padding: 28px 20px; text-align: center; cursor: pointer;
+    transition: all .15s; background: var(--nbg);
+  }
+  .nf-upload-zone:hover, .nf-upload-zone.dragover { border-color: var(--navy); background: var(--card); }
+  .nf-upload-icon { font-size: 36px; margin-bottom: 8px; opacity: .5; }
+  .nf-upload-text { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 3px; }
+  .nf-upload-sub { font-size: 11px; color: var(--ink3); }
+  .nf-file-preview {
+    background: var(--nbg); border: 1px solid var(--bd); border-radius: 10px;
+    padding: 12px 14px; display: flex; align-items: center; gap: 12px; margin-top: 10px;
+  }
+  .nf-file-preview-icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: var(--navy); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0;
+  }
+  .nf-file-preview-info { flex: 1; min-width: 0; }
+  .nf-file-preview-name {
+    font-size: 13px; font-weight: 700; color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .nf-file-preview-size { font-size: 11px; color: var(--ink3); margin-top: 2px; }
+  .nf-file-preview-clear {
+    background: #FEE2E2; border: none; color: #B91C1C;
+    width: 26px; height: 26px; border-radius: 6px; cursor: pointer;
+    font-size: 12px; font-weight: 700;
+  }
+</style>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js" integrity="sha384-OUW9euuUyxyHcAhTqbhI+Iyb8LMssXt/cpz0yXhs9UWG2/R/uaWdakx/4cfww7Vb" crossorigin="anonymous"></script>
 </head>
 <body>
 
-
+<!-- 🔴 새 버전 배포 안내 배너 — 사용자가 [새로고침] 버튼 누를 때까지 사라지지 않음 -->
+<!-- 표시 조건: CLIENT_BUILD ≠ _serverBuild (data-load 폴링에서 감지) -->
+<!-- 자동 reload 절대 없음. 클릭 시 blur → flushPendingSave → location.reload 순서로 데이터 보호 -->
+<div id="version-update-banner" role="alert" aria-live="assertive" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(90deg,#dc2626,#b91c1c);color:#fff;padding:14px 20px;box-shadow:0 4px 12px rgba(0,0,0,.25);font-family:Pretendard,sans-serif;">
+  <div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:240px;">
+      <span style="font-size:22px;line-height:1;">🆕</span>
+      <div>
+        <div style="font-weight:700;font-size:15px;line-height:1.3;">새 버전이 배포되었습니다 — 새로고침이 필요합니다</div>
+        <div style="font-size:12px;opacity:.92;margin-top:3px;line-height:1.4;">
+          이 PC는 옛 코드를 사용 중이라 일부 기능이 정상 동작하지 않을 수 있습니다.
+          <span id="version-update-detail" style="opacity:.85;"></span>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button id="version-update-reload-btn" type="button"
+        style="background:#fff;color:#b91c1c;border:0;padding:10px 18px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.15);white-space:nowrap;">
+        지금 새로고침
+      </button>
+      <span style="font-size:11px;opacity:.85;white-space:nowrap;">계속 뜨면<br>Ctrl+F5 (Mac: Cmd+Shift+R)</span>
+    </div>
+  </div>
+</div>
 
 <!-- ══ 랜딩페이지 — flex.team inspired · Apple Monochrome ══ -->
 <div id="landing-overlay" style="position:fixed;inset:0;z-index:99997;display:block;overflow-y:auto;overflow-x:hidden;background:#fff;">
@@ -568,6 +974,16 @@
         알림
         <span id="adm-alert-badge" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:#FF453A;color:#fff;font-size:9px;font-weight:600;padding:1px 6px;border-radius:980px;display:none;font-variant-numeric:tabular-nums">0</span>
       </div>
+      <div class="adm-sb-item" id="adm-m-backup" onclick="admPage('backup')" style="position:relative;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        백업/복구
+        <span id="adm-backup-warn" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:#F59E0B;color:#fff;font-size:9px;font-weight:600;padding:1px 6px;border-radius:980px;display:none">!</span>
+      </div>
+      <div class="adm-sb-item" id="adm-m-monitoring" onclick="admPage('monitoring')" style="position:relative;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        모니터링
+        <span id="adm-mon-badge" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:#FF453A;color:#fff;font-size:9px;font-weight:600;padding:1px 6px;border-radius:980px;display:none">0</span>
+      </div>
     </nav>
 
     <div style="padding:14px 10px;border-top:.5px solid rgba(255,255,255,.08)">
@@ -612,7 +1028,10 @@
   <div class="nt" id="nt-settings" onclick="gp('settings')">급여 설정 <span class="tip-wrap"><button class="tip-btn" style="background:none;border:none;cursor:pointer;font-size:12px;padding:0 2px;opacity:.7" onclick="showTip('급여 설정','급여 계산에 필요한 기본 설정을 합니다.\n\n• 급여 방식 선택 (통상임금제·시간급·월정액제·고정급제)\n• 야간/연장/휴일 가산수당 ON/OFF\n• 주말·공휴일 기준 설정\n• 휴게시간 기본값 설정')">💡</button></span></div>
   <div class="nsp"></div>
   
-<button onclick="authLogout()" style="margin-right:8px;padding:6px 14px;border-radius:8px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);color:#F87171;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.background='rgba(239,68,68,.18)'" onmouseout="this.style.background='rgba(239,68,68,.08)'">로그아웃</button><button class="nxa" onclick="exportFile()">HTML 저장</button>
+<div id="sync-indicator" title="저장 상태" style="display:flex;align-items:center;gap:5px;margin-right:10px;padding:4px 10px;border-radius:8px;background:rgba(255,255,255,.06);font-size:10.5px;color:rgba(255,255,255,.85);font-weight:600;cursor:default;user-select:none">
+  <span id="sync-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22C55E;box-shadow:0 0 6px rgba(34,197,94,.6);transition:background .2s,box-shadow .2s"></span>
+  <span id="sync-text">저장됨</span>
+</div><button onclick="authLogout()" style="margin-right:8px;padding:6px 14px;border-radius:8px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);color:#F87171;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.background='rgba(239,68,68,.18)'" onmouseout="this.style.background='rgba(239,68,68,.08)'">로그아웃</button><button class="nxa" onclick="exportFile()">HTML 저장</button>
 </div>
 <div class="body">
 <div class="mob-sb-dim" onclick="toggleMobSb()"></div>
@@ -659,14 +1078,21 @@
       <div class="pt-s" id="daily-sub">날짜를 선택하세요</div>
     </div>
     <div style="display:flex;gap:6px;align-items:center">
-      <span id="sv-msg" style="font-size:11px;color:var(--teal);background:var(--tbg);padding:4px 12px;border-radius:9px;display:none;font-weight:700">✓ 저장되었습니다</span>
+      <span id="daily-sel-badge" style="display:none;background:#1565C0;color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:12px;align-items:center;gap:5px"></span>
       <button class="btn btn-sm" onclick="fillNormalAttend()" style="color:var(--navy);border-color:var(--navy);">✅ 전체 정상출퇴근</button>
       <button class="btn btn-sm" onclick="fillNormalAttendSelected()" style="color:var(--teal);border-color:var(--teal);">☑ 선택 정상출퇴근</button>
-      <button class="btn btn-sm" onclick="applyRecentAll()" title="직원별 가장 최근 출퇴근 기록을 오늘에 불러옵니다" style="color:var(--purple);border-color:var(--purple)">📋 최근 데이터 불러오기</button>
-      <button class="btn btn-sm" onclick="exportDailyExcel()" style="color:#065F46;border-color:#065F46;">⬇ 당일 엑셀</button>
+      <button class="btn btn-sm" onclick="applyRecentAll()" title="체크된 직원만 또는 전체 — 직원별 가장 최근 출퇴근 기록을 오늘에 불러옵니다" style="color:var(--purple);border-color:var(--purple)">📋 최근 데이터 불러오기</button>
+      <button class="btn btn-sm" onclick="copyDailyRecords()" title="이 날짜의 출퇴근 기록을 메모리에 복사 (체크된 직원만 또는 전체)" style="color:#0891B2;border-color:#0891B2">📋 복사</button>
+      <button class="btn btn-sm" onclick="pasteDailyRecords()" title="복사된 기록을 지금 보는 날짜에 적용 (기존 기록 있는 직원은 건너뜀)" style="color:#1B5E20;border-color:#1B5E20">📌 붙여놓기</button>
+      <div style="position:relative;display:inline-block">
+        <button class="btn btn-sm" onclick="toggleDailyExcelMenu(event)" style="color:#065F46;border-color:#065F46;">⬇ 엑셀 ▾</button>
+        <div id="daily-excel-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--card);border:1px solid var(--bd2);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:50;min-width:140px;overflow:hidden">
+          <button type="button" onclick="exportDailyExcel();closeDailyExcelMenu();" style="display:block;width:100%;padding:9px 14px;background:transparent;border:none;text-align:left;font-size:12px;color:var(--ink);cursor:pointer;font-family:inherit;font-weight:600">📅 당일 엑셀</button>
+          <button type="button" onclick="openRangeExcelModal();closeDailyExcelMenu();" style="display:block;width:100%;padding:9px 14px;background:transparent;border:none;text-align:left;font-size:12px;color:var(--ink);cursor:pointer;font-family:inherit;font-weight:600;border-top:1px solid var(--bd)">🗓️ 기간 엑셀</button>
+        </div>
+      </div>
       <button class="btn btn-xs" onclick="clearDay()" style="color:var(--rose);border-color:#FECACA">이 날 초기화</button>
       <button class="btn btn-sm" onclick="openMoveDate()" style="color:var(--navy2);border-color:var(--navy2);">📅 날짜 이동</button>
-      <button class="btn btn-n btn-sm" onclick="saveDay()">저장</button>
     </div>
   </div>
   <div id="daily-filter-bar"></div>
@@ -677,8 +1103,10 @@
     <div class="ds">
       <div class="dar" onclick="nd('month',-1)">‹</div><div class="dl">월</div><div class="dv" id="dm">3</div><div class="dar" onclick="nd('month',1)">›</div>
     </div>
-    <div class="ds">
+    <div class="ds" style="position:relative">
       <div class="dar" onclick="nd('day',-1)">‹</div><div class="dl">일</div><div class="dv" id="dd">1</div><div class="dar" onclick="nd('day',1)">›</div>
+      <button id="day-cal-btn" type="button" onclick="toggleDayPicker(event)" title="달력에서 날짜 선택" style="margin-left:6px;padding:3px 7px;background:var(--card);border:1px solid var(--bd2);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;color:var(--navy2);font-family:inherit">📅</button>
+      <div id="day-picker-pop" class="day-picker-pop" style="display:none"></div>
     </div>
     <div class="ds" style="border-right:none"><div class="ddow" id="ddow">토요일</div></div>
   </div>
@@ -759,11 +1187,13 @@
         <button class="mvf-sub btn btn-xs" onclick="setMvSubFilter('nation','foreign',this)" style="font-size:10px">외국인</button>
       </div>
       <div id="mv-dept-filter" style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:3px"></div>
+      <div id="mv-deptcat-filter" style="display:flex;gap:3px;background:rgba(14,165,233,.08);border-radius:8px;padding:3px" title="부서 분류 (커스텀 부서 자동 포함)"></div>
       <div id="mv-tabs" style="display:flex;gap:3px;flex-wrap:wrap"></div>
       <div style="width:1px;height:14px;background:var(--bd);margin:0 4px"></div>
       <button class="btn btn-sm" id="mv-cal" onclick="setMvMode('cal')" style="background:var(--nbg);color:var(--navy2);border-color:var(--navy2)">캘린더</button>
       <button class="btn btn-sm" id="mv-ov" onclick="setMvMode('ov')">전체 현황표</button>
-      <button class="btn btn-sm btn-t" onclick="exportMonthlyExcel()">⬇ 엑셀 내보내기</button>
+      <button class="btn btn-sm btn-t" onclick="exportMonthlyExcel()" title="필터링된 전체 인원 + 직원별 시트">⬇ 엑셀 내보내기</button>
+      <button class="btn btn-sm" onclick="exportMonthlyExcelOne(vEid)" title="현재 선택된 직원만 다운로드" style="background:var(--nbg);color:var(--navy2);border-color:var(--navy2)">⬇ 이 직원만</button>
     </div>
   </div>
   <div id="mv-body"></div>
@@ -853,7 +1283,7 @@
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
       <div style="font-size:12px;font-weight:700;color:var(--ink)">📤 엑셀 업로드 미리보기</div>
       <div style="display:flex;gap:6px;align-items:center">
-        <select id="leave-upload-sheet1" onchange="leaveUploadParseSheet()" style="padding:4px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-weight:600"></select>
+        <select id="leave-upload-sheet1" onchange="leaveUploadParseSheet(event)" style="padding:4px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-weight:600"></select>
         <button class="btn btn-n btn-sm" onclick="leaveUploadApply()" id="leave-upload-apply-btn1" style="font-size:11px">적용</button>
         <button class="btn btn-sm" onclick="leaveUploadCancel()" style="font-size:11px;color:var(--ink3)">취소</button>
       </div>
@@ -887,13 +1317,7 @@
     </table>
   </div>
 
-  <!-- 월별 적립 달력 (선택된 직원) -->
-  <div id="leave-monthly-detail" style="margin-top:14px;display:none">
-    <div class="bk-hd" style="border-radius:12px 12px 0 0;padding:10px 14px">
-      <span id="leave-detail-title">직원 월별 연차 적립 현황</span>
-    </div>
-    <div id="leave-monthly-grid" style="background:var(--card);border:1px solid var(--bd);border-radius:0 0 12px 12px;padding:12px;overflow-x:auto"></div>
-  </div>
+  <!-- 인라인 펼침으로 대체됨 — 하단 고정 패널 제거 (행 바로 아래에 상세 표시) -->
 </div>
 
 <!-- 직원 현황 -->
@@ -903,13 +1327,6 @@
       <div class="pt">인원 현황</div>
       <div class="pt-s">연도별 월간 직원 및 급여 현황 요약</div>
     </div>
-    <div style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:3px">
-        <button class="cpf-btn btn btn-xs on" data-f="all" onclick="setCompanyFilter('all')">전체</button>
-        <button class="cpf-btn btn btn-xs" data-f="fixed" onclick="setCompanyFilter('fixed')">통상임금제</button>
-        <button class="cpf-btn btn btn-xs" data-f="monthly" onclick="setCompanyFilter('monthly')">포괄임금제</button>
-        <button class="cpf-btn btn btn-xs" data-f="hourly" onclick="setCompanyFilter('hourly')">시급제</button>
-
-      </div>
       <div style="display:flex;align-items:center;gap:4px;background:var(--card);border:1px solid var(--bd);border-radius:9px;padding:3px 8px">
       <button class="dar" onclick="companyYearNav(-1)">‹</button>
       <span id="company-year-disp" style="font-size:14px;font-weight:700;color:var(--navy);min-width:40px;text-align:center">2026</span>
@@ -949,6 +1366,7 @@
         <th style="width:96px">사원번호</th>
         <th style="width:60px">이름</th>
         <th style="width:56px">직종</th>
+        <th style="width:64px">부서</th>
         <th style="width:52px">직급</th>
         <th style="width:56px">소속</th>
         <th style="width:130px">주민번호</th>
@@ -990,7 +1408,7 @@
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div style="font-size:12px;font-weight:700;color:var(--ink)">📤 엑셀 업로드 미리보기</div>
       <div style="display:flex;gap:6px;align-items:center">
-        <select id="leave-upload-sheet" onchange="leaveUploadParseSheet()" style="padding:4px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-weight:600"></select>
+        <select id="leave-upload-sheet" onchange="leaveUploadParseSheet(event)" style="padding:4px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-weight:600"></select>
         <button class="btn btn-n btn-sm" onclick="leaveUploadApply()" id="leave-upload-apply-btn" style="font-size:11px">적용</button>
         <button class="btn btn-sm" onclick="leaveUploadCancel()" style="font-size:11px;color:var(--ink3)">취소</button>
       </div>
@@ -1058,11 +1476,30 @@
   <div class="ph">
     <div>
       <div class="pt">📁 폴더 관리</div>
-      <div class="pt-s">파일 및 문서 관리 · 폴더 구조로 체계적으로 정리</div>
+      <div class="pt-s">고용노동부 표준 양식 27종 + 회사 자체 양식 + 사용자 폴더</div>
     </div>
-    <button class="btn btn-n btn-sm" onclick="addRootFolder()">+ 폴더 추가</button>
   </div>
+  <!-- 회사 정보 입력 패널 (전체 양식 공통) -->
+  <div class="nf-company-panel" id="nf-company-panel"></div>
+  <!-- 브레드크럼 -->
+  <div class="nf-breadcrumb" id="nf-breadcrumb"></div>
+  <!-- 메인 영역 -->
   <div id="folder-body"></div>
+</div>
+
+<!-- 양식 작성 / 회사양식 업로드 / 폴더 추가 모달 -->
+<div class="nf-modal-bg" id="nf-modal" onclick="if(event.target.id==='nf-modal')closeNfModal()">
+  <div class="nf-modal">
+    <div class="nf-modal-head">
+      <div class="nf-modal-title-wrap">
+        <div class="nf-modal-title" id="nf-modal-title">서식 작성</div>
+        <div class="nf-modal-sub" id="nf-modal-sub">필요 정보 입력 후 다운로드</div>
+      </div>
+      <button class="nf-modal-close" onclick="closeNfModal()">✕</button>
+    </div>
+    <div class="nf-modal-body" id="nf-modal-body"></div>
+    <div class="nf-modal-foot" id="nf-modal-foot"></div>
+  </div>
 </div>
 
 
@@ -1509,14 +1946,14 @@ noprohr.netlify.app/tbm_sign.html
         <div class="sr" id="sr-base-rate">
           <div><div class="sl">기본 시급 (전체)</div><div class="ss">직원 관리에서 개별 수정 가능</div></div>
           <div style="display:flex;align-items:center;gap:4px">
-            <input class="ni" type="number" id="inp-base-rate" value="11750" min="1" style="width:88px">
+            <input class="ni" type="text" inputmode="numeric" id="inp-base-rate" value="11,750" style="width:88px;text-align:right" oninput="formatNumInput(this)" onchange="POL.baseRate=+this.value.replace(/,/g,'')||0;saveLS();renderPayroll()">
             <span style="font-size:11px;color:var(--ink3)">원</span>
           </div>
         </div>
         <div class="sr" id="sr-base-monthly" style="display:none">
           <div><div class="sl">기본 월급 (전체)</div><div class="ss">직원 관리에서 개별 수정 가능 · 통상시급=월급÷209h</div></div>
           <div style="display:flex;align-items:center;gap:4px">
-            <input class="ni" type="number" id="inp-base-monthly" value="2455750" min="1" style="width:100px" onchange="POL.baseMonthly=+this.value;saveLS()">
+            <input class="ni" type="text" inputmode="numeric" id="inp-base-monthly" value="2,455,750" style="width:100px;text-align:right" oninput="formatNumInput(this)" onchange="POL.baseMonthly=+this.value.replace(/,/g,'')||0;saveLS()">
             <span style="font-size:11px;color:var(--ink3)">원</span>
           </div>
         </div>
@@ -1737,6 +2174,39 @@ noprohr.netlify.app/tbm_sign.html
       </div>
     </div>
 
+    <!-- 🔄 데이터 복구 (감사 로그 기반) -->
+    <div class="set-c" style="border-color:#FCD34D">
+      <div class="set-h" style="background:#F59E0B">🔄 데이터 복구 (시점 복원)</div>
+      <div class="set-b">
+        <div style="font-size:12px;color:var(--ink2);margin-bottom:12px;line-height:1.7">
+          서버에 자동 보관된 변경 이력에서 <strong>특정 시점</strong>으로 데이터를 되돌립니다.<br>
+          <span style="font-size:11px;color:var(--ink3)">실수로 삭제·덮어쓴 직원/출퇴근 기록 등을 복구할 때 사용. 복원 직전 상태도 자동 백업되어 다시 되돌릴 수 있음.</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+          <label style="font-size:11px;color:var(--ink2);font-weight:600">데이터 종류:</label>
+          <select id="recover-key-select" onchange="loadRecoveryHistory()" style="padding:5px 10px;font-size:12px;border:1px solid var(--bd2);border-radius:6px;background:#fff;font-family:inherit">
+            <option value="emps">직원 (emps)</option>
+            <option value="rec">출퇴근/연차 (rec)</option>
+            <option value="bonus">상여금 (bonus)</option>
+            <option value="allow">수당 (allow)</option>
+            <option value="tax">세금 (tax)</option>
+            <option value="tbk">임시휴게 (tbk)</option>
+            <option value="safety">안전교육 (safety)</option>
+            <option value="leave_overrides">연차 (leave_overrides)</option>
+            <option value="leave_settings">연차설정 (leave_settings)</option>
+            <option value="pol">급여설정 (pol)</option>
+            <option value="bk">기본휴게 (bk)</option>
+          </select>
+          <button class="btn btn-sm" onclick="loadRecoveryHistory()" style="font-size:11px">🔍 이력 불러오기</button>
+        </div>
+        <div id="recover-history-list" style="max-height:380px;overflow-y:auto;border:1px solid var(--bd);border-radius:8px;background:#FAFAFA;padding:6px"></div>
+        <div style="margin-top:10px;font-size:10px;color:var(--ink3);line-height:1.5">
+          ⚠️ 복원 후엔 모든 사용자가 <strong>Ctrl+F5</strong>로 새로고침해야 화면에 반영됩니다.<br>
+          복원 직전 상태는 자동으로 'restore-snapshot' 행으로 audit_log에 보관되어 다시 되돌릴 수 있습니다.
+        </div>
+      </div>
+    </div>
+
     <!-- 사번 자동 부여 -->
     <div class="set-c">
       <div class="set-h">🔢 사번 자동 부여</div>
@@ -1755,7 +2225,7 @@ noprohr.netlify.app/tbm_sign.html
             <div><div class="sl">사이트코드 (앞 5자리)</div>
               <div class="ss">선별장유형(1) + 광역(2) + 세부(2)<br>예: 12013 = 자체/인천/남동구</div>
             </div>
-            <select class="ni" id="inp-site-code" style="width:140px;text-align:center;font-size:12px;font-weight:600;padding:4px 6px">
+            <select class="ni" id="inp-site-code" onchange="setSiteCode(this.value)" style="width:140px;text-align:center;font-size:12px;font-weight:600;padding:4px 6px">
               <option value="">선택</option>
               <option value="12013">12013 남동구</option>
               <option value="12034">12034 중구(인천)</option>
@@ -1816,7 +2286,7 @@ noprohr.netlify.app/tbm_sign.html
 </div>
 
 </div></div></div>
-<script src="/js/app.js"></script>
+<script src="/js/app.js?v=2026-05-13-4"></script>
 <!-- 인라인 핸들러용 unsafe-inline은 추후 단계적 제거 예정 -->
 <script>
 // placeholder - app.js에서 모든 로직 처리

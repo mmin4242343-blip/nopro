@@ -29,6 +29,19 @@
 2. Netlify가 GitHub push를 감지하여 자동 빌드/배포
 3. Claude가 push까지 직접 수행해왔음
 
+## 프론트엔드 빌드/번들 정책
+
+**프론트엔드 빌드 단계는 의도적으로 없음.** `js/app.js`, `index.html`, `css/app.css` 원본 그대로 Netlify에 배포됨 (`publish = "."`).
+
+- `package.json`에 build script 없음. 의존성은 백엔드(Netlify Functions)용만.
+- `netlify.toml`의 `node_bundler = "esbuild"`는 **백엔드 Functions 번들링용**이며 프론트엔드와 무관.
+- **Netlify가 자동 gzip 압축 적용** (`Content-Encoding: gzip`). 실측: `app.js` 638KB → 전송 시 약 163KB.
+- minify·번들 미적용 상태이며, 단순 도입 시 사이트 마비 위험:
+  - **이유 1**: `index.html`에 인라인 이벤트 핸들러 약 317개 존재. minifier가 전역 함수명을 mangle하면 `onclick="addEmp()"` 등이 즉시 ReferenceError.
+  - **이유 2**: esbuild로 IIFE 번들링하면 전역 스코프가 사라져 인라인 핸들러가 함수를 찾지 못함.
+- minify/번들 도입하려면 **인라인 핸들러 제거가 선행 필수**. 그 전엔 손대지 말 것.
+- 현재 gzip 후 전송 크기(약 163KB)는 현대 SPA 기준 평범한 수준이라 시급도 낮음.
+
 ## 디렉토리 구조
 
 ```
@@ -50,7 +63,9 @@ nopro/
     │   ├── auth.js                     # JWT 인증 + httpOnly 쿠키 + CORS 유틸
     │   ├── crypto.js                   # AES-256-GCM 암호화/복호화 (주민번호 뒷자리)
     │   ├── rate-limit.js               # 로그인 Rate Limiting (in-memory + DB)
-    │   └── supabase.js                 # Supabase 클라이언트 초기화
+    │   ├── supabase.js                 # Supabase 클라이언트 초기화
+    │   ├── scrub.js                    # PII 스크럽 (주민번호·사업자·전화·이메일·암호화값)
+    │   └── logger.js                   # 서버 측 로거 (error_log 테이블 기록)
     ├── auth-login.js                   # 로그인 (bcrypt only, Rate Limiting 적용)
     ├── auth-signup.js                  # 회사 가입
     ├── auth-verify.js                  # JWT 토큰 검증 및 자동 갱신 (쿠키 기반)
@@ -65,6 +80,11 @@ nopro/
     ├── tbm-sign.js                     # TBM 안전교육 서명 API (외부 링크용)
     ├── admin-companies.js              # [관리자] 전체 회사 목록 조회
     ├── admin-delete.js                 # [관리자] 회사 삭제
+    ├── admin-backup.js                 # [관리자] 회사별 전체 데이터 백업 다운로드 (companies + company_data + audit_log, 비밀번호 제외)
+    ├── admin-error-log.js              # [관리자] error_log 조회 + 통계 (모니터링 페이지용)
+    ├── audit-restore.js                # [관리자] 감사 로그 기반 복구 API
+    ├── holidays-fetch.js               # 공휴일 자동 동기화 (한국천문연구원 API 프록시)
+    ├── log-error.js                    # 클라이언트 → 서버 에러 전송 (인증 선택, IP rate-limit, PII 스크럽)
     └── migrate-passwords.js            # [관리자] SHA-256 → bcrypt 패스워드 마이그레이션
 ```
 
@@ -130,6 +150,8 @@ address         VARCHAR         -- 주소
 join_date       DATE            -- 가입일
 status          VARCHAR         -- 'active' | 'inactive'
 created_at      TIMESTAMP
+active_session_id   TEXT        -- 현재 활성 세션 UUID (JWT의 sid와 매칭, 단일 로그인)
+active_session_at   TIMESTAMPTZ -- 마지막 활동 시각 (heartbeat, idle timeout 1시간)
 ```
 
 ### `company_data` 테이블
@@ -153,6 +175,7 @@ UNIQUE(company_id, data_key)    -- atomic upsert용 유니크 제약
 - `tax` — 세금 기록
 - `leave_settings` — 연차 설정
 - `leave_overrides` — 직원별 연차 오버라이드
+- `bk_snapshots` — **일별** 기본 휴게세트 스냅샷 (DEF_BK 변경 시 변경 직전 값을 과거 일자에 freeze, 키 형식 `YYYY-MM-DD`. 호환을 위해 옛 월 키 `YYYY-MM`도 fallback 인식). DEF_BK 각 엔트리는 `shift` 필드(`'all'|'day'|'night'`)로 적용 직원 분류 가능 — `getActiveBk(y,m,d,emp)`가 emp.shift에 맞춰 필터링.
 
 ### `audit_log` 테이블
 ```
@@ -165,6 +188,26 @@ old_value       TEXT                -- 변경 전 JSON (롤백용)
 new_value       TEXT                -- 변경 후 JSON
 changed_at      TIMESTAMP NOT NULL DEFAULT now()
 ```
+
+### `error_log` 테이블 (2026-04-30 신설, 90일 자동 정리)
+```
+id              BIGSERIAL PRIMARY KEY
+occurred_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+level           VARCHAR(10)      -- 'error' | 'warn' | 'info' | 'guard'
+source          VARCHAR(40)      -- 'client' | 함수명
+message         TEXT (PII 스크럽)
+stack           TEXT (PII 스크럽)
+url             TEXT
+user_agent      TEXT
+company_id      BIGINT REFERENCES companies(id) ON DELETE SET NULL
+user_email      VARCHAR(255) (PII 스크럽)
+meta            JSONB (PII 스크럽)
+build_id        VARCHAR(20)      -- CLIENT_BUILD 식별자
+ip_hash         VARCHAR(16)      -- IP는 해시화하여 PII 회피
+```
+- 인덱스: `occurred_at DESC`, `level`, `source`, `company_id`
+- pg_cron으로 매일 새벽 3시 90일 초과 자동 삭제 (`cleanup_old_error_log()` 함수)
+- 마이그레이션 SQL: `docs/error-log-migration.sql`
 
 ### `login_attempts` 테이블
 ```
@@ -179,7 +222,8 @@ attempted_at    TIMESTAMP NOT NULL DEFAULT now()
 ```javascript
 EMPS = []           // 직원 배열 [{id, name, phone, rrnFront, rrnBack, rate, payMode, monthly, position, ...}]
 POL = {}            // 급여 정책 {basePayMode, baseRate, sot, nightStart, extFixed, ntFixed, ...}
-REC = {}            // 출퇴근 기록 {"{empId}_{YYYY-MM-DD}": {start, end, pohal, att, outTimes, customBk}}
+REC = {}            // 출퇴근 기록 {"{empId}_{YYYY-MM-DD}": {start, end, pohal, att, outTimes, customBk, subWork}}
+                    //   subWork=true: 휴일대체근무. 휴일가산 무력화 → 평일처럼 산정 (예: 5/1 근로자의날 대체)
 BONUS_REC = {}      // 상여금 {"{empId}_{YYYY}_{MM}": amount}
 ALLOWANCE_REC = {}  // 수당 {"{empId}_{YYYY}_{MM}": {ability, position, career, ...}}
 TAX_REC = {}        // 세금 {"{empId}_{YYYY}_{MM}": {incomeMin, incomeMax, ...}}
@@ -239,6 +283,50 @@ SAFETY_REC = {}     // 안전교육 기록
 - 로그인 성공 시 시도 기록 초기화
 - 429 응답 + Retry-After 헤더
 
+### 단일 로그인 차단 (2026-05-04 도입)
+
+같은 계정으로 **여러 PC/브라우저 동시 로그인 차단**. 마지막 사용자 보호 우선 (옵션 A).
+
+**핵심 동작:**
+1. 로그인 성공 시 UUID(`sid`) 생성 → JWT payload에 포함 + `companies.active_session_id`에 저장
+2. `auth-verify` 호출마다 토큰 sid vs DB sid 비교 + `active_session_at = now()` 갱신 (heartbeat)
+3. 새 로그인 시도 → DB에 활성 세션 있고 `active_session_at` 1시간 이내 → **409 거부**
+4. 1시간 idle 초과 → 옛 세션 자동 만료 → 새 로그인 허용 (DB sid 교체)
+5. 명시적 로그아웃 → DB의 `active_session_id` NULL로 클리어 → 즉시 다른 곳 로그인 가능
+
+**대응 모드:**
+- 새 로그인 차단 (409) → 로그인 폼에 "이미 다른 기기/브라우저에서 사용 중" 안내
+- 옛 세션이 새 sid로 교체된 후 옛 토큰으로 접근 → 401 + `reason: 'session_replaced'` → 프론트가 강제 로그아웃 모달 + 2초 후 자동 로그아웃
+- 레거시 JWT (sid 없음): DB도 NULL이면 자동으로 새 sid 발급해 무중단 전환, DB에 sid 있으면 session_replaced
+
+**관리자(role='admin') 예외:**
+단일 세션 정책 면제. 여러 브라우저 동시 로그인 가능 (개발자 편의).
+
+**활동 감지 (heartbeat):**
+- 프론트가 20분마다 `/auth-verify` 자동 호출 (`AUTH_REFRESH_INTERVAL_MS`)
+- `apiFetch`가 일반 API 성공 후 `AUTH_ACTIVITY_COOLDOWN_MS` 경과 시에도 `/auth-verify` 백그라운드 호출
+- 사용자가 화면 켜놓기만 해도 자동 갱신 → 본인이 차단되는 일 없음
+
+**비상 롤백 (코드 변경 없이):**
+```sql
+-- 모든 세션 즉시 클리어 → 모두 새 로그인 허용
+UPDATE companies SET active_session_id = NULL, active_session_at = NULL;
+
+-- 특정 회사만:
+UPDATE companies SET active_session_id = NULL, active_session_at = NULL WHERE id = <ID>;
+
+-- 현재 활성 세션 조회:
+SELECT id, email, company_name, active_session_at, NOW() - active_session_at AS idle_for
+  FROM companies WHERE active_session_id IS NOT NULL ORDER BY active_session_at DESC;
+```
+
+**마이그레이션 SQL**: `docs/single-session-migration.sql`
+
+**개발 시 주의:**
+- `signToken` 호출 시 user payload에 반드시 `sid` 포함 (admin은 제외)
+- 새 인증 함수 만들 때 `auth-verify.js`의 sid 검증 로직 패턴 참조
+- 단일 세션 정책 무력화 우회 코드 추가 금지 (의도적 우회 시 21중 가드와 동급으로 사고 위험)
+
 ## 환경 변수 (Netlify에 설정)
 
 ```
@@ -287,36 +375,95 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
 - 이미지 로드 실패 시 onerror 핸들러 추가
 - 안전교육 드래그앤드롭 중복 리스너 방지 + 사진 삭제 시 서버 반영
 
-### 데이터 유실 방지 4중 가드 (2026-04-23 도입, 같은 날 확장)
+### 데이터 유실 방지 다중 가드 (2026-04-23 도입, 이후 지속 확장 — 현재 클라 14 + 서버 7 = 21중)
 
 **사고 이력**:
-- **1차 wipe (01:40 UTC)**: 단일 `sbSaveAll()` 호출이 EMPS·REC·BONUS·ALLOW·TAX 5개 키를 동시에 빈값으로 덮어씀. 근본 원인: `sbLoadAll`의 `else { EMPS = []; }` 분기가 서버 파셜 응답 시 메모리 리셋 → 후속 saveLS가 빈값을 서버에 저장.
-- **2차 wipe (02:58 UTC, 1차 가드 배포 후 재발)**: 하드 새로고침 직후 초기 로드 구간에 save가 트리거되었고, `_syncedSnapshot=null` 상태에서 클라 가드가 "스냅샷 없음 = 데이터 없음"으로 오인해 빈값 저장을 허용. 서버 가드는 `oldValue` 존재 시에만 검사하던 로직 결함으로 함께 실패.
-- 복구는 두 사고 모두 감사 로그 `old_value` 역추적으로 수행 성공 (최종 상태: EMPS 145명, REC 2117건, BONUS 4건, ALLOW 57건, TAX 1건).
+- **1차 wipe (2026-04-23 01:40 UTC)**: 단일 `sbSaveAll()` 호출이 EMPS·REC·BONUS·ALLOW·TAX 5개 키를 동시에 빈값으로 덮어씀. 근본 원인: `sbLoadAll`의 `else { EMPS = []; }` 분기가 서버 파셜 응답 시 메모리 리셋 → 후속 saveLS가 빈값을 서버에 저장.
+- **2차 wipe (2026-04-23 02:58 UTC, 1차 가드 배포 후 재발)**: 하드 새로고침 직후 초기 로드 구간에 save가 트리거되었고, `_syncedSnapshot=null` 상태에서 클라 가드가 "스냅샷 없음 = 데이터 없음"으로 오인해 빈값 저장을 허용. 서버 가드는 `oldValue` 존재 시에만 검사하던 로직 결함으로 함께 실패.
+- **3차 부분 손실 (2026-04-26 23:52 UTC, company_id=4 / test2@naver.com)**: 21중 가드 도입 후에도 발생. emps -386 bytes, rec -54,232 bytes, tbk -699 bytes 손실 (전체 wipe 아닌 부분 축소). 대용량 키 저장 silent 버그가 원인으로 추정 (커밋 `263885c` "세션 만료 알림 강화 + 대형 키 저장 silent 버그 수정"으로 대응). 복구 SQL은 `docs/recovery-2026-04-27.sql` 참조.
+- 복구는 세 사고 모두 감사 로그 `old_value` 역추적으로 수행 성공.
 
-**최종 방어선 (4중 가드)** — 커밋 `faedc4f` → `ccbbfaa` → `d01bd4a` → `7cc5eba` → `513bc7d` → `30607d5`:
+**보호 대상 키 (PROTECTED)**: `emps`, `rec`, `bonus`, `allow`, `tax`, `tbk`, `safety`, `bk`
 
-#### 가드 1: `sbLoadAll` 단언적 교체 제거
+#### ▣ 클라이언트 가드 (js/app.js, 14중)
+
+**C-1. `sbLoadAll` 단언적 교체 제거**
 - `if('key' in map)` 패턴만 사용. 서버 응답에 키가 없으면 메모리·localStorage **그대로 유지**.
 - `else { X = []; }` 또는 `if(map.x)` 분기 **영구 금지**.
 
-#### 가드 2: `sbSaveAll` / `safeItemSave` / `_flushSaveOnUnload` 빈값 차단 (우회 불가)
-- 보호 대상: `emps`, `rec`, `bonus`, `allow`, `tax`, `tbk`, `safety`
-- 조건 1 (**초기 로드 전**): `_syncedSnapshot === null` → 빈값 저장 **무조건 차단** (console만, 토스트 X)
-- 조건 2 (**덮어쓰기 시도**): 스냅샷에 데이터 있음 + 현재 빈값 → 차단 + 사용자 토스트
-- **우회 플래그 없음.** `rmAllEmps` 같은 "전체 삭제" 기능은 **완전 비활성화**(alert만 표시).
-- 직접 `apiFetch('/data-save', ...)` 호출 금지 → `safeItemSave(key, value)` 또는 `sbSaveAll()` 사용.
+**C-2. `sbSaveAll` 빈값 차단** (line ~10101)
+- `_syncedSnapshot === null` (초기 로드 전) → PROTECTED 키 빈값 저장 **무조건 차단** (console만)
+- 스냅샷에 데이터 있음 + 현재 빈값 → 차단 + 사용자 토스트
 
-#### 가드 3: `pollForUpdates` 서버 wipe 전파 차단
-- `_guardedMerge` / `_guardedReplace` 래퍼: 서버 값이 비었고 로컬에 데이터 있으면 해당 키 동기화 스킵 → 다른 기기/서버의 빈값이 로컬을 덮어쓸 수 없음.
+**C-3. `safeItemSave` 단일 키 저장 동일 가드** (line ~555)
+- 단일 키 저장 경로도 sbSaveAll과 동일한 빈값 차단 적용
+- 직접 `apiFetch('/data-save', ...)` 호출 금지 → 반드시 `safeItemSave(key, value)` 또는 `sbSaveAll()` 사용
 
-#### 가드 4 (서버측): `data-save.js` 빈값 저장 무조건 거부
-- `PROTECTED = new Set(['emps','rec','bonus','allow','tax','tbk','safety'])` 키는 빈 배열/객체이면 **`oldValue` 존재 여부 불문 `continue`로 스킵** (upsert도 감사 로그 insert도 안 함).
-- 클라이언트 코드가 어떤 식으로 해킹/버그돼도 **빈값은 서버 DB에 도달 불가**.
+**C-4. `_flushSaveOnUnload` beacon 경로 동일 가드** (line ~695)
+- 페이지 닫힘 직전 sendBeacon 저장 시에도 동일한 빈값 가드 적용 (sbSaveAll 우회 불가)
 
-#### clearLocalData / 로그아웃 경쟁 조건 방어
-- `clearLocalData()`는 로컬 전역 리셋 시 **반드시** `_syncedSnapshot = null` + `clearTimeout(saveLS._timer)` 동반.
-- logout 중 대기 타이머가 유효 쿠키로 빈값 저장하던 race window 봉쇄.
+**C-5. `pollForUpdates _guardedMerge`** (line ~10591)
+- 서버 값이 비었고 로컬에 데이터 있으면 해당 키 동기화 스킵 → 서버 빈값이 로컬을 덮어쓸 수 없음
+- 적용 키: rec, bonus, allow, tbk
+
+**C-6. `pollForUpdates _guardedReplace`** (line ~10627)
+- 비키 블롭(replaceIfClean 경로)에도 동일한 서버 빈값 보호 적용
+
+**C-7. EMPS ADD-ONLY 폴링** (line ~10640)
+- 폴링은 새 직원만 흡수, **기존 직원은 절대 안 건드림**. 다른 기기에서 직원 삭제해도 폴링으론 전파 안 됨 (F5만 전파)
+
+**C-8. BK ADD-ONLY 폴링** (line ~10664)
+- 휴게시간도 동일 — 폴링은 추가만, 삭제는 F5에서만
+
+**C-9. POL 폴링 무변경** (line ~10658)
+- 급여 정책은 폴링에서 절대 변경 안 함. F5 시 sbLoadAll로만 동기화 → 사용자가 설정 중인 값 보호
+
+**C-10. `clearLocalData` race 봉쇄** (line ~10069)
+- 로컬 전역 리셋 시 **반드시** `_syncedSnapshot = null` + `clearTimeout(saveLS._timer)` 동반
+- logout 중 대기 타이머가 유효 쿠키로 빈값 저장하던 race window 차단
+
+**C-11. diff 기반 변경 키만 전송** (line ~10119)
+- 마지막 sync 스냅샷과 비교해 **변경된 키만** 서버 전송. 빈값 저장 시도 자체를 줄여 서버 가드 부하 감소
+
+**C-12. 낙관적 잠금 클라 송신** (line ~10156, ~575)
+- 저장 시 마지막으로 본 서버 `updated_at`을 `expectedUpdatedAt`으로 함께 전송 → 서버가 stale 거부
+
+**C-13. BroadcastChannel 멀티탭 동기화** (line ~10211)
+- 한 탭이 저장 성공하면 같은 브라우저 다른 탭에 즉시 알림 → 다른 탭 즉시 폴링 → 멀티탭 충돌 최소화
+
+**C-14. localStorage QuotaExceeded 감지** (line ~624)
+- `saveLS()` try-catch에서 `QuotaExceededError` 감지 시 사용자 토스트로 명확히 알림
+- **데이터는 서버에 정상 저장됨** (try-catch가 sbSaveAll 트리거를 막지 않음). 화면이 느려지거나 사진 일부 미표시 가능성만 안내
+
+#### ▣ 서버 가드 (netlify/functions/data-save.js, 7중)
+
+**S-1. 요청 본문 10MB 제한** (line ~14)
+- 비정상적으로 큰 페이로드는 413으로 거부
+
+**S-2. PROTECTED 빈값 무조건 거부** (line ~64)
+- 보호 키가 빈 배열/객체이면 **`oldValue` 존재 여부 불문** `continue`로 스킵 (upsert도 감사 로그도 안 함)
+- 클라이언트가 어떤 식으로 해킹/버그돼도 **빈값은 서버 DB에 도달 불가**
+
+**S-3. 낙관적 잠금 stale-version 거부** (line ~76)
+- 클라가 보낸 `expectedUpdatedAt`보다 서버 `updated_at`이 더 최신이면 거부 → 다른 디바이스의 옛 상태가 새 데이터를 덮어쓰는 사고 방지
+
+**S-4. 레거시 클라이언트 차단** (line ~77)
+- `expectedUpdatedAt`이 없는데 PROTECTED 키 + 서버에 기존 값 존재 → 거부 (옛 캐시 클라이언트가 가드 우회 시도)
+- 옛 코드를 캐시한 PC가 데이터를 덮어쓰는 일을 서버가 직접 막음
+
+**S-5. 사이즈 30% 급감 차단** (line ~89, 자체 코멘트 "6중 가드")
+- PROTECTED 키 + `oldValue` 존재 + 신규 사이즈가 30% 이상 줄고 5KB 이상 차이 → stale-overwrite로 간주, 거부
+- 정당한 대량 삭제는 보통 단계적으로 일어나므로 30% 급감은 사고 신호
+
+**S-6. atomic upsert** (line ~114)
+- `onConflict: 'company_id,data_key'` 단일 쿼리로 race 차단
+
+**S-7. 감사 로그 + old_value 백업** (line ~128)
+- 모든 변경의 변경 전 값을 audit_log에 보존 → 사고 시 복원 가능 (1차/2차 wipe 모두 이 경로로 복구)
+
+#### 페이지 닫힘 / 새로고침 시점 데이터 보호
+- `beforeunload` → `_flushSaveOnUnload`가 `saveLS._timer` 디바운스 중인 변경분을 sendBeacon으로 전송
+- **자동 강제 새로고침 금지**: 입력 중(input focus) 또는 `_hasUnsavedChanges === true` 상태에서 강제 reload 시 250ms 디바운스 윈도우 내 입력값이 유실 가능. 옛 캐시 클라 안내는 큰 배너 + 사용자 클릭 새로고침을 기본으로 하고, 자동 reload가 필요하면 (1) `_hasUnsavedChanges === false`, (2) `document.activeElement`가 input/textarea 아님, (3) 마지막 입력 후 30초 경과 — 3조건 동시 만족 시에만 허용
 
 ### 알려진 부수 이슈
 
@@ -345,6 +492,101 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
 4. **서버 직접 저장(`/data-save`) 금지**: `sbSaveAll()` 또는 `safeItemSave(key, value)` 만 사용.
 5. **init 시점 자동 저장 로직 추가 금지**: 504 재발 원인. 변경 감지 후 조건부 저장만 허용.
 6. **복구 절차**: 감사 로그 `old_value`에서 복원. `/api/audit-log?key=X&limit=1&offset=N` 페이징으로 `old` 크고 `new` 작은 시점 찾기 → `old_value` JSON.parse → `/api/data-save` 재저장. `emps`의 경우 `rrnBack`이 암호화된 상태라 이중 암호화 방지 위해 `rrnBack=''`로 비우고 저장 필요(rrnBack 재입력 별도 요구).
+7. **배포 시 빌드 ID 갱신 — 반드시 3곳 동시에**: 빌드 ID 누락 시 모든 사용자에게 빨간 배너가 잘못 뜨거나(false positive) 새 버전 사용자에게 안 뜸(false negative). **데이터 영향은 없으나 UX 사고**.
+   - `js/app.js`의 `CLIENT_BUILD` 상수 (line 6 근처)
+   - `index.html`의 `<script src="/js/app.js?v=...">` 쿼리값
+   - `netlify/functions/data-load.js`의 fallback (`process.env.SERVER_BUILD || '...'` 우측 문자열, line 52 근처)
+   - 세 값을 모두 동일한 `YYYY-MM-DD-N` 형식으로 갱신. Netlify 환경변수 `SERVER_BUILD`는 선택사항(설정돼 있으면 fallback보다 우선).
+
+### 백업/복구 운영 정책
+
+**3중 방어선 구조:**
+
+1. **1차: Supabase Pro PITR (7일 자동)** — Supabase 콘솔에서 7일 내 임의 시점 복원 가능. Supabase 자체가 정상이면 가장 빠른 수단.
+2. **2차: 관리자 패널 수동 백업** — 관리자 패널 [백업/복구] 탭에서 회사별 또는 전체 일괄 다운로드. **주 1회 받아 외부 저장소에 보관 필수**. Supabase 자체 장애 시 유일한 복구 수단.
+3. **3차: audit_log 영구 보존** — 부분 wipe·실수 변경은 `old_value` 역추적으로 시점 복원 (1·2·3차 사고 모두 이 경로로 복구 성공).
+
+**백업 다운로드 파일 구조 (`admin-backup.js` 응답):**
+```json
+{
+  "version": "1.0",
+  "exportedAt": "ISO timestamp",
+  "companyId": <int>,
+  "company": { ... },          // companies 테이블 1행 (password_hash 제외)
+  "company_data": { "emps": "<JSON>", "rec": "<JSON>", ... },
+  "company_data_versions": { "emps": "ISO", ... },
+  "audit_log": [ ... ]          // 해당 회사 전체 감사 이력
+}
+```
+
+**파일 보안:**
+- 주민번호 뒷자리(`rrnBack`)는 AES-256-GCM 암호화 상태 그대로. 복원 시 ENCRYPTION_KEY 필요.
+- 비밀번호 해시는 의도적으로 제외 (유출 시 무차별 대입 공격 차단).
+- 그 외 주민번호 앞자리·이름·연락처·급여·근무 기록 등은 **평문 포함**. 다운로드 파일을 안전하지 않은 곳에 두면 즉시 개인정보 사고.
+- 운영자 매뉴얼: `docs/backup-manual.md`
+
+**백업 주기:**
+- **권장: 주 1회 (매주 월요일)**. 외장 드라이브 또는 암호화된 클라우드 폴더에 보관.
+- 매일은 과함 (PITR 7일이 일별 커버). 월 1회는 부족 (PITR 만료 후 사고 시 한 달치 손실).
+
+**관리자 패널 UI:**
+- [백업/복구] 탭에 "마지막 백업 N일 전" 표시
+- 7일 초과 시 사이드바 뱃지 + 대시보드 경고 배너
+- localStorage `nopro_admin_last_backup`에 시점 기록
+
+**복구 절차 (가장 자주 쓰는 순서):**
+1. **Supabase 자체 정상 + 부분 데이터 손실:** audit_log `old_value` 역추적 (`docs/recovery-2026-04-27.sql` 패턴)
+2. **Supabase 자체 정상 + 7일 내 wipe:** Supabase Pro PITR 사용
+3. **Supabase 장애 또는 7일 초과:** 관리자 패널 백업 파일 → SQL로 수동 복원 (전체 매뉴얼은 `docs/backup-manual.md`)
+
+### 운영 모니터링 시스템 (2026-04-30 도입)
+
+**자체 로깅 방식** — 외부 서비스(Sentry 등) 미사용. 노무 데이터(주민번호·급여) 외부 누출 차단 목적.
+
+**아키텍처:**
+```
+클라이언트 에러 발생
+  ↓ window.onerror / unhandledrejection / 가드 트리거
+reportError() (js/app.js)
+  ↓ PII 스크럽 1차 (_scrubPII)
+  ↓ 같은 fingerprint 1분 1회 디바운스
+  ↓ navigator.sendBeacon (페이지 닫혀도 보장)
+/api/log-error
+  ↓ IP rate-limit (분당 30건)
+  ↓ PII 스크럽 2차 (서버 scrub.js)
+  ↓ logServerError() — Supabase error_log 테이블
+관리자 패널 [📊 모니터링] 탭
+  ↓ /api/admin-error-log
+  ↓ 레벨/소스/기간 필터, 통계 카드, 상세 모달
+```
+
+**PII 스크럽 패턴 (`_shared/scrub.js`):**
+- 주민번호: `\d{6}[-\s]?\d{7}` → `\1-*******`
+- 사업자번호: `\d{3}[-\s]?\d{2}[-\s]?\d{5}` → `***-**-*****`
+- 전화번호: `01x-XXXX-YYYY` → `01x-****-****`
+- 이메일: `local@domain` → `l****l@domain`
+- AES 암호화: `ENC:xxx` → `ENC:[REDACTED]`
+- 키 이름이 `password|hash|token|secret|rrn` 등이면 값 자체 `[REDACTED]`
+
+**기록되는 신호:**
+- 클라이언트: 잡히지 않은 JS 에러, Promise rejection
+- 가드 트리거: `safeItemSave`/`sbSaveAll` 빈값 차단 (level='guard')
+- 폴링 실패: `/data-load` 504/timeout (level='warn')
+- saveLS quota 초과 (level='warn'/'error')
+- 백엔드: 함수에서 `logServerError()` 직접 호출 (선택적)
+
+**관리자 패널 사용:**
+- 사이드바 [📊 모니터링] 클릭
+- 사이드바 뱃지에 미해결 error 카운트 표시
+- 필터: level / source / 기간(1일·7일·30일·90일)
+- 행 클릭 → 상세 모달 (스택, 메타, 빌드 ID 등)
+
+**보존 정책:** 90일 (pg_cron 매일 새벽 3시 자동 삭제). 대용량 사고 데이터에 대비한 안전 마진.
+
+**개발자 가이드:**
+- 새 가드 트리거 지점에서 `reportError({ level:'guard', source:'함수명', message:'...', meta:{key,...} })` 호출 권장
+- 백엔드에서는 `import { logServerError } from './_shared/logger.js'` 후 호출
+- **PII 직접 노출 금지** — 스크럽 패턴에 없는 민감 정보가 있으면 `meta`에 `[REDACTED]` 표시 후 전달
 
 ### 남은 보안 작업 (선택)
 - CSP `script-src 'unsafe-inline'` 제거: 인라인 이벤트 핸들러 336개를 addEventListener로 전환 필요 (대규모 리팩토링)
@@ -487,7 +729,7 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
 2. Netlify Functions는 ES Module 형식 (`.js`, `export const handler`, `package.json`에 `"type":"module"`)
 3. 프론트엔드에서 Supabase URL/키를 직접 참조하지 말 것 (보안)
 4. `saveLS()` 호출을 빠뜨리면 데이터가 유실될 수 있음
-5. 공휴일(`PH`) 객체는 매년 수동 업데이트 필요
+5. 공휴일(`PH`) 객체는 자동 동기화됨 — `loadHolidaysAround()`가 enterApp 시 작년·올해·내년 KASI API에서 fetch하여 `_genPH` 폴백을 덮어씀. localStorage 7일 캐시(`npm5_ph_{year}`) 사용. 수동 보정이 필요하면 `_genPH` 또는 `loadHolidaysForYear`에서 처리.
 6. CORS 허용 목록 변경 시 Netlify 환경변수 `ALLOWED_ORIGINS` 수정
 7. 비밀번호는 **bcrypt만 지원** (SHA-256, 평문 폴백 없음)
 8. push 시 Netlify 자동 배포가 즉시 이루어지므로 main 브랜치 직접 push 주의
@@ -496,9 +738,11 @@ ALLOWED_ORIGINS       # CORS 허용 도메인 (쉼표 구분, 기본값: https:/
 11. httpOnly 쿠키 기반 인증이므로, 프론트엔드에서 JWT를 직접 다루지 말 것 (localStorage에 토큰 저장 금지)
 12. API 호출 시 `credentials: 'include'` 필수 (쿠키 자동 전송), Authorization 헤더 사용하지 않음
 13. Supabase Storage 버킷명: `nopro-files` (파일 업로드/삭제/URL 발급에 사용)
-14. **⚠️ 데이터 유실 방지 가드 절대 우회 금지** (2026-04-23 사고 이후 도입)
+14. **⚠️ 데이터 유실 방지 가드 절대 우회 금지** (2026-04-23 사고 이후 도입, 21중으로 확장)
     - `sbLoadAll`은 반드시 `if('key' in map)` 패턴만 사용. `else { X = []; }` 분기 절대 추가 금지.
-    - `sbSaveAll`의 빈값 가드는 수정·제거 금지. 필요 시 `window._allowEmptyXxxSave` 플래그로 명시적 우회.
-    - `pollForUpdates`의 `_guardedMerge`/`_guardedReplace` 래퍼 제거 금지.
-    - `clearLocalData`를 authLogout 외 다른 곳에서 호출 시 반드시 `_syncedSnapshot = null` 동반.
-    - 상세 규칙은 "데이터 유실 방지 3중 가드" 섹션 참조.
+    - `sbSaveAll` / `safeItemSave` / `_flushSaveOnUnload`의 빈값 가드는 수정·제거 금지.
+    - **`_allowEmptyXxxSave` 같은 우회 플래그 절대 재도입 금지.** 사용자가 명시적으로 거부한 패턴 (2026-04-24 확인).
+    - `pollForUpdates`의 `_guardedMerge`/`_guardedReplace`/EMPS·BK ADD-ONLY 래퍼 제거 금지.
+    - `clearLocalData`를 authLogout 외 다른 곳에서 호출 시 반드시 `_syncedSnapshot = null` + `clearTimeout(saveLS._timer)` 동반.
+    - 서버측 가드(`PROTECTED` 빈값 거부 / 낙관적 잠금 / 레거시 클라 차단 / 사이즈 30% 급감 차단) 어느 하나도 약화시키지 말 것.
+    - 상세 규칙은 "데이터 유실 방지 다중 가드" 섹션 참조 (클라 14 + 서버 7 = 21중).

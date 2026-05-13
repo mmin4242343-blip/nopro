@@ -25,8 +25,11 @@ export const handler = async (event) => {
     try { body = JSON.parse(event.body); } catch { return err(400, '잘못된 요청 형식입니다', event); }
 
     // 단일 저장 또는 bulk 저장
-    const ALLOWED_KEYS = ['emps','pol','bk','tbk','rec','bonus','allow','tax','leave_settings','leave_overrides','folders','safety','pol_snapshots','pay_snapshots'];
-    const items = body.items || [{ key: body.key, value: body.value }];
+    const ALLOWED_KEYS = ['emps','pol','bk','tbk','rec','bonus','allow','tax','leave_settings','leave_overrides','folders','safety','pol_snapshots','pay_snapshots','bk_snapshots','company_info','custom_docs','saved_forms'];
+    const items = body.items || [{ key: body.key, value: body.value, expectedUpdatedAt: body.expectedUpdatedAt }];
+
+    const versions = {};   // 저장 성공한 키 → 새 updated_at (클라가 자기 _serverVersions 갱신용)
+    const conflicts = [];  // 낙관적 잠금 충돌 — 클라가 stale 상태로 덮어쓰려 한 키 정보
 
     for (const item of items) {
       if (!item.key || !ALLOWED_KEYS.includes(item.key)) continue;
@@ -40,44 +43,85 @@ export const handler = async (event) => {
 
       const dataStr = JSON.stringify(value);
 
-      // 감사 로그용 + 🛡️ 서버측 빈값 덮어쓰기 가드용: 기존 값 조회
+      // 감사 로그용 + 🛡️ 빈값 가드용 + 🛡️ 낙관적 잠금용: 기존 값/버전 조회
       let oldValue = null;
+      let serverUpdatedAt = null;
       try {
         const { data: existing } = await supabase
           .from('company_data')
-          .select('data_value')
+          .select('data_value, updated_at')
           .eq('company_id', companyId)
           .eq('data_key', item.key)
           .single();
-        if (existing) oldValue = existing.data_value;
+        if (existing) {
+          oldValue = existing.data_value;
+          serverUpdatedAt = existing.updated_at;
+        }
       } catch {
         // 기존 값 조회 실패해도 저장은 진행
       }
 
       // 🛡️ 서버측 2차 방어: 빈값 저장 절대 금지 (보호 대상 키)
-      // - 서버에 데이터 있음 & 클라가 빈값 → 차단 (원본 wipe 방지)
-      // - 서버 빈값 & 클라 빈값 → 차단 (연쇄 빈값 저장 방지, 로그 오염만 유발)
-      // - 서버 없음(신규 생성) & 클라 빈값 → 차단 (의미 없는 빈 레코드 생성 방지)
-      // 즉, 보호 키는 빈값이면 무조건 거부.
-      const PROTECTED = new Set(['emps','rec','bonus','allow','tax','tbk','safety']);
+      const PROTECTED = new Set(['emps','rec','bonus','allow','tax','tbk','safety','bk']);
       if (PROTECTED.has(item.key)) {
         const clientIsEmpty = Array.isArray(value) ? value.length === 0 : (value && typeof value==='object' && Object.keys(value).length===0);
         if (clientIsEmpty) {
           console.warn(`🛡️ 서버 가드: 빈값 저장 차단 (company=${companyId}, key=${item.key}, by=${changedBy}, oldExists=${!!oldValue})`);
-          continue;  // 해당 키만 스킵, 다른 아이템은 계속 처리
+          continue;  // 해당 키만 스킵
+        }
+      }
+
+      // 🛡️ 낙관적 잠금 (강화판): 옛 캐시된 클라이언트가 가드를 우회하지 못하게 함
+      const expectedUpdatedAt = item.expectedUpdatedAt || null;
+      const isStaleOverwrite = expectedUpdatedAt && serverUpdatedAt && new Date(serverUpdatedAt) > new Date(expectedUpdatedAt);
+      const isLegacyClientRisk = !expectedUpdatedAt && serverUpdatedAt && PROTECTED.has(item.key);
+      if (isStaleOverwrite || isLegacyClientRisk) {
+        conflicts.push({
+          key: item.key,
+          expected: expectedUpdatedAt,
+          actual: serverUpdatedAt,
+          reason: isLegacyClientRisk ? 'legacy-client-no-version' : 'stale-version',
+        });
+        console.warn(`🛡️ 낙관적 잠금: ${isLegacyClientRisk?'레거시 클라이언트 차단':'충돌'} (company=${companyId}, key=${item.key}, by=${changedBy}, expected=${expectedUpdatedAt}, server=${serverUpdatedAt})`);
+        continue;
+      }
+
+      // 🛡️ 6중 가드: 사이즈 급감 자동 차단 (낙관적 잠금이 어떻게든 뚫려도 최종 방어선)
+      // PROTECTED 키가 30% 이상 줄어들면 stale-overwrite로 간주, 무조건 거부.
+      // 정상적인 사용 패턴에서 30% 감소는 거의 없음 (정당한 대량 삭제는 보통 단계적).
+      // 만약 정말 의도된 30%+ 삭제라면 → 문의 후 SHRINK_OK 플래그로 우회.
+      if (PROTECTED.has(item.key) && oldValue) {
+        const oldSize = oldValue.length;
+        const newSize = dataStr.length;
+        const SHRINK_THRESHOLD = 0.30; // 30% 이상 감소 시 차단
+        const MIN_LOSS_BYTES = 5000;   // 5KB 미만 차이는 무시 (신규/소규모 정상 동작)
+        const lostBytes = oldSize - newSize;
+        if (lostBytes > MIN_LOSS_BYTES && lostBytes / oldSize > SHRINK_THRESHOLD) {
+          conflicts.push({
+            key: item.key,
+            reason: 'size-drop-blocked',
+            oldSize,
+            newSize,
+            lostBytes,
+          });
+          console.error(`🚨 사이즈 급감 차단! (company=${companyId}, key=${item.key}, by=${changedBy}, ${oldSize}B → ${newSize}B, -${lostBytes}B = ${Math.round(lostBytes/oldSize*100)}% 감소). 데이터 손실 방지 위해 거부.`);
+          continue;
         }
       }
 
       // atomic upsert (레이스 컨디션 방지)
+      const newUpdatedAt = new Date().toISOString();
       const { error: upsertErr } = await supabase
         .from('company_data')
         .upsert({
           company_id: companyId,
           data_key: item.key,
           data_value: dataStr,
-          updated_at: new Date().toISOString()
+          updated_at: newUpdatedAt
         }, { onConflict: 'company_id,data_key' });
       if (upsertErr) return err(500, '서버 오류가 발생했습니다', event);
+
+      versions[item.key] = newUpdatedAt;
 
       // 감사 로그 기록 (비동기, 실패해도 저장에 영향 없음)
       try {
@@ -95,7 +139,7 @@ export const handler = async (event) => {
       }
     }
 
-    return ok({ success: true }, event);
+    return ok({ success: true, versions, conflicts }, event);
 
   } catch (e) {
     if (e.message.includes('토큰') || e.message.includes('jwt')) return err(401, '세션이 만료되었습니다', event);

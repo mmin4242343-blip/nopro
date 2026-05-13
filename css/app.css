@@ -76,8 +76,11 @@ button,div,span{letter-spacing:-.01em}
 
 .body{display:flex;flex:1;overflow:hidden}
 
-/* 사이드바 */
-.sb{width:180px;background:var(--card);border-right:.5px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0;height:100%;overflow:hidden;position:relative;transition:width .3s var(--ease)}
+/* 사이드바 — 회의 의견(2026-04-24)으로 좌측 사이드바 비활성화.
+   기능은 직원관리 페이지로 일원화되어 여기서는 숨김. 코드는 추후 복원 가능하도록 유지. */
+.sb{display:none!important}
+.mob-ham,.mob-sb-dim{display:none!important}
+._sb_legacy_unused{width:180px;background:var(--card);border-right:.5px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0;height:100%;overflow:hidden;position:relative;transition:width .3s var(--ease)}
 .sb-toggle{position:absolute;top:12px;right:10px;width:22px;height:22px;border-radius:50%;border:.5px solid var(--bd);background:#fff;cursor:pointer;font-size:10px;color:var(--ink3);display:flex;align-items:center;justify-content:center;z-index:5;padding:0;transition:all .2s var(--ease);font-family:inherit;line-height:1;box-shadow:var(--shadow-sm)}
 .sb-toggle:hover{color:var(--ink);border-color:var(--ink2);background:var(--surf)}
 .sb.collapsed{width:44px}
@@ -98,10 +101,11 @@ button,div,span{letter-spacing:-.01em}
 .er{font-size:10px;color:var(--ink3);letter-spacing:-.01em}
 .main{flex:1;overflow-y:auto;background:var(--surf);height:100%}
 .pg{padding:0;display:none}
-.pg.on{display:block;animation:fadeIn .3s var(--ease);min-height:100%}
+/* 사이드바 제거 이후 전 페이지 공통 좌우 여백 — 가장자리에 붙는 것 방지 */
+.pg.on{display:block;animation:fadeIn .3s var(--ease);min-height:100%;padding:0 28px 20px}
 
-/* 페이지 헤더 */
-.ph{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;padding:28px 28px 0}
+/* 페이지 헤더 — 좌우 패딩은 부모(.pg.on)에서 제공, 여기선 top만 유지 */
+.ph{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;padding:28px 0 0}
 .sticky-hd{position:sticky;top:0;z-index:50;background:rgba(245,245,247,.85);backdrop-filter:saturate(180%) blur(20px);border-bottom:.5px solid var(--bd)}
 .sticky-hd .ph{margin-bottom:0;border-bottom:none}
 .pt{font-size:24px;font-weight:600;color:var(--ink);letter-spacing:-.03em}
@@ -128,6 +132,31 @@ button,div,span{letter-spacing:-.01em}
 .dar{padding:7px 9px;background:var(--surf);color:var(--ink3);cursor:pointer;font-size:14px;user-select:none;transition:all .15s}
 .dar:hover{background:var(--nbg2);color:var(--ink)}
 .ddow{padding:7px 14px;font-size:11.5px;color:var(--ink3);background:var(--surf);white-space:nowrap;font-weight:500;letter-spacing:-.01em}
+
+/* 일별 미니 캘린더 팝업 — position:fixed로 .dbar의 overflow:hidden 회피 */
+.day-picker-pop{position:fixed;z-index:9000;background:var(--card);border:1px solid var(--bd2);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.15);padding:12px;width:280px;font-family:inherit}
+.dpk-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:6px}
+.dpk-nav{padding:4px 9px;background:var(--surf);border:1px solid var(--bd);border-radius:6px;cursor:pointer;font-size:12px;color:var(--ink2);font-family:inherit;line-height:1}
+.dpk-nav:hover{background:var(--nbg2);color:var(--ink)}
+.dpk-title{font-size:13px;font-weight:700;color:var(--ink);flex:1;text-align:center;cursor:pointer;padding:4px 8px;border-radius:6px}
+.dpk-title:hover{background:var(--surf)}
+.dpk-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.dpk-dow{font-size:10px;font-weight:700;color:var(--ink3);text-align:center;padding:4px 0}
+.dpk-dow.su{color:var(--rose)}
+.dpk-dow.sa{color:var(--navy2)}
+.dpk-cell{position:relative;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--ink);background:transparent;border:1px solid transparent;border-radius:6px;cursor:pointer;transition:all .12s;font-family:inherit;padding:0}
+.dpk-cell:hover{background:var(--nbg);border-color:var(--navy2)}
+.dpk-cell.empty{cursor:default;opacity:0}
+.dpk-cell.other{color:var(--ink3);opacity:.4}
+.dpk-cell.su{color:var(--rose)}
+.dpk-cell.sa{color:var(--navy2)}
+.dpk-cell.hol{color:var(--rose);background:#FFF1F2}
+.dpk-cell.today{border-color:var(--navy2);font-weight:800}
+.dpk-cell.sel{background:var(--navy)!important;color:#fff!important;border-color:var(--navy)}
+.dpk-dot{position:absolute;bottom:3px;width:4px;height:4px;border-radius:50%;background:var(--green)}
+.dpk-cell.sel .dpk-dot{background:#fff}
+.dpk-foot{display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--bd);font-size:10px;color:var(--ink3)}
+.dpk-today-btn{padding:3px 9px;background:var(--navy);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:10px;font-weight:600;font-family:inherit}
 
 /* 휴게 */
 .bk-box{background:var(--card);border:.5px solid var(--bd);border-radius:var(--radius);margin-bottom:16px;overflow:hidden;box-shadow:var(--shadow-sm)}
@@ -229,13 +258,24 @@ button,div,span{letter-spacing:-.01em}
 .tch{font-size:7.5px;padding:1.5px 6px;border-radius:980px;display:inline-block;margin-top:1px;font-weight:500;background:var(--surf);color:var(--ink);border:.5px solid var(--bd)}
 .ph-name{font-size:8.5px;color:var(--rose);font-weight:500;margin-top:1px;letter-spacing:-.01em}
 
-/* 전체현황표 */
-.ov-w{overflow-x:auto;border:.5px solid var(--bd);border-radius:var(--radius);background:var(--card);box-shadow:var(--shadow-sm)}
-.ov-t{border-collapse:collapse;width:100%}
-.ov-t th{padding:12px 8px;font-size:10.5px;font-weight:600;color:#1D1D1F;background:#FAFAFA;border-right:.5px solid #E8E8ED;border-bottom:.5px solid #D2D2D7;text-align:center;white-space:nowrap;letter-spacing:.02em}
-.ov-t td{padding:8px 8px;font-size:10.5px;border-bottom:.5px solid #F0F0F2;border-right:.5px solid #F0F0F2;text-align:center;white-space:nowrap;font-weight:400;letter-spacing:-.01em;color:var(--ink)}
+/* 근태현황 필터 버튼 활성 상태 — 어떤 필터가 눌렸는지 시각적으로 표시 */
+.mvf-btn,.mvf-sub{background:transparent;color:var(--ink3);border:1px solid var(--bd2);transition:all .15s}
+.mvf-btn.on,.mvf-sub.on{background:var(--navy);color:#fff;border-color:var(--navy);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.mvf-btn:hover:not(.on),.mvf-sub:hover:not(.on){background:var(--surf);color:var(--ink);border-color:var(--bd)}
+
+/* 전체현황표 — 좌우 여백은 부모 .pg.on이 제공 */
+.ov-scroll-top{overflow-x:auto;overflow-y:hidden;height:14px;border:.5px solid var(--bd);border-bottom:none;border-radius:var(--radius) var(--radius) 0 0;background:var(--card);display:none;-webkit-overflow-scrolling:touch}
+.ov-scroll-top.on{display:block}
+.ov-scroll-spacer{height:1px}
+.ov-w{overflow-x:auto;max-width:100%;width:100%;border:.5px solid var(--bd);border-radius:var(--radius);background:var(--card);box-shadow:var(--shadow-sm);-webkit-overflow-scrolling:touch}
+.ov-w.has-top{border-top-left-radius:0;border-top-right-radius:0}
+.ov-t{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%}
+.ov-t th{padding:8px 4px;font-size:10.5px;font-weight:600;color:#1D1D1F;background:#FAFAFA;border-right:.5px solid #E8E8ED;border-bottom:.5px solid #D2D2D7;text-align:center;white-space:nowrap;letter-spacing:.02em;min-width:32px}
+.ov-t thead th:first-child{position:sticky;left:0;z-index:3;box-shadow:2px 0 4px -2px rgba(0,0,0,.08);min-width:90px;padding:8px}
+.ov-t td{padding:6px 4px;font-size:10.5px;border-bottom:.5px solid #F0F0F2;border-right:.5px solid #F0F0F2;text-align:center;white-space:nowrap;font-weight:400;letter-spacing:-.01em;color:var(--ink);min-width:32px}
 .ov-t tr:last-child td{border-bottom:none}
-.ov-t td.ec{text-align:left;font-weight:500;background:var(--surf);position:sticky;left:0;z-index:1;border-right:1px solid var(--bd)}
+.ov-t td.ec{text-align:left;font-weight:500;background:var(--surf);position:sticky;left:0;z-index:2;border-right:1px solid var(--bd);box-shadow:2px 0 4px -2px rgba(0,0,0,.08);min-width:90px;padding:6px 8px}
+.ov-t td.sm{min-width:48px;padding:6px 8px}
 .ov-t td.hd2{background:var(--surf);color:var(--ink)}
 .ov-t td.ab2{background:rgba(208,2,27,.06);color:var(--rose)}
 .ov-t td.ph2{background:var(--surf);color:var(--ink)}

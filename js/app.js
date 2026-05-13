@@ -1,10 +1,190 @@
 // ══ API 설정 ══
 const API_BASE = '/api';
+// 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
+// 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
+// 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
+const CLIENT_BUILD = '2026-05-13-4';
+
+// ══════════════════════════════════════
+// 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
+// ══════════════════════════════════════
+// 클라이언트에서 발생한 에러·가드 트리거를 서버 로그 테이블에 전송.
+// PII 스크럽은 클라(1차) + 서버(2차) 이중 방어. 노무 데이터 외부 누출 차단.
+const _PII_PATTERNS = [
+  [/(\d{6})[-\s]?(\d{7})/g, '$1-*******'],                             // 주민번호
+  [/(\d{3})[-\s]?(\d{2})[-\s]?(\d{5})/g, '***-**-*****'],              // 사업자번호
+  [/(01[016789]|0[2-6]\d?)[-\s]?(\d{3,4})[-\s]?(\d{4})/g, '$1-****-****'], // 전화번호
+  [/ENC:[A-Za-z0-9+/=]{20,}/g, 'ENC:[REDACTED]']                       // AES 암호화값
+];
+function _scrubPII(s){
+  if(s == null) return s;
+  let str = String(s);
+  if(str.length > 4000) str = str.slice(0, 4000) + '...[TRUNCATED]';
+  for(const [re, rep] of _PII_PATTERNS) str = str.replace(re, rep);
+  return str;
+}
+
+// 같은 에러 폭주 방지 — fingerprint 기반 1분 1회
+const _reportSeen = new Map();
+function reportError({ level = 'error', source, message, stack, meta } = {}){
+  try {
+    if(!message) return;
+    const fp = (source||'') + '|' + String(message).slice(0, 100);
+    const now = Date.now();
+    const last = _reportSeen.get(fp) || 0;
+    if(now - last < 60 * 1000) return;
+    _reportSeen.set(fp, now);
+    if(_reportSeen.size > 200){
+      const cutoff = now - 60 * 1000;
+      for(const [k, v] of _reportSeen) if(v < cutoff) _reportSeen.delete(k);
+    }
+
+    const payload = {
+      level,
+      source: source || 'client',
+      message: _scrubPII(message),
+      stack: stack ? _scrubPII(stack) : null,
+      url: location.pathname + location.search,
+      userAgent: navigator.userAgent,
+      buildId: CLIENT_BUILD,
+      meta: meta || null
+    };
+
+    // sendBeacon이 가장 안정적 (페이지 닫혀도 전송 보장)
+    try {
+      if(navigator.sendBeacon){
+        const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+        navigator.sendBeacon('/api/log-error', blob);
+        return;
+      }
+    } catch {}
+    fetch('/api/log-error', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload), keepalive: true
+    }).catch(()=>{});
+  } catch {} // 로깅 실패는 절대 사용자 노출 안 함
+}
+
+// 글로벌 에러 캐치
+try {
+  window.addEventListener('error', (ev) => {
+    if(ev?.message === 'Script error.' && !ev.filename) return; // cross-origin 노이즈 무시
+    reportError({
+      level: 'error', source: 'window.onerror',
+      message: ev?.message || String(ev),
+      stack: ev?.error?.stack
+    });
+  });
+  window.addEventListener('unhandledrejection', (ev) => {
+    const r = ev?.reason;
+    reportError({
+      level: 'error', source: 'unhandledrejection',
+      message: r?.message || String(r),
+      stack: r?.stack
+    });
+  });
+} catch {}
+let _buildMismatchShown = false;
+function _checkServerBuild(serverBuild){
+  if(!serverBuild) return;
+  const banner = (typeof document!=='undefined') ? document.getElementById('version-update-banner') : null;
+  // 빌드 일치 → 배너 떠있으면 회수 (운영 실수 false-positive 회복용)
+  if(serverBuild === CLIENT_BUILD){
+    if(banner && banner.style.display !== 'none'){
+      banner.style.display = 'none';
+      try { document.body.classList.remove('has-version-banner'); } catch(e){}
+    }
+    _buildMismatchShown = false;
+    return;
+  }
+  // 불일치 → 배너 표시 (이미 떠있으면 idempotent)
+  if(_buildMismatchShown) return;
+  _buildMismatchShown = true;
+  console.warn('🏷️ 빌드 버전 불일치:', {client:CLIENT_BUILD, server:serverBuild});
+  if(banner){
+    const detail = document.getElementById('version-update-detail');
+    if(detail){
+      detail.textContent = `(현재 ${CLIENT_BUILD} → 최신 ${serverBuild})`;
+    }
+    banner.style.display = 'block';
+    // 배너 높이만큼 본문 밀어서 콘텐츠 가림 방지
+    try { document.body.classList.add('has-version-banner'); } catch(e){}
+    // 버튼 핸들러는 1회만 바인딩
+    const btn = document.getElementById('version-update-reload-btn');
+    if(btn && !btn._wired){
+      btn._wired = true;
+      btn.addEventListener('click', _doVersionReload);
+    }
+  } else if(typeof showSyncToast==='function'){
+    // 배너 DOM 못 찾을 때 폴백 (랜딩 진입 등 초기화 전)
+    showSyncToast(
+      '🆕 새 버전이 배포되었습니다. Ctrl+F5로 새로고침해주세요.\n'+
+      `(현재 ${CLIENT_BUILD} → 최신 ${serverBuild})`,
+      'warn', 15000
+    );
+  }
+}
+
+// 🔴 [지금 새로고침] 클릭 시 데이터 유실 방지 절차
+//   1) 현재 focus된 input의 onblur 발화 → 입력값 커밋 (handleTimeInput 등)
+//   2) 디바운스 중인 saveLS._timer를 즉시 flush + await
+//   3) 미저장 변경이 남아있으면 사용자 confirm으로 한 번 더 막음
+//   4) 최종 reload (브라우저가 beforeunload → _flushSaveOnUnload(sendBeacon)로 한 번 더 안전망)
+async function _doVersionReload(){
+  const btn = document.getElementById('version-update-reload-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '저장 중…'; }
+  try {
+    // 1. 입력 중 셀의 값 커밋 (blur 트리거 → handleTimeInput → saveLS 디바운스 등록)
+    if(typeof document!=='undefined' && document.activeElement && typeof document.activeElement.blur==='function'){
+      try { document.activeElement.blur(); } catch(e){}
+    }
+    // 2. 디바운스 중인 변경분 즉시 서버 저장
+    if(typeof flushPendingSave==='function'){
+      try { await flushPendingSave(); } catch(e){ console.warn('flushPendingSave 오류:', e); }
+    }
+    // 3. 그래도 미저장이 남아있으면 사용자 확인
+    if(typeof _hasUnsavedChanges!=='undefined' && _hasUnsavedChanges){
+      const proceed = confirm(
+        '⚠️ 서버에 미반영된 변경이 있습니다.\n\n'+
+        '그래도 새로고침하시겠습니까?\n'+
+        '(페이지 닫힘 직전 마지막으로 한 번 더 저장 시도되지만, 네트워크 상태에 따라 유실될 수 있습니다.)'
+      );
+      if(!proceed){
+        if(btn){ btn.disabled = false; btn.textContent = '지금 새로고침'; }
+        return;
+      }
+    }
+    // 4. reload — beforeunload 핸들러(_flushSaveOnUnload)가 마지막 안전망
+    location.reload();
+  } catch(e){
+    console.error('_doVersionReload 오류:', e);
+    if(btn){ btn.disabled = false; btn.textContent = '지금 새로고침'; }
+    if(typeof showSyncToast==='function'){
+      showSyncToast('⚠️ 새로고침 처리 중 오류. 잠시 후 다시 시도해주세요.','error',5000);
+    }
+  }
+}
 const AUTH_REFRESH_INTERVAL_MS = 20 * 60 * 1000; // 쿠키 수명 7d 대비 20분마다 /auth-verify 호출해 슬라이딩 갱신 (안전망)
 // 활동 기반 자동 갱신: 일반 API 호출 성공 시 30분 쿨다운으로 백그라운드 verify 트리거.
 // setInterval은 탭 백그라운드 throttle/슬립 영향을 받지만 활동 기반은 클릭/저장 직후 즉시 실행됨.
 const AUTH_ACTIVITY_COOLDOWN_MS = 30 * 60 * 1000;
 let _lastActivityRefresh = Date.now();
+
+// 세션 만료 시 사용자에게 명확히 안내하는 영구 배너 (5초 토스트는 놓치기 쉬움)
+// 새로고침 버튼 클릭 시 즉시 재로그인 가능. 같은 호출 반복돼도 1개만 표시.
+function showSessionExpiredBanner(){
+  if(document.getElementById('session-expired-banner')) return;
+  const b = document.createElement('div');
+  b.id = 'session-expired-banner';
+  b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(90deg,#DC2626,#EF4444);color:#fff;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;box-shadow:0 4px 12px rgba(0,0,0,.25);font-size:13px;font-weight:600;font-family:inherit';
+  b.innerHTML = '<span>⚠️ 세션이 만료되었습니다. 미저장 변경분이 있을 수 있어요. 새로고침 후 다시 로그인하세요.</span>'
+    + '<div style="display:flex;gap:8px;flex-shrink:0">'
+    + '<button onclick="location.reload()" style="background:#fff;color:#DC2626;border:0;padding:8px 16px;border-radius:6px;font-weight:700;cursor:pointer;font-size:12px">🔄 지금 새로고침</button>'
+    + '<button onclick="document.getElementById(\'session-expired-banner\').remove()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);padding:8px 12px;border-radius:6px;cursor:pointer;font-size:12px">닫기</button>'
+    + '</div>';
+  document.body.appendChild(b);
+}
 
 // 디버깅용: REC 쓰기 이력 추적 (콘솔에서 window.__recWrites 로 확인)
 // "입력한 적 없는 데이터가 들어있다" 증상 재현 시 원인 경로 추적용 — 최대 500건 순환
@@ -30,14 +210,33 @@ async function apiFetch(endpoint, method='POST', body=null){
   let data;
   try{data=JSON.parse(text);}catch(e){throw new Error('서버 응답 오류 (status:'+res.status+')');}
   const isAuthEndpoint=endpoint.startsWith('/auth-login')||endpoint.startsWith('/auth-signup')||endpoint.startsWith('/auth-verify');
+  // 🔒 단일 로그인 — 다른 기기/브라우저에서 새 로그인됨 → 강제 로그아웃
+  // (auth-verify에서도 발생 가능 → isAuthEndpoint 검사보다 먼저 처리)
+  if(res.status===401 && data && data.reason==='session_replaced'){
+    if(typeof showSyncToast==='function'){
+      showSyncToast('⚠️ 다른 기기에서 로그인되어 종료됩니다\n잠시 후 로그인 화면으로 이동합니다.\n저장되지 않은 값은 로컬에 남아있을 수 있습니다.','error',8000);
+    }
+    try { showSessionExpiredBanner(); } catch(e){}
+    setTimeout(()=>{ try { authLogout(); } catch(e){} }, 2000);
+    throw new Error('다른 기기에서 로그인되어 종료됩니다');
+  }
   if(res.status===401 && !isAuthEndpoint){
     if(typeof showSyncToast==='function'){
       showSyncToast('⚠️ 세션이 만료되었습니다. 다시 로그인해주세요.\n저장되지 않은 값은 로컬에 남아있을 수 있습니다.','error',5000);
     }
+    showSessionExpiredBanner();
     authLogout();
     throw new Error('세션이 만료되었습니다');
   }
   if(res.status===429) throw new Error(data.error||'요청이 너무 많습니다. 잠시 후 다시 시도해주세요.');
+  // 🔒 단일 로그인 — 새 로그인 시도 시 기존 활성 세션 있음 → 친절한 메시지로 throw
+  if(res.status===409 && data && data.reason==='session_active'){
+    const remain = data.retry_after_minutes || 0;
+    const msg = '이미 다른 기기/브라우저에서 사용 중입니다.\n\n'
+      + '먼저 그 기기에서 로그아웃하거나, 약 ' + remain + '분 후 자동 만료를 기다려 주세요.\n'
+      + '(마지막 활동 후 1시간 idle 시 자동 만료)';
+    throw new Error(msg);
+  }
   if(!res.ok) throw new Error(data.error||'서버 오류');
   // 활동 기반 능동 갱신: 일반 API 호출 성공 후 쿨다운 경과 시 백그라운드로 verify 호출.
   // 서버의 shouldRefresh가 만족되면 Set-Cookie로 쿠키가 7일로 리셋됨. 실패해도 무시(fire-and-forget).
@@ -52,6 +251,19 @@ async function apiFetch(endpoint, method='POST', body=null){
 function esc(s){
   if(s==null) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+// 숫자 입력 필드 콤마 자동 포맷팅 (시급/월급 등)
+// oninput에서 호출: 입력 값에서 숫자만 추출 → toLocaleString으로 콤마 삽입, 캐럿 위치 보정
+function formatNumInput(el){
+  try {
+    const caret = el.selectionStart;
+    const oldLen = el.value.length;
+    const raw = el.value.replace(/[^0-9]/g, '');
+    el.value = raw ? parseInt(raw,10).toLocaleString() : '';
+    const newLen = el.value.length;
+    const diff = newLen - oldLen;
+    el.setSelectionRange(caret + diff, caret + diff);
+  } catch(e){}
 }
 // CSS injection 방지: style 속성에 들어가는 색상값 검증
 function safeColor(c,fallback){
@@ -182,6 +394,16 @@ const DOW=['일','월','화','수','목','금','토'];
 const dim=(y,m)=>new Date(y,m,0).getDate();
 const fdow=(y,m)=>new Date(y,m-1,1).getDay();
 const rk=(id,y,m,d)=>`${id}_${y}-${pad(m)}-${pad(d)}`;
+// 🛡️ 입사일/퇴사일 등 'YYYY-MM-DD' 문자열을 LOCAL 자정으로 파싱.
+// new Date('2026-04-20')은 UTC 자정으로 파싱되어 KST에선 09:00이 됨 → 같은 날짜 대비 9시간 늦어짐
+// → 입사 당일(예: 4/20 입사자가 4/20에 표시 안 됨) 누락 버그 발생.
+// 이 함수는 항상 로컬 자정으로 파싱하여 날짜 비교를 안전하게 만듦.
+function parseEmpDate(s){
+  if(!s) return null;
+  const m=String(s).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(!m) return new Date(s); // 비표준 형식은 기존 동작 유지
+  return new Date(+m[1], +m[2]-1, +m[3], 0, 0, 0, 0);
+}
 const pT=t=>{if(!t||!t.includes(':'))return null;const[h,m]=t.split(':').map(Number);return h*60+m;};
 const rEnd=(s,e)=>e<=s?e+1440:e;
 // FP 보정 epsilon: 부동소수점 표현 오차(예: 32.98 → 32.979999...)로 인해
@@ -286,6 +508,8 @@ function setTaxRec(eid,y,m,field,val){
   if(!TAX_REC[eid][k])TAX_REC[eid][k]={incomeTax:'',localTax:'',otherDed:'',bonusDed:''};
   TAX_REC[eid][k][field]=val;
   localStorage.setItem('npm5_tax',JSON.stringify(TAX_REC));
+  // 💾 서버 저장 — 이전엔 localStorage만 저장돼서 F5 시 옛 서버값으로 덮여 사용자 입력 유실 가능했음
+  if(typeof saveLS==='function') saveLS();
 }
 
 // ═══ 월별 정책 스냅샷 헬퍼 ═══
@@ -294,7 +518,11 @@ function _polKey(y, m){ return y + '-' + String(m).padStart(2,'0'); }
 
 function getPolForMonth(y, m){
   const snap = POL_SNAPSHOTS[_polKey(y, m)];
-  return snap || POL;
+  if(!snap) return POL;
+  // 수당 정의(allowances)는 항상 라이브 POL을 사용한다.
+  // 스냅샷이 동결된 시점 이후 추가/삭제/이름변경된 수당이 모든 월의 카드·엑셀에 즉시 반영되도록 함.
+  // 정책 토글(야간/연장/휴일 등)은 스냅샷 그대로 보존.
+  return Object.assign({}, snap, { allowances: POL.allowances });
 }
 
 // REC에서 데이터가 있는 모든 (y,m) 집합을 반환
@@ -360,8 +588,9 @@ function confirmPayMonth(y, m){
   const monthEnd = new Date(y, m, 0);
   const monthStart = new Date(y, m-1, 1);
   const activeEmps = EMPS.filter(e=>{
-    if(e.join){const jd=new Date(e.join);if(jd>monthEnd)return false;}
-    if(e.leave){const ld=new Date(e.leave);if(ld<monthStart)return false;}
+    if(e.deletedAt) return false; // 🗑️ 휴지통 제외
+    if(e.join){const jd=parseEmpDate(e.join);if(jd>monthEnd)return false;}
+    if(e.leave){const ld=parseEmpDate(e.leave);if(ld<monthStart)return false;}
     return true;
   });
   const summaries = {};
@@ -434,6 +663,74 @@ function syncPolSnapshot(){
   } catch(e){ console.warn('syncPolSnapshot 실패:', e); }
 }
 
+// ═══ 일별 기본 휴게세트 스냅샷 헬퍼 ═══
+// 키 형식: "YYYY-MM-DD". 해당 일 계산 시 스냅샷 있으면 그걸, 없으면 라이브 DEF_BK.
+// 변경 직전 값을 과거 일에 freeze → 한 번 저장된 데이터는 새 값으로 절대 덮이지 않음.
+// 호환성: 기존 월별("YYYY-MM") 키도 fallback으로 인식.
+function _dayKey(y, m, d){ return y + '-' + String(m).padStart(2,'0') + '-' + String(d).padStart(2,'0'); }
+
+// REC에서 데이터가 있는 모든 일자(YYYY-MM-DD) 집합 반환
+function _daysWithRec(){
+  const set = new Set();
+  try {
+    Object.keys(REC||{}).forEach(k=>{
+      // rk 형식: "empId_YYYY-MM-DD" (zero-padded)
+      const m = String(k).match(/_(\d{4}-\d{2}-\d{2})$/);
+      if(m){ set.add(m[1]); }
+    });
+  } catch(e){}
+  return set;
+}
+
+function getBkForDay(y, m, d){
+  if(typeof BK_SNAPSHOTS === 'undefined') return DEF_BK;
+  // 일별 스냅샷 우선
+  const dKey = _dayKey(y, m, d);
+  if(BK_SNAPSHOTS[dKey]) return BK_SNAPSHOTS[dKey];
+  // 호환: 마이그레이션 전 월별 스냅샷이 있으면 그걸 사용
+  const mKey = _polKey(y, m);
+  if(BK_SNAPSHOTS[mKey]) return BK_SNAPSHOTS[mKey];
+  return DEF_BK;
+}
+
+function freezePastDaysBk(bkToSave){
+  try {
+    if(typeof BK_SNAPSHOTS === 'undefined') return false;
+    const src = bkToSave || DEF_BK;
+    if(!Array.isArray(src) || src.length === 0) return false; // 빈값은 freeze 안 함
+    const now = new Date();
+    const todayKey = _dayKey(now.getFullYear(), now.getMonth()+1, now.getDate());
+    const days = _daysWithRec();
+    let changed = false;
+    days.forEach(key => {
+      if(key >= todayKey) return; // 오늘·미래 일자는 라이브 DEF_BK 사용
+      if(!BK_SNAPSHOTS[key]){     // 🛡️ 이미 freeze된 일자는 절대 덮어쓰지 않음
+        BK_SNAPSHOTS[key] = JSON.parse(JSON.stringify(src));
+        changed = true;
+      }
+    });
+    if(changed){
+      localStorage.setItem('npm5_bk_snapshots', JSON.stringify(BK_SNAPSHOTS));
+    }
+    return changed;
+  } catch(e){ console.warn('freezePastDaysBk 실패:', e); return false; }
+}
+
+let _prevBkForSnapshot = null;
+function syncBkSnapshot(){
+  try {
+    if(typeof DEF_BK === 'undefined') return;
+    if(!_prevBkForSnapshot){
+      _prevBkForSnapshot = JSON.parse(JSON.stringify(DEF_BK));
+      return;
+    }
+    if(JSON.stringify(DEF_BK) === JSON.stringify(_prevBkForSnapshot)) return;
+    // 변경 감지: 이전 값(=과거 일이 사용했던 값)을 과거 일에 freeze
+    freezePastDaysBk(_prevBkForSnapshot);
+    _prevBkForSnapshot = JSON.parse(JSON.stringify(DEF_BK));
+  } catch(e){ console.warn('syncBkSnapshot 실패:', e); }
+}
+
 // 서버에 아직 전송 안 된 로컬 변경이 있는지 추적 (beforeunload 경고용)
 let _hasUnsavedChanges = false;
 
@@ -446,24 +743,59 @@ async function safeItemSave(key, value){
     if(s==null) return false;
     try { const p = typeof s==='string'?JSON.parse(s):s; return Array.isArray(p)?p.length>0:(typeof p==='object' && Object.keys(p).length>0); } catch(e){ return false; }
   };
-  const PROTECTED = new Set(['emps','rec','bonus','allow','tax','tbk','safety']);
+  const PROTECTED = new Set(['emps','rec','bonus','allow','tax','tbk','safety','bk']);
   // 🛡️ 우회 경로 없음 — 빈값 저장은 무조건 차단
   if(PROTECTED.has(key) && isEmpty(value)){
     if(snap === null){
       console.warn('🛡️ safeItemSave: 초기 로드 전 빈값 저장 차단 ('+key+')');
+      try { reportError({ level: 'guard', source: 'safeItemSave', message: '초기 로드 전 빈값 저장 차단', meta: { key, reason: 'snap_null' } }); } catch {}
       return {blocked:true};
     }
     if(snapHas(snap[key])){
       console.warn('🛡️ safeItemSave: 빈값 덮어쓰기 차단 ('+key+')');
+      try { reportError({ level: 'guard', source: 'safeItemSave', message: '빈값 덮어쓰기 차단', meta: { key, reason: 'snap_has_data' } }); } catch {}
       return {blocked:true};
     }
   }
-  return apiFetch('/data-save','POST',{key,value});
+  // 🛡️ 낙관적 잠금: 마지막으로 본 서버 버전을 함께 보냄
+  const expectedUpdatedAt = (typeof _serverVersions!=='undefined' && _serverVersions) ? (_serverVersions[key]||null) : null;
+  const resp = await apiFetch('/data-save','POST',{key,value,expectedUpdatedAt});
+  // 응답 처리: 버전 갱신 + 충돌 발생 시 통보
+  if(resp){
+    if(resp.versions && typeof _serverVersions!=='undefined'){
+      const savedKeys = Object.keys(resp.versions);
+      Object.entries(resp.versions).forEach(([k,v])=>{ if(v) _serverVersions[k] = v; });
+      // 🔁 같은 브라우저 다른 탭에 알림
+      if(savedKeys.length && typeof _broadcastSaved==='function') _broadcastSaved(savedKeys);
+    }
+    if(resp.conflicts && resp.conflicts.length && typeof handleConflicts==='function'){
+      handleConflicts(resp.conflicts);
+    }
+  }
+  return resp;
+}
+
+// ── 저장 상태 인디케이터 ──
+// 'saved' = 🟢 저장됨, 'saving' = 🟡 저장 중, 'unsaved' = 🔴 미저장(서버 실패 또는 대기)
+function setSyncStatus(state, msg){
+  const dot = document.getElementById('sync-dot');
+  const text = document.getElementById('sync-text');
+  if(!dot || !text) return;
+  const conf = {
+    saved:   {color:'#22C55E', glow:'rgba(34,197,94,.6)',  label:'저장됨'},
+    saving:  {color:'#EAB308', glow:'rgba(234,179,8,.6)',  label:'저장 중...'},
+    unsaved: {color:'#EF4444', glow:'rgba(239,68,68,.7)',  label:'미저장'}
+  }[state] || {color:'#9CA3AF', glow:'rgba(156,163,175,.4)', label:state};
+  dot.style.background = conf.color;
+  dot.style.boxShadow = '0 0 6px ' + conf.glow;
+  text.textContent = msg || conf.label;
 }
 
 function saveLS(){
-  // POL 변경 자동 감지 → 직전 상태를 과거 달에 복사 (변경 이후 과거 조회 시 옛 설정 사용 보장)
+  // POL/DEF_BK 변경 자동 감지 → 직전 상태를 과거 달에 복사 (변경 이후 과거 조회 시 옛 설정 사용 보장)
   try { syncPolSnapshot(); } catch(e){}
+  try { if(typeof syncBkSnapshot === 'function') syncBkSnapshot(); } catch(e){}
+  setSyncStatus('saving');
   try{
     localStorage.setItem(LS.E,JSON.stringify(EMPS));
     localStorage.setItem(LS.P,JSON.stringify(POL));
@@ -473,25 +805,45 @@ function saveLS(){
     localStorage.setItem(LS.BN,JSON.stringify(BONUS_REC));
     localStorage.setItem(LS.AL,JSON.stringify(ALLOWANCE_REC));
     sfSave();
-  }catch(e){console.warn(e);}
+  }catch(e){
+    console.warn(e);
+    // 🛡️ localStorage 용량 초과 감지 — 사용자에게 명확히 알림 (기존 토스트 1회만)
+    const isQuota = e && (e.name==='QuotaExceededError' || e.code===22 || e.code===1014 || /quota|storage/i.test(String(e.message||'')));
+    // 🔭 운영 모니터링 기록
+    try { reportError({ level: isQuota?'warn':'error', source: 'saveLS', message: e?.message || String(e), stack: e?.stack, meta: { isQuota } }); } catch {}
+    if(isQuota && typeof showSyncToast==='function' && !window._quotaToastShown){
+      window._quotaToastShown = true;
+      showSyncToast(
+        '⚠️ 브라우저 저장공간 한도 초과 (약 5~10MB)\n\n'+
+        '데이터는 서버에 정상 저장되지만 이 컴퓨터 화면이 느려질 수 있습니다.\n'+
+        '안전교육 사진이 너무 많은 경우 일부 폴더에서 사진 일부만 보일 수 있습니다.\n\n'+
+        '대처: F12 → Application → Storage 에서 nopro 도메인 데이터 확인',
+        'error', 12000
+      );
+      // 1분 후 플래그 리셋 (필요 시 다시 알림)
+      setTimeout(()=>{ window._quotaToastShown = false; }, 60000);
+    }
+  }
   _hasUnsavedChanges = true;
   // Supabase 자동 동기화 (즉시 실행, debounce)
   try{
     const _sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
     if(_sess && _sess.companyId){
-      // debounce: 연속 저장 방지 (500ms)
+      // debounce: 연속 입력 결합 (100ms — 사용자 체감 즉시 + 빠른 키 입력은 묶임)
       if(saveLS._timer) clearTimeout(saveLS._timer);
       saveLS._timer = setTimeout(async ()=>{
         try {
           await sbSaveAll(_sess.companyId);
           _hasUnsavedChanges = false;
+          setSyncStatus('saved');
         } catch(e) {
           console.warn('Supabase 저장 오류:',e);
+          setSyncStatus('unsaved', '미저장(재시도 대기)');
           if(typeof showSyncToast==='function'){
             showSyncToast('⚠️ 서버 저장 실패\n네트워크 상태를 확인해주세요. 로컬에는 저장됨.','error',5000);
           }
         }
-      }, 500);
+      }, 100);
     }
   }catch(e){}
 }
@@ -553,14 +905,35 @@ function _flushSaveOnUnload(){
       return true;
     });
     if(!items.length) return;
-    const blob = new Blob([JSON.stringify({items})], {type:'application/json'});
+    // 🛡️ 낙관적 잠금: beacon으로 보내는 아이템에도 마지막 본 서버 버전 첨부
+    // sendBeacon은 응답 못 받으니 충돌 처리는 서버 측 거부에만 의존 — 다음 로드 때 자연스럽게 동기화됨
+    const sv = (typeof _serverVersions!=='undefined' && _serverVersions) || {};
+    const itemsWithVer = items.map(it => ({...it, expectedUpdatedAt: sv[it.key] || null}));
+    const blob = new Blob([JSON.stringify({items:itemsWithVer})], {type:'application/json'});
     navigator.sendBeacon((typeof API_BASE!=='undefined'?API_BASE:'')+'/data-save', blob);
   }catch(e){ console.warn('beacon 저장 실패:', e); }
 }
-window.addEventListener('pagehide', _flushSaveOnUnload);
-window.addEventListener('beforeunload', _flushSaveOnUnload);
+
+// 🛡️ 페이지 떠나기 직전 활성 input/textarea blur 처리 — 미커밋 입력값을 onchange로 강제 저장
+// 사용자가 휴게시간·출퇴근시간·설정 칸 등 어떤 칸이든 타이핑 후 blur 안 하고 F5/탭닫기 해도
+// 이 함수가 활성 input을 blur시켜 onchange 발동 → updE 등이 메모리·localStorage에 반영됨.
+// 그 후 _flushSaveOnUnload가 sendBeacon으로 서버까지 도달 보장.
+function _blurActiveInputBeforeFlush(){
+  try {
+    const ae = document.activeElement;
+    if(ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)){
+      ae.blur();
+    }
+  } catch(e){}
+}
+function _safeUnloadFlush(){
+  _blurActiveInputBeforeFlush();
+  _flushSaveOnUnload();
+}
+window.addEventListener('pagehide', _safeUnloadFlush);
+window.addEventListener('beforeunload', _safeUnloadFlush);
 document.addEventListener('visibilitychange', () => {
-  if(document.visibilityState === 'hidden') _flushSaveOnUnload();
+  if(document.visibilityState === 'hidden') _safeUnloadFlush();
 });
 
 // 미저장 변경사항이 있으면 탭 닫기 전에 브라우저 네이티브 확인창 표시
@@ -575,6 +948,14 @@ window.addEventListener('beforeunload', (e)=>{
 // 탭/창 복귀 시 서버 최신값 자동 반영 (동시 접속 반영 — 옵션 A)
 // 내 편집 중 값이 덮어쓰이지 않도록: blur → pending flush → sbLoadAll 순서
 async function reloadOnFocus(){
+  // 🛑 자동 재로드 비활성화 (2026-05-04) — 입력값 유실 사고 차단.
+  // 입력 직후(특히 timeKeyNav Enter 경로) 서버 저장이 비동기로 진행 중인데
+  // 다른 앱/탭에서 돌아오면 sbLoadAll이 옛 서버 값으로 메모리를 덮어쓰는 사례 발생.
+  // (timeKeyNav는 saveLS._timer를 안 쓰므로 flushPendingSave가 건너뛰어짐 → 무방비)
+  // 단일 로그인 차단(예정) 후엔 동시 접속이 없으므로 자동 재로드 무용지물.
+  // 사용자가 명시적으로 새로고침(F5) 시 sbLoadAll로 동기화됨.
+  return;
+  // 아래 원본 코드 보존 (재활성화 필요 시 위 return 제거):
   if(document.hidden) return;
   const now = Date.now();
   if(now - (reloadOnFocus._lastAt||0) < 3000) return; // 중복 방지 (focus+visibilitychange 동시 발화)
@@ -656,6 +1037,7 @@ let EMPS=load(LS.E,null)||[];
 let POL=Object.assign({...DEF_POL},load(LS.P,{}));
 // 월별 정책 스냅샷: "YYYY-MM" → POL 복사본. 과거 달 계산 시 그 달 스냅샷 사용.
 let POL_SNAPSHOTS = JSON.parse(localStorage.getItem('npm5_pol_snapshots')||'{}');
+let BK_SNAPSHOTS = JSON.parse(localStorage.getItem('npm5_bk_snapshots')||'{}');
 // 월 확정 급여 스냅샷: "YYYY-MM" → { confirmed, confirmedAt, confirmedBy, summaries:{empId: monthSummary 결과} }
 // 확정된 달은 monthSummary 대신 이 저장값을 그대로 사용 → 어떤 데이터 수정에도 금액 고정
 let PAY_SNAPSHOTS = JSON.parse(localStorage.getItem('npm5_pay_snapshots')||'{}');
@@ -666,11 +1048,13 @@ const FIXED_ALLOWS = ['능력수당','직급수당','경력수당','교통비','
 if(!POL.allowances||POL.allowances.length===0){
   POL.allowances=[...DEF_POL.allowances];
 } else {
-  // 기본 수당 중 없는 것만 앞에 추가
+  // 기본 수당 중 없는 것만 앞에 추가 + 🛡️ 기본 항목 isDeduct는 default 값으로 강제 동기화.
+  // 사용자가 실수로 능력수당 등의 공제 체크박스를 눌러도 페이지 로드 시 자동 복구.
+  // (사용자 본인이 의도적으로 변경하려고 해도 막힘 → UI에서도 disable 처리)
   DEF_POL.allowances.forEach(da=>{
     const existing = POL.allowances.find(a=>a.id===da.id);
     if(!existing) POL.allowances.unshift({...da});
-    else if(existing.isDeduct===undefined) existing.isDeduct=da.isDeduct||false;
+    else existing.isDeduct = da.isDeduct;  // 항상 default로 강제 (보호 장치)
   });
   // 기존 수당에 isDeduct 없으면 false 기본값
   POL.allowances.forEach(a=>{ if(a.isDeduct===undefined) a.isDeduct=false; });
@@ -769,7 +1153,21 @@ function getOrdinaryRate(emp,y,m){
 // ══════════════════════════════════════
 // 계산 엔진
 // ══════════════════════════════════════
-function getActiveBk(y,m,d){const k=`${y}-${pad(m)}-${pad(d)}`;return TBK[k]||DEF_BK;}
+function getActiveBk(y,m,d,emp){
+  const dayKey=`${y}-${pad(m)}-${pad(d)}`;
+  // 우선순위: 일별 임시(TBK) > 일별 스냅샷(BK_SNAPSHOTS[YYYY-MM-DD]) > 월별 스냅샷(호환) > 라이브 DEF_BK
+  let bks;
+  if(TBK[dayKey]) bks = TBK[dayKey];
+  else if(typeof getBkForDay === 'function') bks = getBkForDay(y, m, d);
+  else bks = DEF_BK;
+  // 직원이 지정된 경우 shift 필터 적용 — 'all' 또는 같은 shift만 통과 (필드 없으면 'all'로 간주)
+  if(!emp || !Array.isArray(bks)) return bks;
+  const empShift = emp.shift || 'day';
+  return bks.filter(b => {
+    const bs = b.shift || 'all';
+    return bs === 'all' || bs === empShift;
+  });
+}
 function calcBkDeduct(sMin,eMin,bks){
   let t=0;
   bks.forEach(b=>{
@@ -852,9 +1250,11 @@ function calcNightBkMins(sMin,eMin,bks){
   return n;
 }
 
-function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate){
+function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate,halfDayBaseM){
   // premiumRate: 통상시급 (가산수당 계산용). 미지정 시 rate 사용
+  // halfDayBaseM: 반차로 이미 채워진 기본근로시간(분). 기본 0. 반차 시 240 전달 → OT 임계값을 240으로 낮춤
   const pRate=premiumRate||rate;
+  const _halfBase = +halfDayBaseM || 0;
   const s=pT(start),eR=pT(end);if(s===null||eR===null)return null;
   const e=rEnd(s,eR);
   const gross=e-s;
@@ -864,12 +1264,14 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate){
   const work=Math.max(0,gross-deduct);
   const nightM=calcNightMins(s,e,bks,outTimes); // 22~06 야간 분
   const dayM=Math.max(0,work-nightM);
-  const ot=Math.max(0,work-480);
+  // 8h(480분) 기준 OT 임계값. 반차일에는 반차로 채워진 분(_halfBase=240)만큼 낮춰 4h 초과 OT 처리
+  const _otThresh = Math.max(0, 480 - _halfBase);
+  const ot=Math.max(0,work-_otThresh);
   const crossed=eR<=s;
   const mode=empMode||POL.basePayMode;
 
-  // 연장 구간 분리 (야간/주간)
-  const otNight=Math.max(0, nightM - Math.max(0, 480-dayM));
+  // 연장 구간 분리 (야간/주간) — 임계값 반영
+  const otNight=Math.max(0, nightM - Math.max(0, _otThresh-dayM));
   const otDay=Math.max(0, ot-otNight);
 
   if(mode==='pohal'){
@@ -1007,13 +1409,30 @@ function monthSummary(eid,y,m){
   const emp=EMPS.find(e=>e.id===eid);
   if(!emp)return{wdays:0,adays:0,aldays:0,twkH:0,tNightH:0,tOtDayH:0,tOtNightH:0,tHolDayH:0,tHolNightH:0,tHolDayOtH:0,tHolNightOtH:0,tBase:0,tNightPay:0,tOtDayPay:0,tOtNightPay:0,tHolDayPay:0,tHolNightPay:0,tHolDayOtPay:0,tHolNightOtPay:0,annualPay:0,wkly:0,bonus:0,allowances:{},totalAllowance:0,deduction:0,total:0};
   // 입사일 이전 월이면 빈 결과
-  if(emp.join){const jd=new Date(emp.join);if(jd>new Date(y,m,0))return{wdays:0,adays:0,aldays:0,twkH:0,tNightH:0,tOtDayH:0,tOtNightH:0,tHolDayH:0,tHolNightH:0,tHolDayOtH:0,tHolNightOtH:0,tBase:0,tNightPay:0,tOtDayPay:0,tOtNightPay:0,tHolDayPay:0,tHolNightPay:0,tHolDayOtPay:0,tHolNightOtPay:0,annualPay:0,wkly:0,bonus:0,allowances:{},totalAllowance:0,deduction:0,total:0};}
+  if(emp.join){const jd=parseEmpDate(emp.join);if(jd>new Date(y,m,0))return{wdays:0,adays:0,aldays:0,twkH:0,tNightH:0,tOtDayH:0,tOtNightH:0,tHolDayH:0,tHolNightH:0,tHolDayOtH:0,tHolNightOtH:0,tBase:0,tNightPay:0,tOtDayPay:0,tOtNightPay:0,tHolDayPay:0,tHolNightPay:0,tHolDayOtPay:0,tHolNightOtPay:0,annualPay:0,wkly:0,bonus:0,allowances:{},totalAllowance:0,deduction:0,total:0};}
   // 퇴사일 이후 월이면 빈 결과
-  if(emp.leave){const ld=new Date(emp.leave);if(ld<new Date(y,m-1,1))return{wdays:0,adays:0,aldays:0,twkH:0,tNightH:0,tOtDayH:0,tOtNightH:0,tHolDayH:0,tHolNightH:0,tHolDayOtH:0,tHolNightOtH:0,tBase:0,tNightPay:0,tOtDayPay:0,tOtNightPay:0,tHolDayPay:0,tHolNightPay:0,tHolDayOtPay:0,tHolNightOtPay:0,annualPay:0,wkly:0,bonus:0,allowances:{},totalAllowance:0,deduction:0,total:0};}
+  if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<new Date(y,m-1,1))return{wdays:0,adays:0,aldays:0,twkH:0,tNightH:0,tOtDayH:0,tOtNightH:0,tHolDayH:0,tHolNightH:0,tHolDayOtH:0,tHolNightOtH:0,tBase:0,tNightPay:0,tOtDayPay:0,tOtNightPay:0,tHolDayPay:0,tHolNightPay:0,tHolDayOtPay:0,tHolNightOtPay:0,annualPay:0,wkly:0,bonus:0,allowances:{},totalAllowance:0,deduction:0,total:0};}
   const days=dim(y,m);
   const sot=emp.sot||POL.sot||209;
-  let wdays=0,adays=0,aldays=0,tBase=0,tNightPay=0,tOtDayPay=0,tOtNightPay=0,tHolDayPay=0,tHolNightPay=0,tHolDayOtPay=0,tHolNightOtPay=0,deduction=0,dedShortMins=0;
+  // ── 입사/퇴사월 일할 계수 ──
+  // 사용자 정책: 해당월 실제 일수(28~31) 기준. (재직일 / 해당월 일수) 비율을
+  // tBase·수당에 곱한다. 시급제(hourly)는 실근무 기반이라 일할 비율 미적용.
+  let _proStart=1, _proEnd=days;
+  if(emp.join){
+    const jd=parseEmpDate(emp.join);
+    if(jd && jd.getFullYear()===y && jd.getMonth()===m-1) _proStart=jd.getDate();
+  }
+  if(emp.leave){
+    const ld=parseEmpDate(emp.leave);
+    if(ld && ld.getFullYear()===y && ld.getMonth()===m-1) _proEnd=ld.getDate();
+  }
+  const _prorateDays=Math.max(0, _proEnd - _proStart + 1);
+  const _prorate=days>0 ? (_prorateDays/days) : 1;
+  const _isPartialMonth=_prorate<1;
+  let wdays=0,adays=0,aldays=0,tBase=0,tNightPay=0,tOtDayPay=0,tOtNightPay=0,tHolDayPay=0,tHolNightPay=0,tHolDayOtPay=0,tHolNightOtPay=0,deduction=0,dedShortMins=0,dedShortHByDay=0;
   let tExtraWorkPay=0,tHolPayNew=0;
+  // 특근: 직접 입력된 누적 가산 결과물(최대 250%) — 일별 합산
+  let tSpecialDays=0,tSpecialPay=0;
   let tMonthlyHolStdPay=0,tMonthlyHolOtPay=0;
   // 시간(hours) 합산: 매일 m2h 변환 후 누적 (출퇴근 기록 소수점 그대로 합산)
   let twkH=0,tAllNightH=0,tAllOtDayH=0,tAllOtNightH=0;
@@ -1030,9 +1449,9 @@ function monthSummary(eid,y,m){
   for(let d=1;d<=days;d++){
     // 퇴사일 이후 날짜는 근태/급여 집계 제외 (daily 필터와 동일 규칙: 퇴사일 당일까지 근무 인정)
     if(emp.leave){
-      const ld=new Date(emp.leave);
+      const ld=parseEmpDate(emp.leave);
       const curDate=new Date(y,m-1,d);
-      if(ld<=curDate) continue;
+      if(ld<curDate) continue;
     }
     const rec=REC[rk(eid,y,m,d)];if(!rec)continue;
     if(rec.annual){aldays+=1;continue;}
@@ -1048,8 +1467,9 @@ function monthSummary(eid,y,m){
     if(rec.absent){
       adays++;
       if(empPayMode==='monthly'){
-        // 월급제: 주말/공휴일 결근은 공제 안 함 (원래 안 나와도 되는 날)
-        const isHolDay = isAutoHol(y,m,d,emp);
+        // 월급제: 주말/공휴일 결근은 공제 안 함 (원래 안 나와도 되는 날) — 대체근무 무관 (결근이라 가산 자체 없음)
+        // 대체공휴일 체크 시도 휴일 취급 → 차감 안 함
+        const isHolDay = isAutoHol(y,m,d,emp) || rec.subHol;
         if(!isHolDay && (POL.dedMonthly??true)){
           const monthlyBase=getEmpMonthlyAt(emp, y, m, 1);
           const workDaysInMonth=Array.from({length:days},(_,i)=>i+1).filter(dd=>{
@@ -1064,20 +1484,36 @@ function monthSummary(eid,y,m){
       }
       continue;
     }
-    const autoH=isAutoHol(y,m,d,emp);
-    const bks=getActiveBk(y,m,d);
+    // 대체근무 체크 시 휴일성 무력화 → 평일처럼 산정. 대체공휴일은 평일을 휴일로 강제.
+    const autoH=(isAutoHol(y,m,d,emp) && !rec.subWork) || rec.subHol;
+    const bks=getActiveBk(y,m,d,emp);
     const msBks = rec.customBk ? (rec.customBkList||[]) : bks;
-    const c=rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,msBks,rec.outTimes||[],empPayMode,ordRate):null;
+    // 🎯 반차 + 출퇴근 → OT 임계는 항상 480분(8h) 유지 — 실근무 8h 초과해야 1.5배 가산 (반차 4h는 base 임계에 포함 안 함)
+    const _halfBaseM = 0;
+    const c=rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,msBks,rec.outTimes||[],empPayMode,ordRate,_halfBaseM):null;
+    // 특근: 출퇴근 유무와 관계없이 체크되고 금액이 있으면 합산 (외부 계산 결과물 입력 방식)
+    // 입력 금액이 그 날의 모든 가산(소정근로외/야간/연장/휴일) 대체 — 이중 합산 방지
+    if(rec.specialWork && (+rec.specialPay||0) > 0){
+      tSpecialDays++;
+      tSpecialPay += +rec.specialPay||0;
+      if(c) wdays++; // 출퇴근 기록 있으면 근무일로 카운트
+      continue;      // 그 날의 자동 가산 누적은 스킵 (이중 합산 방지)
+    }
     if(!c)continue;
     // 매일 m2h 변환 후 시간(hours) 누적 (출퇴근 기록 소수점 그대로 합산)
     twkH+=m2h(c.work); tAllNightH+=m2h(c.nightM); tAllOtDayH+=m2h(c.otDay); tAllOtNightH+=m2h(c.otNight);
     if(empPayMode==='fixed'){
-      tFixExtraH += m2h(autoH ? c.work : Math.max(0,c.work-480));
+      // 🎯 OT 임계는 반차여도 480분(8h) 유지 — 실근무 자체가 8h 초과해야 0.5x 연장가산
+      const fixedThresh = 480;
+      tFixExtraH += m2h(autoH ? c.work : Math.max(0, c.work - fixedThresh));
       if(autoH) tFixHolWorkH += m2h(c.work);
     }
     if(empPayMode==='hourly' && !autoH){
       const dayM = Math.max(0, c.work - c.nightM);
-      tHrBaseH += m2h(Math.min(dayM, 480) + Math.min(c.nightM, 480));
+      // 🎯 반차일: 반차 4h를 base에 추가 + 실근무 8h 초과만 OT 처리 (임계는 480분 유지)
+      const hourlyThresh = 480;
+      if(rec.halfAnnual) tHrBaseH += 4; // 반차 4h 시급 기본급 시간 가산 (월급 대신)
+      tHrBaseH += m2h(Math.min(dayM, hourlyThresh) + Math.min(c.nightM, hourlyThresh));
       tHrNightH += m2h(Math.min(c.nightM, 480));
       tHrOtDayH += m2h(c.otDay);
       tHrOtNightH += m2h(c.otNight);
@@ -1094,10 +1530,18 @@ function monthSummary(eid,y,m){
       tHolNightOtH+=m2h(c.otNight);
     }
     wdays++;
-    // 월급제·시급제는 시��기준 공제 없음
-    // 시급제: 실��무시간 기��� 계산이라 별도 공제 불필요
-    if(empPayMode!=='monthly' && empPayMode!=='hourly' && POL.dedMode==='hour'&&c.work<dailyStd*60&&!autoH){
-      const sh=dailyStd*60-c.work;if(sh>10){deduction+=r10(rate*m2h(sh));dedShortMins+=sh;}
+    // 반차일은 4시간(240분) 인정 → 기준 시간에서 차감 (반차 4h + 출근 c.work ≥ 8h이면 공제 없음)
+    const _adjStdM = dailyStd*60 - (rec.halfAnnual ? 240 : 0);
+    const _shMins = _adjStdM - c.work;
+    // 📊 표시용 공제시간: 평일에 소정(8h) 미달이면 누적 (휴일 제외 — 정기휴일·법정공휴일은 특근 개념)
+    // autoH=true: 주간직원의 토/일, 야간직원의 금/토, 법정공휴일 (subWork=true면 평일 처리됨)
+    if(!autoH && _shMins > 0){
+      dedShortHByDay += +m2h(_shMins).toFixed(2);
+    }
+    // 💰 결근차감 금액 + 분 단위 정밀 누적: 기존 조건 (통상/포괄임금제 + 시간단위 공제 모드 + 평일만)
+    if(empPayMode!=='monthly' && empPayMode!=='hourly' && POL.dedMode==='hour' && !autoH && _shMins > 0){
+      deduction += r10(rate*m2h(_shMins));
+      dedShortMins += _shMins;
     }
   }
   // ── 누적 시간(hours) × 시급 → r10 한 번 (엑셀 방식) ──
@@ -1106,7 +1550,7 @@ function monthSummary(eid,y,m){
   const _rh = v=>Math.round(v*100 + FP_EPS)/100;
   if(empPayMode==='fixed'){
     const _ntF=POL.ntFixed??true, _otF=POL.otFixed??true;
-    tBase=r10(rate*sot);
+    tBase=r10(rate*sot*_prorate);
     tNightPay=_ntF?r10(ordRate*0.5*_rh(tAllNightH)):0;
     // 초과연장: 엑셀 X = rh(주간연장) + rh(야간연장, ntF꺼지면 제외) → 1회 ROUND (주간/야간 배율 동일 0.5로 통합 가능)
     const otHExcel = _rh(tAllOtDayH) + (_ntF?_rh(tAllOtNightH):0);
@@ -1128,11 +1572,11 @@ function monthSummary(eid,y,m){
       tHolNightOtPay=r10(ordRate*2.5*tHolNightOtH);
     }
   } else if(empPayMode==='monthly'){
-    tBase=r10(getEmpMonthlyAt(emp, y, m, 1));
+    tBase=r10(getEmpMonthlyAt(emp, y, m, 1)*_prorate);
     tMonthlyHolStdPay=(POL.holMonthlyStd??true)?r10(ordRate*1.5*tMhHolStdH):0;
     tMonthlyHolOtPay=(POL.holMonthlyOt??true)?r10(ordRate*2.0*tMhHolOtH):0;
   } else if(empPayMode==='pohal'){
-    tBase=r10(rate*sot);
+    tBase=r10(rate*sot*_prorate);
     const pohalRate=ordRate||Math.round((POL.baseMonthly||2455750)/209);
     tMonthlyHolStdPay=(POL.holMonthlyStd??true)?r10(pohalRate*1.5*tMhHolStdH):0;
     tMonthlyHolOtPay=(POL.holMonthlyOt??true)?r10(pohalRate*2.0*tMhHolOtH):0;
@@ -1155,8 +1599,8 @@ function monthSummary(eid,y,m){
       for(let offset=0;offset<7;offset++){
         const d=mon+offset;
         if(d<1||d>daysInMonth) continue;
-        // 퇴사일 이후 날짜는 주휴수당 판정 제외
-        if(emp.leave){const ld=new Date(emp.leave);if(ld<=new Date(y,m-1,d)) continue;}
+        // 퇴사일 이후 날짜는 주휴수당 판정 제외 (퇴사일 당일은 포함)
+        if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<new Date(y,m-1,d)) continue;}
         // 근무형태 등록된 경우만 소정근로일 체크
         if(isRegistered){
           const dowKo=DOW_KO[new Date(y,m-1,d).getDay()];
@@ -1167,10 +1611,10 @@ function monthSummary(eid,y,m){
         if(isRegistered&&(!rec||rec.absent)){hasAbsent=true;continue;}
         if(!rec||rec.absent) continue; // 미등록은 그냥 skip
         if(rec.annual||rec.halfAnnual) continue; // 연차는 개근 인정
-        const bks=getActiveBk(y,m,d);
+        const bks=getActiveBk(y,m,d,emp);
         const _whActiveBks = rec.customBk ? (rec.customBkList||[]) : bks;
         const c=rec.start&&rec.end
-          ?calcSession(rec.start,rec.end,rate,isAutoHol(y,m,d,emp),_whActiveBks,rec.outTimes||[],empPayMode,ordRate)
+          ?calcSession(rec.start,rec.end,rate,(isAutoHol(y,m,d,emp)&&!rec.subWork)||rec.subHol,_whActiveBks,rec.outTimes||[],empPayMode,ordRate)
           :null;
         if(c&&c.work>0) weekWork+=c.work;
       }
@@ -1185,20 +1629,26 @@ function monthSummary(eid,y,m){
   POL.allowances.forEach(a=>{
     const v=getMonthAllowance(eid,y,m,a.id);
     // isDeduct인 항목은 입력값을 음수로 처리
-    const effectiveV = (a.isDeduct && v>0) ? -v : v;
+    let effectiveV = (a.isDeduct && v>0) ? -v : v;
+    // 입사·퇴사월 일할: 공제(가불·선지급 등 약정 금액)는 일할 안 함, 수당만 일할
+    if(_isPartialMonth && !a.isDeduct){
+      effectiveV = r10(effectiveV * _prorate);
+    }
     allowances[a.id]=effectiveV;
     totalAllowance+=effectiveV;
   });
-  // 총 가산수당 합계
-  const tTotalBonus = empPayMode==='fixed'
+  // 총 가산수당 합계 (고정특근수당 포함 — tSpecialPay는 여기에만 합산되고, total 합산식에서는 별도 가산하지 않음)
+  const tTotalBonus = (empPayMode==='fixed'
     ? tExtraWorkPay + tNightPay + tOtDayPay + tOtNightPay + tHolPayNew
-    : tNightPay + tOtDayPay + tOtNightPay + (tHolDayPay||0) + (tHolNightPay||0) + (tHolDayOtPay||0) + (tHolNightOtPay||0);
+    : tNightPay + tOtDayPay + tOtNightPay + (tHolDayPay||0) + (tHolNightPay||0) + (tHolDayOtPay||0) + (tHolNightOtPay||0)
+  ) + tSpecialPay;
   // 결근차감: 통상시급(= 기본시급 + '통상' 체크된 수당만 반영) 기준으로 재계산
   // 근로기준법상 결근 1일=통상임금 1일분 공제
+  // 표시 공제시간(dedShortHByDay) 그대로 사용 → 표시 × 통상시급 = 차감 금액 정확히 일치 (사용자 요구)
   if(empPayMode!=='monthly' && empPayMode!=='hourly'){
-    deduction = Math.round(ordRate * (adays * dailyStd + m2h(dedShortMins)) / 10 + FP_EPS) * 10;
+    deduction = Math.round(ordRate * (adays * dailyStd + dedShortHByDay) / 10 + FP_EPS) * 10;
   }
-  // 총급여 = 기본급 + 수당 + 주휴 + 연차 + 총가산수당 + 월급제휴일 + 상여 - 결근차감
+  // 총급여 = 기본급 + 수당 + 주휴 + 연차 + 총가산수당(고정특근수당 포함) + 월급제휴일 + 상여 - 결근차감
   const total=r10((tBase+totalAllowance) + wkly + annualPay + tTotalBonus + tMonthlyHolStdPay + tMonthlyHolOtPay + bonus - deduction);
 
   const rh=v=>Math.round(v*100 + FP_EPS)/100; // 시간 소수점 2자리 (FP 보정)
@@ -1206,7 +1656,9 @@ function monthSummary(eid,y,m){
     tBase,tNightPay,tOtDayPay,tOtNightPay,tHolDayPay,tHolNightPay,tHolDayOtPay,tHolNightOtPay,
     tExtraWorkH:rh(tFixExtraH),tExtraWorkPay,tHolPayNew,tTotalBonus,
     tMonthlyHolStdPay,tMonthlyHolOtPay,
-    annualPay,wkly,bonus,allowances,totalAllowance,deduction,dedShortH:dedShortMins/60,total};
+    tSpecialDays,tSpecialPay,
+    annualPay,wkly,bonus,allowances,totalAllowance,deduction,dedShortH:dedShortHByDay,total,
+    prorateDays:_prorateDays,prorateMonthDays:days,isPartialMonth:_isPartialMonth};
   } finally {
     if(_polSwapped) POL = _origPOL;
   }
@@ -1296,7 +1748,7 @@ function gp(p){
     renderPayroll();
   }
   if(p==='emps')renderEmps();
-  if(p==='settings'){renderDefBk();renderAllowanceList();}
+  if(p==='settings'){populateSettingsUI();renderDefBk();renderAllowanceList();}
   if(p==='shift')renderShiftList();
   if(p==='safety')renderSafety();
   if(p==='leave')renderLeave();
@@ -1385,8 +1837,11 @@ function updDbar(){
   document.getElementById('ddow').textContent=dowText;
   document.getElementById('daily-sub').textContent=`${cY}년 ${cM}월 ${cD}일 ${DOW[dow]}요일`;
   const al=document.getElementById('hol-alert');
-  if(autoH){al.style.display='block';al.textContent=`🎌 ${phName||(dow===6?'토요일':'일요일')} — 휴일 가산 자동 적용`;}
+  if(autoH){al.style.display='block';al.textContent=`${phName||(dow===6?'토요일':'일요일')} — 휴일 가산 자동 적용`;}
   else al.style.display='none';
+  // 미니 캘린더가 열려있으면 동기화
+  const _dpkPop=document.getElementById('day-picker-pop');
+  if(_dpkPop && _dpkPop.style.display==='block'){ _dpkY=cY; _dpkM=cM; renderDayPicker(); }
 }
 
 function getDsBk(){const k=`${cY}-${pad(cM)}-${pad(cD)}`;return TBK[k]||DEF_BK.map(b=>({...b}));}
@@ -1476,46 +1931,66 @@ function calcOutMins(outTimes){
 function handleTimeInput(eid,field,raw){
   const parsed=parseTimeInput(raw);
   const k=rk(eid,cY,cM,cD);
-  if(!REC[k])REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
+  if(!REC[k])REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[],specialWork:false,specialPay:0,subWork:false,subHol:false};
   REC[k][field]=parsed;
   saveLS();
-  // input 값 즉시 반영
+  // input 값 즉시 반영 (포커스가 이미 떠난 상태에서만)
   const inp=document.querySelector('#daily-tbody input.time-inp[data-eid="'+eid+'"][data-field="'+field+'"]');
   if(inp && inp!==document.activeElement) inp.value=parsed;
-  // 실근무/야간/연장 셀 업데이트
+  // 계산 셀(실근무/야간/연장/휴일) 갱신 — 빈값/특수상태도 처리해서 옛 값 잔존 방지
   _updateDailyRowCells(eid);
 }
 
 function _updateDailyRowCells(eid){
   const k=rk(eid,cY,cM,cD);
   const rec=REC[k];
-  if(!rec||!rec.start||!rec.end) return;
+  // 행 찾기
+  const rows=document.querySelectorAll('#daily-tbody tr');
+  let targetTr=null;
+  for(const tr of rows){
+    if(tr.querySelector('input.time-inp[data-eid="'+eid+'"]')){ targetTr=tr; break; }
+  }
+  if(!targetTr) return;
+  const tdW=targetTr.querySelector('.td-w');
+  const tdBk=targetTr.querySelector('.td-bk');
+  const tdNt=targetTr.querySelector('.td-nt');
+  const tdOt=targetTr.querySelector('.td-ot');
+  const tdHol=targetTr.querySelector('.td-hol');
+  // 🛡️ 빈값/연차/결근 등 계산 불필요 → 계산 셀 클리어 (옛 값 잔존 방지)
+  // 단, 특수상태(연차/결근/반차)일 때는 renderTable이 chip을 그렸으므로 여기서 안 건드림
+  if(!rec || (!rec.start || !rec.end)){
+    if(!rec || (!rec.absent && !rec.annual && !rec.halfAnnual)){
+      if(tdW){ const d=tdW.querySelector('div')||tdW; d.textContent=''; }
+      if(tdBk) tdBk.innerHTML='';
+      if(tdNt) tdNt.textContent='';
+      if(tdOt) tdOt.textContent='';
+      if(tdHol) tdHol.textContent='';
+    }
+    return;
+  }
   if(rec.absent||rec.annual) return;
   const emp=EMPS.find(e=>e.id===eid);
   if(!emp) return;
-  const autoH=isAutoHol(cY,cM,cD,emp);
-  const bks=getActiveBk(cY,cM,cD);
+  // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제
+  const autoH=(isAutoHol(cY,cM,cD,emp) && !rec.subWork) || rec.subHol;
+  const bks=getActiveBk(cY,cM,cD,emp);
   const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
+  const _pm = getEmpPayMode(emp);
+  // 🎯 반차여도 실근무 8h 임계 유지 (반차 4h는 OT 임계에 영향 X, 기본급 지급은 별도)
+  const _halfBaseM = 0;
   try{
-    const c=calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,cY,cM));
+    const c=calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],_pm,getOrdinaryRate(emp,cY,cM),_halfBaseM);
     if(!c) return;
-    // row 찾기
-    const rows=document.querySelectorAll('#daily-tbody tr');
-    for(const tr of rows){
-      if(!tr.querySelector('input.time-inp[data-eid="'+eid+'"]')) continue;
-      const tdW=tr.querySelector('.td-w');
-      if(tdW){
-        const d=tdW.querySelector('div')||tdW;
-        d.textContent=c.work>0?fmtH(c.work):'';
-      }
-      const tdNt=tr.querySelector('.td-nt');
-      if(tdNt) tdNt.textContent=c.nightM>30?fmtH(c.nightM):'';
-      const tdOt=tr.querySelector('.td-ot');
-      if(tdOt) tdOt.textContent=c.ot>0?fmtH(c.ot):'';
-      const tdHol=tr.querySelector('.td-hol');
-      if(tdHol) tdHol.textContent=autoH&&c.work>0?fmtH(c.work):'';
-      break;
+    if(tdW){
+      const d=tdW.querySelector('div')||tdW;
+      d.textContent=c.work>0?fmtH(c.work):'';
     }
+    if(tdBk) tdBk.innerHTML = c.bkMins>0
+      ? fmtH(c.bkMins)+(c.nightBkMins>0?`<div style="font-size:8px;color:#7C3AED;margin-top:1px">야간${fmtH(c.nightBkMins)}</div>`:'')
+      : '';
+    if(tdNt) tdNt.textContent=c.nightM>30?fmtH(c.nightM):'';
+    if(tdOt) tdOt.textContent=c.ot>0?fmtH(c.ot):'';
+    if(tdHol) tdHol.textContent=autoH&&c.work>0?fmtH(c.work):'';
   }catch(err){console.warn('row update 오류:',err);}
 }
 function setR(eid,f,v){
@@ -1525,14 +2000,23 @@ function setR(eid,f,v){
   if(f==='annual'&&v){REC[k].absent=false;REC[k].halfAnnual=false;}
   if(f==='halfAnnual'&&v){REC[k].absent=false;REC[k].annual=false;}
   if(f==='absent'&&v){REC[k].annual=false;REC[k].halfAnnual=false;}
+  // 대체근무 ↔ 대체공휴일 상호 배타 (한 날에 둘 다 켜는 건 의미 모순)
+  if(f==='subWork'&&v) REC[k].subHol=false;
+  if(f==='subHol'&&v) REC[k].subWork=false;
   REC[k][f]=v;
   // customBk 체크 시 customBkList 자동 초기화
   if(f==='customBk'&&v&&!REC[k].customBkList?.length){
     REC[k].customBkList=[{s:'',e:''}];
   }
-  saveLS();renderTable();
-  // 연차/반차 변경 시 관련 탭도 즉시 갱신
-  if(f==='annual'||f==='halfAnnual'||f==='absent'){
+  // 특근 해제 시 금액도 0으로 (잘못된 누적 방지)
+  if(f==='specialWork'&&!v) REC[k].specialPay=0;
+  saveLS();
+  // 비고(note)는 시각 변화 없음 → 재렌더 생략 (한글 IME 조합 깨짐·입력 유실 방지).
+  // input.value는 사용자가 친 그대로 DOM에 살아있고, 다음 자연스러운 재렌더에 REC 값으로 그려짐.
+  if(f==='note') return;
+  renderTable();
+  // 연차/반차/대체근무/대체공휴일/특근 변경 시 관련 탭도 즉시 갱신
+  if(f==='annual'||f==='halfAnnual'||f==='absent'||f==='subWork'||f==='subHol'||f==='specialWork'){
     const lvPage=document.getElementById('pg-leave');
     if(lvPage&&lvPage.classList.contains('on')) renderLeave();
     const mvPage=document.getElementById('pg-monthly');
@@ -1542,13 +2026,27 @@ function setR(eid,f,v){
   }
 }
 
+// 특근수당 금액 입력
+function setSpecialPay(eid,raw){
+  const k=rk(eid,cY,cM,cD);
+  if(!REC[k])REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[],specialWork:false,specialPay:0};
+  const num=+(String(raw||'').replace(/,/g,''))||0;
+  REC[k].specialPay=Math.max(0,num);
+  saveLS();
+  // 급여관리/근태가 켜져 있으면 갱신 (총급여 반영)
+  const pvPage=document.getElementById('pg-payroll');
+  if(pvPage&&pvPage.classList.contains('on')) renderPayroll();
+}
+
 // ══ 공통 필터 상태 ══
 const F = {
-  daily:   { shift:'all', nation:'all', pay:'all', dept:'all', search:'' },
-  payroll: { shift:'all', nation:'all', pay:'all', dept:'all', search:'' },
-  leave:   { shift:'all', nation:'all', pay:'all', dept:'all', search:'' },
-  emps:    { shift:'all', nation:'all', pay:'all', dept:'all', search:'' },
+  daily:   { shift:'all', nation:'all', pay:'all', dept:'all', deptCat:'all', search:'' },
+  payroll: { shift:'all', nation:'all', pay:'all', dept:'all', deptCat:'all', search:'' },
+  leave:   { shift:'all', nation:'all', pay:'all', dept:'all', deptCat:'all', search:'' },
+  emps:    { shift:'all', nation:'all', pay:'all', dept:'all', deptCat:'all', search:'' },
 };
+// 부서 분류 옵션 — 사무(미지정) / 선별 / 시설 / 운반. 사번 자동 생성에는 영향 없음
+const DEPT_CATS = ['선별','시설','운반'];
 
 function setFilter(tab, key, val, btn){
   F[tab][key] = val;
@@ -1586,9 +2084,11 @@ function setSearch(tab, val){
 function applyCommonFilter(emps, tab, refDate){
   const f = F[tab];
   return emps.filter(emp=>{
+    // 🗑️ 휴지통 직원은 모든 화면에서 자동 제외 (직원관리 휴지통 뷰에서는 별도 경로로 표시)
+    if(emp.deletedAt) return false;
     // 퇴사자 필터: 기준일 이전 퇴사자 제외. 단, 직원관리(emps) 탭에서는 퇴사자도 하단에 표시하기 위해 필터 스킵
     if(emp.leave && tab!=='emps'){
-      const ld=new Date(emp.leave);
+      const ld=parseEmpDate(emp.leave);
       const ref=refDate||new Date();
       if(ld<ref) return false;
     }
@@ -1603,6 +2103,11 @@ function applyCommonFilter(emps, tab, refDate){
       else{if(ep!==f.pay)return false;}
     }
     if(f.dept && f.dept!=='all' && (emp.dept||'').trim()!==(f.dept||'').trim()) return false;
+    if(f.deptCat && f.deptCat!=='all'){
+      const ec=(emp.deptCat||'').trim();
+      if(f.deptCat==='none'){ if(ec) return false; }
+      else if(ec!==f.deptCat) return false;
+    }
     if(f.search && !(emp.name||'').toLowerCase().includes(f.search)) return false;
     return true;
   });
@@ -1629,7 +2134,21 @@ function makeFilterBar(tab){
       <button class="fb${f.pay==='monthly'?' on':''}" onclick="setFilter('${tab}','pay','monthly',this)">포괄임금제</button>
     </div>
     ${(()=>{
-      const depts=[...new Set(EMPS.map(e=>(e.dept||'').trim()).filter(d=>d))].sort();
+      // 부서 분류: 전체 / 사무(none) / 기본 3개(선별/시설/운반) / EMPS에 입력된 커스텀 부서 자동 추가
+      const customCats = [...new Set(EMPS.map(e=>(e.deptCat||'').trim()).filter(d=>d && !DEPT_CATS.includes(d)))].sort();
+      const all = [['all','전체'],['none','사무'],...DEPT_CATS.map(c=>[c,c]),...customCats.map(c=>[c,c])];
+      return `<div class="filter-group" data-fg="deptCat" title="부서 분류">`+
+        all.map(([v,l])=>`<button class="fb${(f.deptCat||'all')===v?' on':''}" onclick="setFilter('${tab}','deptCat','${v}',this)"${v==='none'?' title="부서 미지정"':''}>${esc(l)}</button>`).join('')+
+        `</div>`;
+    })()}
+    ${(()=>{
+      // 인천본점 항상 맨 앞 → 아웃소싱 → 그 외 가나다순 (본점 우선 정렬)
+      const _deptRank = s => s==='인천본점' ? 0 : (s==='아웃소싱' ? 1 : 2);
+      const depts=[...new Set(EMPS.map(e=>(e.dept||'').trim()).filter(d=>d))].sort((a,b)=>{
+        const ra=_deptRank(a), rb=_deptRank(b);
+        if(ra!==rb) return ra-rb;
+        return a.localeCompare(b);
+      });
       if(!depts.length) return '';
       const cur=f.dept||'all';
       return '<div class="filter-group" style="display:flex;gap:3px;background:rgba(0,0,0,.05);border-radius:8px;padding:2px;">'
@@ -1645,6 +2164,9 @@ function makeFilterBar(tab){
       <input placeholder="이름 검색..." value="${f.search}"
         oninput="setSearch('${tab}',this.value)">
     </div>
+    ${tab==='emps' ? `<button id="emp-order-edit-btn" onclick="enterEmpOrderEditMode()"
+        title="직원 순서를 편집 모드에서 드래그로 변경 — 편집 중엔 다른 디바이스 변경에 안 덮여짐"
+        style="margin-left:6px;padding:6px 12px;font-size:12px;font-weight:600;border:1px solid #C8D6E5;border-radius:8px;background:#fff;color:#1E3A5F;cursor:pointer;font-family:inherit;white-space:nowrap;">✏️ 순서 편집</button>` : ''}
   </div>`;
 }
 
@@ -1655,12 +2177,19 @@ function renderFilterBar(containerId, tab){
   if(existing && document.activeElement === existing){
     // 검색 input에 포커스 중이면 버튼 상태만 업데이트하고 input은 보존
     const f = F[tab];
+    // 부서 분류 그룹은 EMPS의 커스텀 값 포함이라 동적 — 매 호출마다 재계산
+    const _customCats = [...new Set(EMPS.map(e=>(e.deptCat||'').trim()).filter(d=>d && !DEPT_CATS.includes(d)))].sort();
     el.querySelectorAll('.filter-group').forEach((grp, gi)=>{
-      const key = ['shift','nation','pay'][gi];
+      const key = ['shift','nation','pay','deptCat'][gi];
       if(!key) return;
       grp.querySelectorAll('.fb').forEach(b=>{
         b.classList.remove('on','on-night','on-foreign');
-        const vals = [['all','day','night'],['all','korean','foreign'],['all','fixed','hourly','monthly']][gi];
+        const vals = [
+          ['all','day','night'],
+          ['all','korean','foreign'],
+          ['all','fixed','hourly','monthly'],
+          ['all','none', ...DEPT_CATS, ..._customCats]
+        ][gi];
         const idx = Array.from(grp.children).indexOf(b);
         const bVal = vals[idx];
         if(bVal === f[key]){
@@ -1676,11 +2205,59 @@ function renderFilterBar(containerId, tab){
 }
 
 let payFilter = 'all';
+
 function setPayFilter(f){ payFilter=f; }
 function filterEmpsByPay(emps){
   return applyCommonFilter(emps, 'payroll');
 }
+
+// ══ 입력값 유실 방지: 재렌더 시 활성 input의 값/캐럿/포커스 보존 ══
+// renderTable/renderEmps 등 innerHTML 교체로 input이 destroy & recreate될 때
+// 사용자가 입력 중인 글자가 사라지지 않도록 스냅샷 → 복원.
+// 체크박스/버튼 등 비-텍스트 input은 보존 대상 아님.
+//
+// 🚦 _skipFocusRestore 플래그: timeKeyNav(Enter/Tab)에서 blur 후 다음 셀로 이동할 때
+// renderTable의 focus 복원이 현재 셀에 cursor를 다시 잡아버리는 충돌 방지용.
+// 플래그 ON이면 스냅샷 자체를 안 찍어 _restoreInputIn은 자동 no-op.
+let _skipFocusRestore = false;
+
+function _snapshotInputIn(containerEl){
+  if(_skipFocusRestore) return null;
+  if(!containerEl) return null;
+  const ae = document.activeElement;
+  if(!ae || !ae.matches || !containerEl.contains(ae)) return null;
+  if(!ae.matches('input,textarea')) return null;
+  const t = (ae.type||'').toLowerCase();
+  if(t==='checkbox'||t==='radio'||t==='button'||t==='submit'||t==='file') return null;
+  return {
+    eid: ae.dataset.eid || '',
+    field: ae.dataset.field || '',
+    id: ae.id || '',
+    val: ae.value,
+    ss: ae.selectionStart,
+    se: ae.selectionEnd
+  };
+}
+function _restoreInputIn(containerEl, snap){
+  if(!snap || !containerEl) return;
+  let el = null;
+  if(snap.eid && snap.field){
+    el = containerEl.querySelector('input[data-eid="'+snap.eid+'"][data-field="'+snap.field+'"]');
+  } else if(snap.id){
+    const candidate = document.getElementById(snap.id);
+    if(candidate && containerEl.contains(candidate)) el = candidate;
+  }
+  if(!el) return;
+  // 사용자가 친 raw 값 보존 (REC의 옛 값으로 그려진 새 input을 raw로 덮음)
+  if(el.value !== snap.val) el.value = snap.val;
+  try { el.focus(); } catch(e){}
+  try { el.setSelectionRange(snap.ss, snap.se); } catch(e){}
+}
+
 function renderTable(){
+  // 🛡️ 입력 중 input 스냅 (재렌더 후 복원)
+  const _focusTbody = document.getElementById('daily-tbody');
+  const _focusSnap = _snapshotInputIn(_focusTbody);
   // 과거 날짜 조회 시 그 달의 정책 스냅샷 사용
   const _origPOL = POL;
   const _monthPOL = (typeof getPolForMonth==='function') ? getPolForMonth(cY, cM) : POL;
@@ -1688,11 +2265,10 @@ function renderTable(){
   if(_polSwapped) POL = _monthPOL;
   try {
   renderFilterBar('daily-filter-bar','daily');
-  const bks=getActiveBk(cY,cM,cD);
   const dayDate=new Date(cY,cM-1,cD);
   const activeDayEmps = applyCommonFilter(EMPS.filter(emp=>{
-    if(emp.join){const jd=new Date(emp.join);if(jd>dayDate)return false;}
-    if(emp.leave){const ld=new Date(emp.leave);if(ld<=dayDate)return false;}
+    if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate)return false;}
+    if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<dayDate)return false;}
     return true;
   }), 'daily', dayDate);
   document.getElementById('daily-tbody').innerHTML=activeDayEmps.map(emp=>{
@@ -1702,20 +2278,24 @@ function renderTable(){
     const prevKey = rk(emp.id,prevD.getFullYear(),prevD.getMonth()+1,prevD.getDate());
     // 저장된 기록만 사용 (자동 채우기 없음 - 최근 데이터 불러오기 버튼으로만 적용)
     const rec=REC[k]||{empId:emp.id,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
-    const autoH=isAutoHol(cY,cM,cD,emp);
+    // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제 (UI 휴일 배지·계산 모두 일치)
+    const autoH=(isAutoHol(cY,cM,cD,emp) && !rec.subWork) || rec.subHol;
     const rate=getEmpRate(emp);
     const al=calcAnnualLeave(emp);
     const empPayMode=getEmpPayMode(emp);
     const isPohalEmp=empPayMode==='pohal';
-    // 개별휴게 ON이면 개인 휴게시간 사용, 아니면 전체 휴게시간
+    // 직원 shift에 따라 다른 휴게세트 적용 (주간/야간 분리)
+    const bks=getActiveBk(cY,cM,cD,emp);
+    // 개별휴게 ON이면 개인 휴게시간 사용, 아니면 shift별 휴게시간
     const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
     let c=null;
     if(rec.annual){
       c={work:480,nightM:0,ot:0,crossed:false,basePay:rate*8,nightPay:0,otPay:0,holPay:0,totalPay:rate*8};
     } else if(rec.halfAnnual){
-      // 반차: 4h 기본 지급, 출퇴근 있으면 실근무 추가 계산
+      // 반차: 4h 기본 지급, 출퇴근 있으면 실근무 추가 계산 (시급제·통상임금제는 4h+work 8h초과 1.5x 연장)
       if(rec.start&&rec.end){
-        c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,cY,cM));
+        const _halfBaseM = 0;
+        c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,cY,cM),_halfBaseM);
       } else {
         c={work:240,nightM:0,ot:0,crossed:false,basePay:rate*4,nightPay:0,otPay:0,holPay:0,totalPay:rate*4};
       }
@@ -1734,7 +2314,7 @@ function renderTable(){
     const phName=getPhName(cY,cM,cD);
     const holTag=autoH?`<span style="font-size:9px;color:#9A3412;background:#FED7AA;padding:1px 5px;border-radius:5px;font-weight:700;margin-left:3px">${esc(phName)||'휴일'}</span>`:'';
     const cbTd=`<td style="width:32px;text-align:center;">
-  <input type="checkbox" class="daily-row-cb" data-eid="${emp.id}" style="accent-color:var(--navy);">
+  <input type="checkbox" class="daily-row-cb" data-eid="${emp.id}" style="accent-color:var(--navy);" onchange="dailyUpdateSelCount()">
 </td>`;
     const nameTd=`<td class="td-nm">
       <div style="display:flex;align-items:center;gap:5px">
@@ -1753,9 +2333,9 @@ function renderTable(){
       const pohalBkUI = rec.customBk ? `<div style="margin-top:4px;padding:5px 8px;background:var(--gbg);border:1px solid #BBF7D0;border-radius:6px">
         <div style="font-size:9px;font-weight:700;color:var(--green);margin-bottom:3px">개인 휴게시간</div>
         ${(rec.customBkList||[{s:'',e:''}]).map((b,bi)=>`<div style="display:flex;align-items:center;gap:3px;margin-bottom:2px">
-          <input class="out-time" value="${b.s||''}" placeholder="1200" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'s',this.value)" onkeydown="if(event.key==='Enter')setCustomBk(${emp.id},${bi},'s',this.value)">
+          <input class="out-time" value="${b.s||''}" placeholder="1200" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'s',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
           <span style="font-size:10px;color:var(--ink3)">~</span>
-          <input class="out-time" value="${b.e||''}" placeholder="1300" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'e',this.value)" onkeydown="if(event.key==='Enter')setCustomBk(${emp.id},${bi},'e',this.value)">
+          <input class="out-time" value="${b.e||''}" placeholder="1300" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'e',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
           <button class="out-x" onclick="delCustomBk(${emp.id},${bi})" style="color:#065F46">×</button>
         </div>`).join('')}
         <button class="bk-add" onclick="addCustomBk(${emp.id})" style="font-size:9px;margin-top:2px;padding:2px 8px">+ 세트 추가</button>
@@ -1764,9 +2344,9 @@ function renderTable(){
       const pohalOutUI=(rec.outTimes&&rec.outTimes.length>0)?`<div style="margin-top:4px;padding:5px 7px;background:var(--abg);border-radius:6px;border:1px solid #FCD34D">
         ${(rec.outTimes||[]).map((o,oi)=>`<div class="out-row">
           <span style="font-size:9px;font-weight:700;color:var(--amber)">외출${oi+1}</span>
-          <input class="out-time" value="${o.s||''}" placeholder="0900" onblur="setOutTime(${emp.id},${oi},'s',this.value)" onkeydown="if(event.key==='Enter')setOutTime(${emp.id},${oi},'s',this.value)">
+          <input class="out-time" value="${o.s||''}" placeholder="0900" onblur="setOutTime(${emp.id},${oi},'s',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
           <span style="font-size:11px;color:var(--ink3)">~</span>
-          <input class="out-time" value="${o.e||''}" placeholder="1000" onblur="setOutTime(${emp.id},${oi},'e',this.value)" onkeydown="if(event.key==='Enter')setOutTime(${emp.id},${oi},'e',this.value)">
+          <input class="out-time" value="${o.e||''}" placeholder="1000" onblur="setOutTime(${emp.id},${oi},'e',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
           <button class="out-x" onclick="delOutTime(${emp.id},${oi})">×</button>
         </div>`).join('')}
       </div>`:'';
@@ -1794,9 +2374,27 @@ function renderTable(){
             <label style="font-size:10px;color:var(--green);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600" title="전체 휴게시간 무시하고 개인 휴게시간 적용">
               <input type="checkbox" ${rec.customBk?'checked':''} onchange="setR(${emp.id},'customBk',this.checked)">개별휴게
             </label>
+            <label style="font-size:10px;color:#7C3AED;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600" title="휴일이지만 평일 대체근무로 처리 (휴일가산 미적용, 기본 근무로 산정)">
+              <input type="checkbox" ${rec.subWork?'checked':''} onchange="setR(${emp.id},'subWork',this.checked)">대체근무
+            </label>
+            <label style="font-size:10px;color:#D97706;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:700" title="평일이지만 공휴일로 처리 (휴일가산 적용)">
+              <input type="checkbox" ${rec.subHol?'checked':''} onchange="setR(${emp.id},'subHol',this.checked)">대체공휴일
+            </label>
+            <label style="font-size:10px;color:#B91C1C;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:700" title="특근 체크 시 입력한 금액(누적 가산 결과)이 총급여에 추가 지급됩니다">
+              <input type="checkbox" ${rec.specialWork?'checked':''} onchange="setR(${emp.id},'specialWork',this.checked)">특근
+            </label>
             <button class="out-btn ${(rec.outTimes&&rec.outTimes.length>0)?'active':''}" onclick="addOutTime(${emp.id})">+ 외출</button>
             <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" oninput="setR(${emp.id},'note',this.value)">
           </div>
+          ${rec.specialWork?`<div style="margin-top:4px;padding:5px 8px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;font-weight:700;color:#B91C1C">고정특근수당</span>
+            <input type="text" inputmode="numeric" value="${rec.specialPay?Number(rec.specialPay).toLocaleString():''}" placeholder="0"
+              style="width:110px;padding:3px 6px;font-size:11px;border:1px solid #FECACA;border-radius:5px;text-align:right;font-weight:700;color:#B91C1C"
+              oninput="formatNumInput(this)"
+              onblur="setSpecialPay(${emp.id},this.value)"
+              onkeydown="if(event.key==='Enter')this.blur()">
+            <span style="font-size:10px;color:#7F1D1D">원</span>
+          </div>`:''}
           ${pohalOutUI}
           ${pohalBkUI}
         </td>
@@ -1819,9 +2417,9 @@ function renderTable(){
       const monthlyBkUI = rec.customBk ? `<div style="margin-top:4px;padding:5px 8px;background:var(--gbg);border:1px solid #BBF7D0;border-radius:6px">
         <div style="font-size:9px;font-weight:700;color:var(--green);margin-bottom:3px">개인 휴게시간</div>
         ${(rec.customBkList||[{s:'',e:''}]).map((b,bi)=>`<div style="display:flex;align-items:center;gap:3px;margin-bottom:2px">
-          <input class="out-time" value="${b.s||''}" placeholder="1200" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'s',this.value)" onkeydown="if(event.key==='Enter')setCustomBk(${emp.id},${bi},'s',this.value)">
+          <input class="out-time" value="${b.s||''}" placeholder="1200" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'s',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
           <span style="font-size:10px;color:var(--ink3)">~</span>
-          <input class="out-time" value="${b.e||''}" placeholder="1300" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'e',this.value)" onkeydown="if(event.key==='Enter')setCustomBk(${emp.id},${bi},'e',this.value)">
+          <input class="out-time" value="${b.e||''}" placeholder="1300" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'e',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
           <button class="out-x" onclick="delCustomBk(${emp.id},${bi})" style="color:#065F46">×</button>
         </div>`).join('')}
         <button class="bk-add" onclick="addCustomBk(${emp.id})" style="font-size:9px;margin-top:2px;padding:2px 8px">+ 세트 추가</button>
@@ -1830,9 +2428,9 @@ function renderTable(){
       const monthlyOutUI=(rec.outTimes&&rec.outTimes.length>0)?`<div style="margin-top:4px;padding:5px 7px;background:var(--abg);border-radius:6px;border:1px solid #FCD34D">
         ${(rec.outTimes||[]).map((o,oi)=>`<div class="out-row">
           <span style="font-size:9px;font-weight:700;color:var(--amber)">외출${oi+1}</span>
-          <input class="out-time" value="${o.s||''}" placeholder="0900" onblur="setOutTime(${emp.id},${oi},'s',this.value)" onkeydown="if(event.key==='Enter')setOutTime(${emp.id},${oi},'s',this.value)">
+          <input class="out-time" value="${o.s||''}" placeholder="0900" onblur="setOutTime(${emp.id},${oi},'s',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
           <span style="font-size:11px;color:var(--ink3)">~</span>
-          <input class="out-time" value="${o.e||''}" placeholder="1000" onblur="setOutTime(${emp.id},${oi},'e',this.value)" onkeydown="if(event.key==='Enter')setOutTime(${emp.id},${oi},'e',this.value)">
+          <input class="out-time" value="${o.e||''}" placeholder="1000" onblur="setOutTime(${emp.id},${oi},'e',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
           <button class="out-x" onclick="delOutTime(${emp.id},${oi})">×</button>
         </div>`).join('')}
       </div>`:'';
@@ -1861,9 +2459,27 @@ function renderTable(){
             <label style="font-size:10px;color:var(--green);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600" title="전체 휴게시간 무시하고 개인 휴게시간 적용">
               <input type="checkbox" ${rec.customBk?'checked':''} onchange="setR(${emp.id},'customBk',this.checked)">개별휴게
             </label>
+            <label style="font-size:10px;color:#7C3AED;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600" title="휴일이지만 평일 대체근무로 처리 (휴일가산 미적용, 기본 근무로 산정)">
+              <input type="checkbox" ${rec.subWork?'checked':''} onchange="setR(${emp.id},'subWork',this.checked)">대체근무
+            </label>
+            <label style="font-size:10px;color:#D97706;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:700" title="평일이지만 공휴일로 처리 (휴일가산 적용)">
+              <input type="checkbox" ${rec.subHol?'checked':''} onchange="setR(${emp.id},'subHol',this.checked)">대체공휴일
+            </label>
+            <label style="font-size:10px;color:#B91C1C;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:700" title="특근 체크 시 입력한 금액(누적 가산 결과)이 총급여에 추가 지급됩니다">
+              <input type="checkbox" ${rec.specialWork?'checked':''} onchange="setR(${emp.id},'specialWork',this.checked)">특근
+            </label>
             <button class="out-btn ${(rec.outTimes&&rec.outTimes.length>0)?'active':''}" onclick="addOutTime(${emp.id})">+ 외출</button>
             <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" oninput="setR(${emp.id},'note',this.value)">
           </div>
+          ${rec.specialWork?`<div style="margin-top:4px;padding:5px 8px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;font-weight:700;color:#B91C1C">고정특근수당</span>
+            <input type="text" inputmode="numeric" value="${rec.specialPay?Number(rec.specialPay).toLocaleString():''}" placeholder="0"
+              style="width:110px;padding:3px 6px;font-size:11px;border:1px solid #FECACA;border-radius:5px;text-align:right;font-weight:700;color:#B91C1C"
+              oninput="formatNumInput(this)"
+              onblur="setSpecialPay(${emp.id},this.value)"
+              onkeydown="if(event.key==='Enter')this.blur()">
+            <span style="font-size:10px;color:#7F1D1D">원</span>
+          </div>`:''}
           ${monthlyOutUI}
           ${monthlyBkUI}
         </td>
@@ -1877,18 +2493,18 @@ function renderTable(){
     const outUI=(rec.outTimes&&rec.outTimes.length>0)?`<div style="margin-top:4px;padding:5px 7px;background:var(--abg);border-radius:6px;border:1px solid #FCD34D">
       ${(rec.outTimes||[]).map((o,oi)=>`<div class="out-row">
         <span style="font-size:9px;font-weight:700;color:var(--amber)">외출${oi+1}</span>
-        <input class="out-time" value="${o.s||''}" placeholder="0900" onblur="setOutTime(${emp.id},${oi},'s',this.value)" onkeydown="if(event.key==='Enter')setOutTime(${emp.id},${oi},'s',this.value)">
+        <input class="out-time" value="${o.s||''}" placeholder="0900" onblur="setOutTime(${emp.id},${oi},'s',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
         <span style="font-size:11px;color:var(--ink3)">~</span>
-        <input class="out-time" value="${o.e||''}" placeholder="1000" onblur="setOutTime(${emp.id},${oi},'e',this.value)" onkeydown="if(event.key==='Enter')setOutTime(${emp.id},${oi},'e',this.value)">
+        <input class="out-time" value="${o.e||''}" placeholder="1000" onblur="setOutTime(${emp.id},${oi},'e',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
         <button class="out-x" onclick="delOutTime(${emp.id},${oi})">×</button>
       </div>`).join('')}
     </div>`:'';
     const customBkUI = rec.customBk ? `<div style="margin-top:4px;padding:5px 8px;background:var(--gbg);border:1px solid #BBF7D0;border-radius:6px">
       <div style="font-size:9px;font-weight:700;color:var(--green);margin-bottom:3px">개인 휴게시간</div>
       ${(rec.customBkList||[{s:'',e:''}]).map((b,bi)=>`<div style="display:flex;align-items:center;gap:3px;margin-bottom:2px">
-        <input class="out-time" value="${b.s||''}" placeholder="1200" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'s',this.value)" onkeydown="if(event.key==='Enter')setCustomBk(${emp.id},${bi},'s',this.value)">
+        <input class="out-time" value="${b.s||''}" placeholder="1200" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'s',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
         <span style="font-size:10px;color:var(--ink3)">~</span>
-        <input class="out-time" value="${b.e||''}" placeholder="1300" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'e',this.value)" onkeydown="if(event.key==='Enter')setCustomBk(${emp.id},${bi},'e',this.value)">
+        <input class="out-time" value="${b.e||''}" placeholder="1300" style="border-color:#BBF7D0" onblur="setCustomBk(${emp.id},${bi},'e',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
         <button class="out-x" onclick="delCustomBk(${emp.id},${bi})" style="color:#065F46">×</button>
       </div>`).join('')}
       <button class="bk-add" onclick="addCustomBk(${emp.id})" style="font-size:9px;margin-top:2px;padding:2px 8px">+ 세트 추가</button>
@@ -1918,9 +2534,27 @@ function renderTable(){
           <label style="font-size:10px;color:var(--green);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600" title="전체 휴게시간 무시하고 개인 휴게시간 적용">
             <input type="checkbox" ${rec.customBk?'checked':''} onchange="setR(${emp.id},'customBk',this.checked)">개별휴게
           </label>
+          <label style="font-size:10px;color:#7C3AED;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600" title="휴일이지만 평일 대체근무로 처리 (휴일가산 미적용, 기본 근무로 산정)">
+            <input type="checkbox" ${rec.subWork?'checked':''} onchange="setR(${emp.id},'subWork',this.checked)">대체근무
+          </label>
+          <label style="font-size:10px;color:#D97706;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:700" title="평일이지만 공휴일로 처리 (휴일가산 적용)">
+            <input type="checkbox" ${rec.subHol?'checked':''} onchange="setR(${emp.id},'subHol',this.checked)">대체공휴일
+          </label>
+          <label style="font-size:10px;color:#B91C1C;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:700" title="특근 체크 시 입력한 금액(누적 가산 결과)이 총급여에 추가 지급됩니다">
+            <input type="checkbox" ${rec.specialWork?'checked':''} onchange="setR(${emp.id},'specialWork',this.checked)">특근
+          </label>
           <button class="out-btn ${(rec.outTimes&&rec.outTimes.length>0)?'active':''}" onclick="addOutTime(${emp.id})">+ 외출</button>
           <input class="note-inp" value="${esc(rec.note||'')}" placeholder="비고" oninput="setR(${emp.id},'note',this.value)">
         </div>
+        ${rec.specialWork?`<div style="margin-top:4px;padding:5px 8px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;display:flex;align-items:center;gap:6px">
+          <span style="font-size:10px;font-weight:700;color:#B91C1C">고정특근수당</span>
+          <input type="text" inputmode="numeric" value="${rec.specialPay?Number(rec.specialPay).toLocaleString():''}" placeholder="0"
+            style="width:110px;padding:3px 6px;font-size:11px;border:1px solid #FECACA;border-radius:5px;text-align:right;font-weight:700;color:#B91C1C"
+            oninput="formatNumInput(this)"
+            onblur="setSpecialPay(${emp.id},this.value)"
+            onkeydown="if(event.key==='Enter')this.blur()">
+          <span style="font-size:10px;color:#7F1D1D">원</span>
+        </div>`:''}
         ${outUI}
         ${customBkUI}
       </td>
@@ -1929,6 +2563,10 @@ function renderTable(){
   } finally {
     if(_polSwapped) POL = _origPOL;
   }
+  // 🛡️ 활성 input 복원 (raw 값 + 캐럿 + 포커스)
+  _restoreInputIn(document.getElementById('daily-tbody'), _focusSnap);
+  // 🎯 체크박스 카운트 배지 초기화 (날짜 이동·재렌더 시 체크 리셋되므로 0으로 시작)
+  if(typeof dailyUpdateSelCount === 'function') dailyUpdateSelCount();
 }
 
 // ══ Tab 키 네비게이션 ══
@@ -1984,40 +2622,39 @@ function timeKeyNav(e, el, eid, field) {
     e.preventDefault();
     e.stopPropagation();
 
-    // 1. 값 파싱 + 포맷
+    // 1. 값 파싱 + DOM input value 정규화
     const parsed = parseTimeInput(el.value);
     el.value = parsed;
 
-    // 2. 다음 input 먼저 찾기 (DOM 재생성 전에)
+    // 2. 다음 input 찾기 (DOM 그대로 유지하므로 변경 없음)
     const allInputs = Array.from(document.querySelectorAll('#daily-tbody input.time-inp'))
       .filter(inp => !inp.disabled && inp.offsetParent !== null);
     const curIdx = allInputs.indexOf(el);
     const nextIdx = e.shiftKey ? curIdx - 1 : curIdx + 1;
     const nextInput = (nextIdx >= 0 && nextIdx < allInputs.length) ? allInputs[nextIdx] : null;
 
-    // 3. REC 업데이트 (renderTable 없이 직접)
+    // 3. REC 업데이트 (renderTable 안 부름 → DOM 안 깨짐 → focus 자유롭게 이동 가능)
     const k = rk(eid, cY, cM, cD);
     if(!REC[k]) REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
     REC[k][field] = parsed;
 
-    // 4. localStorage만 저장 (renderTable X → DOM 재생성 방지)
+    // 4. localStorage + Supabase 비동기 저장 (포커스 이동 방해 안 함)
     try{
       localStorage.setItem(LS.R, JSON.stringify(REC));
-      // Supabase 비동기 저장 (포커스 이동 방해 안 함)
       const _sess = JSON.parse(localStorage.getItem('nopro_session')||'null');
       if(_sess && _sess.companyId){
         sbSaveAll(_sess.companyId).catch(e=>console.warn(e));
       }
     }catch(err){}
 
-    // 5. 포커스 이동
+    // 5. 다음 셀로 포커스 이동 + 전체 선택 (출근→퇴근→다음 직원 출근 순서)
     if(nextInput){
       nextInput.focus();
       nextInput.select();
     }
 
-    // 6. 현재 행 수치만 업데이트 (전체 renderTable 없이)
-    updateRowCalc(eid);
+    // 6. 현재 행 계산 셀(실근무/야간/연장/휴일) 갱신 — 빈값일 때도 클리어 처리됨
+    _updateDailyRowCells(eid);
 
   } else if(e.key === 'ArrowDown' || e.key === 'ArrowUp') {
     e.preventDefault();
@@ -2038,10 +2675,15 @@ function updateRowCalc(eid){
   if(!rec || !rec.start || !rec.end) return;
   const emp = EMPS.find(e=>e.id===eid);
   if(!emp) return;
-  const autoH = isAutoHol(cY, cM, cD);
-  const bks = getActiveBk(cY, cM, cD);
+  // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제
+  // emp 전달: 야간근무자(POL.nightWeekend)와 주간근무자(POL.dayWeekend) 휴일 기준 분리 적용
+  const autoH = (isAutoHol(cY, cM, cD, emp) && !rec.subWork) || rec.subHol;
+  const bks = getActiveBk(cY, cM, cD, emp);
   const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
-  const c = calcSession(rec.start, rec.end, getEmpRate(emp), autoH, activeBks, rec.outTimes||[], getEmpPayMode(emp), getOrdinaryRate(emp,cY,cM));
+  const _pm = getEmpPayMode(emp);
+  // 🎯 반차여도 실근무 8h 임계 유지 (반차 4h는 OT 임계에 영향 X, 기본급 지급은 별도)
+  const _halfBaseM = 0;
+  const c = calcSession(rec.start, rec.end, getEmpRate(emp), autoH, activeBks, rec.outTimes||[], _pm, getOrdinaryRate(emp,cY,cM), _halfBaseM);
   if(!c) return;
   // 해당 행의 수치 셀 업데이트
   const rows = document.querySelectorAll('#daily-tbody tr');
@@ -2071,20 +2713,37 @@ function getPrevDayRec(empId) {
   return null;
 }
 function applyRecentAll() {
-  const empsToApply = activeDayEmpsForCopy();
+  // 🎯 체크된 직원이 있으면 그들만, 없으면 화면 필터 전체 적용 (하위 호환)
+  const checkedIds = [...document.querySelectorAll('.daily-row-cb:checked')].map(c=>parseInt(c.dataset.eid));
+  let empsToApply;
+  let isCheckedMode = false;
+  if(checkedIds.length > 0){
+    const idSet = new Set(checkedIds);
+    empsToApply = EMPS.filter(e => idSet.has(e.id));
+    isCheckedMode = true;
+  } else {
+    empsToApply = activeDayEmpsForCopy();
+  }
   if(empsToApply.length===0){
     const toast=document.createElement('div');
     toast.style.cssText='position:fixed;bottom:24px;right:24px;background:#B45309;color:#fff;padding:10px 18px;border-radius:9px;font-size:12px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2)';
-    toast.textContent='⚠ 대상 직원이 없습니다 (사이드바 필터를 확인해주세요)';
+    toast.textContent='⚠ 대상 직원이 없습니다 (필터를 확인해주세요)';
     document.body.appendChild(toast); setTimeout(()=>toast.remove(),2500);
     return;
   }
   const dateStr=`${cY}-${pad(cM)}-${pad(cD)}`;
-  const search=(document.getElementById('sb-search-inp')?.value||'').trim();
-  const filterActive=SBF.shift!=='all'||SBF.nation!=='all'||SBF.pay!=='all'||!!search;
-  const filterNote=filterActive?`\n(사이드바 필터 적용됨: shift=${SBF.shift}, nation=${SBF.nation}, pay=${SBF.pay}${search?`, 검색="${search}"`:''})`:'';
+  const sbSearch=(document.getElementById('sb-search-inp')?.value||'').trim();
+  const fd=F.daily;
+  const sbActive=SBF.shift!=='all'||SBF.nation!=='all'||SBF.pay!=='all'||!!sbSearch;
+  const pgActive=fd.shift!=='all'||fd.nation!=='all'||fd.pay!=='all'||(fd.dept&&fd.dept!=='all')||(fd.deptCat&&fd.deptCat!=='all')||!!fd.search;
+  const filterActive=sbActive||pgActive;
   const preview=empsToApply.slice(0,5).map(e=>e.name).join(', ')+(empsToApply.length>5?` 외 ${empsToApply.length-5}명`:'');
-  const msg=`📋 ${dateStr}에 직원 ${empsToApply.length}명의 가장 최근 출퇴근 기록을 복사합니다.\n\n대상: ${preview}${filterNote}\n\n※ 이미 기록이 있는 직원은 건너뜁니다.\n진행하시겠습니까?`;
+  const headLine = isCheckedMode
+    ? `📋 체크된 ${empsToApply.length}명에게만 ${dateStr}에 최근 출퇴근 기록을 불러오겠습니까?`
+    : filterActive
+      ? `📋 현재 필터링된 ${empsToApply.length}명만 ${dateStr}에 최근 출퇴근 기록을 불러오겠습니까?`
+      : `📋 ${dateStr}에 직원 ${empsToApply.length}명의 가장 최근 출퇴근 기록을 복사합니다.`;
+  const msg=`${headLine}\n\n대상: ${preview}\n\n※ 이미 기록이 있는 직원은 건너뜁니다.`;
   if(!confirm(msg)) return;
 
   let cnt=0, skipped=0, noRecent=0;
@@ -2100,7 +2759,10 @@ function applyRecentAll() {
       end: prev.end,
       absent: false, annual: false, halfAnnual: false,
       note: '', outTimes: [],
-      customBk: false, customBkList: []
+      // 개별휴게 설정도 함께 복사 — 직전 기록에서 개별휴게 쓰던 직원이
+      // 최근데이터 불러오기 후 표준 휴게로 돌아가던 버그 수정
+      customBk: !!prev.customBk,
+      customBkList: prev.customBkList ? JSON.parse(JSON.stringify(prev.customBkList)) : []
     };
     __recWrite('applyRecentAll', emp.id, k, {start:prev.start, end:prev.end, name:emp.name});
     cnt++;
@@ -2119,14 +2781,138 @@ function applyRecentAll() {
   setTimeout(()=>toast.remove(), 3200);
 }
 
+// ══════════════════════════════════════
+// 📋 출퇴근 복사/붙여놓기 (메모리 클립보드)
+// ══════════════════════════════════════
+// 클립보드 구조: { sourceDate:'YYYY-MM-DD', items:[{empId, name, snapshot:{start,end,customBk,customBkList,outTimes,subWork,subHol,specialWork,specialPay}}] }
+// 세션 내 유지. 페이지 새로고침·로그아웃 시 초기화.
+let _recClipboard = null;
+
+function copyDailyRecords(){
+  // 체크된 직원 우선 → 없으면 화면 필터 전체
+  const checkedIds = [...document.querySelectorAll('.daily-row-cb:checked')].map(c=>parseInt(c.dataset.eid));
+  let srcEmps;
+  if(checkedIds.length > 0){
+    const idSet = new Set(checkedIds);
+    srcEmps = EMPS.filter(e => idSet.has(e.id));
+  } else {
+    srcEmps = activeDayEmpsForCopy();
+  }
+  if(srcEmps.length === 0){
+    if(typeof showSyncToast === 'function') showSyncToast('복사할 직원이 없습니다 (체크 또는 화면 필터 확인)','warn',3000);
+    return;
+  }
+  // 출퇴근 시간이 입력된 직원만 복사 — 빈 행 복사 의미 없음
+  const items = [];
+  srcEmps.forEach(emp => {
+    const k = rk(emp.id, cY, cM, cD);
+    const rec = REC[k];
+    if(!rec || (!rec.start && !rec.end)) return; // 출퇴근 시간 없으면 스킵
+    if(rec.absent || rec.annual || rec.halfAnnual) return; // 결근·연차는 일자별 상태 → 스킵
+    items.push({
+      empId: emp.id,
+      name: emp.name,
+      snapshot: {
+        start: rec.start || '',
+        end: rec.end || '',
+        customBk: !!rec.customBk,
+        customBkList: rec.customBkList ? JSON.parse(JSON.stringify(rec.customBkList)) : [],
+        outTimes: rec.outTimes ? JSON.parse(JSON.stringify(rec.outTimes)) : [],
+        subWork: !!rec.subWork,
+        subHol: !!rec.subHol,
+        specialWork: !!rec.specialWork,
+        specialPay: +rec.specialPay || 0,
+      }
+    });
+  });
+  if(items.length === 0){
+    if(typeof showSyncToast === 'function') showSyncToast('복사할 출퇴근 기록이 없습니다','warn',3000);
+    return;
+  }
+  const dateStr = `${cY}-${pad(cM)}-${pad(cD)}`;
+  _recClipboard = { sourceDate: dateStr, items };
+  if(typeof showSyncToast === 'function'){
+    const preview = items.slice(0,3).map(i=>i.name).join(', ') + (items.length>3 ? ` 외 ${items.length-3}명` : '');
+    showSyncToast(`📋 ${dateStr} ${items.length}명 복사됨\n${preview}\n→ 다른 날짜로 이동 후 [붙여놓기]`, 'ok', 4000);
+  }
+}
+
+function pasteDailyRecords(){
+  if(!_recClipboard || !_recClipboard.items || _recClipboard.items.length === 0){
+    if(typeof showSyncToast === 'function') showSyncToast('클립보드가 비어있습니다. 먼저 [복사]를 누르세요.','warn',3000);
+    return;
+  }
+  const dateStr = `${cY}-${pad(cM)}-${pad(cD)}`;
+  if(_recClipboard.sourceDate === dateStr){
+    if(typeof showSyncToast === 'function') showSyncToast('같은 날짜에는 붙여놓기 불가. 다른 날로 이동 후 시도하세요.','warn',3000);
+    return;
+  }
+  let applied = 0, skipped = 0, missing = 0;
+  const appliedNames = [];
+  _recClipboard.items.forEach(item => {
+    const emp = EMPS.find(e => e.id === item.empId);
+    if(!emp){ missing++; return; }
+    // 입퇴사일 범위 체크
+    const dayDate = new Date(cY, cM-1, cD);
+    if(emp.join){ const jd = parseEmpDate(emp.join); if(jd > dayDate){ missing++; return; } }
+    if(emp.leave){ const ld = parseEmpDate(emp.leave); if(ld < dayDate){ missing++; return; } }
+    const k = rk(item.empId, cY, cM, cD);
+    const existing = REC[k];
+    // 기존 데이터 있으면 건너뜀 — 사용자 답변 "건너뛰기 (추천)"
+    if(existing && (existing.start || existing.end || existing.absent || existing.annual || existing.halfAnnual)){
+      skipped++;
+      return;
+    }
+    const s = item.snapshot;
+    REC[k] = {
+      empId: item.empId,
+      start: s.start, end: s.end,
+      absent: false, annual: false, halfAnnual: false,
+      note: '',
+      outTimes: s.outTimes ? JSON.parse(JSON.stringify(s.outTimes)) : [],
+      customBk: !!s.customBk,
+      customBkList: s.customBkList ? JSON.parse(JSON.stringify(s.customBkList)) : [],
+      subWork: !!s.subWork,
+      subHol: !!s.subHol,
+      specialWork: !!s.specialWork,
+      specialPay: s.specialPay || 0,
+    };
+    if(typeof __recWrite === 'function') __recWrite('pasteDailyRecords', item.empId, k, {start:s.start, end:s.end, name:emp.name, source:_recClipboard.sourceDate});
+    applied++;
+    appliedNames.push(emp.name);
+  });
+  if(applied > 0){
+    saveLS();
+    if(typeof renderTable === 'function') renderTable();
+  }
+  if(typeof showSyncToast === 'function'){
+    if(applied > 0){
+      const preview = appliedNames.slice(0,3).join(', ') + (appliedNames.length>3 ? ` 외 ${appliedNames.length-3}명` : '');
+      let msg = `📌 ${_recClipboard.sourceDate} → ${dateStr}\n${applied}명 붙여넣음\n${preview}`;
+      if(skipped > 0) msg += `\n(기존 기록 ${skipped}명 유지)`;
+      if(missing > 0) msg += `\n(대상 누락 ${missing}명)`;
+      showSyncToast(msg, 'ok', 4500);
+    } else if(skipped > 0){
+      showSyncToast(`이미 기록 있는 직원 ${skipped}명 — 모두 건너뜀`, 'warn', 3500);
+    } else {
+      showSyncToast('붙여넣을 직원이 없습니다','warn',3000);
+    }
+  }
+}
+
 function activeDayEmpsForCopy(){
-  // 현재 필터 + 입사일 + 퇴사일 조건 적용한 직원 목록 (퇴사일 이후엔 자동 복사 방지)
+  // 화면에 보이는 직원과 동일한 목록 (renderTable과 같은 필터 적용)
+  // 입사일/퇴사일 + 페이지 상단 필터바(F.daily) + 사이드바 필터(SBF) 모두 반영
   const dayDate=new Date(cY,cM-1,cD);
   const search=(document.getElementById('sb-search-inp')?.value||'').trim();
-  return EMPS.filter(emp=>{
-    if(emp.join){const jd=new Date(emp.join);if(jd>dayDate) return false;}
-    if(emp.leave){const ld=new Date(emp.leave);if(ld<=dayDate) return false;}
-    // 사이드바 필터 반영 (renderSb와 동일 로직)
+  // 1) renderTable과 동일하게: 입퇴사 + 페이지 상단 필터바
+  const baseFiltered = applyCommonFilter(EMPS.filter(emp=>{
+    if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate) return false;}
+    if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<dayDate) return false;}
+    return true;
+  }), 'daily', dayDate);
+  // 2) 사이드바 필터 추가 적용 (사이드바 검색 input 포함)
+  return baseFiltered.filter(emp=>{
     if(SBF.shift!=='all' && (emp.shift||'day')!==SBF.shift) return false;
     const isFor = emp.nation==='foreign' || emp.foreigner===true;
     if(SBF.nation==='korean' && isFor) return false;
@@ -2155,28 +2941,9 @@ function setTableLock(locked){ /* 제거됨 */ }
 
 function startEditDay(){/* 제거됨 */}
 
-function saveDay(){
-  // 현재 화면 input 값 강제 파싱 저장
-  document.querySelectorAll('#daily-tbody input.time-inp').forEach(inp=>{
-    if(inp.disabled||!inp.value) return;
-    const eid=parseInt(inp.dataset.eid);
-    const field=inp.dataset.field;
-    if(!eid||!field) return;
-    const parsed=parseTimeInput(inp.value);
-    if(!parsed) return;
-    const k=rk(eid,cY,cM,cD);
-    if(!REC[k])REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
-    REC[k][field]=parsed;
-    __recWrite('saveDay', eid, k, {field, value:parsed});
-  });
-  saveLS();
-  const svMsg=document.getElementById('sv-msg');
-  if(svMsg){svMsg.style.display='inline';setTimeout(()=>svMsg.style.display='none',2500);}
-  // 모든 관련 탭 즉시 갱신
-  try{const pvPage=document.getElementById('pg-payroll');if(pvPage&&pvPage.classList.contains('on'))renderPayroll();}catch(e){}
-  try{const lvPage=document.getElementById('pg-leave');if(lvPage&&lvPage.classList.contains('on'))renderLeave();}catch(e){}
-  try{const mvPage=document.getElementById('pg-monthly');if(mvPage&&mvPage.classList.contains('on'))renderMonthly();}catch(e){}
-}
+// 🗑️ saveDay() 제거 (2026-05-04) — 자동 저장과 100% 중복 + silent failure로 사고 유발.
+// 모든 입력은 onblur/onchange/oninput에서 saveLS → 250ms 디바운스 → sbSaveAll로 자동 저장됨.
+// 우상단 #sync-indicator가 실시간 저장 상태 표시. 명시적 수동 저장 불필요.
 
 function clearDay(){EMPS.forEach(e=>delete REC[rk(e.id,cY,cM,cD)]);saveLS();renderTable();}
 
@@ -2301,7 +3068,7 @@ function cvm(d){vM+=d;if(vM>12){vM=1;vY++;}if(vM<1){vM=12;vY--;}renderMonthly();
 function setMvMode(m){vMode=m;['mv-cal','mv-ov'].forEach((id,i)=>{const el=document.getElementById(id);if(!el)return;const a=(i===0&&m==='cal')||(i===1&&m==='ov');el.style.background=a?'var(--nbg)':'';el.style.color=a?'var(--navy2)':'';el.style.borderColor=a?'var(--navy2)':'var(--bd2)';});renderMonthly();}
 
 let mvFilter = 'all';
-const MF = { shift:'all', nation:'all', dept:'all' };
+const MF = { shift:'all', nation:'all', dept:'all', deptCat:'all' };
 function setMvSubFilter(key, val, btn){
   MF[key] = val;
   if(btn){
@@ -2318,7 +3085,30 @@ function setMvFilter(f){
   });
   renderMonthly();
 }
+// 🛡️ 사용자 입력 보호 헬퍼 — 활성 input이 사용자 입력칸이면 true.
+// 입력 중 화면 재렌더 시 input이 reset되어 입력값이 화면에서 휘발되는 사고 방지용.
+// 출퇴근 시간 입력(time-input/data-eid), 급여 카드(pay-card-inp), XL뷰(data-xl-inp),
+// 상여금(data-field=bonus), 세금(data-tax), 직원관리 등 모든 사용자 데이터 input 포함.
+function _isUserInputActive(){
+  const ae = document.activeElement;
+  if(!ae) return false;
+  const tag = ae.tagName;
+  if(tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') return false;
+  // textarea/select는 입력 중이면 무조건 보호
+  if(tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  const t = (ae.type || 'text').toLowerCase();
+  // 검색·필터·체크·라디오 등은 데이터 입력칸 아님 → 보호 대상에서 제외
+  if(t === 'checkbox' || t === 'radio' || t === 'button' || t === 'submit' || t === 'search') return false;
+  return true;
+}
+
 function renderMonthly(){
+  // 🛡️ 입력 보호
+  if(_isUserInputActive()){
+    clearTimeout(window._monthlyRefT);
+    window._monthlyRefT = setTimeout(()=>renderMonthly(), 1000);
+    return;
+  }
   // 과거 달 조회 시 그 달 정책 스냅샷 사용 (renderCal/renderOv 내부 calcSession에 전파)
   const _origPOL = POL;
   const _monthPOL = (typeof getPolForMonth==='function') ? getPolForMonth(vY, vM) : POL;
@@ -2340,17 +3130,32 @@ function renderMonthly(){
         </button>`).join('');
     } else { mvDeptDiv.style.display='none'; }
   }
+  // 부서 분류(deptCat) 필터 동적 생성 — 기본 4개 + EMPS에 입력된 커스텀 부서 자동 포함
+  const mvDeptCatDiv = document.getElementById('mv-deptcat-filter');
+  if(mvDeptCatDiv){
+    const customCats = [...new Set(EMPS.map(e=>(e.deptCat||'').trim()).filter(d=>d && !DEPT_CATS.includes(d)))].sort();
+    const all = [['all','전체'],['none','사무'],...DEPT_CATS.map(c=>[c,c]),...customCats.map(c=>[c,c])];
+    mvDeptCatDiv.innerHTML = all.map(([v,l])=>`
+      <button class="mvf-sub btn btn-xs${MF.deptCat===v?' on':''}"
+        onclick="setMvSubFilter('deptCat','${v}',this)"
+        style="font-size:10px;background:${MF.deptCat===v?'var(--navy)':'transparent'};color:${MF.deptCat===v?'#fff':'var(--ink3)'};"${v==='none'?' title="부서 미지정"':''}>
+        ${esc(l)}
+      </button>`).join('');
+  }
   const mvMonthEnd = new Date(vY, vM, 0); // 해당 월 마지막 날
   const mvMonthStart = new Date(vY, vM-1, 1);
   const mvEmps = EMPS.filter(e=>{
+    // 🗑️ 휴지통 제외
+    if(e.deletedAt) return false;
     // 퇴사자: 해당 월 시작 전에 퇴사했으면 제외
-    if(e.leave){const ld=new Date(e.leave);if(ld<mvMonthStart)return false;}
+    if(e.leave){const ld=parseEmpDate(e.leave);if(ld<mvMonthStart)return false;}
     if(mvFilter!=='all'){const ep=e.payMode||'fixed';if(mvFilter==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}else{if(ep!==mvFilter)return false;}}
     if(MF.shift!=='all' && (e.shift||'day')!==MF.shift) return false;
     const isFor = e.nation==='foreign'||e.foreigner===true;
     if(MF.nation==='korean' && isFor) return false;
     if(MF.nation==='foreign' && !isFor) return false;
     if(MF.dept!=='all' && (e.dept||'').trim()!==MF.dept) return false;
+    if(MF.deptCat!=='all'){const ec=(e.deptCat||'').trim();if(MF.deptCat==='none'){if(ec)return false;}else if(ec!==MF.deptCat)return false;}
     return true;
   });
   // 현재 선택 직원이 필터에 없으면 첫 번째로 리셋
@@ -2359,20 +3164,52 @@ function renderMonthly(){
     <button onclick="vEid=${e.id};renderMonthly()"
       style="padding:2px 8px;font-size:10px;border:1px solid ${e.id===vEid?'var(--navy2)':'var(--bd2)'};border-radius:12px;background:${e.id===vEid?'var(--nbg)':'var(--card)'};color:${e.id===vEid?'var(--navy2)':'var(--ink2)'};cursor:pointer;font-family:inherit;font-weight:${e.id===vEid?'700':'500'}">${esc(e.name)}</button>`).join('');
   document.getElementById('mv-body').innerHTML=vMode==='cal'?renderCal():renderOv();
+  if(vMode!=='cal' && typeof setupOvScrollSync==='function'){
+    // innerHTML 설정 직후 레이아웃이 아직 없을 수 있으므로 다음 프레임에서 측정
+    requestAnimationFrame(setupOvScrollSync);
+  }
   } finally {
     if(_polSwapped) POL = _origPOL;
   }
 }
+// 일별 공제시간 (분 단위) 계산 — 표시 전용
+// 정책: 평일에만 잡음. 휴일(정기휴일·법정공휴일)은 특근 개념이라 공제 없음.
+// 주간 직원: 토/일 휴일 / 야간 직원: 금/토 휴일 / 모든 직원: 법정공휴일.
+// subWork(대체근무) 체크 시 autoH=false → 평일처럼 공제 검사.
+// monthSummary의 dedShortHByDay와 동일 조건 (모든 화면 일치)
+// isHalf: 반차일은 4h(240분) 인정 → 기준 시간에서 차감
+function _nfDedMin(c, autoH, mode, emp, isHalf){
+  if(!c) return 0;
+  if(autoH) return 0;  // 휴일 제외
+  const sot = (emp && emp.sot) || POL.sot || 209;
+  const dailyStdH = (mode==='fixed' || mode==='monthly') ? 8 : sot/4.345/5;
+  const adjStdM = dailyStdH*60 - (isHalf ? 240 : 0);
+  const dedShMin = adjStdM - c.work;
+  return dedShMin > 0 ? dedShMin : 0;
+}
+
+// 공제시간 chip (캘린더 일별 셀용) — _nfDedMin 결과를 HTML로 래핑
+function _nfDedChip(c, autoH, mode, emp, isHalf){
+  const dedShMin = _nfDedMin(c, autoH, mode, emp, isHalf);
+  if(dedShMin === 0) return '';
+  const sot = (emp && emp.sot) || POL.sot || 209;
+  const dailyStdH = (mode==='fixed' || mode==='monthly') ? 8 : sot/4.345/5;
+  const tipBase = isHalf ? `반차 4h + 출근 ${m2h(c.work).toFixed(2)}h` : `소정 ${dailyStdH.toFixed(2)}h`;
+  return `<span class="tch" style="background:#FEE2E2;color:#B91C1C" title="${tipBase}이 8h 미달 (시급 차감)">공${m2h(dedShMin).toFixed(2)}h</span>`;
+}
+
 function renderCal(){
   const emp=EMPS.find(e=>e.id===vEid);if(!emp)return'';
   const s=monthSummary(vEid,vY,vM),days=dim(vY,vM);
   const curBonus=getMonthBonus(vEid,vY,vM);
   const al=calcAnnualLeave(emp);
-  let h=`<div class="sg5">
+  let h=`<div class="sg5" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr))">
     <div class="sc"><div class="sc-l">근무일</div><div class="sc-v">${s.wdays}<span class="sc-u">일</span></div></div>
     <div class="sc"><div class="sc-l">연차사용</div><div class="sc-v" style="color:var(--green)">${s.aldays}<span class="sc-u">일</span></div></div>
     <div class="sc"><div class="sc-l">야간</div><div class="sc-v">${(s.tNightH||0).toFixed(2)}<span class="sc-u">h</span></div></div>
     <div class="sc"><div class="sc-l">연장</div><div class="sc-v">${((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2)}<span class="sc-u">h</span></div></div>
+    <div class="sc"><div class="sc-l">실근무</div><div class="sc-v">${(s.twkH||0).toFixed(2)}<span class="sc-u">h</span></div></div>
+    <div class="sc" title="소정근로 미달분 (시급 차감) — 통상임금제·시간단위 공제 모드만"><div class="sc-l">공제시간</div><div class="sc-v" style="color:${(s.dedShortH||0)>0?'var(--rose)':'var(--ink3)'}">${(s.dedShortH||0).toFixed(2)}<span class="sc-u">h</span></div></div>
     <div class="sc ok"><div class="sc-l">월 급여</div><div class="sc-v" style="font-size:15px;color:var(--green)">${Math.round(s.total/10000)}<span class="sc-u">만원</span></div></div>
   </div>
   <div style="background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:11px 15px;margin-bottom:11px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 3px rgba(0,0,0,.05)">
@@ -2393,24 +3230,27 @@ function renderCal(){
   ['일','월','화','수','목','금','토'].forEach((x,i)=>h+=`<div class="cdh ${i===0?'su':i===6?'sa':''}">${x}</div>`);
   const fd=fdow(vY,vM);for(let i=0;i<fd;i++)h+=`<div class="cdc em"></div>`;
   const calEmpMode=emp?getEmpPayMode(emp):POL.basePayMode;
-  const calLeaveDate = emp.leave ? new Date(emp.leave) : null;
+  const calLeaveDate = emp.leave ? parseEmpDate(emp.leave) : null;
   for(let d=1;d<=days;d++){
     const dow=(fd+d-1)%7,rec=REC[rk(vEid,vY,vM,d)];
-    // 퇴사일 이후 날짜는 비활성 표시 (근무시간 미집계와 UI 일치)
+    // 퇴사일 이후 날짜는 비활성 표시 (근무시간 미집계와 UI 일치, 퇴사일 당일은 정상 표시)
     if(calLeaveDate){
       const curDate=new Date(vY,vM-1,d);
-      if(calLeaveDate<=curDate){
+      if(calLeaveDate<curDate){
         h+=`<div class="cdc em" style="opacity:.45;background:var(--rose-dim,#FEE2E2)"><div class="cdn ${dow===0?'su':dow===6?'sa':''}">${d}</div><div style="font-size:9px;color:var(--rose);font-weight:700">퇴사후</div></div>`;
         continue;
       }
     }
-    const autoH=isAutoHol(vY,vM,d,emp),phName=getPhName(vY,vM,d);
+    // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제 (캘린더 셀 색·계산 모두 일치)
+    const autoH=(isAutoHol(vY,vM,d,emp) && !(rec&&rec.subWork))||(rec&&rec.subHol),phName=getPhName(vY,vM,d);
     const rate=getEmpRate(emp);
     const isAl=rec&&rec.annual;
     const isHalf=rec&&rec.halfAnnual;
-    const _calBks=getActiveBk(vY,vM,d);
+    const _calBks=getActiveBk(vY,vM,d,emp);
     const _calActiveBks = rec && rec.customBk ? (rec.customBkList||[]) : _calBks;
-    const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,_calActiveBks,rec.outTimes||[],calEmpMode,getOrdinaryRate(emp,vY,vM)):null;
+    // 🎯 반차여도 실근무 8h 임계 유지 (반차 4h는 OT 임계에 영향 X)
+    const _calHalfBaseM = 0;
+    const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,_calActiveBks,rec.outTimes||[],calEmpMode,getOrdinaryRate(emp,vY,vM),_calHalfBaseM):null;
     const isSel=vY===cY&&vM===cM&&d===cD;
     let cls='cdc '+(rec&&rec.absent?'abd':isAl?'ald':isHalf?'ald':phName?'phd':c?'hd':'')+(isSel?' sel':'');
     let inner=`<div class="cdn ${dow===0?'su':dow===6?'sa':phName?'ph':''}">${d}</div>`;
@@ -2419,14 +3259,22 @@ function renderCal(){
     else if(isAl)inner+=`<div style="font-size:9px;color:var(--green);font-weight:700">연차</div>`;
     else if(isHalf){
       inner+=`<div style="font-size:9px;color:#0891B2;font-weight:700">반차</div>`;
-      if(c){inner+=`<div class="cti">${rec.start}~${rec.end}</div><div class="cwk">${fmtH(c.work)}</div>`;}
-      else{inner+=`<div style="font-size:8px;color:#0891B2">0.5일</div>`;}
+      if(c){
+        inner+=`<div class="cti">${rec.start}~${rec.end}</div><div class="cwk">${fmtH(c.work)}</div>`;
+        // 반차일은 4h 인정 → 4h+c.work가 8h 미달이면 공제 (isHalf=true)
+        const _dedChip = _nfDedChip(c, autoH, calEmpMode, emp, true);
+        if(_dedChip) inner += `<div>${_dedChip}</div>`;
+      } else {
+        inner+=`<div style="font-size:8px;color:#0891B2">0.5일</div>`;
+      }
     } else if(c){
       inner+=`<div class="cti">${rec.start}~${rec.end}</div><div class="cwk">${fmtH(c.work)}</div><div>`;
       if(c.crossed)inner+=`<span class="tch" style="background:var(--gbg);color:#065F46">익일</span>`;
       if(c.nightM>30)inner+=`<span class="tch" style="background:var(--abg);color:#92400E">야${m2h(c.nightM).toFixed(2)}h</span>`;
       if(c.ot>0)inner+=`<span class="tch" style="background:#EDE9FE;color:#4C1D95">연${m2h(c.ot).toFixed(2)}h</span>`;
       if(autoH)inner+=`<span class="tch" style="background:#FED7AA;color:#9A3412">휴</span>`;
+      // 공제시간 chip — monthSummary와 동일 조건 (반차 아님)
+      inner += _nfDedChip(c, autoH, calEmpMode, emp, false);
       inner+=`</div>`;
     }
     h+=`<div class="${cls}" onclick="jumpDay(${vY},${vM},${d})">${inner}</div>`;
@@ -2436,48 +3284,212 @@ function renderCal(){
 function renderOv(){
   const days=dim(vY,vM);
   let th=`<th style="position:sticky;left:0;z-index:2;background:var(--navy);min-width:76px">직원</th>`;
-  for(let d=1;d<=days;d++){const dow=(fdow(vY,vM)+d-1)%7;const ph=getPhName(vY,vM,d);const autoH=isAutoHol(vY,vM,d);th+=`<th style="${dow===0||autoH?'color:#FCA5A5':dow===6?'color:#93C5FD':''}" title="${ph||''}">${d}${ph?'🎌':''}<br><span style="font-weight:400;font-size:8px;opacity:.7">${DOW[dow]}</span></th>`;}
-  th+=`<th style="background:#0E4D2E">근무일</th><th style="background:#0E4D2E">연차</th><th style="background:#0E4D2E">실근무</th><th style="background:#0E4D2E">월급여</th>`;
+  for(let d=1;d<=days;d++){const dow=(fdow(vY,vM)+d-1)%7;const ph=getPhName(vY,vM,d);const autoH=isAutoHol(vY,vM,d);th+=`<th style="${dow===0||autoH?'color:#FCA5A5':dow===6?'color:#93C5FD':''}" title="${ph||''}">${d}<br><span style="font-weight:400;font-size:8px;opacity:.7">${ph||DOW[dow]}</span></th>`;}
+  th+=`<th style="background:#0E4D2E">근무일</th><th style="background:#0E4D2E">연차</th><th style="background:#0E4D2E">실근무</th><th style="background:#0E4D2E" title="소정근로(보통 8h) 미달분 합계 — 통상임금제 + 시간단위 공제 모드에서만 발생">공제<br><span style="font-size:8px;opacity:.7">(h)</span></th><th style="background:#0E4D2E">월급여</th>`;
   const mvEmps = EMPS.filter(e=>{
+    // 🗑️ 휴지통 제외
+    if(e.deletedAt) return false;
     if(mvFilter!=='all'){const ep=e.payMode||'fixed';if(mvFilter==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}else{if(ep!==mvFilter)return false;}}
     if(MF.shift!=='all' && (e.shift||'day')!==MF.shift) return false;
     const isFor = e.nation==='foreign' || e.foreigner===true;
     if(MF.nation==='korean' && isFor) return false;
     if(MF.nation==='foreign' && !isFor) return false;
     if(MF.dept!=='all' && (e.dept||'').trim()!==MF.dept) return false;
+    if(MF.deptCat!=='all'){const ec=(e.deptCat||'').trim();if(MF.deptCat==='none'){if(ec)return false;}else if(ec!==MF.deptCat)return false;}
     return true;
   });
   const rows=mvEmps.map(emp=>{
     const rate=getEmpRate(emp);
-    const ovLeaveDate = emp.leave ? new Date(emp.leave) : null;
+    const ovLeaveDate = emp.leave ? parseEmpDate(emp.leave) : null;
     let tr=`<td class="ec"><div style="display:flex;align-items:center;gap:4px"><div class="av" style="width:19px;height:19px;font-size:9px;background:${safeColor(emp.color,'#DBEAFE')};color:${safeColor(emp.tc,'#1E3A5F')}">${esc(emp.name)[0]}</div>${esc(emp.name)}${emp.leave?'<span style="font-size:8px;color:var(--rose);margin-left:2px">퇴사</span>':''}</div></td>`;
     for(let d=1;d<=days;d++){
-      // 퇴사일 이후 셀은 비활성 표시
+      // 퇴사일 이후 셀은 비활성 표시 (퇴사일 당일은 정상 표시)
       if(ovLeaveDate){
         const curDate=new Date(vY,vM-1,d);
-        if(ovLeaveDate<=curDate){ tr+=`<td class="mt" style="background:var(--rose-dim,#FEE2E2);color:var(--rose);opacity:.5">-</td>`; continue; }
+        if(ovLeaveDate<curDate){ tr+=`<td class="mt" style="background:var(--rose-dim,#FEE2E2);color:var(--rose);opacity:.5">-</td>`; continue; }
       }
       const rec=REC[rk(emp.id,vY,vM,d)];
-      const autoH=isAutoHol(vY,vM,d);
+      // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제
+      // emp 전달: 야간근무자(POL.nightWeekend)와 주간근무자(POL.dayWeekend) 휴일 기준 분리 적용
+      const autoH=(isAutoHol(vY,vM,d,emp) && !(rec&&rec.subWork))||(rec&&rec.subHol);
       const isAl=rec&&rec.annual;
-      const _ovBks=getActiveBk(vY,vM,d);
+      const _ovBks=getActiveBk(vY,vM,d,emp);
       const _ovActiveBks = rec && rec.customBk ? (rec.customBkList||[]) : _ovBks;
-      const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,_ovActiveBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM)):null;
+      const _ovPm = getEmpPayMode(emp);
+      // 🎯 반차여도 실근무 8h 임계 유지 (반차 4h는 OT 임계에 영향 X)
+      const _ovHalfBaseM = 0;
+      const c=rec&&!rec.absent&&!isAl&&rec.start&&rec.end?calcSession(rec.start,rec.end,rate,autoH,_ovActiveBks,rec.outTimes||[],_ovPm,getOrdinaryRate(emp,vY,vM),_ovHalfBaseM):null;
       const ph=getPhName(vY,vM,d);
       if(rec&&rec.absent)tr+=`<td class="ab2">결근</td>`;
       else if(isAl)tr+=`<td class="al2">연차</td>`;
       else if(rec&&rec.halfAnnual)tr+=`<td class="al2" style="background:#E0F2FE;color:#0891B2">반차${c?'<br>'+fmtH(c.work):''}</td>`;
-      else if(ph&&!c)tr+=`<td class="ph2" title="${ph}">🎌</td>`;
+      else if(ph&&!c)tr+=`<td class="ph2" title="${ph}" style="font-size:9px;line-height:1.1;padding:2px">${ph}</td>`;
       else if(c)tr+=`<td class="${autoH?'ph2':'hd2'}">${fmtH(c.work)}</td>`;
       else tr+=`<td class="mt">-</td>`;
     }
     const s=monthSummary(emp.id,vY,vM);
-    tr+=`<td class="sm">${s.wdays}일</td><td class="sm" style="background:var(--gbg);color:var(--green)">${s.aldays}일</td><td class="sm">${s.twkH.toFixed(2)}h</td><td class="sm">${Math.round(s.total/10000)}만</td>`;
+    tr+=`<td class="sm">${s.wdays}일</td><td class="sm" style="background:var(--gbg);color:var(--green)">${s.aldays}일</td><td class="sm">${s.twkH.toFixed(2)}h</td><td class="sm" style="${(s.dedShortH||0)>0?'color:#FCA5A5;font-weight:700':'color:var(--ink3);opacity:.5'}">${(s.dedShortH||0)>0?s.dedShortH.toFixed(2)+'h':'-'}</td><td class="sm">${Math.round(s.total/10000)}만</td>`;
     return`<tr>${tr}</tr>`;
   }).join('');
-  return`<div class="ov-w"><table class="ov-t"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  return`<div class="ov-scroll-top" id="ov-scroll-top"><div class="ov-scroll-spacer" id="ov-scroll-spacer"></div></div>
+<div class="ov-w" id="ov-w"><table class="ov-t"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+// 전체현황표 상단 스크롤바 ↔ 본 테이블 가로 스크롤 양방향 동기화
+function setupOvScrollSync(){
+  const top = document.getElementById('ov-scroll-top');
+  const w = document.getElementById('ov-w');
+  const spacer = document.getElementById('ov-scroll-spacer');
+  if(!top || !w || !spacer) return;
+  const t = w.querySelector('.ov-t');
+  if(!t) return;
+  const apply = () => {
+    // 항상 상단 스크롤바 표시 (가로 길이가 화면에 들어와도 시각적 일관성 유지)
+    top.classList.add('on');
+    w.classList.add('has-top');
+    spacer.style.width = t.scrollWidth + 'px';
+  };
+  apply();
+  let syncing = false;
+  top.onscroll = () => { if(syncing) return; syncing = true; w.scrollLeft = top.scrollLeft; requestAnimationFrame(()=>{ syncing = false; }); };
+  w.onscroll = () => { if(syncing) return; syncing = true; top.scrollLeft = w.scrollLeft; requestAnimationFrame(()=>{ syncing = false; }); };
+  // 폰트/이미지 로드 후 너비 다시 계산
+  requestAnimationFrame(apply);
+  if(!window._ovScrollResizeBound){
+    window._ovScrollResizeBound = true;
+    window.addEventListener('resize', () => { try{ setupOvScrollSync(); }catch(e){} }, {passive:true});
+  }
 }
 function jumpDay(y,m,d){cY=y;cM=m;cD=d;vY=y;vM=m;updDbar();renderBks();renderTable();gp('daily');}
+
+// ── 일별 미니 캘린더 팝업 ──
+let _dpkY=null,_dpkM=null;
+function toggleDayPicker(ev){
+  if(ev) ev.stopPropagation();
+  const pop=document.getElementById('day-picker-pop');
+  const btn=document.getElementById('day-cal-btn');
+  if(!pop||!btn) return;
+  if(pop.style.display==='block'){closeDayPicker();return;}
+  _dpkY=cY; _dpkM=cM;
+  // 팝업을 document.body로 이동 (.dbar의 overflow:hidden 회피)
+  if(pop.parentNode!==document.body) document.body.appendChild(pop);
+  // 팝업 내부 클릭은 outside-close로 전파되지 않도록 차단 (innerHTML 재렌더 후 e.target이 detach되는 race 방지)
+  if(!pop._stopPropAdded){
+    pop.addEventListener('click', e=>e.stopPropagation());
+    pop._stopPropAdded=true;
+  }
+  pop.style.display='block';
+  renderDayPicker();
+  // 버튼 위치 기준으로 팝업 좌표 계산 (viewport 안 들어오면 좌측으로 보정)
+  const r=btn.getBoundingClientRect();
+  const popW=300; // padding 포함 대략
+  const vw=window.innerWidth;
+  let left=r.left;
+  if(left+popW>vw-12) left=Math.max(12, vw-popW-12);
+  pop.style.top=`${r.bottom+6}px`;
+  pop.style.left=`${left}px`;
+  setTimeout(()=>{ document.addEventListener('click', _dpkOutsideClose, {once:false}); }, 0);
+}
+function closeDayPicker(){
+  const pop=document.getElementById('day-picker-pop');
+  if(pop) pop.style.display='none';
+  document.removeEventListener('click', _dpkOutsideClose);
+}
+function _dpkOutsideClose(e){
+  const pop=document.getElementById('day-picker-pop');
+  const btn=document.getElementById('day-cal-btn');
+  if(!pop||pop.style.display!=='block') return;
+  if(pop.contains(e.target) || (btn&&btn.contains(e.target))) return;
+  closeDayPicker();
+}
+function dpkNav(d){
+  _dpkM+=d;
+  // ±12 (연 단위)도 정확히 처리 — while 루프로 누적 캐리오버
+  while(_dpkM>12){_dpkM-=12;_dpkY++;}
+  while(_dpkM<1){_dpkM+=12;_dpkY--;}
+  renderDayPicker();
+}
+function dpkPick(y,m,d){
+  cY=y; cM=m; cD=d;
+  closeDayPicker();
+  updDbar(); renderBks(); renderTable();
+}
+function dpkToday(){
+  const t=new Date();
+  cY=t.getFullYear(); cM=t.getMonth()+1; cD=t.getDate();
+  closeDayPicker();
+  updDbar(); renderBks(); renderTable();
+}
+function _dpkHasRecord(y,m,d){
+  const prefix=`_${y}-${pad(m)}-${pad(d)}`;
+  for(const e of EMPS){
+    const r=REC[`${e.id}${prefix}`];
+    if(r && (r.start||r.end||r.absent||r.annual||r.halfAnnual)) return true;
+  }
+  return false;
+}
+function renderDayPicker(){
+  const pop=document.getElementById('day-picker-pop');
+  if(!pop) return;
+  const y=_dpkY, m=_dpkM;
+  const days=dim(y,m);
+  const firstDow=new Date(y,m-1,1).getDay();
+  const today=new Date();
+  const tY=today.getFullYear(), tM=today.getMonth()+1, tD=today.getDate();
+  const dows=['일','월','화','수','목','금','토'];
+  let html=`<div class="dpk-hd">
+    <button type="button" class="dpk-nav" onclick="dpkNav(-12)" title="작년">«</button>
+    <button type="button" class="dpk-nav" onclick="dpkNav(-1)" title="이전 달">‹</button>
+    <div class="dpk-title" onclick="dpkToday()">${y}년 ${m}월</div>
+    <button type="button" class="dpk-nav" onclick="dpkNav(1)" title="다음 달">›</button>
+    <button type="button" class="dpk-nav" onclick="dpkNav(12)" title="내년">»</button>
+  </div>
+  <div class="dpk-grid">`;
+  dows.forEach((x,i)=>{html+=`<div class="dpk-dow ${i===0?'su':i===6?'sa':''}">${x}</div>`;});
+  for(let i=0;i<firstDow;i++) html+=`<div class="dpk-cell empty"></div>`;
+  for(let d=1;d<=days;d++){
+    const dow=(firstDow+d-1)%7;
+    const phName=getPhName(y,m,d);
+    const isHol=phName||dow===0;
+    const isToday=(y===tY&&m===tM&&d===tD);
+    const isSel=(y===cY&&m===cM&&d===cD);
+    const hasRec=_dpkHasRecord(y,m,d);
+    const cls=['dpk-cell'];
+    if(dow===0)cls.push('su');
+    else if(dow===6)cls.push('sa');
+    if(phName)cls.push('hol');
+    if(isToday)cls.push('today');
+    if(isSel)cls.push('sel');
+    html+=`<button type="button" class="${cls.join(' ')}" onclick="dpkPick(${y},${m},${d})" title="${y}-${pad(m)}-${pad(d)}${phName?' · '+phName:''}">${d}${hasRec?'<span class="dpk-dot"></span>':''}</button>`;
+  }
+  html+=`</div>
+  <div class="dpk-foot">
+    <span><span class="dpk-dot" style="position:static;display:inline-block;vertical-align:middle;margin-right:4px"></span>기록 있음</span>
+    <button type="button" class="dpk-today-btn" onclick="dpkToday()">오늘로</button>
+  </div>`;
+  pop.innerHTML=html;
+}
+
+// ── 일별 엑셀 드롭다운 ──
+function toggleDailyExcelMenu(ev){
+  if(ev) ev.stopPropagation();
+  const menu=document.getElementById('daily-excel-menu');
+  if(!menu) return;
+  if(menu.style.display==='block'){closeDailyExcelMenu();return;}
+  menu.style.display='block';
+  setTimeout(()=>{ document.addEventListener('click', _dailyExcelOutsideClose, {once:false}); }, 0);
+}
+function closeDailyExcelMenu(){
+  const menu=document.getElementById('daily-excel-menu');
+  if(menu) menu.style.display='none';
+  document.removeEventListener('click', _dailyExcelOutsideClose);
+}
+function _dailyExcelOutsideClose(e){
+  const menu=document.getElementById('daily-excel-menu');
+  if(!menu||menu.style.display!=='block') return;
+  if(menu.contains(e.target)) return;
+  closeDailyExcelMenu();
+}
 
 // ══════════════════════════════════════
 // 급여 요약
@@ -2551,7 +3563,7 @@ function fastSearchPayroll(){
     const visible = !search || name.includes(search);
     card.style.display = visible ? '' : 'none';
     if(!visible) return;
-    const s = _payrollSummaryCache.get(+card.dataset.empId);
+    const s = _payrollSummaryCache.get(`${+card.dataset.empId}_${pY}_${pM}`);
     if(!s) return;
     gt.base+=s.tBase; gt.nt+=s.tNightPay; gt.ot+=s.tOtDayPay+s.tOtNightPay;
     gt.hol+=(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0);
@@ -2565,6 +3577,12 @@ function fastSearchPayroll(){
 }
 
 function renderPayroll(){
+  // 🛡️ 입력 보호 — 입력칸에 타이핑 중이면 재렌더 미룸 (입력값 휘발 방지)
+  if(_isUserInputActive()){
+    clearTimeout(window._cardRefT);
+    window._cardRefT = setTimeout(()=>renderPayroll(), 1000);
+    return;
+  }
   // 과거 달 조회 시 그 달 정책 스냅샷 사용
   const _origPOL = POL;
   const _monthPOL = (typeof getPolForMonth==='function') ? getPolForMonth(pY, pM) : POL;
@@ -2578,16 +3596,18 @@ function renderPayroll(){
   // 확정된 달은 입력칸을 잠가 "입력해도 안 먹히는" 현상 방지
   const _monthLocked = (typeof isPayMonthConfirmed==='function') && isPayMonthConfirmed(pY, pM);
   let gt={base:0,nt:0,ot:0,hol:0,al:0,bonus:0,allow:0,ded:0,total:0};
-  // 해당 월에 재직 중인 직원만
+  // 해당 월에 재직 중인 직원만 (refDate=월 시작일: 월 도중 퇴사자도 해당 월엔 표시)
   const payMonthEnd=new Date(pY,pM,0);
+  const payMonthStart=new Date(pY,pM-1,1);
   const activePayEmps = applyCommonFilter(EMPS.filter(emp=>{
-    if(emp.join){const jd=new Date(emp.join);if(jd>payMonthEnd)return false;}
-    if(emp.leave){const ld=new Date(emp.leave);if(ld<new Date(pY,pM-1,1))return false;}
+    if(emp.join){const jd=parseEmpDate(emp.join);if(jd>payMonthEnd)return false;}
+    if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<payMonthStart)return false;}
     return true;
-  }), 'payroll', payMonthEnd);
+  }), 'payroll', payMonthStart);
   document.getElementById('pay-grid').innerHTML=activePayEmps.map(emp=>{
-    const s=monthSummary(emp.id,pY,pM);
-    _payrollSummaryCache.set(emp.id, s);
+    const _ck=`${emp.id}_${pY}_${pM}`;
+    let s=_payrollSummaryCache.get(_ck);
+    if(!s){ s=monthSummary(emp.id,pY,pM); _payrollSummaryCache.set(_ck, s); }
     const rate=getEmpRate(emp);
     gt.base+=s.tBase;gt.nt+=s.tNightPay;gt.ot+=s.tOtDayPay+s.tOtNightPay;gt.hol+=(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0);gt.al+=s.annualPay;gt.bonus+=s.bonus;gt.allow+=s.totalAllowance;gt.ded+=s.deduction;gt.total+=s.total;
     return`<div class="pc" data-emp-id="${emp.id}" data-emp-name="${esc((emp.name||'').toLowerCase())}">
@@ -2595,7 +3615,7 @@ function renderPayroll(){
         <div class="av" style="width:32px;height:32px;font-size:12px;background:${safeColor(emp.color,'#DBEAFE')};color:${safeColor(emp.tc,'#1E3A5F')}">${esc(emp.name)[0]}</div>
         <div>
           <div style="font-size:13px;font-weight:700;color:var(--ink)">${esc(emp.name)}</div>
-          <div style="font-size:10px;color:var(--ink3)">${esc(emp.role)} · ${s.wdays}일<span class="emp-mode-badge ${getEmpPayModeLabel(emp).cls}" style="margin-left:4px">${getEmpPayModeLabel(emp).text}</span><span style="font-size:9px;padding:1px 5px;border-radius:5px;background:${getEmpShiftLabel(emp).bg};color:${getEmpShiftLabel(emp).color};font-weight:700;margin-left:2px">${getEmpShiftLabel(emp).text}</span>${(()=>{const or=getOrdinaryRate(emp,pY,pM);const br=getEmpRate(emp);return or>br?`<span style="font-size:9px;padding:1px 5px;border-radius:5px;background:#EFF6FF;color:var(--navy2);font-weight:700;margin-left:2px">통상시급 ${or.toLocaleString()}원</span>`:''})()}</div>
+          <div style="font-size:10px;color:var(--ink3)">${esc(emp.role)} · ${s.wdays}일<span class="emp-mode-badge ${getEmpPayModeLabel(emp).cls}" style="margin-left:4px">${getEmpPayModeLabel(emp).text}</span><span style="font-size:9px;padding:1px 5px;border-radius:5px;background:${getEmpShiftLabel(emp).bg};color:${getEmpShiftLabel(emp).color};font-weight:700;margin-left:2px">${getEmpShiftLabel(emp).text}</span>${(()=>{const or=getOrdinaryRate(emp,pY,pM);const br=getEmpRate(emp);return or>br?`<span style="font-size:9px;padding:1px 5px;border-radius:5px;background:#EFF6FF;color:var(--navy2);font-weight:700;margin-left:2px">통상시급 ${or.toLocaleString()}원</span>`:''})()}${s.isPartialMonth?`<span style="font-size:9px;padding:1px 5px;border-radius:5px;background:#FEF3C7;color:#92400E;font-weight:700;margin-left:2px" title="입사·퇴사월 일할 적용: ${s.prorateDays}/${s.prorateMonthDays}일">일할 ${s.prorateDays}/${s.prorateMonthDays}일</span>`:''}</div>
         </div>
       </div>
       <div class="pcb">
@@ -2614,19 +3634,22 @@ function renderPayroll(){
           const _pm2=getEmpPayMode(emp);
           if(_pm2==='monthly') return ''; // 월급제: 가산수당 없음 (휴일수당은 위에서 처리)
           const _isFixed=_pm2==='fixed';
-          const addPay=_isFixed
+          const addPay=(_isFixed
             ? (s.tExtraWorkPay||0)+(s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolPayNew||0)
-            : (s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0);
+            : (s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0)
+          )+(s.tSpecialPay||0);
           return addPay>0?`<div class="pr"><span class="prl">추가수당</span><span class="prv" style="color:#3C3489">${fmt$(addPay)}원</span></div>`:'';
         })()}
         ${s.annualPay>0?`<div class="pr"><span class="prl">연차수당</span><span class="prv" style="color:var(--green)">${fmt$(s.annualPay)}원<span class="prx">${s.aldays}일</span></span></div>`:''}
+        ${(s.tSpecialPay||0)>0?`<div class="pr"><span class="prl" style="color:#B91C1C;font-weight:700">고정특근수당</span><span class="prv" style="color:#B91C1C;font-weight:700">${fmt$(s.tSpecialPay)}원<span class="prx">${s.tSpecialDays||0}일</span></span></div>`:''}
         <div class="pr">
           <span class="prl">상여금</span>
           <span style="display:flex;align-items:center;gap:5px">
-            <input type="number" value="${s.bonus}" placeholder="0" ${_monthLocked?'readonly title="확정된 달 — 입력하려면 확정 해제 먼저"':''}
+            <input type="text" inputmode="numeric" value="${s.bonus?Number(s.bonus).toLocaleString():''}" placeholder="0" ${_monthLocked?'readonly title="확정된 달 — 입력하려면 확정 해제 먼저"':''}
               class="pay-card-inp" data-eid="${emp.id}" data-card-field="bonus"
               style="width:90px;padding:3px 6px;font-size:12px;border:1px solid ${_monthLocked?'var(--bd2)':'var(--bd2)'};border-radius:5px;text-align:right;font-family:inherit;font-weight:600;color:var(--purple)${_monthLocked?';background:var(--surf);cursor:not-allowed;opacity:.65':''}"
-              onblur="setMonthBonus(${emp.id},pY,pM,+this.value);clearTimeout(window._cardRefT);window._cardRefT=setTimeout(()=>renderPayroll(),500)"
+              oninput="formatNumInput(this)"
+              onblur="setMonthBonus(${emp.id},pY,pM,+this.value.replace(/,/g,'')||0);clearTimeout(window._cardRefT);window._cardRefT=setTimeout(()=>renderPayroll(),500)"
               onkeydown="if(event.key==='Enter'){event.preventDefault();payCardNav(this);}">
             <span style="font-size:10px;color:var(--ink3)">원</span>
           </span>
@@ -2644,10 +3667,11 @@ function renderPayroll(){
             ${isDeduct?'🔴 ':''}${a.name}${!isDirect&&rawV?'<span style="font-size:8px;color:var(--ink3);margin-left:3px">자동</span>':''}
           </span>
           <span style="display:flex;align-items:center;gap:4px">
-            <input type="number" value="${rawV||''}" placeholder="0" min="0" ${_monthLocked?'readonly title="확정된 달 — 입력하려면 확정 해제 먼저"':''}
+            <input type="text" inputmode="numeric" value="${rawV?Number(rawV).toLocaleString():''}" placeholder="0" ${_monthLocked?'readonly title="확정된 달 — 입력하려면 확정 해제 먼저"':''}
               class="pay-card-inp" data-eid="${emp.id}" data-card-field="allow-${a.id}"
               style="width:80px;padding:3px 6px;font-size:12px;border:1px solid ${isDeduct?'#FECDD3':'var(--bd2)'};border-radius:5px;text-align:right;font-family:inherit;font-weight:600;color:${isDeduct?'var(--rose)':'var(--amber)'}${_monthLocked?';background:var(--surf);cursor:not-allowed;opacity:.65':''}"
-              onblur="setMonthAllowance(${emp.id},pY,pM,'${a.id}',+this.value);clearTimeout(window._cardRefT);window._cardRefT=setTimeout(()=>renderPayroll(),500)"
+              oninput="formatNumInput(this)"
+              onblur="setMonthAllowance(${emp.id},pY,pM,'${a.id}',+this.value.replace(/,/g,'')||0);clearTimeout(window._cardRefT);window._cardRefT=setTimeout(()=>renderPayroll(),500)"
               onkeydown="if(event.key==='Enter'){event.preventDefault();payCardNav(this);}">
             <span style="font-size:10px;color:${isDeduct?'var(--rose)':'var(--ink3)'}">${isDeduct?'(공제)':'원'}</span>
             ${!isDeduct?`<label style="display:flex;align-items:center;gap:2px;cursor:pointer;white-space:nowrap" title="통상임금 포함 시 가산수당(야간/연장/휴일) 계산에 반영">
@@ -2674,29 +3698,40 @@ function renderPayroll(){
   }
 }
 
+// 청크 렌더 race 방지용 토큰 — 동일 함수 재호출 시 진행 중인 RAF 청크 중단
+let _xlRenderToken = 0;
 function renderXlPreview(){
+  // 🛡️ 입력 보호
+  if(_isUserInputActive()){
+    if(_xlRefreshTimer) clearTimeout(_xlRefreshTimer);
+    _xlRefreshTimer = setTimeout(()=>renderXlPreview(), 1000);
+    return;
+  }
   const allowList = POL.allowances.filter(a => !a.isDeduct);
   const deductAllow = POL.allowances.filter(a => a.isDeduct===true);
   const sot = POL.sot || 209;
   const isMonthlyView = false;
 
   const payEmps = applyCommonFilter(EMPS.filter(emp=>{
-    if(emp.join){const jd=new Date(emp.join);if(jd>new Date(pY,pM,0))return false;}
-    if(emp.leave){const ld=new Date(emp.leave);if(ld<new Date(pY,pM-1,1))return false;}
+    if(emp.join){const jd=parseEmpDate(emp.join);if(jd>new Date(pY,pM,0))return false;}
+    if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<new Date(pY,pM-1,1))return false;}
     return true;
-  }), 'payroll');
+  }), 'payroll', new Date(pY,pM-1,1));
 
   // ── 헤더 ──
   const hdr = `<thead><tr>
     <th style="min-width:36px;background:#1a3a6e;color:#fff;position:sticky;left:0;z-index:5">순번</th>
-    <th style="min-width:60px;background:#1a3a6e;color:#fff">근무지</th>
-    <th style="min-width:60px;background:#1a3a6e;color:#fff">직무/직급</th>
     <th style="min-width:70px;background:#1a3a6e;color:#fff;position:sticky;left:36px;z-index:5">성명</th>
+    <th style="min-width:60px;background:#1a3a6e;color:#fff">직종</th>
+    <th style="min-width:60px;background:#1a3a6e;color:#fff">근무지</th>
+    <th style="min-width:50px;background:#1a3a6e;color:#fff">직급</th>
+    <th style="min-width:60px;background:#1a3a6e;color:#fff">부서</th>
     <th style="min-width:64px;background:#1a3a6e;color:#fff">급여<br>방식</th>
     <th style="min-width:46px;background:#1a3a6e;color:#fff">연차<br>개수</th>
     <th style="min-width:46px;background:#1a3a6e;color:#fff">근무<br>일수</th>
     <th style="min-width:52px;background:#1a3a6e;color:#fff">소정근로<br>시간</th>
     <th style="min-width:72px;background:#1a3a6e;color:#fff">입사일</th>
+    <th style="min-width:72px;background:#1a3a6e;color:#fff">퇴사일</th>
     <th style="min-width:60px;background:#1a3a6e;color:#fff">시급</th>
     <th style="min-width:80px;background:#1a3a6e;color:#fff">기본급<br><span style="font-size:9px;opacity:.7">(월고정:209h / 시급:실근무)</span></th>
     <th style="min-width:72px;background:#0D9488;color:#fff">주휴수당<br><span style="font-size:9px;opacity:.7">(시간급 전용)</span></th>
@@ -2711,14 +3746,16 @@ function renderXlPreview(){
     <th style="min-width:46px;background:#854F0B;color:#FAC775">초과휴일<br>시간(h)<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
     <th style="min-width:46px">결근<br>일수</th>
     <th style="min-width:56px">공제시간<br><span style="font-size:9px;opacity:.7">(h) ×1.0</span></th>
+    <th style="min-width:50px;background:#B91C1C;color:#FECACA">특근<br>일수</th>
+    <th style="min-width:80px;background:#B91C1C;color:#FECACA">고정특근수당<br><span style="font-size:8px;opacity:.8">최대 250%</span></th>
     <th style="min-width:80px;background:#1565C0;color:#fff">소정근로외<br>실근무수당<br><span style="font-size:8px;opacity:.8">×1.0</span></th>
     <th style="min-width:72px;background:#0C447C;color:#B5D4F4">야간<br>수당<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
     <th style="min-width:72px;background:#534AB7;color:#EEEDFE">초과연장<br>수당<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
     <th style="min-width:72px;background:#854F0B;color:#FAC775">초과휴일<br>수당<br><span style="font-size:8px;opacity:.8">×0.5</span></th>
-    <th style="min-width:72px;background:#854F0B;color:#FAC775">월급제<br>휴일수당<br><span style="font-size:8px;opacity:.8">8h이내×1.5</span></th>
-    <th style="min-width:72px;background:#993C1D;color:#F5C4B3">월급제<br>휴일초과<br><span style="font-size:8px;opacity:.8">8h초과×2.0</span></th>
-    <th style="min-width:72px;background:#A32D2D;color:#F7C1C1">결근차감</th>
+    <th style="min-width:72px;background:#854F0B;color:#FAC775">포괄임금제<br>휴일수당<br><span style="font-size:8px;opacity:.8">8h이내×1.5</span></th>
+    <th style="min-width:72px;background:#993C1D;color:#F5C4B3">포괄임금제<br>휴일초과<br><span style="font-size:8px;opacity:.8">8h초과×2.0</span></th>
     <th style="min-width:90px;background:#065F46;color:#D1FAE5">총 가산수당 <button class="tip-btn" style="background:rgba(255,255,255,.2);border:none;cursor:pointer;font-size:11px;padding:0 3px;border-radius:50%;color:#fff" onclick="showBonusTip()">💡</button></th>
+    <th style="min-width:72px;background:#A32D2D;color:#F7C1C1">결근차감</th>
     <th class="yw" style="min-width:80px">상여금<br>(선지급)</th>
     <th style="min-width:90px;background:#1a3a6e;color:#fff">총급여</th>
     ${deductAllow.map(a=>`<th style="min-width:72px">${a.name}</th>`).join('')}
@@ -2734,8 +3771,10 @@ function renderXlPreview(){
   // ── 데이터 행 ──
   let gt={base:0,nt:0,otDay:0,otNight:0,holDay:0,holNight:0,holDayOt:0,holNightOt:0,al:0,bonus:0,allow:0,ded:0,total:0};
 
-  const rows = payEmps.map((emp,idx)=>{
-    const s = monthSummary(emp.id, pY, pM);
+  const buildRow = (emp, idx) => {
+    const _ck = `${emp.id}_${pY}_${pM}`;
+    let s = _payrollSummaryCache.get(_ck);
+    if(!s){ s = monthSummary(emp.id, pY, pM); _payrollSummaryCache.set(_ck, s); }
     const rate = getEmpRate(emp);
     const tx = getTaxRec(emp.id, pY, pM);
 
@@ -2747,9 +3786,10 @@ function renderXlPreview(){
     const allowCells = allowList.map(a=>{
       const rawV = getMonthAllowance(emp.id,pY,pM,a.id);
       return `<td style="padding:2px 4px">
-        <input type="number" value="${rawV!==0?rawV:''}" placeholder="0"
+        <input type="text" inputmode="numeric" data-xl-inp="1" value="${rawV!==0?Number(rawV).toLocaleString():''}" placeholder="0"
           style="width:100%;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#1565C0;font-weight:600;outline:none;padding:2px 4px;"
           data-eid="${emp.id}" data-aid="${a.id}"
+          oninput="formatNumInput(this)"
           onblur="xlSaveAllow(this)"
           onfocus="this.style.background='#EFF6FF';this.style.outline='2px solid #1565C0'"
           onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
@@ -2758,16 +3798,17 @@ function renderXlPreview(){
     const deductCells = deductAllow.map(a=>{
       const rawV = a.id==='deduct' ? (getMonthAllowance(emp.id,pY,pM,a.id)||0) : getMonthAllowance(emp.id,pY,pM,a.id);
       return `<td style="padding:2px 4px;background:#FFF1F2">
-        <input type="number" value="${rawV!==0?rawV:''}" placeholder="0"
+        <input type="text" inputmode="numeric" data-xl-inp="1" value="${rawV!==0?Number(rawV).toLocaleString():''}" placeholder="0"
           style="width:100%;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:var(--rose);font-weight:700;outline:none;padding:2px 4px;"
           data-eid="${emp.id}" data-aid="${a.id}"
+          oninput="formatNumInput(this)"
           onblur="xlSaveAllow(this)"
           onfocus="this.style.background='#FFF1F2';this.style.outline='2px solid var(--rose)'"
           onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
       </td>`;
     }).join('');
 
-    // 총급여 = 급여 + 주휴수당 + 연차수당 + 총가산수당 + 상여금 - 결근차감
+    // 총급여 = 급여 + 주휴수당 + 연차수당 + 총가산수당(고정특근수당 포함) + 상여금 - 결근차감
     const totalPay = basePay + (s.wkly||0) + s.annualPay + (s.tTotalBonus||0) + (s.tMonthlyHolStdPay||0) + (s.tMonthlyHolOtPay||0) - s.deduction + s.bonus;
     const incomeTax = tx.incomeTax||0;
     const localTax = tx.localTax||0;
@@ -2782,20 +3823,24 @@ function renderXlPreview(){
     const netPay = totalPay - deductAllowTotal - pension4 - health4 - employ4 - incomeTax - localTax;
 
     const joinStr = emp.join ? emp.join.substring(0,10) : '';
+    const leaveStr = emp.leave ? emp.leave.substring(0,10) : '';
     const leaveCalc = calcLeaveForYear(emp, pY);
     const annualTotal = leaveCalc ? leaveCalc.total : 0;
     const annualUsed = countUsedLeave(emp.id, pY);
 
     return `<tr>
       <td class="num" style="position:sticky;left:0;z-index:2;background:#F8FAFC">${idx+1}</td>
-      <td>${esc(emp.dept||'')}</td>
-      <td>${esc(emp.role||'')}</td>
       <td style="font-weight:500;position:sticky;left:36px;z-index:2;background:#fff">${esc(emp.name||'')}</td>
+      <td>${esc(emp.role||'')}</td>
+      <td>${esc(emp.dept||'')}</td>
+      <td>${esc(emp.grade||'')}</td>
+      <td>${esc(emp.deptCat||'')}</td>
       <td style="text-align:center"><span class="emp-mode-badge ${getEmpPayModeLabel(emp).cls}" style="font-size:9px;padding:2px 6px">${getEmpPayModeLabel(emp).text}</span></td>
-      <td class="num">${annualTotal}</td>
+      <td class="num">${Number(annualTotal||0).toFixed(1)}</td>
       <td class="num">${s.wdays}</td>
       <td class="num">${(getEmpPayMode(emp)==='hourly'||getEmpPayMode(emp)==='monthly')?'':sot}</td>
       <td class="num" style="font-size:11px">${joinStr}</td>
+      <td class="num" style="font-size:11px;${leaveStr?'color:var(--rose);font-weight:700':''}">${leaveStr}</td>
       <td class="num">${getOrdinaryRate(emp, pY, pM).toLocaleString('ko-KR')}</td>
       <td class="num" style="font-weight:500">${s.tBase>0?fmt$(s.tBase):'-'}</td>
       <td class="num" style="${getEmpPayMode(emp)==='hourly'&&s.wkly>0?'color:#0D9488;font-weight:700':''}">${getEmpPayMode(emp)==='hourly'?(s.wkly>0?fmt$(s.wkly):''):''}</td>
@@ -2809,18 +3854,21 @@ function renderXlPreview(){
       <td class="num" style="${((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0))>0?'color:#854F0B;font-weight:500':''}">${((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0))>0?((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0)).toFixed(2):''}</td>
       <td class="num">${s.adays>0?s.adays:''}</td>
       <td class="num" style="${s.dedShortH>0?'color:#A32D2D;font-weight:500':''}">${s.dedShortH>0?s.dedShortH.toFixed(2):''}</td>
+      <td class="num" style="${(s.tSpecialDays||0)>0?'color:#B91C1C;font-weight:700':''}">${(s.tSpecialDays||0)>0?s.tSpecialDays:''}</td>
+      <td class="num" style="${(s.tSpecialPay||0)>0?'color:#B91C1C;font-weight:700;background:#FEF2F2':''}">${(s.tSpecialPay||0)>0?fmt$(s.tSpecialPay):''}</td>
       <td class="num" style="${(s.tExtraWorkPay||0)>0?'color:#1565C0;font-weight:700':''}">${(s.tExtraWorkPay||0)>0?fmt$(s.tExtraWorkPay):''}</td>
       <td class="num" style="${s.tNightPay>0?'color:#0C447C;font-weight:700':''}">${s.tNightPay>0?fmt$(s.tNightPay):''}</td>
       <td class="num" style="${((s.tOtDayPay||0)+(s.tOtNightPay||0))>0?'color:#534AB7;font-weight:700':''}">${((s.tOtDayPay||0)+(s.tOtNightPay||0))>0?fmt$((s.tOtDayPay||0)+(s.tOtNightPay||0)):''}</td>
       <td class="num" style="${(s.tHolPayNew||0)>0?'color:#854F0B;font-weight:700':''}">${(s.tHolPayNew||0)>0?fmt$(s.tHolPayNew):''}</td>
       <td class="num" style="${(s.tMonthlyHolStdPay||0)>0?'color:#854F0B;font-weight:700':''}">${(s.tMonthlyHolStdPay||0)>0?fmt$(s.tMonthlyHolStdPay):''}</td>
       <td class="num" style="${(s.tMonthlyHolOtPay||0)>0?'color:#993C1D;font-weight:700':''}">${(s.tMonthlyHolOtPay||0)>0?fmt$(s.tMonthlyHolOtPay):''}</td>
-      <td class="num" style="${s.deduction>0?'color:#A32D2D;font-weight:700':''}">${s.deduction>0?'-'+fmt$(s.deduction):''}</td>
       <td class="num" style="font-weight:700;color:#065F46;background:#ECFDF5">${(s.tTotalBonus||0)>0?fmt$(s.tTotalBonus):''}</td>
+      <td class="num" style="${s.deduction>0?'color:#A32D2D;font-weight:700':''}">${s.deduction>0?'-'+fmt$(s.deduction):''}</td>
       <td style="padding:2px 4px;background:#FEF3C7">
-        <input type="number" value="${s.bonus||''}" placeholder="0"
+        <input type="text" inputmode="numeric" data-xl-inp="1" value="${s.bonus?Number(s.bonus).toLocaleString():''}" placeholder="0"
           style="width:100%;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#92400E;font-weight:700;outline:none;padding:2px 4px;"
           data-eid="${emp.id}" data-field="bonus"
+          oninput="formatNumInput(this)"
           onblur="xlSaveBonus(this)"
           onfocus="this.style.background='#FEF3C7';this.style.outline='2px solid #F59E0B'"
           onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
@@ -2828,41 +3876,46 @@ function renderXlPreview(){
       <td class="num" style="font-weight:700;background:#EFF6FF">${fmt$(totalPay)}</td>
       ${deductCells}
       <td style="padding:2px 4px;background:#F5F3FF">
-        <input type="number" value="${+(tx.pension)||''}" placeholder="0"
+        <input type="text" inputmode="numeric" data-xl-inp="1" value="${+(tx.pension)?Number(+(tx.pension)).toLocaleString():''}" placeholder="0"
           style="width:68px;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#7C3AED;font-weight:600;outline:none;padding:2px 4px;"
           data-eid="${emp.id}" data-tax="pension"
+          oninput="formatNumInput(this)"
           onblur="xlSaveTax(this)"
           onfocus="this.style.outline='2px solid #7C3AED'"
           onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
       </td>
       <td style="padding:2px 4px;background:#F5F3FF">
-        <input type="number" value="${+(tx.health)||''}" placeholder="0"
+        <input type="text" inputmode="numeric" data-xl-inp="1" value="${+(tx.health)?Number(+(tx.health)).toLocaleString():''}" placeholder="0"
           style="width:68px;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#7C3AED;font-weight:600;outline:none;padding:2px 4px;"
           data-eid="${emp.id}" data-tax="health"
+          oninput="formatNumInput(this)"
           onblur="xlSaveTax(this)"
           onfocus="this.style.outline='2px solid #7C3AED'"
           onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
       </td>
       <td style="padding:2px 4px;background:#F5F3FF">
-        <input type="number" value="${+(tx.employment)||''}" placeholder="0"
+        <input type="text" inputmode="numeric" data-xl-inp="1" value="${+(tx.employment)?Number(+(tx.employment)).toLocaleString():''}" placeholder="0"
           style="width:68px;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#7C3AED;font-weight:600;outline:none;padding:2px 4px;"
           data-eid="${emp.id}" data-tax="employment"
+          oninput="formatNumInput(this)"
           onblur="xlSaveTax(this)"
           onfocus="this.style.outline='2px solid #7C3AED'"
           onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
       </td>
       <td style="padding:2px 4px">
-        <input type="number" value="${incomeTax||''}" placeholder="0"
+        <input type="text" inputmode="numeric" data-xl-inp="1" value="${incomeTax?Number(incomeTax).toLocaleString():''}" placeholder="0"
           style="width:68px;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#A32D2D;font-weight:600;outline:none;padding:2px 4px;"
           data-eid="${emp.id}" data-tax="incomeTax"
+          oninput="formatNumInput(this)"
           onblur="xlSaveTax(this)"
           onfocus="this.style.outline='2px solid #A32D2D'"
           onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
       </td>
       <td style="padding:2px 4px">
-        <input type="number" value="${localTax||''}" placeholder="0"
+        <input type="text" inputmode="numeric" data-xl-inp="1" value="${localTax?Number(localTax).toLocaleString():''}" placeholder="0"
           style="width:68px;border:none;background:transparent;font-size:11px;text-align:right;font-family:inherit;color:#A32D2D;font-weight:600;outline:none;padding:2px 4px;"
           data-eid="${emp.id}" data-tax="localTax"
+          oninput="formatNumInput(this)"
           onblur="xlSaveTax(this)"
           onfocus="this.style.outline='2px solid #A32D2D'"
           onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();this.blur();xlInputNav(this,event.shiftKey);}">
@@ -2870,46 +3923,85 @@ function renderXlPreview(){
       <td class="num" style="${totalDeduct>0?'color:#A32D2D;font-weight:700':''}">${totalDeduct>0?'-'+fmt$(totalDeduct):''}</td>
       <td class="num" style="font-weight:700;color:#085041">${fmt$(netPay)}</td>
     </tr>`;
-  });
+  };
 
-  document.getElementById('xl-table').innerHTML = hdr + '<tbody>' + rows.join('') + '</tbody>';
-  // 하단 스크롤바 미러 동기화
-  setTimeout(()=>{
-    const wrap = document.getElementById('xl-wrap-main');
-    const mirror = document.getElementById('xl-scroll-mirror');
-    const mirrorInner = document.getElementById('xl-scroll-mirror-inner');
-    if(wrap && mirror && mirrorInner){
-      mirrorInner.style.width = wrap.scrollWidth + 'px';
-      // 미러 → 본체 동기화
-      mirror.onscroll = ()=>{ if(!wrap._syncing){ wrap._syncing=true; wrap.scrollLeft=mirror.scrollLeft; wrap._syncing=false; }};
-      // 본체 → 미러 동기화
-      wrap.onscroll = ()=>{ if(!mirror._syncing){ mirror._syncing=true; mirror.scrollLeft=wrap.scrollLeft; mirror._syncing=false; }};
-    }
-  }, 50);
-  // 클릭 즉시 편집 활성화
-  document.querySelectorAll('#xl-table td.xl-editable').forEach(td=>{
-    td.addEventListener('focus', function(){
-      this.setAttribute('contenteditable','true');
-      const range=document.createRange();
-      range.selectNodeContents(this);
-      window.getSelection().removeAllRanges();
-      window.getSelection().addRange(range);
-    });
-    td.addEventListener('blur', function(){
-      this.setAttribute('contenteditable','false');
-      _xlDispatchSave(this);
-    });
-    td.addEventListener('keydown', function(e){
-      if(e.key==='Enter'){e.preventDefault();this.blur();}
-      if(e.key==='Escape'){e.preventDefault();renderXlPreview();}
-      if(e.key==='Tab'){e.preventDefault();
-        const all=Array.from(document.querySelectorAll('#xl-table td.xl-editable'));
-        const idx=all.indexOf(this); this.blur();
-        const next=all[e.shiftKey?idx-1:idx+1];
-        if(next) setTimeout(()=>next.focus(),50);
+  // ── 스켈레톤 + RAF 청크 렌더 (체감 응답성 개선) ──
+  const myToken = ++_xlRenderToken;
+  const total = payEmps.length;
+  const SKEL_TR = '<tr class="xl-skel"><td colspan="100" style="padding:8px;height:30px;border:0"></td></tr>';
+  document.getElementById('xl-table').innerHTML = hdr + '<tbody id="xl-tbody">' + (total>0 ? SKEL_TR.repeat(total) : '') + '</tbody>';
+
+  // 스켈레톤 CSS (페이지당 한 번만 주입)
+  if(!document.getElementById('xl-skel-style')){
+    const _st = document.createElement('style');
+    _st.id = 'xl-skel-style';
+    _st.textContent = '@keyframes xlSkel{0%{background-position:200% 0}100%{background-position:-200% 0}} .xl-skel td{background:linear-gradient(90deg,#F1F5F9 25%,#E2E8F0 50%,#F1F5F9 75%);background-size:200% 100%;animation:xlSkel 1.5s infinite;border-bottom:1px solid #F1F5F9}';
+    document.head.appendChild(_st);
+  }
+
+  // 마지막 청크 후 호출: 스크롤 동기화 + 입력 핸들러 등록
+  const _attachPostRender = () => {
+    setTimeout(()=>{
+      const wrap = document.getElementById('xl-wrap-main');
+      const mirror = document.getElementById('xl-scroll-mirror');
+      const mirrorInner = document.getElementById('xl-scroll-mirror-inner');
+      if(wrap && mirror && mirrorInner){
+        mirrorInner.style.width = wrap.scrollWidth + 'px';
+        mirror.onscroll = ()=>{ if(!wrap._syncing){ wrap._syncing=true; wrap.scrollLeft=mirror.scrollLeft; wrap._syncing=false; }};
+        wrap.onscroll = ()=>{ if(!mirror._syncing){ mirror._syncing=true; mirror.scrollLeft=wrap.scrollLeft; mirror._syncing=false; }};
       }
+    }, 50);
+    document.querySelectorAll('#xl-table td.xl-editable').forEach(td=>{
+      td.addEventListener('focus', function(){
+        this.setAttribute('contenteditable','true');
+        const range=document.createRange();
+        range.selectNodeContents(this);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+      });
+      td.addEventListener('blur', function(){
+        this.setAttribute('contenteditable','false');
+        _xlDispatchSave(this);
+      });
+      td.addEventListener('keydown', function(e){
+        if(e.key==='Enter'){e.preventDefault();this.blur();}
+        if(e.key==='Escape'){e.preventDefault();renderXlPreview();}
+        if(e.key==='Tab'){e.preventDefault();
+          const all=Array.from(document.querySelectorAll('#xl-table td.xl-editable'));
+          const idx=all.indexOf(this); this.blur();
+          const next=all[e.shiftKey?idx-1:idx+1];
+          if(next) setTimeout(()=>next.focus(),50);
+        }
+      });
     });
-  });
+  };
+
+  if(total === 0){ _attachPostRender(); return; }
+
+  // 행 30개씩 RAF 청크로 점진 렌더 — 첫 화면 즉시 표시 + 메인 스레드 양보
+  const tbody = document.getElementById('xl-tbody');
+  const CHUNK = 30;
+  const renderChunk = (start) => {
+    if(myToken !== _xlRenderToken) return; // 새 호출 들어왔으면 이 청크 중단
+    const end = Math.min(start + CHUNK, total);
+    let html = '';
+    for(let i = start; i < end; i++){ html += buildRow(payEmps[i], i); }
+    const tmp = document.createElement('tbody');
+    tmp.innerHTML = html;
+    const newRows = Array.from(tmp.children);
+    const skelList = Array.from(tbody.querySelectorAll('tr.xl-skel')).slice(0, newRows.length);
+    for(let i = 0; i < newRows.length; i++){
+      if(skelList[i]) skelList[i].replaceWith(newRows[i]);
+      else tbody.appendChild(newRows[i]);
+    }
+    if(end < total){
+      requestAnimationFrame(() => renderChunk(end));
+    } else {
+      if(myToken !== _xlRenderToken) return;
+      _attachPostRender();
+    }
+  };
+  requestAnimationFrame(() => renderChunk(0));
 }
 
 function setupXlNav() {
@@ -3185,17 +4277,19 @@ function xlEdit(empId, field, rawText) {
 // ══════════════════════════════════════
 
 function renderEmps(){
+  // 옛 dept-cat-options datalist DOM이 남아있으면 정리 (캐시된 페이지 잔재 청소)
+  const _oldDl = document.getElementById('dept-cat-options');
+  if(_oldDl) _oldDl.remove();
+
+  // 🛡️ 입력 중 input 스냅 (재렌더 후 복원 — 직원 정보 입력 보호)
+  const _focusTbody = document.getElementById('emp-tbody');
+  const _focusSnap = _snapshotInputIn(_focusTbody);
+
   renderFilterBar('emps-filter-bar','emps');
-  let sorted=[...EMPS].sort((a,b)=>{
-    // 퇴사자 맨 뒤
-    if(!a.leave&&b.leave)return -1;
-    if(a.leave&&!b.leave)return 1;
-    // 주간 먼저, 야간 나중
-    const aS=(a.shift||'day')==='day'?0:1;
-    const bS=(b.shift||'day')==='day'?0:1;
-    return aS-bS;
-  });
-  sorted = applyCommonFilter(sorted, 'emps');
+  // 🗂 EMPS 자연 순서 그대로 표시 — 사용자 드래그(empDrop)로 변경한 EMPS 배열 순서 100% 보존
+  // sortEMPS는 시작 시·shift/leave 변경 시·sbLoadAll 시 호출되어 EMPS를 4단계 정렬 상태로 유지.
+  // 그 후 사용자가 드래그로 미세조정하면 이 함수에서 추가 정렬 안 하므로 그대로 보존됨.
+  let sorted = applyCommonFilter([...EMPS], 'emps');
   let _prevGroup = null;
   document.getElementById('emp-tbody').innerHTML=sorted.map((e,i)=>{
     const al=calcAnnualLeave(e);
@@ -3203,9 +4297,9 @@ function renderEmps(){
     const _curGroup = e.leave ? 'leave' : (e.shift||'day');
     let _groupHdr = '';
     if(_curGroup !== _prevGroup){
-      if(_curGroup==='day') _groupHdr=`<tr><td colspan="18" style="padding:5px 14px;background:linear-gradient(90deg,#FEF9C3,#FFF7ED);font-size:10px;font-weight:800;color:#D97706;letter-spacing:.5px;border-bottom:1px solid #FCD34D">☀️ 주간 근무자</td></tr>`;
-      else if(_curGroup==='night') _groupHdr=`<tr><td colspan="18" style="padding:5px 14px;background:linear-gradient(90deg,#EDE9FE,#F5F3FF);font-size:10px;font-weight:800;color:#7C3AED;letter-spacing:.5px;border-bottom:1px solid #DDD6FE">🌙 야간 근무자</td></tr>`;
-      else if(_curGroup==='leave') _groupHdr=`<tr><td colspan="18" style="padding:5px 14px;background:linear-gradient(90deg,#FEE2E2,#FFF1F2);font-size:10px;font-weight:800;color:#E11D48;letter-spacing:.5px;border-bottom:1px solid #FECDD3">🚪 퇴사자</td></tr>`;
+      if(_curGroup==='day') _groupHdr=`<tr><td colspan="19" style="padding:5px 14px;background:linear-gradient(90deg,#FEF9C3,#FFF7ED);font-size:10px;font-weight:800;color:#D97706;letter-spacing:.5px;border-bottom:1px solid #FCD34D">☀️ 주간 근무자</td></tr>`;
+      else if(_curGroup==='night') _groupHdr=`<tr><td colspan="19" style="padding:5px 14px;background:linear-gradient(90deg,#EDE9FE,#F5F3FF);font-size:10px;font-weight:800;color:#7C3AED;letter-spacing:.5px;border-bottom:1px solid #DDD6FE">🌙 야간 근무자</td></tr>`;
+      else if(_curGroup==='leave') _groupHdr=`<tr><td colspan="19" style="padding:5px 14px;background:linear-gradient(90deg,#FEE2E2,#FFF1F2);font-size:10px;font-weight:800;color:#E11D48;letter-spacing:.5px;border-bottom:1px solid #FECDD3">🚪 퇴사자</td></tr>`;
     }
     _prevGroup = _curGroup;
     return _groupHdr+`<tr draggable="true" data-eid="${e.id}"
@@ -3218,13 +4312,14 @@ function renderEmps(){
       <td><span style="cursor:grab;color:var(--ink3);font-size:14px;padding:0 4px;">⠿</span></td>
       <td style="text-align:center;font-size:11px;font-weight:700;color:#94A3B8;padding:0 4px">${rowNum}</td>
       <td><div style="display:flex;gap:2px;align-items:center">
-        <input class="ei2" value="${esc(e.empNo||'')}" onchange="updE(${e.id},'empNo',this.value)" style="text-align:center;font-size:10px;flex:1" placeholder="사번" autocomplete="off">
-        ${!e.empNo&&POL.empNoEnabled&&(POL.siteCode||'').length===5?`<button onclick="showGenEmpNo(${e.id})" style="padding:2px 4px;font-size:8px;border:1px solid var(--navy2);border-radius:4px;background:var(--nbg);color:var(--navy2);cursor:pointer;white-space:nowrap;font-weight:700" title="사번 자동 생성">생성</button>`:''}
+        <input class="ei2" value="${esc(e.empNo||'')}" oninput="updE(${e.id},'empNo',this.value)" style="text-align:center;font-size:10px;flex:1" placeholder="사번" autocomplete="off">
+        ${!e.empNo&&POL.empNoEnabled?`<button onclick="showGenEmpNo(${e.id})" style="padding:2px 4px;font-size:8px;border:1px solid var(--navy2);border-radius:4px;background:var(--nbg);color:var(--navy2);cursor:pointer;white-space:nowrap;font-weight:700" title="사번 자동 생성 (사이트코드 미설정 시 안내 표시)">생성</button>`:''}
       </div></td>
-      <td><input class="ei2" value="${esc(e.name)}" onchange="updE(${e.id},'name',this.value)" placeholder="이름" autocomplete="off"></td>
-      <td><input class="ei2" value="${esc(e.role)}" onchange="updE(${e.id},'role',this.value)" autocomplete="off"></td>
-      <td><input class="ei2" value="${esc(e.grade||'')}" onchange="updE(${e.id},'grade',this.value)" placeholder="직급" autocomplete="off"></td>
-      <td><input class="ei2" value="${esc(e.dept||'')}" onchange="updE(${e.id},'dept',this.value)" placeholder="인천본점" autocomplete="off"></td>
+      <td><input class="ei2" value="${esc(e.name)}" oninput="updE(${e.id},'name',this.value)" placeholder="이름" autocomplete="off"></td>
+      <td><input class="ei2" value="${esc(e.role)}" oninput="updE(${e.id},'role',this.value)" autocomplete="off"></td>
+      <td><input class="ei2" value="${esc(e.deptCat||'')}" placeholder="사무" oninput="updE(${e.id},'deptCat',this.value.trim())" style="text-align:center;background:${e.deptCat?'#ECFDF5':'transparent'};color:${e.deptCat?'#047857':'var(--ink2)'};font-weight:${e.deptCat?'700':'500'};font-size:10px" title="부서 분류 (입력 즉시 저장 + 필터에 자동 분류)" autocomplete="off" /></td>
+      <td><input class="ei2" value="${esc(e.grade||'')}" oninput="updE(${e.id},'grade',this.value)" placeholder="직급" autocomplete="off"></td>
+      <td><input class="ei2" value="${esc(e.dept||'')}" oninput="updE(${e.id},'dept',this.value)" placeholder="인천본점" autocomplete="off"></td>
       <td>
         <div style="display:flex;gap:3px;align-items:center">
           <input class="ei2" value="${esc(e.rrnFront||'')}" maxlength="6" placeholder="앞6자리"
@@ -3239,8 +4334,8 @@ function renderEmps(){
       </td>
       <td>
         ${(e.payMode||POL.basePayMode)==='monthly'
-          ?`<div style="display:flex;align-items:center;gap:2px"><input class="ei2" type="number" value="${e.monthly!==null&&e.monthly!==undefined?e.monthly:''}" onchange="updE(${e.id},'monthly',+this.value)" style="text-align:right" placeholder="${POL.baseMonthly}" autocomplete="off"><span style="font-size:9px;color:var(--ink3)">원/월</span></div>`
-          :`<div style="display:flex;align-items:center;gap:2px"><input class="ei2" type="number" value="${e.rate!==null&&e.rate!==undefined?e.rate:''}" onchange="updE(${e.id},'rate',+this.value)" style="text-align:right" placeholder="${POL.baseRate}" autocomplete="off"><span style="font-size:9px;color:var(--ink3)">원/h</span></div>`
+          ?`<div style="display:flex;align-items:center;gap:2px"><input class="ei2" type="text" inputmode="numeric" value="${e.monthly!==null&&e.monthly!==undefined?Number(e.monthly).toLocaleString():''}" oninput="formatNumInput(this)" onchange="updE(${e.id},'monthly',+this.value.replace(/,/g,'')||0)" style="text-align:right" placeholder="${Number(POL.baseMonthly||0).toLocaleString()}" autocomplete="off"><span style="font-size:9px;color:var(--ink3)">원/월</span></div>`
+          :`<div style="display:flex;align-items:center;gap:2px"><input class="ei2" type="text" inputmode="numeric" value="${e.rate!==null&&e.rate!==undefined?Number(e.rate).toLocaleString():''}" oninput="formatNumInput(this)" onchange="updE(${e.id},'rate',+this.value.replace(/,/g,'')||0)" style="text-align:right" placeholder="${Number(POL.baseRate||0).toLocaleString()}" autocomplete="off"><span style="font-size:9px;color:var(--ink3)">원/h</span></div>`
         }
       </td>
       <td><input class="ei2" type="date" value="${esc(e.join||'')}" onchange="updE(${e.id},'join',this.value)"></td>
@@ -3262,7 +4357,7 @@ function renderEmps(){
         <div class="rb-g" style="justify-content:center">
           <div class="rb ${!e.payMode||e.payMode==='fixed'?'on':''}" onclick="updE(${e.id},'payMode','fixed');renderEmps()" style="font-size:9px;padding:3px 6px">통상임금제</div>
           <div class="rb ${e.payMode==='hourly'?'on':''}" onclick="updE(${e.id},'payMode','hourly');renderEmps()" style="font-size:9px;padding:3px 6px">시급제</div>
-          <div class="rb ${e.payMode==='monthly'?'on':''}" onclick="updE(${e.id},'payMode','monthly');renderEmps()" style="font-size:9px;padding:3px 6px">월급제</div>
+          <div class="rb ${e.payMode==='monthly'?'on':''}" onclick="updE(${e.id},'payMode','monthly');renderEmps()" style="font-size:9px;padding:3px 6px">포괄임금제</div>
         </div>
       </td>
       <td>
@@ -3288,6 +4383,8 @@ function renderEmps(){
     </tr>`;
   }).join('');
   initColResize();
+  // 🛡️ 활성 input 복원 (이름/주민번호/시급/사번 등 입력 중 보호)
+  _restoreInputIn(document.getElementById('emp-tbody'), _focusSnap);
 }
 
 // 직원관리 테이블 헤더 드래그 리사이즈
@@ -3402,20 +4499,115 @@ function empDrop(ev,i){
   }
   empDragIdx=null;
   saveLS();
+  // 🚀 드래그 직후 250ms 디바운스 우회하고 즉시 서버 저장 — 사용자가 빠르게 F5 눌러도 유실 방지
+  if(typeof flushPendingSave === 'function') flushPendingSave();
   renderEmps();
   renderSb(document.getElementById('sb-search-inp')?.value||'');
   renderTable();
 }
+// 🔒 EMPS 명시적 편집 모드 — [✏️ 순서 편집] 버튼 클릭 시 활성, [저장]/[취소] 시 해제.
+// 활성 동안: 폴링 EMPS 동기화 스킵 + handleConflicts EMPS 머지는 항상 사용자 우선(스킵).
+// _empEditModeSnapshot: 진입 시점 EMPS 복사본 — [취소] 시 100% 복원 보장.
+let _empEditMode = false;
+let _empEditModeSnapshot = null;
+function isEmpEditingLocked(){ return _empEditMode === true; }
+
+// 편집 모드 진입 — 직원관리 페이지 [✏️ 순서 편집] 버튼에서 호출
+function enterEmpOrderEditMode(){
+  if(_empEditMode) return;
+  _empEditMode = true;
+  // EMPS 깊은 복사본 저장 (취소 시 복원용) — 객체 참조 체인까지 안전하게
+  try { _empEditModeSnapshot = JSON.parse(JSON.stringify(EMPS||[])); } catch(e){ _empEditModeSnapshot = []; }
+  _renderEmpEditBar();
+  // 편집 중 페이지 이탈 경고
+  window.addEventListener('beforeunload', _empEditBeforeUnload);
+}
+function _empEditBeforeUnload(e){
+  if(!_empEditMode) return;
+  e.preventDefault();
+  e.returnValue = '직원 순서 편집 중입니다. 저장하지 않고 나가시겠습니까?';
+  return e.returnValue;
+}
+function exitEmpOrderEditMode(save){
+  if(!_empEditMode) return;
+  try {
+    if(save){
+      // 사용자 변경을 즉시 저장 — 디바운스 우회 + handleConflicts에서도 항상 사용자 우선이므로 무조건 통과
+      saveLS();
+      if(typeof flushPendingSave === 'function') flushPendingSave();
+      if(typeof showSyncToast === 'function') showSyncToast('✅ 직원 순서 저장됨', 'ok', 2500);
+    } else {
+      // 취소: 진입 시점 EMPS로 100% 복원
+      if(Array.isArray(_empEditModeSnapshot)){
+        EMPS = JSON.parse(JSON.stringify(_empEditModeSnapshot));
+        try { localStorage.setItem('npm5_emps', JSON.stringify(EMPS)); } catch(e){}
+      }
+    }
+  } catch(e){
+    console.error('exitEmpOrderEditMode 오류:', e);
+    // 오류 시 안전: 스냅샷 복원
+    if(Array.isArray(_empEditModeSnapshot)){
+      try { EMPS = JSON.parse(JSON.stringify(_empEditModeSnapshot)); } catch(_){}
+    }
+  } finally {
+    _empEditMode = false;
+    _empEditModeSnapshot = null;
+    _removeEmpEditBar();
+    window.removeEventListener('beforeunload', _empEditBeforeUnload);
+    if(typeof renderEmps === 'function') renderEmps();
+    if(typeof renderSb === 'function') renderSb();
+    if(typeof renderTable === 'function') renderTable();
+  }
+}
+function _renderEmpEditBar(){
+  if(document.getElementById('emp-edit-bar')) return;
+  const bar = document.createElement('div');
+  bar.id = 'emp-edit-bar';
+  bar.style.cssText = 'position:sticky;top:0;z-index:50;background:#FEF3C7;border:2px solid #F59E0B;border-radius:8px;padding:10px 16px;margin:8px 0;display:flex;align-items:center;justify-content:space-between;gap:12px;font-family:inherit;box-shadow:0 2px 8px rgba(245,158,11,.2);';
+  bar.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;min-width:0;">'+
+      '<span style="font-size:18px;flex-shrink:0;">✏️</span>'+
+      '<div style="min-width:0;">'+
+        '<div style="font-weight:700;color:#92400E;font-size:14px;">직원 순서 편집 모드</div>'+
+        '<div style="font-size:11px;color:#78350F;margin-top:2px;">행을 드래그해 순서 변경. 편집 중엔 다른 디바이스 변경이 사용자 변경을 덮지 않습니다.</div>'+
+      '</div>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px;flex-shrink:0;">'+
+      '<button onclick="exitEmpOrderEditMode(false)" style="padding:7px 14px;border:1px solid #D1D5DB;border-radius:6px;background:#fff;color:#374151;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">❌ 취소</button>'+
+      '<button onclick="exitEmpOrderEditMode(true)" style="padding:7px 16px;border:0;border-radius:6px;background:#22C55E;color:#fff;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;">💾 저장</button>'+
+    '</div>';
+  const empsPg = document.getElementById('pg-emps');
+  if(empsPg){
+    empsPg.insertBefore(bar, empsPg.firstChild);
+  } else {
+    document.body.appendChild(bar);
+  }
+}
+function _removeEmpEditBar(){
+  const bar = document.getElementById('emp-edit-bar');
+  if(bar) bar.remove();
+}
+
 // EMPS 배열 자체를 주간→야간→퇴사 순으로 정렬
 function sortEMPS(){
+  // 4단계 정렬: 퇴사자 뒤로 → 주간/야간 → 내국인/외국인 → 같은 그룹 내 원래 순서(stable sort)
+  // 결과 그룹 순서: 주간 내국인 → 주간 외국인 → 야간 내국인 → 야간 외국인 → 퇴사자
+  // EMPS 객체 자체는 미터치 (이름/주민번호/시급 등 변경 0). 배열 위치만 재배치.
   EMPS.sort((a,b)=>{
-    // 퇴사자 맨 뒤
-    if(!a.leave&&b.leave)return -1;
-    if(a.leave&&!b.leave)return 1;
-    // 주간 먼저, 야간 나중
-    const aS=(a.shift||'day')==='day'?0:1;
-    const bS=(b.shift||'day')==='day'?0:1;
-    return aS-bS;
+    // 1. 퇴사자 뒤로
+    const aL = a.leave ? 1 : 0;
+    const bL = b.leave ? 1 : 0;
+    if(aL !== bL) return aL - bL;
+    // 2. 주간 먼저
+    const aS = (a.shift||'day')==='day' ? 0 : 1;
+    const bS = (b.shift||'day')==='day' ? 0 : 1;
+    if(aS !== bS) return aS - bS;
+    // 3. 내국인 먼저 (외국인은 nation==='foreign' 또는 foreigner===true로 판정)
+    const aF = (a.nation==='foreign' || a.foreigner===true) ? 1 : 0;
+    const bF = (b.nation==='foreign' || b.foreigner===true) ? 1 : 0;
+    if(aF !== bF) return aF - bF;
+    // 4. 같은 그룹 내 원래 순서 유지 (ES2019 stable sort 특성 활용 — 사용자 드래그 정렬 보존)
+    return 0;
   });
 }
 
@@ -3438,11 +4630,16 @@ function updE(id,f,v){
       }
     }
   }
-  // shift(주야간) 변경 시 EMPS 배열 자체 재정렬
+  // 🚀 구조 변경(주야간/퇴사) → 정렬·전체 재렌더 필요
   if(f==='shift'||f==='leave'){
     sortEMPS();
+    saveLS();renderSb();renderTable();renderEmps();
+    return;
   }
-  saveLS();renderSb();renderTable();renderEmps();
+  // 🚀 단순 텍스트·셀 편집 → 데이터만 저장 (재렌더 X — 타이핑 중 포커스 보존)
+  // oninput으로 매 키입력마다 호출되어도 입력 흐름 끊기지 않음.
+  // 다른 탭 전환·페이지 진입 시 자연스럽게 최신값 반영됨.
+  saveLS();
 }
 
 // ══════════════════════════════════════
@@ -3452,13 +4649,15 @@ function updE(id,f,v){
 const BULK_COLS = [
   { key:'empNo',   label:'사번',     type:'text',   w:64  },
   { key:'name',    label:'이름 *',   type:'text',   w:88  },
-  { key:'role',    label:'직종',     type:'text',   w:80  },
-  { key:'grade',   label:'직급',     type:'text',   w:72  },
-  { key:'dept',    label:'소속',     type:'text',   w:80  },
+  { key:'role',    label:'직종 *',   type:'text',   w:80  },
+  { key:'grade',   label:'직급 *',   type:'text',   w:72  },
+  { key:'dept',    label:'소속 *',   type:'text',   w:80  },
   { key:'rrnFront',label:'주민번호(앞)',type:'text', w:80  },
   { key:'rrnBack', label:'주민번호(뒤)',type:'text', w:80  },
-  { key:'payMode', label:'급여방식', type:'select', w:88,
-    opts:[{v:'fixed',l:'통상임금제'},{v:'hourly',l:'시급'},{v:'monthly',l:'월급제'},{v:'pohal',l:'포괄임금'}] },
+  { key:'payMode', label:'급여방식', type:'select', w:96,
+    // 인라인 UI(통상임금제/시급제/포괄임금제)와 통일. 월급제·포괄임금 라벨 제거.
+    // 기존 monthly/pohal 직원 데이터는 그대로 유지됨 (calcSession이 두 분기 모두 처리).
+    opts:[{v:'fixed',l:'통상임금제'},{v:'hourly',l:'시급제'},{v:'monthly',l:'포괄임금제'}] },
   { key:'rate',    label:'시급/월급',type:'number', w:96  },
   { key:'join',    label:'입사일',   type:'date',   w:116 },
   { key:'gender',  label:'성별',     type:'select', w:72,
@@ -3737,6 +4936,9 @@ function bulkKeyDown(e){
     document.removeEventListener('keydown', bulkKeyDown);
     return;
   }
+  // 🛡️ 한글 IME 조합 중에는 키 처리 건너뜀 (Tab/Enter 등 누를 때 글자 중복 방지)
+  // 조합 종료 후 IME가 다음 keydown을 재발생시키므로 Tab 이동은 정상 동작함.
+  if(e.isComposing || e.keyCode === 229) return;
   const {r, c} = bulkSel;
   const rows = bulkData.length;
   const cols = BULK_COLS.length;
@@ -3867,9 +5069,11 @@ function bulkPasteText(text){
       else if(key === 'gender') bulkData[r+ri][key] = (trimVal==='여'||trimVal==='female') ? 'female' : trimVal ? 'male' : '';
       else if(key === 'nation') bulkData[r+ri][key] = (trimVal==='외국인'||trimVal==='foreign') ? 'foreign' : trimVal ? 'local' : '';
       else if(key === 'payMode'){
-        if(trimVal==='시급'||trimVal==='hourly') bulkData[r+ri][key]='hourly';
-        else if(trimVal==='월급제'||trimVal==='monthly') bulkData[r+ri][key]='monthly';
-        else if(trimVal==='포괄임금'||trimVal==='pohal') bulkData[r+ri][key]='pohal';
+        if(trimVal==='시급'||trimVal==='시급제'||trimVal==='hourly') bulkData[r+ri][key]='hourly';
+        // 포괄임금제·월급제·포괄임금 모두 monthly로 통합 (인라인 UI와 일치)
+        else if(trimVal==='포괄임금제'||trimVal==='포괄임금'||trimVal==='월급제'||trimVal==='monthly') bulkData[r+ri][key]='monthly';
+        // 명시적 'pohal' 문자열만 pohal 값 유지 (레거시 호환)
+        else if(trimVal==='pohal') bulkData[r+ri][key]='pohal';
         else if(trimVal) bulkData[r+ri][key]='fixed';
         else bulkData[r+ri][key]='';
       }
@@ -3907,9 +5111,33 @@ function closeBulkAdd(){
 }
 
 function confirmBulkAdd(){
-  const valid = bulkData.filter(r=>r.name&&r.name.trim());
-  if(valid.length===0){ alert('이름을 최소 1명 이상 입력하세요'); return; }
+  // 데이터가 한 글자라도 입력된 행만 대상 (완전 빈 행은 무시)
+  const filledRows = bulkData
+    .map((r,idx)=>({r,idx}))
+    .filter(({r})=>Object.values(r||{}).some(v=>v!==undefined&&v!==null&&String(v).trim()!==''));
+  if(filledRows.length===0){ alert('이름을 최소 1명 이상 입력하세요'); return; }
 
+  // 필수 필드 검증: 이름·직종·직급·소속
+  const REQUIRED = [
+    {key:'name',  label:'이름'},
+    {key:'role',  label:'직종'},
+    {key:'grade', label:'직급'},
+    {key:'dept',  label:'소속'},
+  ];
+  const incomplete = [];
+  filledRows.forEach(({r,idx})=>{
+    const missing = REQUIRED.filter(f=>!r[f.key]||!String(r[f.key]).trim()).map(f=>f.label);
+    if(missing.length>0){
+      const rowName = r.name && r.name.trim() ? r.name.trim() : '(이름 없음)';
+      incomplete.push(`${idx+1}행 [${rowName}]: ${missing.join(' · ')} 누락`);
+    }
+  });
+  if(incomplete.length>0){
+    alert(`아래 항목을 모두 입력한 뒤 저장하세요.\n\n[필수 항목] 이름 · 직종 · 직급 · 소속\n\n${incomplete.join('\n')}`);
+    return;
+  }
+
+  const valid = filledRows.map(({r})=>r); // 검증 통과한 행
   const colors=['#DBEAFE','#FEF3C7','#D1FAE5','#EDE9FE','#FCE7F3','#FFF7ED'];
   const tcs=['#1E3A5F','#78350F','#064E3B','#4C1D95','#831843','#7C2D12'];
   let maxId = EMPS.length>0 ? Math.max(...EMPS.map(e=>e.id)) : 0;
@@ -3922,7 +5150,7 @@ function confirmBulkAdd(){
     const isMonthly=pm==='monthly';
     EMPS.push({
       id:maxId, name:row.name.trim(),
-      role:row.role||'', grade:row.grade||'', dept:row.dept||'',
+      role:row.role||'', grade:row.grade||'', dept:row.dept||'', deptCat:row.deptCat||'',
       empNo:row.empNo||'',
       rate:(!isMonthly&&row.rate)?+row.rate:null,
       monthly:(isMonthly&&row.rate)?+row.rate:null,
@@ -4204,6 +5432,22 @@ function toggleEmpNoSetting(on){
   if(label){label.textContent=on?'ON':'OFF';label.style.color=on?'var(--navy)':'var(--ink3)';}
   saveLS();
 }
+
+// 🔢 사이트코드 즉시 저장 — 드롭다운 선택 시 자동 호출 (별도 저장 버튼 안 눌러도 됨)
+function setSiteCode(code){
+  const trimmed = (code||'').trim();
+  POL.siteCode = trimmed;
+  saveLS();
+  // 직원관리 보고 있으면 [생성] 버튼 표시 갱신
+  if(typeof renderEmps === 'function'){
+    const empsPg = document.getElementById('pg-emps');
+    if(empsPg && empsPg.classList.contains('on')) renderEmps();
+  }
+  if(typeof showSyncToast === 'function'){
+    if(trimmed.length === 5) showSyncToast('✅ 사이트코드 ' + trimmed + ' 저장됨', 'ok', 2000);
+    else if(trimmed) showSyncToast('⚠️ 사이트코드는 5자리여야 합니다 (현재 ' + trimmed.length + '자리)', 'warn', 3000);
+  }
+}
 function initEmpNoSetting(){
   const on=!!POL.empNoEnabled;
   const cb=document.getElementById('inp-empno-enabled');if(cb)cb.checked=on;
@@ -4261,8 +5505,14 @@ function doAddEmp(empNo){
   const colors=['#DBEAFE','#FEF3C7','#D1FAE5','#EDE9FE','#FCE7F3','#FFF7ED'];
   const tcs=['#1E3A5F','#78350F','#064E3B','#4C1D95','#831843','#7C2D12'];
   const ci=EMPS.length%colors.length;
-  EMPS.push({id:nid,name:'',role:'',dept:'',empNo:empNo,rate:null,monthly:null,join:'',leave:'',age:'',phone:'',rrnFront:'',rrnBack:'',sot:209,payMode:null,shift:'day',gender:'male',nation:'local',color:colors[ci],tc:tcs[ci]});
+  EMPS.push({id:nid,name:'',role:'',dept:'',deptCat:'',empNo:empNo,rate:null,monthly:null,join:'',leave:'',age:'',phone:'',rrnFront:'',rrnBack:'',sot:209,payMode:null,shift:'day',gender:'male',nation:'local',color:colors[ci],tc:tcs[ci]});
   saveLS();renderEmps();renderSb();
+}
+// 고용형태(직접고용/아웃소싱) 판별 — 소속(dept) 텍스트에 키워드 포함되면 아웃소싱
+// 인원 현황 화면·엑셀에서 공통 사용. 사번 자동 생성과는 무관 (별도로 detectDeptCode 사용).
+function isOutsource(emp){
+  const dept=(emp&&emp.dept||'').trim();
+  return /아웃소싱|파견|도급|외주|위탁/.test(dept);
 }
 // 직원 정보 기반 구분코드 자동 판별
 function detectDeptCode(emp){
@@ -4529,13 +5779,13 @@ function setBasePay(m){
     if(infoEl){infoEl.textContent='시급제: 실근무×시급 / 야간 ×1.5배 전체';infoEl.className='info';}
     const rr2=document.getElementById('sr-base-rate');if(rr2)rr2.style.display='flex';
   } else if(m==='monthly'){
-    if(badge){badge.className='mode-badge mode-pohal';badge.textContent='월급제';}
+    if(badge){badge.className='mode-badge mode-pohal';badge.textContent='포괄임금제';}
     if(sotRow)sotRow.style.display='none';
     if(juhyuTgl)juhyuTgl.classList.add('dis');
-    if(juhyuSs){juhyuSs.textContent='월급제: 주휴 월급에 포함';juhyuSs.style.color='var(--amber)';}
+    if(juhyuSs){juhyuSs.textContent='포괄임금제: 주휴 월급에 포함';juhyuSs.style.color='var(--amber)';}
     if(prem)prem.style.display='block';if(pohalInfo)pohalInfo.style.display='none';
     if(monthlyRow)monthlyRow.style.display='flex';
-    if(infoEl){infoEl.textContent='월급제: 월급 고정 / 휴일출근 시 1.5배(8h이내)·2배(초과)';infoEl.className='info green';}
+    if(infoEl){infoEl.textContent='포괄임금제: 월급 고정 / 휴일출근 시 1.5배(8h이내)·2배(초과)';infoEl.className='info green';}
     const rr4=document.getElementById('sr-base-rate');if(rr4)rr4.style.display='none';
     const mr=document.getElementById('sr-base-monthly');if(mr)mr.style.display='flex';
   } else {
@@ -4549,9 +5799,11 @@ function setBasePay(m){
     const rr3=document.getElementById('sr-base-rate');if(rr3)rr3.style.display='none';
   }
   setTimeout(updNotes,0);
+  // 💾 자동 저장 — 라디오 클릭 즉시 서버 반영 (F5 시 유실 방지)
+  if(typeof saveLS==='function') saveLS();
 }
-function setSize(s){POL.size=s;['u5','o5'].forEach(x=>{const el=document.getElementById('rb-'+x);if(el)el.classList.toggle('on',x===s);});const aw=document.getElementById('set-aw');if(s==='o5'){aw.style.display='flex';document.getElementById('set-aw-msg').textContent='5인 이상: 가산수당 50% 의무 (근기법 제56조)';}else aw.style.display='none';}
-function onJuhyu(){POL.juhyu=document.getElementById('tog-juhyu').checked;}
+function setSize(s){POL.size=s;['u5','o5'].forEach(x=>{const el=document.getElementById('rb-'+x);if(el)el.classList.toggle('on',x===s);});const aw=document.getElementById('set-aw');if(s==='o5'){aw.style.display='flex';document.getElementById('set-aw-msg').textContent='5인 이상: 가산수당 50% 의무 (근기법 제56조)';}else aw.style.display='none'; if(typeof saveLS==='function') saveLS();}
+function onJuhyu(){POL.juhyu=document.getElementById('tog-juhyu').checked; if(typeof saveLS==='function') saveLS();}
 function showLawModal(){
   const existing=document.getElementById('law-modal');
   if(existing){existing.remove();return;}
@@ -4595,9 +5847,9 @@ function showLawModal(){
   modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
   document.body.appendChild(modal);
 }
-function setDupMode(m){POL.dupMode=m;['legal','single'].forEach(x=>{const el=document.getElementById('rb-dup-'+x);if(el)el.classList.toggle('on',x===m);});updNotes();}
-function setDedMode(m){POL.dedMode=m;['hour','day'].forEach(x=>{const el=document.getElementById('rb-ded-'+x);if(el)el.classList.toggle('on',x===m);});}
-function setAlMode(m){POL.alMode=m;['legal','custom'].forEach(x=>{const el=document.getElementById('rb-al-'+x);if(el)el.classList.toggle('on',x===m);});}
+function setDupMode(m){POL.dupMode=m;['legal','single'].forEach(x=>{const el=document.getElementById('rb-dup-'+x);if(el)el.classList.toggle('on',x===m);});updNotes(); if(typeof saveLS==='function') saveLS();}
+function setDedMode(m){POL.dedMode=m;['hour','day'].forEach(x=>{const el=document.getElementById('rb-ded-'+x);if(el)el.classList.toggle('on',x===m);}); if(typeof saveLS==='function') saveLS();}
+function setAlMode(m){POL.alMode=m;['legal','custom'].forEach(x=>{const el=document.getElementById('rb-al-'+x);if(el)el.classList.toggle('on',x===m);}); if(typeof saveLS==='function') saveLS();}
 
 // ── 주말 요일 설정 ──
 function setPremTab(t){
@@ -4630,7 +5882,7 @@ function initWeekendChecks(){
     cb.checked = nw.includes(+cb.dataset.dow);
   });
 }
-function updNightLabel(){const h=+document.getElementById('sel-ns').value;POL.nightStart=h;updNotes();}
+function updNightLabel(){const h=+document.getElementById('sel-ns').value;POL.nightStart=h;updNotes(); if(typeof saveLS==='function') saveLS();}
 function updNotes(){
   const ext=document.getElementById('tog-ext')?.checked;
   const nt=document.getElementById('tog-nt')?.checked;
@@ -4684,6 +5936,10 @@ function updNotes(){
   }
   const el4=document.getElementById('night-info');if(el4)el4.innerHTML=`야간: <strong>${pad(ns)}:00~06:00</strong> / 월고정 ×0.5추가 / 시급제 ×1.5배`;
   const el5=document.getElementById('th-nt');if(el5)el5.textContent=`${pad(ns)}~06시`;
+  // 💾 야간/연장/휴일 11개 토글 onchange="updNotes()"가 POL을 변경하는데 저장 누락 → 추가.
+  // setSize/onJuhyu/setDupMode 등에서도 updNotes 호출하지만 그쪽은 자체 saveLS 있음 → 중복 호출되어도
+  // 디바운스 250ms로 결합되므로 부하 미미.
+  if(typeof saveLS==='function') saveLS();
 }
 function renderAllowanceList(){
   const tipMsg = '이 항목에 입력한 금액은 자동으로 마이너스(공제)로 계산됩니다. 총급여에서 해당 금액만큼 차감됩니다.';
@@ -4695,11 +5951,21 @@ function renderAllowanceList(){
     const rightBtn = isFixed
       ? '<span style="font-size:9px;color:var(--ink3);padding:2px 6px;background:var(--surf);border-radius:4px;white-space:nowrap">기본</span>'
       : '<button class="bk-del" onclick="delAllowance(' + i + ')">×</button>';
-    const deductCtrl = isDeduct
-      ? '<button class="tip-btn" onclick="showTip(' + "'공제 항목'" + ',' + "'" + tipMsg + "'" + ')" style="background:var(--rbg);color:var(--rose);width:22px;height:22px">💡</button>'
-      : '<label style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--ink3);cursor:pointer;white-space:nowrap"><input type="checkbox"' + (isDeduct ? ' checked' : '') + ' onchange="POL.allowances[' + i + '].isDeduct=this.checked;saveLS();renderAllowanceList();renderPayroll()">공제</label>';
+    // 🎯 공제 체크박스 — 양방향 토글 + 기본 항목은 disabled (실수 방지).
+    // 기본 항목(능력/직급/경력/교통/차량/식대/기타공제)의 공제 여부는 코드 default로 고정.
+    // 커스텀 항목(custom_xxx)만 자유롭게 변경 가능.
+    const isFixedId = DEF_ALLOW_IDS.includes(a.id);
+    const deductTipBtn = isDeduct
+      ? '<button class="tip-btn" onclick="showTip(' + "'공제 항목'" + ',' + "'" + tipMsg + "'" + ')" style="background:var(--rbg);color:var(--rose);width:22px;height:22px;margin-left:2px">💡</button>'
+      : '';
+    const cbAttrs = (isDeduct ? ' checked' : '')
+      + (isFixedId ? ' disabled title="기본 수당 항목 — 공제 여부 변경 불가 (실수 방지)"' : '')
+      + ' onchange="POL.allowances[' + i + '].isDeduct=this.checked;saveLS();renderAllowanceList();renderPayroll()"';
+    const labelStyle = 'display:flex;align-items:center;gap:3px;font-size:10px;color:' + (isDeduct ? 'var(--rose);font-weight:700' : 'var(--ink3)') + ';white-space:nowrap'
+      + (isFixedId ? ';cursor:not-allowed;opacity:.6' : ';cursor:pointer');
+    const deductCtrl = '<label style="' + labelStyle + '"><input type="checkbox"' + cbAttrs + '>공제</label>' + deductTipBtn;
     return '<div class="allowance-item" style="' + bgStyle + '">'
-      + '<input class="allowance-name" value="' + a.name + '" placeholder="수당 이름" style="' + nameColor + '" onchange="POL.allowances[' + i + '].name=this.value;saveLS()">'
+      + '<input class="allowance-name" value="' + a.name + '" placeholder="수당 이름" style="' + nameColor + '" onchange="POL.allowances[' + i + '].name=this.value;saveLS();renderPayroll()">'
       + deductCtrl
       + rightBtn
       + '</div>';
@@ -4722,16 +5988,34 @@ function renderDefBk(){
   const MINS=[0,5,10,15,20,25,30,35,40,45,50,55];
   const mkHO=s=>Array.from({length:24},(_,h)=>`<option value="${h}"${h==s?' selected':''}>${pad(h)}</option>`).join('');
   const mkMO=s=>MINS.map(m=>`<option value="${m}"${m==s?' selected':''}>${pad(m)}</option>`).join('');
+  // shift 드롭다운: 'all'(전체) | 'day'(주간) | 'night'(야간) — 기존 데이터에 shift 필드 없으면 'all'로 처리
+  const mkShiftO=s=>{
+    const cur = s || 'all';
+    return `<option value="all"${cur==='all'?' selected':''}>전체</option>`+
+           `<option value="day"${cur==='day'?' selected':''}>주간</option>`+
+           `<option value="night"${cur==='night'?' selected':''}>야간</option>`;
+  };
+  const shiftLabel = {all:'전체', day:'주간', night:'야간'};
+  const shiftBg = {all:'#F5F5F7', day:'#FEF3C7', night:'#E0E7FF'};
   document.getElementById('def-bk').innerHTML=DEF_BK.map((b,i)=>{
-    const[sh,sm]=b.start.split(':').map(Number);const[eh,em]=b.end.split(':').map(Number);
-    return`<div style="display:flex;align-items:center;gap:5px;padding:5px 8px;background:var(--surf);border:1px solid var(--bd);border-radius:7px">
+    const[sh,sm]=(b.start||'12:00').split(':').map(Number);const[eh,em]=(b.end||'13:00').split(':').map(Number);
+    const sft = b.shift || 'all';
+    return`<div style="display:flex;align-items:center;gap:5px;padding:5px 8px;background:${shiftBg[sft]||'var(--surf)'};border:1px solid var(--bd);border-radius:7px">
       <span class="bk-lbl">세트${i+1}</span>
+      <select class="bs" style="font-weight:600;min-width:54px" onchange="updDefBkShift(${i},this.value)" title="이 세트가 적용될 직원 분류">${mkShiftO(sft)}</select>
       <select class="bs" onchange="updDefBkH(${i},'start',this.value)">${mkHO(sh)}</select>:
       <select class="bs" onchange="updDefBkM(${i},'start',this.value)">${mkMO(sm)}</select>~
       <select class="bs" onchange="updDefBkH(${i},'end',this.value)">${mkHO(eh)}</select>:
       <select class="bs" onchange="updDefBkM(${i},'end',this.value)">${mkMO(em)}</select>
-      <button class="bk-del" onclick="DEF_BK.splice(${i},1);saveLS();renderDefBk()">×</button>
+      <button class="bk-del" onclick="delDefBk(${i})">×</button>
     </div>`;}).join('');
+}
+function updDefBkShift(i, v){
+  if(!DEF_BK[i]) return;
+  const allowed = ['all','day','night'];
+  DEF_BK[i].shift = allowed.includes(v) ? v : 'all';
+  saveLS();
+  renderDefBk();
 }
 function updDefBkH(i,f,v){
   const mn=DEF_BK[i][f].split(':')[1];
@@ -4743,7 +6027,18 @@ function updDefBkM(i,f,v){
   const newVal=`${hr}:${pad(+v)}`;
   DEF_BK[i][f]=newVal;saveLS();
 }
-function addDefBk(){DEF_BK.push({id:bkNid++,start:'12:00',end:'13:00'});saveLS();renderDefBk();}
+function addDefBk(){DEF_BK.push({id:bkNid++,shift:'all',start:'12:00',end:'13:00'});saveLS();renderDefBk();}
+// 🛡️ 마지막 1개 세트는 삭제 차단 — DEF_BK가 빈 배열이 되면 모든 직원 휴게시간이 0으로 계산됨
+function delDefBk(i){
+  if(!Array.isArray(DEF_BK)) return;
+  if(DEF_BK.length <= 1){
+    alert('기본 휴게세트는 최소 1개가 필요합니다.\n전부 삭제하려면 시간을 0으로 설정하세요.');
+    return;
+  }
+  DEF_BK.splice(i,1);
+  saveLS();
+  renderDefBk();
+}
 // ── 정책설정 카드 수정/완료 ──
 
 // askChangeDate 완료 후 버튼 복원
@@ -4839,10 +6134,234 @@ function loadStorageImages(container) {
 }
 
 // ══════════════════════════════════════
-// 📁 폴더 관리
+// 📁 폴더 관리 — 표준 27종 양식 + 회사 양식 + 내 폴더
 // ══════════════════════════════════════
 let FOLDERS = JSON.parse(localStorage.getItem('npm5_folders')||'[]');
 // 구조: [{id, name, parentId:null|id, files:[{name,storagePath,size,type,date}], open:bool}]
+//   ⚠️ 새 디자인은 단일 단계만 사용 (parentId 항상 null). 기존 하위폴더는 사장됨.
+
+// 회사 정보 (양식 작성 시 자동 사용 — 노프로 회원가입 정보와 별개)
+let COMPANY_INFO = JSON.parse(localStorage.getItem('npm5_company_info')||'{}');
+function saveCompanyInfo(){
+  try{ localStorage.setItem('npm5_company_info', JSON.stringify(COMPANY_INFO)); }catch(e){}
+  if(typeof saveLS==='function') saveLS();
+}
+
+// 회사 자체 양식 메타데이터 (실제 파일은 Supabase Storage)
+let CUSTOM_DOCS = JSON.parse(localStorage.getItem('npm5_custom_docs')||'[]');
+function saveCustomDocs(){
+  try{ localStorage.setItem('npm5_custom_docs', JSON.stringify(CUSTOM_DOCS)); }catch(e){}
+  if(typeof saveLS==='function') saveLS();
+}
+
+// 작성된 양식 (서버 보관 — Phase 2에서 활용)
+let SAVED_FORMS = JSON.parse(localStorage.getItem('npm5_saved_forms')||'[]');
+function saveSavedForms(){
+  try{ localStorage.setItem('npm5_saved_forms', JSON.stringify(SAVED_FORMS)); }catch(e){}
+  if(typeof saveLS==='function') saveLS();
+}
+
+// 폴더탭 상태
+const folderState = {
+  view: 'home',         // 'home' | 'userFolder'
+  docTab: 'templates',  // 'templates' | 'custom'
+  folderId: null,
+  cat: 'all',
+  search: '',
+  companyExpanded: false
+};
+
+// 카테고리 정의
+const NF_CATEGORIES = [
+  { key:'all',        name:'전체',     emoji:'📂' },
+  { key:'legal',      name:'근로계약', emoji:'📜' },
+  { key:'payroll',    name:'임금·급여', emoji:'💰' },
+  { key:'leave',      name:'휴가·휴직', emoji:'📅' },
+  { key:'discipline', name:'징계·퇴직', emoji:'📝' },
+  { key:'cert',       name:'증명서',   emoji:'🎓' },
+  { key:'insurance',  name:'4대보험',  emoji:'🏥' },
+  { key:'policy',     name:'회사 규정', emoji:'📕' }
+];
+
+// 표준 27종 양식 (고용노동부 표준)
+const NF_TEMPLATES = [
+  { id:'lc_regular', category:'legal', icon:'📜', iconType:'legal',
+    name:'표준 근로계약서 (정규직)', nameEn:'Standard Employment Contract',
+    desc:'기간의 정함이 없는 정규직. 고용노동부 공식 표준 양식.',
+    tags:[{text:'정부 공식',type:'govt'},{text:'필수',type:'req'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'startDate',label:'근로 시작일',type:'date'},
+      {key:'workTime',label:'근무 시간',type:'text'}] },
+  { id:'lc_fixed', category:'legal', icon:'📜', iconType:'legal',
+    name:'표준 근로계약서 (계약직)', nameEn:'Fixed-term Contract',
+    desc:'기간의 정함이 있는 계약직. 2년 이상 시 무기계약 전환.',
+    tags:[{text:'정부 공식',type:'govt'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'startDate',label:'계약 시작일',type:'date'},
+      {key:'endDate',label:'계약 종료일',type:'date'}] },
+  { id:'lc_minor', category:'legal', icon:'👦', iconType:'legal',
+    name:'연소근로자 근로계약서', nameEn:'Minor Worker Contract',
+    desc:'만 18세 미만 근로자용. 친권자 동의서 포함.',
+    tags:[{text:'정부 공식',type:'govt'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'guardianName',label:'친권자 성명',type:'text'}] },
+  { id:'lc_part', category:'legal', icon:'⏰', iconType:'legal',
+    name:'단시간근로자 근로계약서', nameEn:'Part-time Contract',
+    desc:'주 15시간 미만 또는 통상근로자보다 짧게 근무.',
+    tags:[{text:'정부 공식',type:'govt'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'hourlyWage',label:'시급 (원)',type:'number'}] },
+  { id:'lc_construction', category:'legal', icon:'🏗', iconType:'legal',
+    name:'건설일용근로자 근로계약서', nameEn:'Construction Day Labor',
+    desc:'건설현장 일용직 전용. 근로일별 임금 명시.',
+    tags:[{text:'정부 공식',type:'govt'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'siteName',label:'현장명',type:'text'}] },
+  { id:'lc_foreign', category:'legal', icon:'🌐', iconType:'legal',
+    name:'외국인근로자 근로계약서 (한·영)', nameEn:'Foreign Worker Contract',
+    desc:'E-9, H-2 비자 외국인 근로자. 한국어/영어 병기.',
+    tags:[{text:'정부 공식',type:'govt'},{text:'법정',type:'req'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'nationality',label:'국적',type:'text'},
+      {key:'passportNo',label:'여권번호',type:'text'}] },
+  { id:'lc_foreign_agri', category:'legal', icon:'🌾', iconType:'legal',
+    name:'외국인근로자 근로계약서 (농축어업)', nameEn:'Foreign Worker (Agriculture)',
+    desc:'농업·축산업·어업 분야 외국인. 한·영 병기.',
+    tags:[{text:'정부 공식',type:'govt'},{text:'법정',type:'req'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'industry',label:'업종',type:'select',options:['농업','축산업','어업','임업']}] },
+  { id:'lc_executive', category:'legal', icon:'👔', iconType:'legal',
+    name:'임원 위임계약서', nameEn:'Executive Contract',
+    desc:'이사·감사 등 임원용. 근로기준법 일부 적용 제외.',
+    tags:[],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'title',label:'직위',type:'text'}] },
+  { id:'salary_contract', category:'payroll', icon:'💰', iconType:'payroll',
+    name:'연봉계약서', nameEn:'Annual Salary Contract',
+    desc:'연봉 인상·계약 갱신 시 작성.',
+    tags:[],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'annualSalary',label:'연봉 (원)',type:'number'},
+      {key:'effectiveDate',label:'적용 시작일',type:'date'}] },
+  { id:'payslip', category:'payroll', icon:'📋', iconType:'payroll',
+    name:'임금명세서', nameEn:'Pay Slip',
+    desc:'매월 임금 지급 시 의무 교부 (근기법 §48).',
+    tags:[{text:'필수',type:'req'},{text:'근기법 §48',type:'law'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'payMonth',label:'지급 월',type:'month'}] },
+  { id:'wage_ledger', category:'payroll', icon:'📒', iconType:'payroll',
+    name:'임금대장', nameEn:'Wage Ledger',
+    desc:'전 직원 임금 지급 기록부. 3년 보관 의무.',
+    tags:[{text:'필수',type:'req'},{text:'근기법 §48',type:'law'}],
+    fields:[{key:'year',label:'연도',type:'number'},
+      {key:'month',label:'월',type:'number'}] },
+  { id:'leave_promo_1st', category:'leave', icon:'📅', iconType:'leave',
+    name:'연차 사용 촉진 통지 (1차)', nameEn:'Annual Leave Promotion 1st',
+    desc:'근기법 §61. 사용 만료 6개월 전 통지 의무.',
+    tags:[{text:'법정',type:'req'},{text:'근기법 §61',type:'law'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'totalDays',label:'발생 연차 (일)',type:'number'},
+      {key:'deadlineDate',label:'사용 마감일',type:'date'}] },
+  { id:'leave_promo_2nd', category:'leave', icon:'📆', iconType:'leave',
+    name:'연차 사용 촉진 통지 (2차)', nameEn:'Annual Leave Promotion 2nd',
+    desc:'근기법 §61. 1차 통지 후에도 미사용 시 2차.',
+    tags:[{text:'법정',type:'req'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'designatedDate',label:'회사 지정일',type:'date'}] },
+  { id:'leave_request', category:'leave', icon:'✈️', iconType:'leave',
+    name:'휴가 신청서', nameEn:'Leave Request',
+    desc:'연차·병가·경조사 휴가 신청.',
+    tags:[],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'leaveType',label:'휴가 종류',type:'select',options:['연차','병가','경조사','공가','기타']}] },
+  { id:'parental_leave', category:'leave', icon:'👶', iconType:'leave',
+    name:'육아휴직 신청서', nameEn:'Parental Leave',
+    desc:'남녀고용평등법 §19. 만 8세 이하 자녀.',
+    tags:[{text:'법정',type:'req'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'childName',label:'자녀 성명',type:'text'}] },
+  { id:'maternity_leave', category:'leave', icon:'🤰', iconType:'leave',
+    name:'출산전후휴가 신청서', nameEn:'Maternity Leave',
+    desc:'근기법 §74. 출산 전후 90일 (다태아 120일).',
+    tags:[{text:'법정',type:'req'},{text:'근기법 §74',type:'law'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'expectedDate',label:'출산 예정일',type:'date'}] },
+  { id:'family_care', category:'leave', icon:'❤️', iconType:'leave',
+    name:'가족돌봄휴가 신청서', nameEn:'Family Care Leave',
+    desc:'남녀고용평등법 §22의2. 연 10일 이내.',
+    tags:[{text:'법정',type:'req'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'familyName',label:'돌봄 대상자',type:'text'}] },
+  { id:'personnel_order', category:'policy', icon:'📋', iconType:'policy',
+    name:'인사명령서 (전직·발령)', nameEn:'Personnel Order',
+    desc:'직무 변경, 부서 이동, 승진 등.',
+    tags:[],
+    fields:[{key:'empId',label:'대상 직원',type:'employee'},
+      {key:'orderType',label:'발령 종류',type:'select',options:['승진','전직','전보','복직','겸직']}] },
+  { id:'resignation', category:'discipline', icon:'📝', iconType:'discipline',
+    name:'사직서', nameEn:'Resignation Letter',
+    desc:'직원 자발적 퇴직 시 작성.',
+    tags:[],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'resignDate',label:'퇴사 희망일',type:'date'}] },
+  { id:'termination', category:'discipline', icon:'🛑', iconType:'discipline',
+    name:'해고 통지서 (30일 전)', nameEn:'Termination Notice',
+    desc:'근기법 §26. 30일 전 서면 통지 의무.',
+    tags:[{text:'법정',type:'req'},{text:'근기법 §26',type:'law'}],
+    fields:[{key:'empId',label:'대상 직원',type:'employee'},
+      {key:'noticeDate',label:'통지일',type:'date'}] },
+  { id:'advance_termination', category:'discipline', icon:'⚡', iconType:'discipline',
+    name:'해고예고 적용 제외 통지서', nameEn:'Termination without Notice',
+    desc:'근기법 §26 단서. 천재지변·중대 귀책사유.',
+    tags:[],
+    fields:[{key:'empId',label:'대상 직원',type:'employee'}] },
+  { id:'warning', category:'discipline', icon:'⚠️', iconType:'discipline',
+    name:'시말서 / 경위서', nameEn:'Disciplinary Notice',
+    desc:'징계·경고 사유 발생 시 작성.',
+    tags:[],
+    fields:[{key:'empId',label:'대상 직원',type:'employee'},
+      {key:'incidentDate',label:'사건 발생일',type:'date'}] },
+  { id:'discipline_notice', category:'discipline', icon:'🚨', iconType:'discipline',
+    name:'징계처분 통지서', nameEn:'Disciplinary Action Notice',
+    desc:'정식 징계 의결 후 본인 통지.',
+    tags:[],
+    fields:[{key:'empId',label:'대상 직원',type:'employee'},
+      {key:'actionType',label:'징계 종류',type:'select',options:['견책','감봉','정직','강등','해고']}] },
+  { id:'cert_employment', category:'cert', icon:'🎓', iconType:'cert',
+    name:'재직 증명서', nameEn:'Certificate of Employment',
+    desc:'은행·관공서 제출용.',
+    tags:[],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'purpose',label:'용도',type:'text'}] },
+  { id:'cert_career', category:'cert', icon:'📔', iconType:'cert',
+    name:'경력 증명서', nameEn:'Career Certificate',
+    desc:'근기법 §39. 직원 청구 시 즉시 발급 의무.',
+    tags:[{text:'근기법 §39',type:'law'}],
+    fields:[{key:'empId',label:'직원',type:'employee'}] },
+  { id:'cert_resignation', category:'cert', icon:'🪪', iconType:'cert',
+    name:'퇴직 증명서', nameEn:'Certificate of Resignation',
+    desc:'퇴직 후 직원 요청 시 발급.',
+    tags:[],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'resignDate',label:'퇴직일',type:'date'}] },
+  { id:'ins_acquire', category:'insurance', icon:'🏥', iconType:'insurance',
+    name:'4대보험 자격취득신고서', nameEn:'Social Insurance Acquisition',
+    desc:'신규 입사 시 14일 이내 신고 의무.',
+    tags:[{text:'필수',type:'req'},{text:'정부 공식',type:'govt'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'acquireDate',label:'자격 취득일',type:'date'}] },
+  { id:'ins_loss', category:'insurance', icon:'📤', iconType:'insurance',
+    name:'4대보험 자격상실신고서', nameEn:'Social Insurance Loss',
+    desc:'퇴사 시 다음달 15일까지 신고 의무.',
+    tags:[{text:'필수',type:'req'},{text:'정부 공식',type:'govt'}],
+    fields:[{key:'empId',label:'직원',type:'employee'},
+      {key:'lossDate',label:'자격 상실일',type:'date'}] },
+  { id:'rules_of_employment', category:'policy', icon:'📕', iconType:'policy',
+    name:'취업규칙 (표준)', nameEn:'Rules of Employment',
+    desc:'근기법 §93. 상시 10인 이상 사업장 의무.',
+    tags:[{text:'10인↑ 의무',type:'req'},{text:'정부 공식',type:'govt'}],
+    fields:[{key:'category',label:'업종',type:'select',options:['일반 사무직','제조업','서비스업','건설업','음식·숙박업']}] }
+];
 
 // localStorage에는 base64(dataUrl) 제거 후 메타데이터만 저장
 function saveFolders(){
@@ -4857,6 +6376,9 @@ function saveFolders(){
       files:(f.files||[]).map(x=>({id:x.id,name:x.name,storagePath:x.storagePath,size:x.size,type:x.type,date:x.date}))}));
     try{localStorage.setItem('npm5_folders',JSON.stringify(minimal));}catch(e2){console.error('폴더 저장 실패',e2);}
   }
+  // 💾 서버 저장 — 이전엔 localStorage만 저장돼서 폴더 추가/이름변경/삭제가 서버 미반영.
+  // saveLS는 saveFolders를 호출하지 않으므로 무한 루프 위험 없음.
+  if(typeof saveLS==='function') saveLS();
 }
 // 기존 base64 데이터 정리 (최초 1회)
 (function cleanLegacyFolders(){
@@ -5076,126 +6598,1323 @@ function goUp(){
   renderFolder();
 }
 
+// ══ 폴더탭 메인 렌더 ══
 function renderFolder(){
+  renderFolderCompanyPanel();
+  renderFolderBreadcrumb();
+  if(folderState.view==='home'){
+    renderFolderHome();
+  } else if(folderState.view==='userFolder'){
+    const folder = FOLDERS.find(f=>f.id===folderState.folderId);
+    if(!folder){ folderState.view='home'; renderFolder(); return; }
+    renderUserFolderView(folder);
+  }
+}
+
+// ══ 회사 정보 패널 (양식 작성 시 자동 사용) ══
+function renderFolderCompanyPanel(){
+  const panel = document.getElementById('nf-company-panel');
+  if(!panel) return;
+  const info = COMPANY_INFO || {};
+  const hasInfo = info.name || info.ceo || info.address;
+  let summary = '';
+  if(hasInfo){
+    const parts = [];
+    if(info.name) parts.push(`<strong>${esc(info.name)}</strong>`);
+    if(info.ceo) parts.push(`대표 ${esc(info.ceo)}`);
+    if(info.address) parts.push(esc(info.address));
+    summary = parts.join(' · ');
+  } else {
+    summary = '아직 회사 정보가 입력되지 않았어요. 한 번 입력해두면 모든 양식에서 자동 사용할 수 있습니다.';
+  }
+  panel.innerHTML = `
+    <div class="nf-cp-header" onclick="toggleFolderCompanyPanel()">
+      <div style="flex:1;min-width:0">
+        <div class="nf-cp-title">
+          🏢 회사 정보
+          ${hasInfo ? '<span class="nf-cp-badge saved">저장됨</span>' : '<span class="nf-cp-badge">미입력</span>'}
+        </div>
+        <div class="nf-cp-summary">${summary}</div>
+      </div>
+      <button class="nf-cp-toggle">
+        ${folderState.companyExpanded ? '접기 ▴' : (hasInfo ? '수정 ▾' : '입력하기 ▾')}
+      </button>
+    </div>
+    <div class="nf-cp-body ${folderState.companyExpanded ? '' : 'hidden'}">
+      <div class="nf-cp-row">
+        <div class="nf-cp-label">회사명</div>
+        <input class="nf-cp-input" id="nf-ci-name" value="${esc(info.name||'')}" placeholder="예: ○○산업주식회사">
+      </div>
+      <div class="nf-cp-row">
+        <div class="nf-cp-label">대표자</div>
+        <input class="nf-cp-input" id="nf-ci-ceo" value="${esc(info.ceo||'')}" placeholder="예: 홍길동">
+      </div>
+      <div class="nf-cp-row full">
+        <div class="nf-cp-label">사업장 주소</div>
+        <input class="nf-cp-input" id="nf-ci-address" value="${esc(info.address||'')}" placeholder="예: 서울시 강남구 ○○로 123">
+      </div>
+      <div class="nf-cp-row">
+        <div class="nf-cp-label">사업자번호</div>
+        <input class="nf-cp-input" id="nf-ci-bizNumber" value="${esc(info.bizNumber||'')}" placeholder="예: 123-45-67890">
+      </div>
+      <div class="nf-cp-row">
+        <div class="nf-cp-label">연락처</div>
+        <input class="nf-cp-input" id="nf-ci-phone" value="${esc(info.phone||'')}" placeholder="예: 02-1234-5678">
+      </div>
+      <div class="nf-cp-actions">
+        <button class="nf-btn-pill outline" onclick="clearFolderCompanyInfo()">초기화</button>
+        <button class="nf-btn-pill" onclick="saveFolderCompanyInfo()">💾 저장</button>
+      </div>
+    </div>`;
+}
+function toggleFolderCompanyPanel(){ folderState.companyExpanded=!folderState.companyExpanded; renderFolderCompanyPanel(); }
+function saveFolderCompanyInfo(){
+  COMPANY_INFO = {
+    name: (document.getElementById('nf-ci-name').value||'').trim(),
+    ceo: (document.getElementById('nf-ci-ceo').value||'').trim(),
+    address: (document.getElementById('nf-ci-address').value||'').trim(),
+    bizNumber: (document.getElementById('nf-ci-bizNumber').value||'').trim(),
+    phone: (document.getElementById('nf-ci-phone').value||'').trim()
+  };
+  saveCompanyInfo();
+  if(typeof showSyncToast==='function') showSyncToast('회사 정보가 저장됐어요','ok');
+  folderState.companyExpanded = false;
+  renderFolderCompanyPanel();
+}
+function clearFolderCompanyInfo(){
+  if(!confirm('저장된 회사 정보를 모두 지울까요?')) return;
+  COMPANY_INFO = {};
+  saveCompanyInfo();
+  if(typeof showSyncToast==='function') showSyncToast('회사 정보 초기화됨','info');
+  renderFolderCompanyPanel();
+}
+
+// ══ 브레드크럼 ══
+function renderFolderBreadcrumb(){
+  const bc = document.getElementById('nf-breadcrumb');
+  if(!bc) return;
+  if(folderState.view==='home'){
+    bc.innerHTML = `<div class="nf-bc-item active">🏠 폴더 관리</div>`;
+  } else if(folderState.view==='userFolder'){
+    const f = FOLDERS.find(x=>x.id===folderState.folderId);
+    bc.innerHTML = `
+      <div class="nf-bc-item" onclick="goFolderHome()">🏠 폴더 관리</div>
+      <span class="nf-bc-sep">›</span>
+      <div class="nf-bc-item active">📁 ${esc(f?.name||'')}</div>`;
+  }
+}
+function goFolderHome(){ folderState.view='home'; folderState.folderId=null; renderFolder(); }
+
+// ══ 홈 화면 (메인 탭 + 내 폴더) ══
+function renderFolderHome(){
   const body = document.getElementById('folder-body');
   if(!body) return;
-
-  const cur = currentFolderId ? FOLDERS.find(f=>f.id===currentFolderId) : null;
-
-  // ── 브레드크럼 경로 ──
-  function getBreadcrumb(folderId){
-    const path = [];
-    let id = folderId;
-    while(id){
-      const f = FOLDERS.find(x=>x.id===id);
-      if(!f) break;
-      path.unshift(f);
-      id = f.parentId;
-    }
-    return path;
-  }
-  const breadcrumb = currentFolderId ? getBreadcrumb(currentFolderId) : [];
-
-  const breadcrumbHtml = `
-    <div style="display:flex;align-items:center;gap:4px;margin-bottom:16px;flex-wrap:wrap">
-      <span onclick="openFolder(null)" style="font-size:12px;font-weight:600;color:${currentFolderId?'var(--navy2)':'var(--ink)'};cursor:${currentFolderId?'pointer':'default'};padding:4px 8px;border-radius:6px;${currentFolderId?'hover:background:var(--nbg)':''}">
-        🏠 폴더 관리
-      </span>
-      ${breadcrumb.map((f,i)=>`
-        <span style="color:var(--ink3);font-size:11px">›</span>
-        <span onclick="openFolder(${f.id})" style="font-size:12px;font-weight:600;color:${i===breadcrumb.length-1?'var(--ink)':'var(--navy2)'};cursor:${i===breadcrumb.length-1?'default':'pointer'};padding:4px 8px;border-radius:6px">
-          ${f.name}
-        </span>
-      `).join('')}
+  const userFolders = FOLDERS.filter(f=>!f.parentId);
+  const customCount = (CUSTOM_DOCS||[]).length;
+  body.innerHTML = `
+    <div class="nf-main-tabs">
+      <button class="nf-main-tab ${folderState.docTab==='templates'?'on':''}" onclick="setFolderDocTab('templates')">
+        📄 표준 양식 <span class="cnt">${NF_TEMPLATES.length}</span>
+      </button>
+      <button class="nf-main-tab ${folderState.docTab==='custom'?'on':''}" onclick="setFolderDocTab('custom')">
+        📋 회사 양식 <span class="cnt">${customCount}</span>
+      </button>
+    </div>
+    <div id="nf-docs-area"></div>
+    <div class="nf-section">
+      <div class="nf-section-title">
+        📁 내 폴더 <span class="count">${userFolders.length}</span>
+        <button class="nf-btn-pill outline" style="margin-left:auto;font-size:11px;padding:5px 12px" onclick="addRootFolder()">+ 폴더 추가</button>
+      </div>
+      ${userFolders.length===0 ? `
+        <div class="nf-empty" style="padding:32px 20px">
+          <div class="nf-empty-icon" style="font-size:36px">📁</div>
+          <div class="nf-empty-title">아직 만든 폴더가 없어요</div>
+          <div class="nf-empty-sub">파일이나 작성한 양식을 보관할 폴더를 만들어보세요</div>
+        </div>` : `
+        <div class="nf-folder-grid">
+          ${userFolders.map(f=>`
+            <div class="nf-folder-card" onclick="openUserFolder(${f.id})">
+              <div class="nf-folder-icon">📁</div>
+              <div class="nf-folder-name">${esc(f.name)}</div>
+              <div class="nf-folder-meta">${(f.files||[]).length}개 파일</div>
+              <div class="nf-folder-actions" onclick="event.stopPropagation()">
+                <button class="nf-folder-act" onclick="renameFolder(${f.id})" title="이름변경">✏️</button>
+                <button class="nf-folder-act danger" onclick="deleteFolder(${f.id})" title="삭제">🗑</button>
+              </div>
+            </div>`).join('')}
+        </div>`}
     </div>`;
+  if(folderState.docTab==='templates') renderFolderTemplates();
+  else renderFolderCustom();
+}
 
-  // 현재 폴더 안의 하위 폴더들
-  const subFolders = FOLDERS.filter(f=>f.parentId===currentFolderId);
-  // 현재 폴더의 파일들
-  const files = cur ? (cur.files||[]) : [];
+function setFolderDocTab(tab){
+  folderState.docTab = tab;
+  folderState.cat = 'all';
+  folderState.search = '';
+  renderFolderHome();
+}
 
-  // ── 빈 상태 ──
-  if(subFolders.length===0 && files.length===0){
-    // 상단 버튼 업데이트
-    const addBtn0 = document.querySelector('#pg-folder .btn-n');
-    if(addBtn0){
-      if(currentFolderId){ addBtn0.onclick=()=>addSubFolder(currentFolderId); addBtn0.textContent='+ 하위 폴더 추가'; }
-      else { addBtn0.onclick=addRootFolder; addBtn0.textContent='+ 폴더 추가'; }
-    }
-    body.innerHTML = breadcrumbHtml + `
-      <div style="text-align:center;padding:40px 20px 24px;color:var(--ink3)">
-        <div style="font-size:48px;margin-bottom:10px">📁</div>
-        <div style="font-size:14px;font-weight:600;margin-bottom:6px;color:var(--ink2)">
-          ${currentFolderId ? '이 폴더가 비어 있습니다' : '폴더가 없습니다'}
-        </div>
-        <div style="font-size:12px;margin-bottom:16px">폴더나 파일을 추가해보세요</div>
-        ${currentFolderId ? `
-        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-          <button class="btn btn-sm" onclick="addSubFolder(${currentFolderId})" style="color:var(--navy2);border-color:var(--navy2)">📁 하위 폴더 추가</button>
-          <button class="btn btn-n btn-sm" onclick="uploadFile(${currentFolderId})">⬆️ 파일 업로드</button>
-        </div>` : ''}
-      </div>`;
+// ══ 표준 27종 양식 ══
+function renderFolderTemplates(){
+  const area = document.getElementById('nf-docs-area');
+  if(!area) return;
+  area.innerHTML = `
+    <div class="nf-cat-tabs">
+      ${NF_CATEGORIES.map(c=>{
+        const cnt = c.key==='all' ? NF_TEMPLATES.length : NF_TEMPLATES.filter(d=>d.category===c.key).length;
+        return `<button class="nf-cat-tab ${folderState.cat===c.key?'on':''}" onclick="setFolderCat('${c.key}')">${c.emoji} ${c.name} <span class="cnt">${cnt}</span></button>`;
+      }).join('')}
+    </div>
+    <div class="nf-search-bar">
+      🔍 <input type="text" id="nf-search" placeholder="서식 이름 또는 키워드 검색..." value="${esc(folderState.search)}">
+    </div>
+    <div id="nf-doc-grid"></div>`;
+  const inp = document.getElementById('nf-search');
+  if(inp) inp.addEventListener('input', e=>{ folderState.search=e.target.value; renderFolderTemplateGrid(); });
+  renderFolderTemplateGrid();
+}
+function setFolderCat(k){ folderState.cat=k; renderFolderTemplates(); }
+
+function renderFolderTemplateGrid(){
+  const el = document.getElementById('nf-doc-grid');
+  if(!el) return;
+  let docs = NF_TEMPLATES;
+  if(folderState.cat!=='all') docs = docs.filter(d=>d.category===folderState.cat);
+  if(folderState.search){
+    const q = folderState.search.toLowerCase();
+    docs = docs.filter(d=>d.name.toLowerCase().includes(q) || (d.desc||'').toLowerCase().includes(q));
+  }
+  if(docs.length===0){
+    el.className = '';
+    el.innerHTML = `<div class="nf-empty"><div class="nf-empty-icon">📭</div><div class="nf-empty-title">조건에 맞는 서식이 없습니다</div></div>`;
     return;
   }
+  el.className = 'nf-doc-grid';
+  el.innerHTML = docs.map(d=>`
+    <div class="nf-doc-card" onclick="openTemplateForm('${d.id}')">
+      <div class="nf-doc-head">
+        <div class="nf-doc-icon ${d.iconType}">${d.icon}</div>
+        <div class="nf-doc-info">
+          <div class="nf-doc-name">${esc(d.name)}</div>
+          <div class="nf-doc-en">${esc(d.nameEn)}</div>
+        </div>
+      </div>
+      <div class="nf-doc-desc">${esc(d.desc)}</div>
+      <div class="nf-doc-meta">${(d.tags||[]).map(t=>`<span class="nf-doc-tag ${t.type}">${esc(t.text)}</span>`).join('')}</div>
+      <div class="nf-doc-actions">
+        <button class="nf-doc-btn primary" onclick="event.stopPropagation();openTemplateForm('${d.id}')">✍️ 작성</button>
+      </div>
+    </div>`).join('');
+}
 
-  // 상단 버튼 업데이트
-  const addBtn = document.querySelector('#pg-folder .btn-n');
-  if(addBtn){
-    if(currentFolderId){
-      addBtn.onclick = ()=>addSubFolder(currentFolderId);
-      addBtn.textContent = '+ 하위 폴더 추가';
-    } else {
-      addBtn.onclick = addRootFolder;
-      addBtn.textContent = '+ 폴더 추가';
+// ══ 양식 작성 모달 ══
+let _activeNfTplId = null;
+
+function openNfModal(title, sub){
+  document.getElementById('nf-modal-title').textContent = title;
+  document.getElementById('nf-modal-sub').textContent = sub;
+  document.getElementById('nf-modal').classList.add('show');
+}
+function closeNfModal(){
+  document.getElementById('nf-modal').classList.remove('show');
+  _activeNfTplId = null;
+  _nfSelectedFile = null;
+}
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape' && document.getElementById('nf-modal')?.classList.contains('show')) closeNfModal();
+});
+
+// 노프로 EMPS → 양식용 emp 객체 매핑
+function nfMapEmp(empOrName){
+  if(!empOrName) return null;
+  // 이름으로 EMPS에서 매칭 시도
+  let e = null;
+  if(typeof empOrName==='string'){
+    const name = empOrName.trim();
+    if(!name) return null;
+    e = (EMPS||[]).find(x=>x.name===name);
+    if(!e) return { name, rrn:'', phone:'', address:'', position:'', salary:0, hireDate:'', workType:'', payType:'' };
+  } else {
+    e = empOrName;
+  }
+  // 주민번호: 뒷자리는 암호화 상태이므로 앞자리만 표시 (보안)
+  const rrn = e.rrnFront ? `${e.rrnFront}-*******` : '';
+  // workType 매핑
+  const workType = e.shift==='night' ? '야간' : (e.shift==='day' ? '주간' : '');
+  // payType 매핑
+  const payType = e.payMode==='fixed' ? '고정급' : (e.payMode==='hourly' ? '시급제' : (e.payMode==='monthly' ? '포괄임금제' : ''));
+  // salary: monthly가 있으면 우선, 없으면 rate*209 추정
+  const salary = Number(e.monthly) || (e.rate ? Number(e.rate)*209 : 0);
+  return {
+    name: e.name||'',
+    rrn,
+    phone: e.phone||'',
+    address: '',  // 노프로 EMPS는 address 필드 없음
+    position: e.role||e.dept||'',
+    salary,
+    hireDate: e.join||'',
+    workType,
+    payType
+  };
+}
+
+function openTemplateForm(id){
+  const tpl = NF_TEMPLATES.find(d=>d.id===id);
+  if(!tpl) return;
+  _activeNfTplId = id;
+  const info = COMPANY_INFO||{};
+  const hasInfo = info.name || info.ceo || info.address;
+
+  let html = `<div class="nf-info-tip">
+    <strong>💡 작성 방법</strong><br>
+    필요한 정보를 입력하시면 워드(.doc) 또는 PDF로 다운로드됩니다. <strong>비워둔 항목은 빈칸으로 출력</strong>되며, 다운로드 후 직접 채울 수 있어요.
+  </div>`;
+
+  // 회사 정보 자동 적용 체크박스
+  if(hasInfo){
+    html += `<div style="background:var(--nbg);border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:14px">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
+        <input type="checkbox" id="nf-use-company" checked style="width:17px;height:17px;margin-top:1px;cursor:pointer;accent-color:var(--navy)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;color:var(--ink);margin-bottom:3px">🏢 저장된 회사 정보 자동 적용</div>
+          <div style="font-size:11.5px;color:var(--ink3);line-height:1.5">
+            <strong style="color:var(--ink)">${esc(info.name||'(회사명 미입력)')}</strong>
+            ${info.ceo?` · 대표 ${esc(info.ceo)}`:''}
+            ${info.address?` · ${esc(info.address)}`:''}
+            ${info.bizNumber?`<br>사업자번호: ${esc(info.bizNumber)}`:''}
+            ${info.phone?` · 연락처: ${esc(info.phone)}`:''}
+          </div>
+        </div>
+      </label>
+    </div>`;
+  } else {
+    html += `<div class="nf-info-tip warn">
+      <strong>💡 회사 정보 미입력</strong><br>
+      상단 [🏢 회사 정보] 영역에 한 번 입력해두면, 다음부터 모든 양식에 자동 적용됩니다.
+    </div>`;
+  }
+
+  // 직원 정보 직접 입력 섹션 — 양식이 employee 필드를 사용하면 표시
+  const usesEmployee = (tpl.fields||[]).some(f=>f.type==='employee');
+  if(usesEmployee){
+    html += `<div style="font-size:12px;font-weight:800;color:var(--ink);margin:14px 0 6px;letter-spacing:.3px;display:flex;align-items:center;gap:6px">
+      👤 직원 정보 <span style="font-size:10.5px;color:var(--ink3);font-weight:600">(직접 입력 가능 · 등록 직원 선택 시 자동 채움)</span>
+    </div>
+    <div class="nf-form-row">
+      <div class="nf-form-label">성명 <span class="opt">(선택)</span></div>
+      <div><input class="nf-form-input" type="text" id="nf-emp-name" list="nf-dl-emps"
+        placeholder="등록된 직원 선택 또는 직접 입력" autocomplete="off"
+        oninput="_nfFillEmpFromName()">
+      <datalist id="nf-dl-emps">${(EMPS||[]).filter(e=>e.name).map(e=>`<option value="${esc(e.name)}">`).join('')}</datalist></div>
+    </div>
+    <div class="nf-form-row">
+      <div class="nf-form-label">주민번호 <span class="opt">(선택)</span></div>
+      <div><input class="nf-form-input" type="text" id="nf-emp-rrn" placeholder="예: 950101-1234567"></div>
+    </div>
+    <div class="nf-form-row">
+      <div class="nf-form-label">주소 <span class="opt">(선택)</span></div>
+      <div><input class="nf-form-input" type="text" id="nf-emp-address" placeholder="예: 서울시 강남구 ○○로 123"></div>
+    </div>
+    <div class="nf-form-row">
+      <div class="nf-form-label">연락처 <span class="opt">(선택)</span></div>
+      <div><input class="nf-form-input" type="text" id="nf-emp-phone" placeholder="예: 010-1234-5678"></div>
+    </div>
+    <div class="nf-form-row">
+      <div class="nf-form-label">직위 <span class="opt">(선택)</span></div>
+      <div><input class="nf-form-input" type="text" id="nf-emp-position" placeholder="예: 사원, 주임, 대리..."></div>
+    </div>
+    <div class="nf-form-row">
+      <div class="nf-form-label">월급여 (원) <span class="opt">(선택)</span></div>
+      <div><input class="nf-form-input" type="number" id="nf-emp-salary" placeholder="예: 2500000"></div>
+    </div>
+    <div class="nf-form-row">
+      <div class="nf-form-label">입사일 <span class="opt">(선택)</span></div>
+      <div><input class="nf-form-input" type="date" id="nf-emp-hireDate"></div>
+    </div>`;
+  }
+
+  // 양식별 추가 입력 필드 (employee 타입 제외 — 위 섹션에서 처리)
+  const otherFields = (tpl.fields||[]).filter(f=>f.type!=='employee');
+  if(otherFields.length>0){
+    html += `<div style="font-size:12px;font-weight:800;color:var(--ink);margin:14px 0 6px;letter-spacing:.3px">📝 양식 정보</div>`;
+    html += otherFields.map(f=>{
+      let input = '';
+      if(f.type==='select'){
+        input = `<select class="nf-form-input" id="nf-f-${f.key}">
+          <option value="">— 선택 안 함 (다운로드 후 입력) —</option>
+          ${(f.options||[]).map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join('')}
+        </select>`;
+      } else {
+        input = `<input class="nf-form-input" type="${f.type}" id="nf-f-${f.key}" placeholder="비워두면 다운로드 후 입력">`;
+      }
+      return `<div class="nf-form-row">
+        <div class="nf-form-label">${esc(f.label)} <span class="opt">(선택)</span></div>
+        <div>${input}</div>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('nf-modal-body').innerHTML = html;
+  document.getElementById('nf-modal-foot').innerHTML = `
+    <button class="nf-modal-btn" onclick="closeNfModal()">취소</button>
+    <button class="nf-modal-btn" onclick="generateNfForm('preview')">👁 미리보기</button>
+    <button class="nf-modal-btn" onclick="generateNfForm('word')">📝 워드(.doc)</button>
+    <button class="nf-modal-btn primary" onclick="generateNfForm('pdf')">📄 PDF 다운로드</button>
+  `;
+  openNfModal(tpl.name, tpl.nameEn);
+}
+
+// 등록된 직원 이름 입력 시 다른 필드 자동 채움 (사용자가 수정 가능)
+function _nfFillEmpFromName(){
+  const name = (document.getElementById('nf-emp-name')?.value||'').trim();
+  if(!name) return;
+  const e = (EMPS||[]).find(x=>x.name===name);
+  if(!e) return; // 매칭 안 되면 사용자가 직접 입력
+  const setIfEmpty = (id, val) => {
+    const el = document.getElementById(id);
+    if(el && !el.value && val) el.value = val;
+  };
+  setIfEmpty('nf-emp-rrn', e.rrnFront ? `${e.rrnFront}-*******` : '');
+  setIfEmpty('nf-emp-phone', e.phone||'');
+  setIfEmpty('nf-emp-position', e.role||e.dept||'');
+  const sal = Number(e.monthly) || (e.rate ? Number(e.rate)*209 : 0);
+  setIfEmpty('nf-emp-salary', sal||'');
+  setIfEmpty('nf-emp-hireDate', e.join||'');
+}
+
+// 양식 데이터 수집 (회사정보 + 직원 + 양식별 필드)
+function _nfCollectFormData(tpl){
+  const useCompany = document.getElementById('nf-use-company')?.checked;
+  const company = useCompany
+    ? { name:COMPANY_INFO.name||'', ceo:COMPANY_INFO.ceo||'', address:COMPANY_INFO.address||'',
+        bizNumber:COMPANY_INFO.bizNumber||'', phone:COMPANY_INFO.phone||'' }
+    : { name:'', ceo:'', address:'', bizNumber:'', phone:'' };
+  const data = {};
+  let emp = null;
+
+  // 직원 정보 — 직접 입력 섹션이 있으면 그 값을 우선 사용
+  const empNameEl = document.getElementById('nf-emp-name');
+  if(empNameEl){
+    const empName = (empNameEl.value||'').trim();
+    if(empName){
+      emp = {
+        name: empName,
+        rrn: (document.getElementById('nf-emp-rrn')?.value||'').trim(),
+        phone: (document.getElementById('nf-emp-phone')?.value||'').trim(),
+        address: (document.getElementById('nf-emp-address')?.value||'').trim(),
+        position: (document.getElementById('nf-emp-position')?.value||'').trim(),
+        salary: parseInt(document.getElementById('nf-emp-salary')?.value)||0,
+        hireDate: (document.getElementById('nf-emp-hireDate')?.value||'').trim(),
+        workType: '',
+        payType: ''
+      };
+      // 등록 직원이면 workType/payType 보충
+      const matched = (EMPS||[]).find(x=>x.name===empName);
+      if(matched){
+        const mapped = nfMapEmp(matched);
+        emp.workType = mapped.workType||'';
+        emp.payType = mapped.payType||'';
+      }
     }
   }
 
-  // ── 폴더 그리드 ──
-  const foldersHtml = subFolders.length > 0 ? `
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:20px">
-      ${subFolders.map(f=>`
-        <div onclick="openFolder(${f.id})"
-          style="background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px 14px;cursor:pointer;transition:all .15s;text-align:center;position:relative"
-          onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)';this.style.borderColor='var(--navy2)'"
-          onmouseout="this.style.boxShadow='';this.style.borderColor='var(--bd)'">
-          <div style="font-size:32px;margin-bottom:8px">📁</div>
-          <div style="font-size:12px;font-weight:700;color:var(--ink);margin-bottom:4px;word-break:break-all">${f.name}</div>
-          <div style="font-size:10px;color:var(--ink3)">${FOLDERS.filter(x=>x.parentId===f.id).length}개 폴더 · ${(f.files||[]).length}개 파일</div>
-          <div style="position:absolute;top:8px;right:8px;display:flex;gap:3px" onclick="event.stopPropagation()">
-            <button class="btn btn-xs" onclick="addSubFolder(${f.id})" title="하위 폴더">+</button>
-            <button class="btn btn-xs" onclick="uploadFile(${f.id})" title="업로드">⬆</button>
-            <button class="btn btn-xs" onclick="renameFolder(${f.id})" title="이름변경">✏️</button>
-            <button class="btn btn-xs" onclick="deleteFolder(${f.id})" title="삭제" style="color:var(--rose)">🗑</button>
+  // 양식별 추가 필드 (employee 타입 제외)
+  (tpl.fields||[]).forEach(f=>{
+    if(f.type==='employee') return;
+    const el = document.getElementById(`nf-f-${f.key}`);
+    const val = el ? el.value : '';
+    data[f.key] = val;
+  });
+  return { company, data, emp };
+}
+
+function generateNfForm(mode){
+  const tpl = NF_TEMPLATES.find(d=>d.id===_activeNfTplId);
+  if(!tpl) return;
+  const { company, data, emp } = _nfCollectFormData(tpl);
+
+  // 작성 기록 saved_forms에 저장 (Phase 4에서 서버 동기화)
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  SAVED_FORMS.push({
+    id: 'sf_'+Date.now(),
+    tplId: tpl.id,
+    tplName: tpl.name,
+    empName: emp?.name||'',
+    data, company,
+    createdAt: new Date().toISOString()
+  });
+  if(SAVED_FORMS.length>200) SAVED_FORMS = SAVED_FORMS.slice(-200);
+  saveSavedForms();
+
+  // Word blob 미리 생성 (다운로드 + 폴더 저장에 모두 사용)
+  const wordBlob = _nfBuildWordBlob(tpl, data, emp, company);
+  const empName = emp?.name ? `_${emp.name}` : '';
+  const baseName = `${tpl.name}${empName}_${dateStr}`;
+
+  if(mode==='preview'){
+    const html = nfWrapForView(tpl, data, emp, company, false);
+    const w = window.open('', '_blank');
+    if(!w){ if(typeof showSyncToast==='function') showSyncToast('팝업이 차단되었습니다','warn'); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+    closeNfModal();
+    return; // 미리보기는 폴더 저장 알럿 없음
+  }
+  if(mode==='word'){
+    _nfDownloadBlob(wordBlob, baseName+'.doc');
+    closeNfModal();
+    if(typeof showSyncToast==='function') showSyncToast(`${tpl.name}.doc 다운로드 — 빈칸은 워드에서 채워주세요`,'ok');
+  } else if(mode==='pdf'){
+    const html = nfWrapForView(tpl, data, emp, company, true);
+    const w = window.open('', '_blank');
+    if(!w){ if(typeof showSyncToast==='function') showSyncToast('팝업이 차단되었습니다','warn'); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+    closeNfModal();
+    if(typeof showSyncToast==='function') showSyncToast('인쇄 대화상자 → "PDF로 저장" 선택','info');
+  }
+  // 다운로드 후 "내 폴더에 저장" 알럿
+  setTimeout(()=>askSaveToFolder(tpl, emp, dateStr, wordBlob, baseName), 500);
+}
+
+// 다운로드 후 "내 폴더에도 저장하시겠습니까?" 알럿 → 폴더 선택 모달
+function askSaveToFolder(tpl, emp, dateStr, wordBlob, baseName){
+  if(!confirm('📁 내 폴더에도 저장하시겠습니까?\n\n작성한 양식을 폴더에 워드(.doc) 파일로 보관합니다.\n나중에 [폴더 관리] 탭에서 다시 다운로드하거나 PDF로 변환할 수 있어요.')) return;
+
+  // 폴더 선택 모달
+  const userFolders = FOLDERS.filter(f=>!f.parentId);
+  const optionsHtml = userFolders.length===0 ? `
+    <div class="nf-info-tip warn">
+      <strong>💡 안내</strong> 아직 만든 폴더가 없어요. <strong>"작성한 양식"</strong> 폴더가 자동으로 만들어집니다.
+    </div>` : `
+    <div class="nf-form-row">
+      <div class="nf-form-label">폴더 선택</div>
+      <select class="nf-form-input" id="nf-tgt-folder">
+        ${userFolders.map(f=>`<option value="${f.id}">${esc(f.name)}</option>`).join('')}
+        <option value="__new__">+ 새 폴더 만들기</option>
+      </select>
+    </div>
+    <div class="nf-form-row" id="nf-new-folder-row" style="display:none">
+      <div class="nf-form-label">새 폴더 이름</div>
+      <input class="nf-form-input" id="nf-new-folder-name" placeholder="예: 근로계약서, 급여명세 등">
+    </div>`;
+  document.getElementById('nf-modal-body').innerHTML = `
+    <div class="nf-info-tip">
+      <strong>📄 ${esc(tpl.name)}</strong> 을(를) 어느 폴더에 저장할까요?<br>
+      <span style="color:var(--ink3);font-size:11.5px">파일명: ${esc(baseName)}.doc</span>
+    </div>
+    ${optionsHtml}
+  `;
+  document.getElementById('nf-modal-foot').innerHTML = `
+    <button class="nf-modal-btn" onclick="closeNfModal()">건너뛰기</button>
+    <button class="nf-modal-btn primary" onclick="confirmSaveToFolder()">📁 폴더에 저장</button>
+  `;
+  openNfModal('내 폴더에 저장', tpl.name);
+  // 새 폴더 옵션 선택 시 입력칸 표시
+  setTimeout(()=>{
+    const sel = document.getElementById('nf-tgt-folder');
+    if(sel) sel.addEventListener('change', e=>{
+      document.getElementById('nf-new-folder-row').style.display = e.target.value==='__new__' ? '' : 'none';
+    });
+  }, 50);
+  // 클로저로 blob 보관
+  _pendingFormSave = { tpl, dateStr, wordBlob, baseName };
+}
+let _pendingFormSave = null;
+
+async function confirmSaveToFolder(){
+  if(!_pendingFormSave){ closeNfModal(); return; }
+  const { wordBlob, baseName } = _pendingFormSave;
+  const sel = document.getElementById('nf-tgt-folder');
+  let targetId;
+  if(!sel){
+    // 폴더 0개 → 자동 생성
+    targetId = Date.now();
+    FOLDERS.push({id:targetId, name:'작성한 양식', parentId:null, files:[], open:true});
+    saveFolders();
+  } else if(sel.value==='__new__'){
+    const name = (document.getElementById('nf-new-folder-name').value||'').trim();
+    if(!name){ if(typeof showSyncToast==='function') showSyncToast('새 폴더 이름을 입력해주세요','warn'); return; }
+    targetId = Date.now();
+    FOLDERS.push({id:targetId, name, parentId:null, files:[], open:true});
+    saveFolders();
+  } else {
+    targetId = parseInt(sel.value);
+  }
+
+  closeNfModal();
+  if(typeof showSyncToast==='function') showSyncToast('폴더에 업로드 중...','info');
+  try {
+    // Blob → File 변환 후 업로드
+    const fileName = baseName + '.doc';
+    const file = new File([wordBlob], fileName, { type:'application/msword' });
+    const res = await uploadFileToStorage(file, 'folder', targetId);
+    const folder = FOLDERS.find(f=>f.id===targetId);
+    if(folder){
+      folder.files = folder.files||[];
+      folder.files.push({
+        id: Date.now()+Math.random(),
+        name: fileName,
+        storagePath: res.path,
+        size: res.size||file.size,
+        type: 'application/msword',
+        date: new Date().toLocaleDateString('ko-KR')
+      });
+      saveFolders();
+    }
+    if(typeof showSyncToast==='function') showSyncToast(`✓ ${folder?.name||'폴더'}에 저장 완료`,'ok');
+    if(folderState.view==='userFolder') renderFolder();
+    else if(folderState.view==='home') renderFolderHome();
+  } catch(e){
+    console.error('Folder save failed:', e);
+    if(typeof showSyncToast==='function') showSyncToast('폴더 저장 실패: '+(e.message||''),'warn');
+  }
+  _pendingFormSave = null;
+}
+
+// ══ 27종 양식 본문 렌더러 ══
+function _nfBlank(val, width='120pt'){
+  if(val) return esc(String(val));
+  return `<span style="display:inline-block;min-width:${width};border-bottom:.75pt solid #999;color:#9CA3AF;font-size:9.5pt">&nbsp;(직접 입력)&nbsp;</span>`;
+}
+function _nfCompanyTable(c){
+  return `<table>
+<tr><th>사업체명</th><td>${_nfBlank(c.name)}</td><th>대표자</th><td>${_nfBlank(c.ceo)}</td></tr>
+<tr><th>사업장 주소</th><td colspan="3">${_nfBlank(c.address,"300pt")}</td></tr>
+<tr><th>사업자번호</th><td>${_nfBlank(c.bizNumber)}</td><th>연락처</th><td>${_nfBlank(c.phone)}</td></tr>
+</table>`;
+}
+function _nfEmployeeTable(emp){
+  if(!emp){
+    return `<table>
+<tr><th>성명</th><td>${_nfBlank('')}</td><th>주민번호</th><td>${_nfBlank('')}</td></tr>
+<tr><th>주소</th><td colspan="3">${_nfBlank('',"300pt")}</td></tr>
+<tr><th>연락처</th><td>${_nfBlank('')}</td><th>직위</th><td>${_nfBlank('')}</td></tr>
+</table>`;
+  }
+  return `<table>
+<tr><th>성명</th><td>${_nfBlank(emp.name)}</td><th>주민번호</th><td>${_nfBlank(emp.rrn)}</td></tr>
+<tr><th>주소</th><td colspan="3">${_nfBlank(emp.address,"300pt")}</td></tr>
+<tr><th>연락처</th><td>${_nfBlank(emp.phone)}</td><th>직위</th><td>${_nfBlank(emp.position)}</td></tr>
+</table>`;
+}
+function _nfSig(emp, todayStr, leftLabel='사 용 자', rightLabel='근 로 자', c={}){
+  return `<p class="nf-center nf-bold" style="margin-top:25pt;font-size:13pt">${todayStr}</p>
+<table style="margin-top:14pt;border:none;width:100%"><tr style="border:none">
+<td class="nf-sig-block">
+  <div style="font-weight:700;font-size:12pt">${leftLabel}</div>
+  <div style="margin-top:6pt">${_nfBlank(c.name||'')}</div>
+  <div class="nf-sig-line">대표 ${_nfBlank(c.ceo||'')} (인)</div>
+</td>
+<td class="nf-sig-block">
+  <div style="font-weight:700;font-size:12pt">${rightLabel}</div>
+  <div style="margin-top:6pt">${_nfBlank(emp?.name||'')}</div>
+  <div class="nf-sig-line">${_nfBlank(emp?.name||'')} (서명/인)</div>
+</td>
+</tr></table>`;
+}
+
+function nfRenderTemplateBody(tpl, d, emp, c){
+  c = c||{};
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}년 ${today.getMonth()+1}월 ${today.getDate()}일`;
+  const sig = (l,r)=>_nfSig(emp,todayStr,l||'사 용 자',r||'근 로 자',c);
+  const ct = _nfCompanyTable(c);
+  const et = _nfEmployeeTable(emp);
+
+  const renderers = {
+    lc_regular: ()=>`<h1>표 준 근 로 계 약 서</h1>
+<p class="nf-center" style="margin-bottom:12pt;color:#6B7280;font-size:10pt">(기간의 정함이 없는 경우)</p>
+${ct}${et}
+<div class="nf-clause"><div class="nf-clause-title">1. 근로개시일</div>${_nfBlank(d.startDate)}부터</div>
+<div class="nf-clause"><div class="nf-clause-title">2. 근무 장소</div>${_nfBlank(c.address,"300pt")}</div>
+<div class="nf-clause"><div class="nf-clause-title">3. 업무 내용</div>${_nfBlank(emp?.position)} 업무</div>
+<div class="nf-clause"><div class="nf-clause-title">4. 소정근로시간</div>${_nfBlank(d.workTime,"200pt")}</div>
+<div class="nf-clause"><div class="nf-clause-title">5. 임금</div>월급여 <strong>${emp?.salary?emp.salary.toLocaleString()+'원':_nfBlank('')}</strong> · 매월 25일 지급 · 통장 이체</div>
+<div class="nf-clause"><div class="nf-clause-title">6. 연차유급휴가</div>근로기준법에 따라 부여</div>
+<div class="nf-clause"><div class="nf-clause-title">7. 사회보험</div>국민연금·건강보험·고용보험·산재보험 모두 가입</div>
+<div class="nf-clause"><div class="nf-clause-title">8. 근로계약서 교부</div>근기법 §17에 따라 본 계약서를 근로자에게 교부함</div>
+${sig()}`,
+
+    lc_fixed: ()=>`<h1>표 준 근 로 계 약 서</h1>
+<p class="nf-center" style="margin-bottom:12pt;color:#6B7280;font-size:10pt">(기간의 정함이 있는 경우 / 계약직)</p>
+${ct}${et}
+<div class="nf-clause"><div class="nf-clause-title">1. 근로계약기간</div>${_nfBlank(d.startDate)}부터 ${_nfBlank(d.endDate)}까지</div>
+<div class="nf-clause"><div class="nf-clause-title">2. 임금</div>월급여 <strong>${emp?.salary?emp.salary.toLocaleString()+'원':_nfBlank('')}</strong></div>
+<div class="nf-clause"><div class="nf-clause-title">3. 사회보험</div>4대보험 모두 가입</div>
+${sig()}`,
+
+    lc_minor: ()=>`<h1>연소근로자 표준 근로계약서</h1>
+<p class="nf-center" style="margin-bottom:12pt;color:#6B7280;font-size:10pt">(만 18세 미만 / 친권자 동의서 포함)</p>
+${ct}${et}
+<h3>친권자(후견인)</h3>
+<table>
+<tr><th>성명</th><td>${_nfBlank(d.guardianName)}</td><th>관계</th><td>${_nfBlank('')}</td></tr>
+<tr><th>연락처</th><td colspan="3">${_nfBlank('','200pt')}</td></tr>
+</table>
+<div class="nf-clause"><div class="nf-clause-title">1. 근로개시일</div>${_nfBlank(d.startDate)}부터</div>
+<div class="nf-clause"><div class="nf-clause-title">2. 근무시간 한도</div>1일 7시간 / 주 35시간 (근기법 §69)</div>
+<div class="nf-clause"><div class="nf-clause-title">3. 야간·휴일근로 제한</div>22시~6시 야간 및 휴일근로는 본인 동의 + 노동부 인가 시에만 가능</div>
+<p style="margin:14pt 0">위 근로자의 친권자(후견인)로서 본 근로계약 체결에 동의합니다.</p>
+<p class="nf-right nf-bold" style="margin-top:30pt">친권자: ${_nfBlank(d.guardianName)} (서명/인) ___________________</p>
+${sig()}`,
+
+    lc_part: ()=>`<h1>단시간근로자 표준 근로계약서</h1>
+${ct}${et}
+<div class="nf-clause"><div class="nf-clause-title">1. 근로계약기간</div>별도 정함 없음</div>
+<div class="nf-clause"><div class="nf-clause-title">2. 근로일별 시간</div>${_nfBlank('',"200pt")}<br><span style="font-size:9.5pt;color:#9CA3AF">(예: 월 18:00-22:00, 화 18:00-22:00...)</span></div>
+<div class="nf-clause"><div class="nf-clause-title">3. 임금</div>시급 <strong>${_nfBlank(d.hourlyWage)}원</strong> · 매월 25일 지급</div>
+${sig()}`,
+
+    lc_construction: ()=>`<h1>건설일용근로자 표준 근로계약서</h1>
+${ct}${et}
+<h3>현장 정보</h3>
+<table>
+<tr><th>현장명</th><td>${_nfBlank(d.siteName)}</td></tr>
+<tr><th>현장 주소</th><td>${_nfBlank('',"300pt")}</td></tr>
+</table>
+<div class="nf-clause"><div class="nf-clause-title">1. 근로개시일</div>${_nfBlank('')} (현장 종료 시까지)</div>
+<div class="nf-clause"><div class="nf-clause-title">2. 일당</div><strong>${_nfBlank('')}원</strong> · 매주 통장 이체</div>
+<div class="nf-clause"><div class="nf-clause-title">3. 안전보건</div>안전모·안전화 등 개인보호구 착용 의무</div>
+${sig()}`,
+
+    lc_foreign: ()=>`<h1>STANDARD LABOR CONTRACT</h1>
+<p class="nf-center" style="margin-bottom:6pt;font-size:14pt;font-weight:700">표 준 근 로 계 약 서</p>
+<p class="nf-center" style="margin-bottom:12pt;color:#6B7280;font-size:10pt">For Foreign Workers / 외국인 근로자용</p>
+<table>
+<tr><th>Employer / 사업주</th><td>${_nfBlank(c.name)}</td><th>Representative / 대표</th><td>${_nfBlank(c.ceo)}</td></tr>
+</table>
+<table>
+<tr><th>Worker / 근로자</th><td>${_nfBlank(emp?.name)}</td><th>Nationality / 국적</th><td>${_nfBlank(d.nationality)}</td></tr>
+<tr><th>Passport / 여권</th><td>${_nfBlank(d.passportNo)}</td><th>Visa / 체류자격</th><td>${_nfBlank('')}</td></tr>
+</table>
+<div class="nf-clause"><div class="nf-clause-title">1. Term / 근로계약기간</div>${_nfBlank('')} ~ ${_nfBlank('')}</div>
+<div class="nf-clause"><div class="nf-clause-title">2. Wage / 임금</div>Monthly: <strong>${emp?.salary?emp.salary.toLocaleString()+' KRW':_nfBlank('')}</strong></div>
+<div class="nf-clause"><div class="nf-clause-title">3. Social Insurance / 사회보험</div>All 4 insurances applied / 4대보험 모두 가입</div>
+${sig('Employer / 사업주','Worker / 근로자')}`,
+
+    lc_foreign_agri: ()=>`<h1>STANDARD LABOR CONTRACT</h1>
+<p class="nf-center" style="margin-bottom:6pt;font-size:14pt;font-weight:700">표 준 근 로 계 약 서</p>
+<p class="nf-center" style="margin-bottom:12pt;color:#6B7280;font-size:10pt">For Agriculture, Livestock, Fishery / 농축어업</p>
+${ct}
+<table>
+<tr><th>Worker / 근로자</th><td>${_nfBlank(emp?.name)}</td><th>Industry / 업종</th><td>${_nfBlank(d.industry)}</td></tr>
+</table>
+<div class="nf-clause"><div class="nf-clause-title">Notice / 안내</div>농업·축산업·어업은 근기법 §63에 따라 근로시간·휴게·휴일 적용 제외 / Excluded from working hours, breaks, holidays per Labor Standards Act §63</div>
+${sig('Employer / 사업주','Worker / 근로자')}`,
+
+    lc_executive: ()=>`<h1>임 원 위 임 계 약 서</h1>
+${ct}${et}
+<div class="nf-clause"><div class="nf-clause-title">제1조 (임기)</div>${_nfBlank('')}부터 ${_nfBlank('')}년</div>
+<div class="nf-clause"><div class="nf-clause-title">제2조 (직무)</div>회사 정관 및 이사회 결의에 따른 임원 직무 수행</div>
+<div class="nf-clause"><div class="nf-clause-title">제3조 (보수)</div>월 ${emp?.salary?emp.salary.toLocaleString()+'원':_nfBlank('')}</div>
+<div class="nf-clause"><div class="nf-clause-title">제4조 (근로기준법 적용 제외)</div>임원은 근기법상 근로자로 보지 않으므로 근로시간·휴게·휴일·연차 규정 적용 제외</div>
+${sig('회 사','임 원')}`,
+
+    salary_contract: ()=>{
+      const annual = parseInt(d.annualSalary)||0;
+      return `<h1>연 봉 계 약 서</h1>
+${ct}${et}
+<div class="nf-clause"><div class="nf-clause-title">제1조 (연봉액)</div>연봉: <strong>${annual?annual.toLocaleString()+'원':_nfBlank('')}</strong> · 월 환산: ${annual?Math.round(annual/12).toLocaleString()+'원':_nfBlank('')}</div>
+<div class="nf-clause"><div class="nf-clause-title">제2조 (적용)</div>${_nfBlank(d.effectiveDate)}부터 1년</div>
+<div class="nf-clause"><div class="nf-clause-title">제3조 (지급)</div>매월 25일 / 12개월 균등 분할</div>
+${sig()}`;
+    },
+
+    payslip: ()=>{
+      const reg = emp?.salary||0;
+      const np = Math.round(reg*0.045);
+      const hi = Math.round(reg*0.03545);
+      const ltc = Math.round(hi*0.1295);
+      const ei = Math.round(reg*0.009);
+      const tax = Math.round(reg*0.033);
+      const insTotal = np+hi+ltc+ei;
+      const net = reg - tax - insTotal;
+      return `<h1>임 금 명 세 서</h1>
+<p class="nf-center" style="color:#6B7280;margin-bottom:12pt">${_nfBlank(d.payMonth)} 분</p>
+<table>
+<tr><th>회사명</th><td>${_nfBlank(c.name)}</td><th>지급일</th><td>${_nfBlank(d.payMonth)}-25</td></tr>
+<tr><th>성명</th><td>${_nfBlank(emp?.name)}</td><th>직위</th><td>${_nfBlank(emp?.position)}</td></tr>
+</table>
+<h2>지급 항목</h2>
+<table>
+<tr><th>구분</th><th class="nf-right">금액 (원)</th><th>비고</th></tr>
+<tr><td>기본급</td><td class="nf-right nf-bold">${reg?reg.toLocaleString():_nfBlank('')}</td><td>${_nfBlank(emp?.payType)}</td></tr>
+<tr><td>연장근로수당</td><td class="nf-right">${_nfBlank('','60pt')}</td><td>1.5배</td></tr>
+<tr><td>야간근로수당</td><td class="nf-right">${_nfBlank('','60pt')}</td><td>0.5배 가산</td></tr>
+<tr><td>휴일근로수당</td><td class="nf-right">${_nfBlank('','60pt')}</td><td>1.5배</td></tr>
+<tr style="background:#F3F4F6;font-weight:700"><td>지급 합계</td><td class="nf-right">${reg?reg.toLocaleString():_nfBlank('')}</td><td></td></tr>
+</table>
+<h2>공제 항목</h2>
+<table>
+<tr><th>구분</th><th class="nf-right">금액 (원)</th><th>비고</th></tr>
+<tr><td>국민연금</td><td class="nf-right">${reg?np.toLocaleString():_nfBlank('')}</td><td>4.5%</td></tr>
+<tr><td>건강보험</td><td class="nf-right">${reg?hi.toLocaleString():_nfBlank('')}</td><td>3.545%</td></tr>
+<tr><td>장기요양보험</td><td class="nf-right">${reg?ltc.toLocaleString():_nfBlank('')}</td><td>건강보험의 12.95%</td></tr>
+<tr><td>고용보험</td><td class="nf-right">${reg?ei.toLocaleString():_nfBlank('')}</td><td>0.9%</td></tr>
+<tr><td>소득세 (지방세 포함)</td><td class="nf-right">${reg?tax.toLocaleString():_nfBlank('')}</td><td>약 3.3%</td></tr>
+<tr style="background:#F3F4F6;font-weight:700"><td>공제 합계</td><td class="nf-right">${reg?(insTotal+tax).toLocaleString():_nfBlank('')}</td><td></td></tr>
+<tr style="background:#FFFBEB;font-weight:800"><td>실수령액</td><td class="nf-right" style="color:#0F2952">${reg?net.toLocaleString():_nfBlank('')}</td><td></td></tr>
+</table>
+<div class="nf-legal"><b>📋 근기법 §48</b> — 임금 지급 시 명세서 서면 교부 의무. 위반 시 500만원 이하 과태료.<br>※ 산재보험은 사업주 전액 부담으로 근로자 공제 X</div>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center" style="margin-top:10pt">근로자: <b>${_nfBlank(emp?.name)}</b> (인)</p>`;
+    },
+
+    wage_ledger: ()=>`<h1>임 금 대 장</h1>
+<p class="nf-center" style="color:#6B7280;margin-bottom:12pt">${_nfBlank(d.year)}년 ${_nfBlank(d.month)}월 분</p>
+${ct}
+<h2>전 직원 임금 지급 내역</h2>
+<table>
+<tr style="background:#F3F4F6"><th style="width:25pt">No.</th><th style="width:50pt">성명</th><th>주민번호</th><th>직위</th><th class="nf-right">기본급</th><th class="nf-right">실수령</th></tr>
+${(EMPS||[]).map((e,i)=>{
+  const me = nfMapEmp(e);
+  const tax = Math.round((me.salary||0)*0.1218);
+  return `<tr><td class="nf-center">${i+1}</td><td>${esc(me.name||'')}</td><td>${esc(me.rrn||'')}</td><td>${esc(me.position||'')}</td><td class="nf-right">${(me.salary||0).toLocaleString()}</td><td class="nf-right nf-bold">${((me.salary||0)-tax).toLocaleString()}</td></tr>`;
+}).join('')}
+</table>
+<div class="nf-legal"><b>📋 근기법 §48</b> — 임금대장은 3년 보관 의무</div>
+<p class="nf-right nf-bold" style="margin-top:25pt">${_nfBlank(c.name)} 대표 ${_nfBlank(c.ceo)} (인)</p>`,
+
+    leave_promo_1st: ()=>{
+      const total = parseInt(d.totalDays)||0;
+      return `<h1>연차 유급휴가 사용 촉진 통지서 (1차)</h1>
+<p style="margin-bottom:12pt"><strong>${_nfBlank(emp?.name)}</strong> 귀하</p>
+<p>근로기준법 제61조에 따라 연차 유급휴가 사용을 촉진하니 사용 계획을 제출하여 주시기 바랍니다.</p>
+<table>
+<tr><th>발생일</th><td>${_nfBlank(emp?.hireDate)}</td><th>사용 마감일</th><td>${_nfBlank(d.deadlineDate)}</td></tr>
+<tr><th>총 발생 연차</th><td>${total?total+'일':_nfBlank('')}</td><th>잔여 연차</th><td>${_nfBlank('','60pt')}</td></tr>
+</table>
+<div class="nf-clause"><div class="nf-clause-title">요청 사항</div>본 통지를 받은 날로부터 10일 이내 사용 시기를 회사에 서면 제출</div>
+<div class="nf-legal"><b>📋 근기법 §61</b> — 사용자가 촉진 절차 이행 시, 미사용 연차에 대한 금전 보상 의무 면제</div>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center">${_nfBlank(c.name)} 대표 ${_nfBlank(c.ceo)} (인)</p>`;
+    },
+
+    leave_promo_2nd: ()=>`<h1>연차 사용 촉진 통지서 (2차)</h1>
+<p style="margin-bottom:12pt"><strong>${_nfBlank(emp?.name)}</strong> 귀하</p>
+<p>1차 통지에 사용 계획을 통보하지 않으셨으므로, 회사가 사용 시기를 지정합니다.</p>
+<table>
+<tr><th>잔여 연차</th><td>${_nfBlank('','60pt')}</td><th>회사 지정일</th><td>${_nfBlank(d.designatedDate)}</td></tr>
+</table>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center">${_nfBlank(c.name)} 대표 ${_nfBlank(c.ceo)} (인)</p>`,
+
+    leave_request: ()=>`<h1>휴 가 신 청 서</h1>
+<table>
+<tr><th>성명</th><td>${_nfBlank(emp?.name)}</td><th>직위</th><td>${_nfBlank(emp?.position)}</td></tr>
+<tr><th>휴가 종류</th><td colspan="3"><strong>${_nfBlank(d.leaveType)}</strong></td></tr>
+<tr><th>시작일</th><td>${_nfBlank('')}</td><th>종료일</th><td>${_nfBlank('')}</td></tr>
+<tr><th>사유</th><td colspan="3">${_nfBlank('','300pt')}</td></tr>
+</table>
+<p class="nf-center" style="margin-top:25pt">위와 같이 휴가를 신청합니다.</p>
+<p class="nf-center nf-bold">${todayStr}</p>
+<p class="nf-center" style="margin-top:10pt">신청자: <b>${_nfBlank(emp?.name)}</b> (인)</p>`,
+
+    parental_leave: ()=>`<h1>육 아 휴 직 신 청 서</h1>
+${et}
+<h2>자녀 정보</h2>
+<table>
+<tr><th>성명</th><td>${_nfBlank(d.childName)}</td><th>생년월일</th><td>${_nfBlank('')}</td></tr>
+</table>
+<h2>휴직 기간</h2>
+<table>
+<tr><th>시작일</th><td>${_nfBlank('')}</td><th>종료일</th><td>${_nfBlank('')}</td></tr>
+</table>
+<div class="nf-legal"><b>📋 남녀고용평등법 §19</b> — 만 8세 이하 자녀 양육을 위해 최대 1년</div>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center">신청자: <b>${_nfBlank(emp?.name)}</b> (인)</p>`,
+
+    maternity_leave: ()=>`<h1>출 산 전 후 휴 가 신 청 서</h1>
+${et}
+<table>
+<tr><th>출산 예정일</th><td>${_nfBlank(d.expectedDate)}</td><th>구분</th><td>${_nfBlank('','80pt')}</td></tr>
+<tr><th>휴가 시작일</th><td>${_nfBlank('')}</td><th>휴가 종료일</th><td>${_nfBlank('')}</td></tr>
+</table>
+<div class="nf-legal"><b>📋 근기법 §74</b> — 출산 전후 90일 (다태아 120일). 출산 후 45일 이상 보장</div>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center">신청자: <b>${_nfBlank(emp?.name)}</b> (인)</p>`,
+
+    family_care: ()=>`<h1>가 족 돌 봄 휴 가 신 청 서</h1>
+${et}
+<table>
+<tr><th>돌봄 대상자</th><td>${_nfBlank(d.familyName)}</td><th>관계</th><td>${_nfBlank('','80pt')}</td></tr>
+<tr><th>사유</th><td colspan="3">${_nfBlank('','300pt')}</td></tr>
+<tr><th>시작일</th><td>${_nfBlank('')}</td><th>종료일</th><td>${_nfBlank('')}</td></tr>
+</table>
+<div class="nf-legal"><b>📋 남녀고용평등법 §22의2</b> — 연 10일 이내</div>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center">신청자: <b>${_nfBlank(emp?.name)}</b> (인)</p>`,
+
+    personnel_order: ()=>`<h1>인 사 명 령 서</h1>
+${ct}
+<table>
+<tr><th>대상자</th><td>${_nfBlank(emp?.name)}</td><th>발령 종류</th><td><strong>${_nfBlank(d.orderType)}</strong></td></tr>
+<tr><th>현 직위</th><td>${_nfBlank(emp?.position)}</td><th>변경 직위</th><td>${_nfBlank('','100pt')}</td></tr>
+<tr><th>발령일</th><td colspan="3">${_nfBlank('')}</td></tr>
+</table>
+<p style="margin:20pt 0">위와 같이 발령합니다.</p>
+<p class="nf-right nf-bold" style="margin-top:25pt">${todayStr}<br>${_nfBlank(c.name)} 대표 ${_nfBlank(c.ceo)} (인)</p>`,
+
+    resignation: ()=>`<h1>사 직 서</h1>
+<table style="margin-bottom:14pt">
+<tr><th>성명</th><td>${_nfBlank(emp?.name)}</td><th>직위</th><td>${_nfBlank(emp?.position)}</td></tr>
+<tr><th>입사일</th><td>${_nfBlank(emp?.hireDate)}</td><th>퇴사 희망일</th><td><strong>${_nfBlank(d.resignDate)}</strong></td></tr>
+</table>
+<h2>사 직 사 유</h2>
+<div class="nf-clause" style="min-height:80pt">${_nfBlank('','300pt')}</div>
+<p class="nf-center" style="margin-top:25pt">위와 같은 사유로 사직하고자 하오니 허락하여 주시기 바랍니다.</p>
+<p class="nf-center nf-bold">${todayStr}</p>
+<p class="nf-center" style="margin-top:14pt">사직인: <b>${_nfBlank(emp?.name)}</b> (인)</p>
+<p class="nf-center" style="margin-top:20pt">${_nfBlank(c.name)} 대표 귀하</p>`,
+
+    termination: ()=>`<h1>해 고 통 지 서</h1>
+<p style="margin-bottom:14pt"><strong>${_nfBlank(emp?.name)}</strong> 귀하</p>
+${ct}
+<table>
+<tr><th>대상자</th><td>${_nfBlank(emp?.name)}</td><th>직위</th><td>${_nfBlank(emp?.position)}</td></tr>
+<tr><th>통지일</th><td>${_nfBlank(d.noticeDate)}</td><th>해고 예정일</th><td>${_nfBlank('')}</td></tr>
+</table>
+<h2>해 고 사 유</h2>
+<div class="nf-clause" style="min-height:100pt">${_nfBlank('','300pt')}</div>
+<div class="nf-legal"><b>⚠️ 근로자 권리</b><br>· 부당해고 구제신청: 노동위원회 (해고 후 3개월 이내)<br>· 해고예고수당: 30일 전 통지 미이행 시 통상임금 30일분 지급 (근기법 §26)</div>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center">${_nfBlank(c.name)} 대표 ${_nfBlank(c.ceo)} (인)</p>`,
+
+    advance_termination: ()=>`<h1>해 고 예 고 적 용 제 외 통 지 서</h1>
+<p style="margin-bottom:14pt"><strong>${_nfBlank(emp?.name)}</strong> 귀하</p>
+<p>근로기준법 제26조 단서에 해당하여 30일 전 예고 없이 즉시 해고함을 통지합니다.</p>
+<table>
+<tr><th>대상자</th><td>${_nfBlank(emp?.name)}</td><th>해고일</th><td>${_nfBlank('')}</td></tr>
+</table>
+<h2>예고 제외 사유</h2>
+<div class="nf-clause" style="min-height:80pt">${_nfBlank('','300pt')}</div>
+<div class="nf-legal"><b>📋 근기법 §26 단서</b> — 천재지변·중대 귀책사유 시 적용 제외</div>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center">${_nfBlank(c.name)} 대표 ${_nfBlank(c.ceo)} (인)</p>`,
+
+    warning: ()=>`<h1>시 말 서</h1>
+<table>
+<tr><th>대상자</th><td>${_nfBlank(emp?.name)}</td><th>직위</th><td>${_nfBlank(emp?.position)}</td></tr>
+<tr><th>발생일</th><td>${_nfBlank(d.incidentDate)}</td><th>조치</th><td>${_nfBlank('','100pt')}</td></tr>
+</table>
+<h2>사 건 내 용</h2>
+<div class="nf-clause" style="min-height:100pt">${_nfBlank('','300pt')}</div>
+<p class="nf-center" style="margin-top:20pt">위 사실과 다름이 없으며, 향후 동일한 일이 재발하지 않도록 노력할 것을 약속합니다.</p>
+<p class="nf-center nf-bold">${todayStr}</p>
+<p class="nf-center">작성자: <b>${_nfBlank(emp?.name)}</b> (서명)</p>`,
+
+    discipline_notice: ()=>`<h1>징 계 처 분 통 지 서</h1>
+<p style="margin-bottom:14pt"><strong>${_nfBlank(emp?.name)}</strong> 귀하</p>
+${ct}
+<table>
+<tr><th>대상자</th><td>${_nfBlank(emp?.name)}</td><th>징계 종류</th><td><strong>${_nfBlank(d.actionType)}</strong></td></tr>
+<tr><th>의결일</th><td>${_nfBlank('')}</td><th>기간</th><td>${_nfBlank('','80pt')}</td></tr>
+</table>
+<h2>징 계 사 유</h2>
+<div class="nf-clause" style="min-height:80pt">${_nfBlank('','300pt')}</div>
+<div class="nf-clause"><div class="nf-clause-title">이의제기 절차</div>통지일로부터 7일 이내 회사에 재심 신청 가능</div>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center">${_nfBlank(c.name)} 대표 ${_nfBlank(c.ceo)} (인)</p>`,
+
+    cert_employment: ()=>`<h1>재 직 증 명 서</h1>
+<table>
+<tr><th>성명</th><td>${_nfBlank(emp?.name)}</td><th>주민번호</th><td>${_nfBlank(emp?.rrn)}</td></tr>
+<tr><th>주소</th><td colspan="3">${_nfBlank(emp?.address,"300pt")}</td></tr>
+<tr><th>회사명</th><td>${_nfBlank(c.name)}</td><th>대표</th><td>${_nfBlank(c.ceo)}</td></tr>
+<tr><th>입사일</th><td>${_nfBlank(emp?.hireDate)}</td><th>현 직위</th><td>${_nfBlank(emp?.position)}</td></tr>
+<tr><th>용도</th><td colspan="3">${_nfBlank(d.purpose,"200pt")}</td></tr>
+</table>
+<p class="nf-center" style="margin-top:30pt;line-height:2.2;font-size:14pt">위 사람은 본 회사에 재직 중임을 증명합니다.</p>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center" style="margin-top:20pt"><b>${_nfBlank(c.name)}</b><br>대표 ${_nfBlank(c.ceo)} <span style="border:1.5pt solid #DC2626;padding:4pt 12pt;border-radius:50%;color:#DC2626;font-weight:800;margin-left:8pt">직 인</span></p>`,
+
+    cert_career: ()=>`<h1>경 력 증 명 서</h1>
+${et}
+<h2>근무 경력</h2>
+<table>
+<tr><th>회사명</th><td colspan="3">${_nfBlank(c.name)}</td></tr>
+<tr><th>근무 기간</th><td colspan="3">${_nfBlank(emp?.hireDate)} ~ 현재</td></tr>
+<tr><th>최종 직위</th><td>${_nfBlank(emp?.position)}</td><th>근무 형태</th><td>${_nfBlank(emp?.workType)}</td></tr>
+</table>
+<p class="nf-center" style="margin-top:30pt;line-height:2.2;font-size:14pt">위 사람은 본 회사에서 위와 같이 근무하였음을 증명합니다.</p>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center" style="margin-top:20pt"><b>${_nfBlank(c.name)}</b><br>대표 ${_nfBlank(c.ceo)} <span style="border:1.5pt solid #DC2626;padding:4pt 12pt;border-radius:50%;color:#DC2626;font-weight:800;margin-left:8pt">직 인</span></p>
+<div class="nf-legal" style="margin-top:25pt"><b>📋 근기법 §39</b> — 사용자는 근로자 청구 시 사용 기간·업무·직위·임금 등을 즉시 증명서로 발급해야 함</div>`,
+
+    cert_resignation: ()=>`<h1>퇴 직 증 명 서</h1>
+${et}
+<table>
+<tr><th>회사명</th><td>${_nfBlank(c.name)}</td><th>대표</th><td>${_nfBlank(c.ceo)}</td></tr>
+<tr><th>입사일</th><td>${_nfBlank(emp?.hireDate)}</td><th>퇴직일</th><td><strong>${_nfBlank(d.resignDate)}</strong></td></tr>
+<tr><th>최종 직위</th><td>${_nfBlank(emp?.position)}</td><th>퇴직 사유</th><td>${_nfBlank('','100pt')}</td></tr>
+</table>
+<p class="nf-center" style="margin-top:30pt;line-height:2.2;font-size:14pt">위 사람은 본 회사에서 위와 같이 근무하다가 퇴직하였음을 증명합니다.</p>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center" style="margin-top:20pt"><b>${_nfBlank(c.name)}</b><br>대표 ${_nfBlank(c.ceo)} <span style="border:1.5pt solid #DC2626;padding:4pt 12pt;border-radius:50%;color:#DC2626;font-weight:800;margin-left:8pt">직 인</span></p>`,
+
+    ins_acquire: ()=>{
+      const wage = emp?.salary||0;
+      return `<h1>4대 사회보험 자격취득신고서</h1>
+<p class="nf-center" style="color:#6B7280;margin-bottom:12pt">국민연금 · 건강보험 · 고용보험 · 산재보험 통합신고</p>
+${ct}
+<h2>피보험자(근로자) 정보</h2>
+<table>
+<tr><th>성명</th><td>${_nfBlank(emp?.name)}</td><th>주민번호</th><td>${_nfBlank(emp?.rrn)}</td></tr>
+<tr><th>자격취득일</th><td>${_nfBlank(d.acquireDate)}</td><th>월 보수액</th><td>${wage?wage.toLocaleString()+'원':_nfBlank('')}</td></tr>
+</table>
+<h2>가입 보험 (월 보험료 예상)</h2>
+<table>
+<tr><th>구분</th><th class="nf-right">보험료 (원)</th></tr>
+<tr><td>국민연금 (4.5%)</td><td class="nf-right">${wage?Math.round(wage*0.045).toLocaleString():_nfBlank('')}</td></tr>
+<tr><td>건강보험 (3.545%)</td><td class="nf-right">${wage?Math.round(wage*0.03545).toLocaleString():_nfBlank('')}</td></tr>
+<tr><td>장기요양 (0.4591%)</td><td class="nf-right">${wage?Math.round(wage*0.004591).toLocaleString():_nfBlank('')}</td></tr>
+<tr><td>고용보험 (0.9%)</td><td class="nf-right">${wage?Math.round(wage*0.009).toLocaleString():_nfBlank('')}</td></tr>
+</table>
+<div class="nf-legal"><b>📋 신고 의무</b><br>· 신고 기한: 자격 취득일로부터 14일 이내<br>· 신고 방법: 4대사회보험 정보연계센터 (www.4insure.or.kr)</div>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center">신고인: ${_nfBlank(c.name)} 대표 ${_nfBlank(c.ceo)} (인)</p>`;
+    },
+
+    ins_loss: ()=>`<h1>4대 사회보험 자격상실신고서</h1>
+${ct}
+<h2>피보험자(근로자) 정보</h2>
+<table>
+<tr><th>성명</th><td>${_nfBlank(emp?.name)}</td><th>주민번호</th><td>${_nfBlank(emp?.rrn)}</td></tr>
+<tr><th>자격상실일</th><td>${_nfBlank(d.lossDate)}</td><th>상실 사유</th><td>${_nfBlank('','100pt')}</td></tr>
+</table>
+<div class="nf-legal"><b>📋 신고 의무</b><br>· 신고 기한: 자격 상실일이 속한 달의 다음달 15일까지<br>· 고용보험: 이직확인서 동시 제출 필수</div>
+<p class="nf-center nf-bold" style="margin-top:25pt">${todayStr}</p>
+<p class="nf-center">신고인: ${_nfBlank(c.name)} 대표 ${_nfBlank(c.ceo)} (인)</p>`,
+
+    rules_of_employment: ()=>`<h1>취 업 규 칙</h1>
+<p class="nf-center" style="color:#6B7280;margin-bottom:12pt">(${_nfBlank(d.category,"100pt")} 표준)</p>
+${ct}
+<h2>제1장 총칙</h2>
+<div class="nf-clause"><div class="nf-clause-title">제1조 (목적)</div>이 규칙은 ${_nfBlank(c.name)} 소속 근로자의 근로조건 및 복무 규율에 관한 사항을 정함을 목적으로 한다.</div>
+<div class="nf-clause"><div class="nf-clause-title">제2조 (적용 범위)</div>이 규칙은 회사에 근무하는 모든 근로자에게 적용한다.</div>
+<h2>제2장 근로시간</h2>
+<div class="nf-clause"><div class="nf-clause-title">제3조 (근로시간)</div>1주 40시간, 1일 8시간을 원칙으로 한다.</div>
+<div class="nf-clause"><div class="nf-clause-title">제4조 (휴게시간)</div>4시간마다 30분, 8시간마다 1시간 이상 부여.</div>
+<h2>제3장 휴일·휴가</h2>
+<div class="nf-clause"><div class="nf-clause-title">제5조 (주휴일)</div>1주 만근 시 1일의 유급 주휴일을 부여한다.</div>
+<div class="nf-clause"><div class="nf-clause-title">제6조 (연차유급휴가)</div>근로기준법 제60조에 따라 부여한다.</div>
+<h2>제4장 임금</h2>
+<div class="nf-clause"><div class="nf-clause-title">제7조 (임금 지급)</div>매월 25일 지급. 휴일 시 전일 지급.</div>
+<h2>제5장 퇴직</h2>
+<div class="nf-clause"><div class="nf-clause-title">제8조 (퇴직금)</div>1년 이상 근속자에게 평균임금 30일분을 1년에 대하여 지급한다.</div>
+<h2>제6장 안전·보건</h2>
+<div class="nf-clause"><div class="nf-clause-title">제9조 (안전보건교육)</div>산업안전보건법에 따라 정기 교육 실시.</div>
+<h2>제7장 직장 내 괴롭힘 및 성희롱 예방</h2>
+<div class="nf-clause"><div class="nf-clause-title">제10조 (예방)</div>회사는 직장 내 괴롭힘·성희롱을 금지하며, 발생 시 즉시 조치한다 (근기법 §76의2, 남녀고용평등법 §13).</div>
+<h2>부칙</h2>
+<p>본 규칙은 ${todayStr}부터 시행한다.</p>
+<div class="nf-legal"><b>📋 근기법 §93·§94</b> — 상시 10인 이상 근로자 사용 사업장은 작성·신고 의무</div>
+<p class="nf-right nf-bold" style="margin-top:25pt">${_nfBlank(c.name)} 대표 ${_nfBlank(c.ceo)} (인)</p>`
+  };
+  return (renderers[tpl.id] || (()=>'<p>준비 중인 양식입니다</p>'))();
+}
+
+// 미리보기/PDF용 HTML 래퍼
+function nfWrapForView(tpl, d, emp, c, autoPrint){
+  const body = nfRenderTemplateBody(tpl, d, emp, c);
+  const css = `body{font-family:"Malgun Gothic","맑은 고딕",sans-serif;max-width:780px;margin:30px auto;padding:24px;line-height:1.7;font-size:13px;color:#1A1A1A;background:#fff}
+h1{text-align:center;font-size:22px;padding-bottom:14px;border-bottom:2px solid #1A1A1A;margin-bottom:18px;letter-spacing:4px}
+h2{font-size:13px;margin:14pt 0 6pt;padding-left:8pt;border-left:3px solid #1A1A1A;font-weight:700}
+h3{font-size:12px;margin:10pt 0 4pt;font-weight:700;color:#374151}
+table{border-collapse:collapse;width:100%;font-size:12px;margin:8px 0}
+th,td{border:1px solid #999;padding:7px 9px;vertical-align:middle}
+th{background:#F3F4F6;font-weight:700;width:130px;text-align:left}
+.nf-clause{margin:10px 0;padding:9px 13px;background:#F9FAFB;border-left:3px solid #1A1A1A}
+.nf-clause-title{font-weight:700;margin-bottom:3px}
+.nf-center{text-align:center}.nf-right{text-align:right}.nf-bold{font-weight:700}
+.nf-sig-block{border:1px solid #999;padding:14px;text-align:center;width:50%;vertical-align:top}
+.nf-sig-line{border-top:1px solid #333;margin-top:50px;padding-top:5px;font-size:11px;color:#6B7280}
+.nf-legal{background:#FFFBEB;border:1px solid #FDE68A;padding:10px 12px;font-size:11px;color:#78350F;margin:12px 0}
+.nf-legal b{color:#92400E}
+.nf-actions{position:sticky;top:0;text-align:center;margin:0 0 16px;padding:12px;background:#1A1A1A;border-radius:8px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;z-index:99}
+.nf-actions button{padding:9px 18px;border:none;border-radius:6px;font-weight:700;cursor:pointer;background:#fff;color:#1A1A1A;font-size:13px;font-family:inherit}
+.nf-actions button.close{background:#6B7280;color:#fff}
+@media print{ .nf-actions{display:none} body{margin:0;padding:0;max-width:none} @page{size:A4;margin:18mm}}`;
+  return `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>${esc(tpl.name)}</title>
+<style>${css}</style></head><body>
+<div class="nf-actions">
+  <button onclick="window.print()">🖨 인쇄 / PDF로 저장</button>
+  <button onclick="window.close()" class="close">닫기</button>
+</div>
+${body}
+${autoPrint?'<script>window.addEventListener("load",function(){setTimeout(function(){window.print()},300)});<\/script>':''}
+</body></html>`;
+}
+
+// Word(.doc) Blob 빌더
+function _nfBuildWordBlob(tpl, d, emp, c){
+  const body = nfRenderTemplateBody(tpl, d, emp, c);
+  const wordHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:w="urn:schemas-microsoft-com:office:word"
+  xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><title>${esc(tpl.name)}</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
+<style>
+@page WordSection1 { size: 595.3pt 841.9pt; margin: 70pt 70pt 70pt 70pt; }
+div.WordSection1 { page: WordSection1; }
+body { font-family: "Malgun Gothic", "맑은 고딕", sans-serif; font-size: 11pt; line-height: 1.7; color: #1A1A1A; }
+h1 { text-align: center; font-size: 20pt; font-weight: 700; padding-bottom: 10pt; margin-bottom: 14pt; border-bottom: 2pt solid #1A1A1A; letter-spacing: 4pt; }
+h2 { font-size: 12pt; margin: 14pt 0 6pt; padding-left: 8pt; border-left: 3pt solid #1A1A1A; font-weight: 700; }
+h3 { font-size: 11pt; margin: 8pt 0 4pt; font-weight: 700; color: #374151; }
+table { border-collapse: collapse; width: 100%; margin: 6pt 0; font-size: 10.5pt; }
+th, td { border: 0.75pt solid #999; padding: 6pt 8pt; vertical-align: middle; }
+th { background: #F3F4F6; font-weight: 700; width: 110pt; text-align: left; }
+.nf-clause { margin: 8pt 0; padding: 7pt 11pt; background: #F9FAFB; border-left: 2.5pt solid #1A1A1A; }
+.nf-clause-title { font-weight: 700; margin-bottom: 3pt; font-size: 11pt; }
+.nf-center { text-align: center; } .nf-right { text-align: right; } .nf-bold { font-weight: 700; }
+.nf-sig-block { border: 0.75pt solid #999; padding: 14pt; text-align: center; width: 50%; vertical-align: top; }
+.nf-sig-line { border-top: 0.75pt solid #333; margin-top: 50pt; padding-top: 4pt; font-size: 10pt; color: #6B7280; }
+.nf-legal { background: #FFFBEB; border: 0.75pt solid #FDE68A; padding: 8pt 10pt; font-size: 9.5pt; color: #78350F; margin: 12pt 0; }
+.nf-legal b { color: #92400E; }
+ol, ul { margin: 6pt 0; padding-left: 20pt; } li { margin: 3pt 0; font-size: 10.5pt; } p { margin: 5pt 0; }
+</style></head><body><div class="WordSection1">${body}</div></body></html>`;
+  return new Blob(['﻿'+wordHtml], { type:'application/msword;charset=utf-8' });
+}
+// Blob 다운로드 헬퍼
+function _nfDownloadBlob(blob, fileName){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fileName;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 200);
+}
+
+// ══ 회사 양식 업로드/다운로드/삭제 ══
+let _nfSelectedFile = null;
+
+function openCustomDocUpload(){
+  _nfSelectedFile = null;
+  document.getElementById('nf-modal-body').innerHTML = `
+    <div class="nf-form-row">
+      <div class="nf-form-label">양식 이름 <span style="color:#DC2626">*</span></div>
+      <input class="nf-form-input" id="nf-cd-name" placeholder="예: ○○회사 출장 신청서">
+    </div>
+    <div class="nf-form-row">
+      <div class="nf-form-label">설명 <span class="opt">(선택)</span></div>
+      <input class="nf-form-input" id="nf-cd-desc" placeholder="예: 해외 출장 시 사용하는 양식">
+    </div>
+    <div class="nf-form-row">
+      <div class="nf-form-label">파일 첨부 <span style="color:#DC2626">*</span></div>
+      <div>
+        <div class="nf-upload-zone" id="nf-cd-zone" onclick="document.getElementById('nf-cd-file').click()">
+          <div class="nf-upload-icon">📎</div>
+          <div class="nf-upload-text">파일을 드래그하거나 클릭해서 업로드</div>
+          <div class="nf-upload-sub">워드(.doc/.docx) · PDF · HWP · 엑셀 · 이미지 · 최대 5MB</div>
+        </div>
+        <input type="file" id="nf-cd-file" style="display:none" accept=".doc,.docx,.pdf,.hwp,.hwpx,.xls,.xlsx,.png,.jpg,.jpeg" onchange="_nfHandleFileSelect(event)">
+        <div id="nf-cd-preview" style="margin-top:10px"></div>
+      </div>
+    </div>
+    <div class="nf-info-tip warn">
+      <strong>💡 안내</strong> 업로드한 양식은 [회사 양식] 탭에 저장됩니다. 다운로드 후 워드/한글에서 직접 수정하세요.
+    </div>`;
+  document.getElementById('nf-modal-foot').innerHTML = `
+    <button class="nf-modal-btn" onclick="closeNfModal()">취소</button>
+    <button class="nf-modal-btn primary" onclick="saveCustomDoc()">+ 업로드</button>
+  `;
+  openNfModal('회사 양식 추가', '워드/PDF/HWP 등 자체 양식 업로드');
+  // 드래그앤드롭
+  setTimeout(()=>{
+    const zone = document.getElementById('nf-cd-zone');
+    if(!zone) return;
+    zone.addEventListener('dragover', e=>{ e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', ()=>zone.classList.remove('dragover'));
+    zone.addEventListener('drop', e=>{
+      e.preventDefault(); zone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0]; if(file) _nfHandleFile(file);
+    });
+  }, 50);
+}
+function _nfHandleFileSelect(e){ const f = e.target.files[0]; if(f) _nfHandleFile(f); }
+function _nfHandleFile(file){
+  if(file.size > 5*1024*1024){
+    if(typeof showSyncToast==='function') showSyncToast('파일은 5MB 이하여야 합니다','warn');
+    return;
+  }
+  _nfSelectedFile = file;
+  document.getElementById('nf-cd-preview').innerHTML = `
+    <div class="nf-file-preview">
+      <div class="nf-file-preview-icon">${getFileIcon(file.name)}</div>
+      <div class="nf-file-preview-info">
+        <div class="nf-file-preview-name">${esc(file.name)}</div>
+        <div class="nf-file-preview-size">${fmtSize(file.size)}</div>
+      </div>
+      <button class="nf-file-preview-clear" onclick="_nfClearFile()">✕</button>
+    </div>`;
+}
+function _nfClearFile(){
+  _nfSelectedFile = null;
+  const f = document.getElementById('nf-cd-file');
+  if(f) f.value = '';
+  const p = document.getElementById('nf-cd-preview');
+  if(p) p.innerHTML = '';
+}
+
+async function saveCustomDoc(){
+  const name = (document.getElementById('nf-cd-name')?.value||'').trim();
+  const desc = (document.getElementById('nf-cd-desc')?.value||'').trim();
+  if(!name){ if(typeof showSyncToast==='function') showSyncToast('양식 이름을 입력해주세요','warn'); return; }
+  if(!_nfSelectedFile){ if(typeof showSyncToast==='function') showSyncToast('파일을 첨부해주세요','warn'); return; }
+
+  if(typeof showSyncToast==='function') showSyncToast('업로드 중...','info');
+  try {
+    const res = await uploadFileToStorage(_nfSelectedFile, 'custom-doc', 'general');
+    CUSTOM_DOCS.push({
+      id: 'c_'+Date.now(),
+      name, desc,
+      fileName: _nfSelectedFile.name,
+      size: res.size || _nfSelectedFile.size,
+      type: _nfSelectedFile.type,
+      storagePath: res.path,
+      uploadedAt: new Date().toISOString()
+    });
+    saveCustomDocs();
+    closeNfModal();
+    if(typeof showSyncToast==='function') showSyncToast(`✓ '${name}' 업로드 완료`,'ok');
+    folderState.docTab = 'custom';
+    folderState.search = '';
+    renderFolderHome();
+  } catch(e){
+    console.error('Custom doc upload failed:', e);
+    if(typeof showSyncToast==='function') showSyncToast('업로드 실패: '+(e.message||''),'warn');
+  }
+}
+
+async function downloadCustomDoc(id){
+  const doc = (CUSTOM_DOCS||[]).find(d=>d.id===id);
+  if(!doc){ if(typeof showSyncToast==='function') showSyncToast('파일을 찾을 수 없습니다','warn'); return; }
+  if(!doc.storagePath){ if(typeof showSyncToast==='function') showSyncToast('파일 경로 누락','warn'); return; }
+  try {
+    const urls = await getFileUrls([doc.storagePath]);
+    const url = urls[doc.storagePath];
+    if(!url) throw new Error('서명 URL 발급 실패');
+    const a = document.createElement('a');
+    a.href = url; a.download = doc.fileName; a.target = '_blank';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    if(typeof showSyncToast==='function') showSyncToast(`${doc.fileName} 다운로드`,'ok');
+  } catch(e){
+    if(typeof showSyncToast==='function') showSyncToast('다운로드 실패','warn');
+  }
+}
+
+function deleteCustomDoc(id){
+  const doc = (CUSTOM_DOCS||[]).find(d=>d.id===id);
+  if(!doc) return;
+  if(!confirm(`"${doc.name}" 양식을 삭제할까요?\n원본 파일도 함께 삭제됩니다.`)) return;
+  if(doc.storagePath) deleteFileFromStorage(doc.storagePath);
+  CUSTOM_DOCS = CUSTOM_DOCS.filter(d=>d.id!==id);
+  saveCustomDocs();
+  if(typeof showSyncToast==='function') showSyncToast('삭제 완료','ok');
+  renderFolderCustomGrid();
+}
+
+// ══ 회사 양식 (Phase 3에서 업로드/다운로드 활성) ══
+function renderFolderCustom(){
+  const area = document.getElementById('nf-docs-area');
+  if(!area) return;
+  area.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+      <div class="nf-search-bar" style="flex:1;margin:0;min-width:240px">
+        🔍 <input type="text" id="nf-search" placeholder="회사 양식 검색..." value="${esc(folderState.search)}">
+      </div>
+      <button class="nf-btn-pill" onclick="openCustomDocUpload()">+ 양식 추가</button>
+    </div>
+    <div class="nf-info-box">
+      <strong>📋 회사 양식</strong> · 회사가 자체 사용하는 워드(.doc/.docx)·PDF·HWP·엑셀 파일을 보관할 수 있어요. 시스템이 자동 인식하지 않으니, 다운받아 직접 사용하세요.
+    </div>
+    <div id="nf-custom-grid"></div>`;
+  const inp = document.getElementById('nf-search');
+  if(inp) inp.addEventListener('input', e=>{ folderState.search=e.target.value; renderFolderCustomGrid(); });
+  renderFolderCustomGrid();
+}
+function renderFolderCustomGrid(){
+  const el = document.getElementById('nf-custom-grid');
+  if(!el) return;
+  const all = CUSTOM_DOCS||[];
+  let docs = all;
+  if(folderState.search){
+    const q = folderState.search.toLowerCase();
+    docs = docs.filter(d=>(d.name||'').toLowerCase().includes(q));
+  }
+  if(docs.length===0){
+    el.className = '';
+    if(folderState.search && all.length>0){
+      el.innerHTML = `<div class="nf-empty"><div class="nf-empty-icon">📭</div><div class="nf-empty-title">"${esc(folderState.search)}" 검색 결과가 없어요</div><div class="nf-empty-sub">다른 키워드로 검색해보세요</div></div>`;
+    } else {
+      el.innerHTML = `<div class="nf-empty"><div class="nf-empty-icon">📋</div><div class="nf-empty-title">회사 양식이 없어요</div><div class="nf-empty-sub" style="margin-bottom:14px">[+ 양식 추가] 버튼으로 워드·PDF·HWP 파일을 업로드해보세요</div><button class="nf-btn-pill" onclick="openCustomDocUpload()">+ 양식 추가</button></div>`;
+    }
+    return;
+  }
+  el.className = 'nf-doc-grid';
+  el.innerHTML = docs.map(d=>{
+    const ext = ((d.fileName||'').split('.').pop()||'').toUpperCase();
+    return `
+      <div class="nf-doc-card" onclick="downloadCustomDoc('${d.id}')">
+        <div class="nf-doc-head">
+          <div class="nf-doc-icon custom">${getFileIcon(d.fileName||'')}</div>
+          <div class="nf-doc-info">
+            <div class="nf-doc-name">${esc(d.name||'')}</div>
+            <div class="nf-doc-en">${esc(d.fileName||'')} · ${fmtSize(d.size||0)}</div>
           </div>
         </div>
-      `).join('')}
-    </div>` : '';
+        <div class="nf-doc-desc">${esc(d.desc||'회사 자체 양식')}</div>
+        <div class="nf-doc-meta">
+          <span class="nf-doc-tag custom">회사 양식</span>
+          <span class="nf-doc-tag file">${esc(ext)}</span>
+        </div>
+        <div class="nf-doc-actions">
+          <button class="nf-doc-btn primary" onclick="event.stopPropagation();downloadCustomDoc('${d.id}')">📥 다운로드</button>
+          <button class="nf-doc-btn danger" onclick="event.stopPropagation();deleteCustomDoc('${d.id}')" title="삭제">🗑</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+// 회사 양식 업로드/다운로드/삭제는 아래 ══ 회사 양식 ══ 섹션에서 정의
 
-  // ── 파일 목록 ──
-  // 파일 섹션 (항상 표시 - 파일 없어도 업로드 가능)
-  const filesHtml = currentFolderId ? `
-    <div style="background:var(--card);border:1px solid var(--bd);border-radius:14px;overflow:hidden;margin-top:${subFolders.length>0?'0':'0'}">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:rgba(0,0,0,.02);border-bottom:1px solid var(--bd)">
-        <span style="font-size:11px;font-weight:700;color:var(--ink3);letter-spacing:.4px;text-transform:uppercase">파일 ${files.length}개</span>
-        <button class="btn btn-sm btn-n" onclick="uploadFile(${currentFolderId})" style="font-size:11px;padding:4px 12px">⬆️ 파일 업로드</button>
+// ══ 사용자 폴더 진입 (단일 단계) ══
+function openUserFolder(id){
+  folderState.view = 'userFolder';
+  folderState.folderId = id;
+  renderFolder();
+}
+
+function renderUserFolderView(folder){
+  const body = document.getElementById('folder-body');
+  if(!body) return;
+  const files = folder.files||[];
+  body.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="nf-btn-pill outline" onclick="goFolderHome()">← 폴더 관리</button>
+      <button class="nf-btn-pill" onclick="uploadFile(${folder.id})">⬆️ 파일 업로드</button>
+      <button class="nf-btn-pill outline" onclick="renameFolder(${folder.id})">✏️ 이름변경</button>
+      <button class="nf-btn-pill outline" onclick="deleteFolder(${folder.id})" style="color:#B91C1C;border-color:#FCA5A5">🗑 폴더 삭제</button>
+    </div>
+    <div class="nf-file-list">
+      <div class="nf-file-head">
+        <span class="nf-file-head-title">파일 ${files.length}개</span>
       </div>
-      ${files.length > 0 ? files.map(file=>`
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid rgba(0,0,0,.04);transition:background .1s"
-          onmouseover="this.style.background='var(--nbg)'" onmouseout="this.style.background=''">
-          <span style="font-size:20px;flex-shrink:0">${getFileIcon(file.type)}</span>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${file.name}</div>
-            <div style="font-size:10px;color:var(--ink3)">${fmtSize(file.size)} · ${file.date}</div>
+      ${files.length>0 ? files.map(file=>`
+        <div class="nf-file-row">
+          <span class="nf-file-icon">${getFileIcon(file.type)}</span>
+          <div class="nf-file-info">
+            <div class="nf-file-name">${esc(file.name)}</div>
+            <div class="nf-file-meta">${fmtSize(file.size)} · ${esc(file.date||'')}</div>
           </div>
-          <button class="btn btn-xs" onclick="previewFile(${currentFolderId},${file.id})" title="미리보기">👁️</button>
-          <button class="btn btn-xs" onclick="downloadFile(${currentFolderId},${file.id})" title="다운로드">⬇️</button>
-          <button class="btn btn-xs" onclick="deleteFile(${currentFolderId},${file.id})" style="color:var(--rose)" title="삭제">✕</button>
+          <button class="nf-folder-act" onclick="previewFile(${folder.id},${file.id})" title="미리보기">👁️</button>
+          <button class="nf-folder-act" onclick="downloadFile(${folder.id},${file.id})" title="다운로드">⬇️</button>
+          <button class="nf-folder-act danger" onclick="deleteFile(${folder.id},${file.id})" title="삭제">✕</button>
         </div>`).join('') : `
-        <div style="text-align:center;padding:24px;color:var(--ink4);font-size:12px">
-          파일을 업로드하세요
+        <div style="text-align:center;padding:32px 20px;color:var(--ink3);font-size:12.5px">
+          이 폴더가 비어 있어요. 파일을 업로드해보세요.
         </div>`}
-    </div>` : ''
-  body.innerHTML = breadcrumbHtml + foldersHtml + filesHtml;
+    </div>`;
 }
 
 
@@ -5490,9 +8209,9 @@ function saveSettings(){
   POL.nt=POL.ntFixed; POL.ot=POL.otFixed; POL.hol=POL.holFixed;
   POL.juhyu=document.getElementById('tog-juhyu').checked;
   POL.sot=+document.getElementById('inp-sot').value;
-  const newBaseMonthly=+document.getElementById('inp-base-monthly')?.value||0;
+  const newBaseMonthly=+String(document.getElementById('inp-base-monthly')?.value||'').replace(/,/g,'')||0;
   if(newBaseMonthly&&newBaseMonthly!==POL.baseMonthly) POL.baseMonthly=newBaseMonthly;
-  const newBaseRate=+document.getElementById('inp-base-rate').value;
+  const newBaseRate=+String(document.getElementById('inp-base-rate').value).replace(/,/g,'')||0;
   if(newBaseRate && newBaseRate!==POL.baseRate){
     POL.baseRate=newBaseRate;
     saveLS();renderPayroll();
@@ -5508,6 +8227,114 @@ function saveSettings(){
   saveLS();renderTable();renderEmps();
   const btn=event.target;btn.textContent='저장됨 ✓';btn.style.background='var(--teal)';
   setTimeout(()=>{btn.textContent='저장';btn.style.background='';},1600);
+}
+
+// ══════════════════════════════════════
+// 🔄 데이터 복구 — 감사 로그 기반 시점 복원
+// ══════════════════════════════════════
+
+// 1. 선택한 키의 최근 이력을 가져와 화면에 표시
+async function loadRecoveryHistory(){
+  const sel = document.getElementById('recover-key-select');
+  const list = document.getElementById('recover-history-list');
+  if(!sel || !list) return;
+  const key = sel.value;
+  list.innerHTML = '<div style="padding:14px;text-align:center;color:var(--ink3);font-size:12px">불러오는 중...</div>';
+
+  try {
+    const resp = await apiFetch('/audit-log?key='+encodeURIComponent(key)+'&limit=50','GET');
+    if(!resp || !resp.logs){
+      list.innerHTML = '<div style="padding:14px;text-align:center;color:var(--ink3);font-size:12px">이력 없음</div>';
+      return;
+    }
+    if(!resp.logs.length){
+      list.innerHTML = '<div style="padding:14px;text-align:center;color:var(--ink3);font-size:12px">'+esc(key)+' 키에 대한 변경 이력이 없습니다</div>';
+      return;
+    }
+
+    // 현재 저장된 사이즈 (참고용)
+    let curSize = 0;
+    try {
+      const lsKey = 'npm5_'+key;
+      curSize = (localStorage.getItem(lsKey)||'').length;
+    } catch(e){}
+
+    // 이력 행 렌더링
+    list.innerHTML = resp.logs.map(log => {
+      const oldSize = (log.old_value||'').length;
+      const newSize = (log.new_value||'').length;
+      const delta = newSize - oldSize;
+      const dt = new Date(log.changed_at);
+      const dtStr = dt.toLocaleString('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      const isLossEvent = oldSize > newSize && (oldSize - newSize) >= 1000; // 1KB 이상 손실
+      const actionLabel = log.action === 'restore' ? '🔄 복원됨' : log.action === 'restore-snapshot' ? '💾 복원 직전 백업' : log.action;
+      return `
+        <div style="border:1px solid ${isLossEvent?'#FECACA':'var(--bd)'};border-radius:8px;padding:9px 12px;margin-bottom:6px;background:${isLossEvent?'#FEF2F2':'#FFFFFF'};display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <div style="font-size:12px;font-weight:700;color:${isLossEvent?'#DC2626':'var(--navy)'};margin-bottom:3px">
+              ${dtStr} ${isLossEvent?'⚠️':''}
+            </div>
+            <div style="font-size:10px;color:var(--ink3);line-height:1.4">
+              ${esc(log.changed_by||'unknown')} · ${esc(actionLabel)}<br>
+              저장 전 ${oldSize.toLocaleString()}B → 저장 후 ${newSize.toLocaleString()}B
+              <span style="color:${delta>0?'#16A34A':delta<0?'#DC2626':'var(--ink3)'};font-weight:600;margin-left:4px">
+                ${delta>0?'+':''}${delta.toLocaleString()}B
+              </span>
+            </div>
+          </div>
+          <div style="display:flex;gap:4px">
+            ${log.old_value ? `<button class="btn btn-sm" onclick="doRestore(${log.id},'old_value','${esc(dtStr)}',${oldSize})" style="font-size:10px;padding:4px 10px;background:#FEF3C7;color:#92400E;border:1px solid #FCD34D;font-weight:700">⏪ 저장 전(${oldSize.toLocaleString()}B)</button>` : ''}
+            ${log.new_value ? `<button class="btn btn-sm" onclick="doRestore(${log.id},'new_value','${esc(dtStr)}',${newSize})" style="font-size:10px;padding:4px 10px;background:#DCFCE7;color:#166534;border:1px solid #86EFAC;font-weight:700">⏩ 저장 후(${newSize.toLocaleString()}B)</button>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // 헤더에 현재 사이즈 정보 추가
+    const header = document.createElement('div');
+    header.style.cssText = 'padding:8px 10px;margin-bottom:8px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;font-size:11px;color:var(--navy);font-weight:600';
+    header.innerHTML = '📊 현재 로컬 데이터 사이즈: <strong>' + curSize.toLocaleString() + 'B</strong> · 위 시점 중 하나를 선택하면 그 시점의 데이터로 복원됩니다';
+    list.insertBefore(header, list.firstChild);
+
+  } catch(e) {
+    console.error(e);
+    list.innerHTML = '<div style="padding:14px;text-align:center;color:#DC2626;font-size:12px">이력 조회 실패: '+esc(e.message||'알 수 없는 오류')+'</div>';
+  }
+}
+
+// 2. 특정 audit_log 행으로 복원 실행
+async function doRestore(auditId, useField, dtStr, sizeBytes){
+  const fieldLabel = useField === 'old_value' ? '저장 직전 상태(old_value)' : '저장 직후 상태(new_value)';
+  if(!confirm(
+    `🔄 데이터 복원 확인\n\n` +
+    `시점: ${dtStr}\n` +
+    `복원 데이터: ${fieldLabel}\n` +
+    `사이즈: ${sizeBytes.toLocaleString()} bytes\n\n` +
+    `현재 데이터를 위 시점으로 되돌립니다.\n` +
+    `복원 직전 상태는 audit_log에 자동 백업되어 다시 되돌릴 수 있습니다.\n\n` +
+    `계속하시겠습니까?`
+  )) return;
+
+  try {
+    const resp = await apiFetch('/audit-restore','POST',{auditId, useField});
+    if(!resp || !resp.success){
+      alert('복원 실패: ' + (resp && resp.error ? resp.error : '알 수 없는 오류'));
+      return;
+    }
+    alert(
+      `✅ 복원 완료\n\n` +
+      `데이터 종류: ${resp.data_key}\n` +
+      `복원 사이즈: ${(resp.restoredSize||0).toLocaleString()} bytes\n` +
+      `복원 시점: ${new Date(resp.restoredFromTimestamp).toLocaleString('ko-KR')}\n\n` +
+      `잠시 후 페이지가 새로고침됩니다.\n` +
+      `다른 사용자도 Ctrl+F5로 새로고침해야 화면에 반영됩니다.`
+    );
+    // 본인 화면 자동 새로고침
+    setTimeout(()=>{ location.reload(); }, 800);
+  } catch(e) {
+    console.error(e);
+    alert('복원 요청 실패: ' + (e.message || '알 수 없는 오류'));
+  }
 }
 
 // ── 데이터 백업 (JSON 다운로드) ──
@@ -5547,40 +8374,41 @@ function exportExcel(){
     const ws = {}; let R=0;
 
     // ── 타이틀 블록 ──
-    const payMode = isMonthly?'월급제':sheetName==='통상임금제'?'통상임금제':'시급제';
+    const payMode = isMonthly?'포괄임금제':sheetName==='통상임금제'?'통상임금제':'시급제';
     xlsWrite(ws,XLSX.utils.encode_cell({r:0,c:0}),`${month} 급여 명세서`,{
       font:{bold:true,sz:18,color:{rgb:C.navy},name:'맑은 고딕'},
       fill:{fgColor:{rgb:'EFF6FF'}},
       alignment:{horizontal:'left',vertical:'center'},
     });
-    xlsMerge(ws,0,0,0,8);
+    xlsMerge(ws,0,0,0,9);
     xlsWrite(ws,XLSX.utils.encode_cell({r:1,c:0}),
       `${sheetName}  ·  총 ${emps.length}명  ·  출력일: ${new Date().toLocaleDateString('ko-KR')}`,{
       font:{sz:9,color:{rgb:C.gray2},italic:true,name:'맑은 고딕'},
       fill:{fgColor:{rgb:'EFF6FF'}},
       alignment:{horizontal:'left',vertical:'center'},
     });
-    xlsMerge(ws,1,0,1,8);
+    xlsMerge(ws,1,0,1,9);
     ws['!rows']=[{hpt:30},{hpt:16}];
     R=2;
 
     // ── 헤더 정의 (스프레드시트 동일) ──
     const allHdrs = [
-      '순번','근무지','직급','성명','급여유형','연차개수','근무일수','소정근로시간','입사일','시급',
+      '순번','성명','직종','근무지','직급','부서','급여방식','연차개수','근무일수','소정근로시간','입사일','퇴사일','시급',
       '기본급','주휴수당','연차수당',
       ...allowList.map(a=>a.name),
       '급여',
       '실근무(h)','소정근로외(h)','야간(h)','초과연장(h)','초과휴일(h)','결근일수','공제시간(h)',
+      '특근일수','고정특근수당',
       '소정근로외수당','야간수당','초과연장수당','초과휴일수당',
-      '월급제휴일수당','월급제휴일초과','결근차감','총가산수당',
-      '상여금','총급여',
+      '포괄임금제휴일수당','포괄임금제휴일초과','총가산수당','결근차감',
+      '상여금(선지급)','총급여',
       ...deductList.map(a=>a.name),
-      '국민연금','건강보험','고용보험','소득세','주민세','공제합계','실지급액'
+      '국민연금','건강보험','고용보험','소득세','주민세','총공제액','실지급액'
     ];
 
     // 헤더 색상 그룹
     const getHdrStyle = (h) => {
-      if(['순번','근무지','직급','성명','급여유형','연차개수','근무일수','소정근로시간','입사일','시급'].includes(h)) return S.mainHdr(C.navy,'FFFFFF','center');
+      if(['순번','성명','직종','근무지','직급','부서','급여방식','연차개수','근무일수','소정근로시간','입사일','퇴사일','시급'].includes(h)) return S.mainHdr(C.navy,'FFFFFF','center');
       if(h==='기본급'||h==='급여') return S.mainHdr(C.navy,'FFFFFF','center');
       if(h==='주휴수당') return S.mainHdr(C.teal,'FFFFFF','center');
       if(h==='연차수당') return S.mainHdr(C.navy,'FFFFFF','center');
@@ -5589,9 +8417,10 @@ function exportExcel(){
       if(h==='소정근로외수당') return S.mainHdr('1565C0','FFFFFF','center');
       if(h==='야간수당') return S.mainHdr('0C447C','B5D4F4','center');
       if(h==='초과연장수당') return S.mainHdr('534AB7','EEEDFE','center');
-      if(h==='초과휴일수당'||h.includes('월급제')) return S.mainHdr('854F0B','FAC775','center');
+      if(h==='초과휴일수당'||h.includes('포괄임금제')) return S.mainHdr('854F0B','FAC775','center');
+      if(h==='특근일수'||h==='고정특근수당') return S.mainHdr('B91C1C','FECACA','center');
       if(h==='총가산수당') return S.mainHdr('065F46','D1FAE5','center');
-      if(h==='상여금') return S.mainHdr(C.orange2,'FFFFFF','center');
+      if(h.includes('상여금')) return S.mainHdr(C.orange2,'FFFFFF','center');
       if(h==='총급여') return S.mainHdr('0D47A1','FFFFFF','center');
       if(h.includes('공제')||h.includes('세')||h.includes('보험')||h==='결근차감') return S.mainHdr(C.rose,'FFFFFF','center');
       if(h==='실지급액') return S.mainHdr('1B5E20','FFFFFF','center');
@@ -5635,16 +8464,19 @@ function exportExcel(){
       const W=(_c,v,st)=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:_c}),v,st);
       let ci=0;
 
-      // 기본정보
+      // 기본정보 (화면 순서와 동일: 순번/성명/직종/근무지/직급/부서)
       W(ci++,ei+1,S.cell(C.gray,bg,false,'center'));
-      W(ci++,emp.dept||'',S.cell(C.gray,bg,false,'center'));
-      W(ci++,emp.role||'',S.cell(C.gray,bg,false,'center'));
       W(ci++,emp.name,S.cell(C.navy,bg,true,'center'));
+      W(ci++,emp.role||'',S.cell(C.gray,bg,false,'center'));         // 직종 (emp.role)
+      W(ci++,emp.dept||'',S.cell(C.gray,bg,false,'center'));         // 근무지 (emp.dept)
+      W(ci++,emp.grade||'',S.cell(C.gray,bg,false,'center'));        // 직급 (emp.grade)
+      W(ci++,emp.deptCat||'사무',S.cell(C.teal,bg,!!emp.deptCat,'center')); // 부서 (emp.deptCat)
       W(ci++,getEmpPayModeLabel(emp).text,S.cell(C.blue,bg,false,'center'));
-      W(ci++,annualTotal,S.num(C.gray,bg));
+      W(ci++,Number(annualTotal||0),S.num(C.gray,bg,false,'0.0'));
       W(ci++,s.wdays||0,S.num(C.navy,bg));
       W(ci++,(_pm==='hourly'||_pm==='monthly')?'':sot,S.num(C.gray,bg));
       W(ci++,emp.join||'',S.cell(C.gray,bg,false,'center'));
+      W(ci++,emp.leave||'',S.cell(emp.leave?C.rose:C.gray,bg,false,'center'));
       W(ci++,getOrdinaryRate(emp, pY, pM),S.num(C.blue,C.blue4||bg,true));
 
       // 기본급 + 주휴 + 연차수당
@@ -5669,6 +8501,9 @@ function exportExcel(){
       W(ci++,holH>0?+holH.toFixed(2):'',holH>0?S.numDec(C.orange2,bg):S.empty(bg));
       W(ci++,s.adays||'',s.adays?S.num(C.rose,bg):S.empty(bg));
       W(ci++,s.dedShortH>0?+s.dedShortH.toFixed(2):'',s.dedShortH>0?S.numDec(C.rose,bg):S.empty(bg));
+      // 특근일수 / 특근수당
+      W(ci++,(s.tSpecialDays||0)>0?s.tSpecialDays:'',(s.tSpecialDays||0)>0?S.num('B91C1C',bg,true):S.empty(bg));
+      W(ci++,(s.tSpecialPay||0)>0?Math.round(s.tSpecialPay):'',(s.tSpecialPay||0)>0?S.num('B91C1C','FEF2F2',true):S.empty(bg));
 
       // 수당 금액
       W(ci++,Math.round(s.tExtraWorkPay)||'',(s.tExtraWorkPay||0)?S.num('1565C0',bg):S.empty(bg));
@@ -5677,8 +8512,9 @@ function exportExcel(){
       W(ci++,Math.round(s.tHolPayNew||0)||'',(s.tHolPayNew||0)?S.num(C.orange2,C.orange4):S.empty(bg));
       W(ci++,Math.round(s.tMonthlyHolStdPay||0)||'',(s.tMonthlyHolStdPay||0)?S.num(C.orange2,C.orange4):S.empty(bg));
       W(ci++,Math.round(s.tMonthlyHolOtPay||0)||'',(s.tMonthlyHolOtPay||0)?S.num(C.rose,C.rose4):S.empty(bg));
-      W(ci++,s.deduction>0?-Math.round(s.deduction):'',s.deduction?S.num(C.rose,C.rose4):S.empty(bg));
+      // 헤더 순서(총가산수당 → 결근차감)에 맞춰 데이터도 동일 순서로 작성 (tTotalBonus는 고정특근수당 포함)
       W(ci++,Math.round(s.tTotalBonus||0)||'',(s.tTotalBonus||0)?S.num('065F46','ECFDF5',true):S.empty(bg));
+      W(ci++,s.deduction>0?-Math.round(s.deduction):'',s.deduction?S.num(C.rose,C.rose4):S.empty(bg));
 
       // 상여금 + 총급여
       W(ci++,s.bonus||'',s.bonus?S.num(C.orange2,C.orange4):S.empty(bg));
@@ -5712,20 +8548,22 @@ function exportExcel(){
 
     // ── 합계행 ──
     const C_=XLS.C; const ci2=allHdrs.length-1;
-    // 좌측 병합 타이틀
+    // 좌측 병합 타이틀 (순번/성명/직종/근무지/직급 → 0..4)
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),'합 계',S.mainHdr(C_.navy));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),'',S.mainHdr(C_.navy));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),'',S.mainHdr(C_.navy));
-    xlsMerge(ws,R,0,R,2);
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),`${emps.length}명`,{
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),'',S.mainHdr(C_.navy));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),'',S.mainHdr(C_.navy));
+    xlsMerge(ws,R,0,R,4);
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),`${emps.length}명`,{
       font:{bold:true,sz:10,color:{rgb:'FFFFFF'},name:'맑은 고딕'},
       fill:{fgColor:{rgb:C_.navy}},alignment:{horizontal:'center',vertical:'center'},
       border:XLS.B.thin('1E3A5F'),
     });
-    // 빈 셀들
-    for(let c=4;c<ci2-1;c++) xlsWrite(ws,XLSX.utils.encode_cell({r:R,c}),'',(c===allHdrs.indexOf('총 급여'))?S.total('FFFFFF','0D47A1'):{fill:{fgColor:{rgb:C_.gray4}},border:XLS.B.thin()});
+    // 빈 셀들 (부서 다음부터)
+    for(let c=6;c<ci2-1;c++) xlsWrite(ws,XLSX.utils.encode_cell({r:R,c}),'',(c===allHdrs.indexOf('총급여'))?S.total('FFFFFF','0D47A1'):{fill:{fgColor:{rgb:C_.gray4}},border:XLS.B.thin()});
     // 총급여 합계
-    const totalIdx=allHdrs.indexOf('총 급여');
+    const totalIdx=allHdrs.indexOf('총급여');
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:totalIdx}),Math.round(grandTotal),S.total('FFFFFF','0D47A1'));
     // 실지급액 합계
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci2}),Math.round(grandNet),{
@@ -5737,23 +8575,29 @@ function exportExcel(){
     R++;
 
     ws['!cols'] = allHdrs.map((h,i)=>({
-      wch: i===3?10:i===4?12:h.includes('급여')||h==='실지급액'?11:h.includes('수당')||h.includes('공제')?10:8
+      wch: i===1?10 : (i===4||i===5)?7 : i===6?12 : h.includes('급여')||h==='실지급액'?11 : h.includes('수당')||h.includes('공제')?10 : 8
     }));
     xlsRange(ws,0,0,R-1,allHdrs.length-1);
     XLSX.utils.book_append_sheet(wb,ws,sheetName);
   }
 
-  // 3개 시트
+  // 3개 시트 — 화면 필터와 동일: 포괄임금제 시트는 monthly + pohal 둘 다 포함
+  // ⚠️ refDate를 반드시 그 달 1일로 전달. 안 넘기면 applyCommonFilter가 오늘 기준으로 동작 →
+  //    과거월 엑셀에서 그 달에 재직했던 퇴사자가 누락됨 (카드/XL뷰와 결과 어긋남).
   const getEmps = mode => applyCommonFilter(EMPS.filter(e=>{
-    if((e.payMode||'fixed')!==mode) return false;
-    if(e.join&&new Date(e.join)>new Date(pY,pM,0)) return false;
-    if(e.leave&&new Date(e.leave)<new Date(pY,pM-1,1)) return false;
+    // 화면 로직(getEmpPayMode)과 통일 — 비표준 payMode 값도 'fixed'로 정규화되어
+    // 통상임금제 시트에 포함됨. 직접 비교 시 누락되던 4명 등 엑셀 인원 불일치 버그 수정.
+    const ep = getEmpPayMode(e);
+    if(mode==='monthly'){ if(ep!=='monthly' && ep!=='pohal') return false; }
+    else { if(ep!==mode) return false; }
+    if(e.join&&parseEmpDate(e.join)>new Date(pY,pM,0)) return false;
+    if(e.leave&&parseEmpDate(e.leave)<new Date(pY,pM-1,1)) return false;
     return true;
-  }), 'payroll');
+  }), 'payroll', new Date(pY,pM-1,1));
 
   writePaySheet(getEmps('fixed'), '통상임금제', false);
   writePaySheet(getEmps('hourly'), '시급제', false);
-  writePaySheet(getEmps('monthly'), '월급제', true);
+  writePaySheet(getEmps('monthly'), '포괄임금제', true);
 
   XLSX.writeFile(wb, `급여명세_${pY}년${pM}월_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
@@ -5789,23 +8633,25 @@ function exportDailyExcel(){
   ws['!rows'].push({hpt:26});
   R++;
 
-  // 직원 필터링 (renderTable과 동일)
-  const bks=getActiveBk(cY,cM,cD);
+  // 직원 필터링 (renderTable과 동일, 퇴사일 당일은 포함)
   const dayDate2=new Date(cY,cM-1,cD);
   const activeDayEmps = applyCommonFilter(EMPS.filter(emp=>{
-    if(emp.join){const jd=new Date(emp.join);if(jd>dayDate2)return false;}
-    if(emp.leave){const ld=new Date(emp.leave);if(ld<=dayDate2)return false;}
+    if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate2)return false;}
+    if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<dayDate2)return false;}
     return true;
   }), 'daily', dayDate2);
 
-  const payModeLabel={fixed:'통상임금제',hourly:'시급제',monthly:'월급제',pohal:'포괄임금'};
+  const payModeLabel={fixed:'통상임금제',hourly:'시급제',monthly:'포괄임금제',pohal:'포괄임금제'};
 
   activeDayEmps.forEach((emp,ei)=>{
     const k=rk(emp.id,cY,cM,cD);
     const rec=REC[k]||{start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
-    const autoH=isAutoHol(cY,cM,cD,emp);
+    // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제
+    const autoH=(isAutoHol(cY,cM,cD,emp) && !rec.subWork) || rec.subHol;
     const rate=getEmpRate(emp);
     const empPayMode=getEmpPayMode(emp);
+    // 직원 shift별 휴게세트
+    const bks=getActiveBk(cY,cM,cD,emp);
     const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
 
     let c=null;
@@ -5813,7 +8659,9 @@ function exportDailyExcel(){
       c={work:480,nightM:0,ot:0,basePay:rate*8,nightPay:0,otPay:0,holPay:0,totalPay:rate*8};
     } else if(rec.halfAnnual){
       if(rec.start&&rec.end){
-        c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],empPayMode,getOrdinaryRate(emp,pY,pM));
+        // 🎯 반차여도 실근무 8h 임계 유지 (반차 4h는 OT 임계에 영향 X) (화면과 동일)
+        const _xlHalfBaseM = 0;
+        c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],empPayMode,getOrdinaryRate(emp,pY,pM),_xlHalfBaseM);
       } else {
         c={work:240,nightM:0,ot:0,basePay:rate*4,nightPay:0,otPay:0,holPay:0,totalPay:rate*4};
       }
@@ -5855,6 +8703,222 @@ function exportDailyExcel(){
   ws['!cols']=hdrs.map((_,i)=>({wch:i===1?12:i===2?12:i===10?14:i===11?16:10}));
   XLSX.utils.book_append_sheet(wb,ws,`${cM}M${cD}D`);
   XLSX.writeFile(wb,`출퇴근기록_${dateStr}.xlsx`,{bookType:'xlsx',type:'binary'});
+}
+
+// ── 기간 엑셀 모달 ──
+function openRangeExcelModal(){
+  const today=`${cY}-${pad(cM)}-${pad(cD)}`;
+  // 기본 시작: 같은 달 1일
+  const defaultStart=`${cY}-${pad(cM)}-01`;
+  const bg=document.createElement('div');
+  bg.id='range-excel-modal';
+  bg.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;';
+  bg.innerHTML=`
+    <div style="background:var(--card);border-radius:16px;padding:24px;width:380px;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+      <div style="font-size:15px;font-weight:700;color:var(--ink);margin-bottom:6px;">🗓️ 기간 엑셀 다운로드</div>
+      <div style="font-size:12px;color:var(--ink3);margin-bottom:16px;">선택한 기간의 출퇴근 기록을 <b>날짜별 시트</b>로 받습니다.</div>
+      <div style="display:flex;gap:10px;margin-bottom:14px">
+        <div style="flex:1">
+          <label style="font-size:11px;font-weight:600;color:var(--ink);display:block;margin-bottom:4px">시작일</label>
+          <input type="date" id="range-start" value="${defaultStart}" max="${today}"
+            style="width:100%;height:36px;border:1.5px solid var(--bd2);border-radius:8px;padding:0 10px;font-size:13px;font-family:inherit;background:var(--card);color:var(--ink);">
+        </div>
+        <div style="flex:1">
+          <label style="font-size:11px;font-weight:600;color:var(--ink);display:block;margin-bottom:4px">종료일</label>
+          <input type="date" id="range-end" value="${today}"
+            style="width:100%;height:36px;border:1.5px solid var(--bd2);border-radius:8px;padding:0 10px;font-size:13px;font-family:inherit;background:var(--card);color:var(--ink);">
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink2);margin-bottom:14px;cursor:pointer">
+        <input type="checkbox" id="range-skip-empty" checked> 기록 없는 날짜는 시트 생략
+      </label>
+      <div id="range-info" style="font-size:11px;color:var(--ink3);margin-bottom:14px"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="closeRangeExcelModal()" style="padding:7px 16px;border:1px solid var(--bd2);border-radius:8px;background:transparent;font-size:12px;color:var(--ink3);cursor:pointer;font-family:inherit;">취소</button>
+        <button onclick="execRangeExcel()" style="padding:7px 18px;background:#065F46;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">⬇ 다운로드</button>
+      </div>
+    </div>`;
+  document.body.appendChild(bg);
+  const upd=()=>{
+    const s=document.getElementById('range-start').value;
+    const e=document.getElementById('range-end').value;
+    if(!s||!e) return;
+    const sd=new Date(s), ed=new Date(e);
+    const days=Math.floor((ed-sd)/86400000)+1;
+    const info=document.getElementById('range-info');
+    if(days<=0) info.innerHTML='<span style="color:var(--rose)">⚠️ 종료일이 시작일보다 빨라야 합니다.</span>';
+    else info.textContent=`총 ${days}일 (시트 ${days}개)`;
+  };
+  document.getElementById('range-start').addEventListener('change',upd);
+  document.getElementById('range-end').addEventListener('change',upd);
+  upd();
+}
+function closeRangeExcelModal(){
+  const el=document.getElementById('range-excel-modal');
+  if(el) el.remove();
+}
+function execRangeExcel(){
+  const s=document.getElementById('range-start').value;
+  const e=document.getElementById('range-end').value;
+  const skipEmpty=document.getElementById('range-skip-empty').checked;
+  if(!s||!e){showSyncToast('날짜를 선택해주세요.','warn');return;}
+  const sd=new Date(s), ed=new Date(e);
+  if(ed<sd){showSyncToast('종료일이 시작일보다 빨라야 합니다.','warn');return;}
+  closeRangeExcelModal();
+  showSyncToast('엑셀 생성 중...','info',2000);
+  setTimeout(()=>{
+    try{ _buildRangeExcel(sd, ed, skipEmpty); }
+    catch(err){ console.error(err); showSyncToast('엑셀 생성 실패: '+err.message,'err',5000); }
+  }, 50);
+}
+function _buildRangeExcel(sd, ed, skipEmpty){
+  const C=XLS.C, S=XLS.S;
+  const wb=XLSX.utils.book_new();
+  const dowNames=['일','월','화','수','목','금','토'];
+  const payModeLabel={fixed:'통상임금제',hourly:'시급제',monthly:'포괄임금제',pohal:'포괄임금제'};
+  const hdrs=['순번','이름','급여형태','출근','퇴근','근무시간','휴게h','야간h','연장h','휴일h','상태','급여','비고'];
+  let totalSheets=0, totalEmpRows=0, totalWorkH=0, totalPay=0;
+  const cur=new Date(sd);
+  while(cur<=ed){
+    const y=cur.getFullYear(), m=cur.getMonth()+1, d=cur.getDate();
+    const dateStr=`${y}-${pad(m)}-${pad(d)}`;
+    const dow=dowNames[cur.getDay()];
+    const dayDate=new Date(y,m-1,d);
+    const activeEmps=applyCommonFilter(EMPS.filter(emp=>{
+      if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate)return false;}
+      if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<dayDate)return false;}
+      return true;
+    }), 'daily', dayDate);
+    // 기록 있는 직원만 카운트
+    const hasAnyRec=activeEmps.some(emp=>{
+      const r=REC[rk(emp.id,y,m,d)];
+      return r && (r.start||r.end||r.absent||r.annual||r.halfAnnual);
+    });
+    if(skipEmpty && !hasAnyRec){ cur.setDate(cur.getDate()+1); continue; }
+
+    const ws={};
+    xlsWrite(ws,XLSX.utils.encode_cell({r:0,c:0}),`${y}년 ${m}월 ${d}일 (${dow}) 출퇴근 기록`,{
+      font:{bold:true,sz:16,color:{rgb:C.navy},name:'맑은 고딕'},
+      fill:{fgColor:{rgb:'EFF6FF'}},alignment:{horizontal:'left',vertical:'center'},
+    });
+    xlsMerge(ws,0,0,0,12);
+    xlsWrite(ws,XLSX.utils.encode_cell({r:1,c:0}),`출력일: ${new Date().toLocaleDateString('ko-KR')}`,{
+      font:{sz:9,color:{rgb:C.gray2},italic:true,name:'맑은 고딕'},
+      fill:{fgColor:{rgb:'EFF6FF'}},alignment:{horizontal:'left',vertical:'center'},
+    });
+    xlsMerge(ws,1,0,1,12);
+    ws['!rows']=[{hpt:28},{hpt:16}];
+    let R=2;
+    hdrs.forEach((h,ci)=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),h,S.mainHdr(C.navy,'FFFFFF','center')));
+    ws['!rows'].push({hpt:26});
+    R++;
+
+    let dayWorkH=0, dayPay=0, dayCount=0;
+    activeEmps.forEach((emp,ei)=>{
+      const k=rk(emp.id,y,m,d);
+      const rec=REC[k]||{start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
+      const autoH=(isAutoHol(y,m,d,emp) && !rec.subWork) || rec.subHol;
+      const rate=getEmpRate(emp);
+      const empPayMode=getEmpPayMode(emp);
+      const bks=getActiveBk(y,m,d,emp);
+      const activeBks=rec.customBk?(rec.customBkList||[]):bks;
+      let c=null;
+      if(rec.annual){
+        c={work:480,nightM:0,ot:0,bkMins:0,nightBkMins:0,basePay:rate*8,nightPay:0,otPay:0,holPay:0,totalPay:rate*8};
+      } else if(rec.halfAnnual){
+        if(rec.start&&rec.end){
+          // 🎯 반차여도 실근무 8h 임계 유지 (반차 4h는 OT 임계에 영향 X) (화면과 동일)
+          const _pHalfBaseM = 0;
+          c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],empPayMode,getOrdinaryRate(emp,y,m),_pHalfBaseM);
+        }
+        else c={work:240,nightM:0,ot:0,bkMins:0,nightBkMins:0,basePay:rate*4,nightPay:0,otPay:0,holPay:0,totalPay:rate*4};
+      } else if(!rec.absent&&rec.start&&rec.end){
+        c=calcSession(rec.start,rec.end,rate,autoH,activeBks,rec.outTimes||[],empPayMode,getOrdinaryRate(emp,y,m));
+      }
+      let status='-';
+      if(rec.annual) status='연차';
+      else if(rec.halfAnnual) status='반차';
+      else if(rec.absent) status='결근';
+      else if(c) status='출근';
+      const bg=xlsRowBg(ei);
+      let ci=0;
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),ei+1,S.cell(C.gray,bg,false,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),emp.name||'',S.cell(C.gray,bg,false,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),payModeLabel[empPayMode]||empPayMode,S.cell(C.gray,bg,false,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),rec.start||'',S.cell(C.gray,bg,false,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),rec.end||'',S.cell(C.gray,bg,false,'center'));
+      const wH=c?m2h(c.work):0;
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),wH,S.num(C.gray,bg,false,'center'));
+      const bkVal=c&&c.bkMins?m2h(c.bkMins):0;
+      const nightBkVal=c&&c.nightBkMins?Math.round(c.nightBkMins/60*100)/100:0;
+      const bkText=nightBkVal>0?`${bkVal}h (야간${nightBkVal}h)`:(bkVal>0?bkVal:0);
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),bkText,S.num('#2D6A4F',bg,false,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c?Math.round(c.nightM/60*100)/100:0,S.num(C.gray,bg,false,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c?Math.round(c.ot/60*100)/100:0,S.num(C.gray,bg,false,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c&&autoH?Math.round(c.work/60*100)/100:0,S.num(C.gray,bg,false,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),status,S.cell(status==='연차'||status==='반차'?C.green:status==='결근'?C.rose:C.gray,bg,false,'center'));
+      const pay=c?Math.round(c.totalPay/10)*10:0;
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),pay,S.num(C.gray,bg,false,'right'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),rec.note||'',S.cell(C.gray,bg,false,'left'));
+      ws['!rows'].push({hpt:22});
+      R++;
+      dayWorkH+=wH; dayPay+=pay; dayCount++;
+    });
+    // 일별 합계행
+    if(dayCount>0){
+      const sumBg='FFF7E6';
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),'',S.cell(C.navy,sumBg,true,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),`합계 (${dayCount}명)`,S.cell(C.navy,sumBg,true,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),'',S.cell(C.navy,sumBg,true,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),'',S.cell(C.navy,sumBg,true,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),'',S.cell(C.navy,sumBg,true,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),Math.round(dayWorkH*100)/100,S.num(C.navy,sumBg,true,'center'));
+      for(let cc=6;cc<=10;cc++) xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:cc}),'',S.cell(C.navy,sumBg,true,'center'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),dayPay,S.num(C.navy,sumBg,true,'right'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:12}),'',S.cell(C.navy,sumBg,true,'left'));
+      ws['!rows'].push({hpt:24});
+      R++;
+    }
+    xlsRange(ws,0,0,R-1,hdrs.length-1);
+    ws['!cols']=hdrs.map((_,i)=>({wch:i===1?12:i===2?12:i===10?14:i===11?16:10}));
+    // 시트명: M-DD (월-일). 31일치까지 unique.
+    const sheetName=`${m}-${pad(d)}`;
+    XLSX.utils.book_append_sheet(wb,ws,sheetName);
+    totalSheets++; totalEmpRows+=dayCount; totalWorkH+=dayWorkH; totalPay+=dayPay;
+    cur.setDate(cur.getDate()+1);
+  }
+  if(totalSheets===0){
+    showSyncToast('선택 기간에 출퇴근 기록이 없습니다.','warn',4000);
+    return;
+  }
+  // 요약 시트 (맨 앞에 삽입)
+  const sumWs={};
+  xlsWrite(sumWs,XLSX.utils.encode_cell({r:0,c:0}),`기간 합계 (${sd.toISOString().slice(0,10)} ~ ${ed.toISOString().slice(0,10)})`,{
+    font:{bold:true,sz:14,color:{rgb:C.navy},name:'맑은 고딕'},
+    fill:{fgColor:{rgb:'EFF6FF'}},alignment:{horizontal:'left',vertical:'center'},
+  });
+  xlsMerge(sumWs,0,0,0,3);
+  let sR=2;
+  const summary=[
+    ['기간', `${sd.toISOString().slice(0,10)} ~ ${ed.toISOString().slice(0,10)}`],
+    ['포함 시트 수', `${totalSheets}개`],
+    ['총 근무 인원수(연 합계)', `${totalEmpRows}명`],
+    ['총 근무시간', `${Math.round(totalWorkH*100)/100} h`],
+    ['총 급여(추정)', `${Math.round(totalPay).toLocaleString()} 원`],
+  ];
+  summary.forEach(([k,v])=>{
+    xlsWrite(sumWs,XLSX.utils.encode_cell({r:sR,c:0}),k,S.cell(C.navy,'F8FAFC',true,'left'));
+    xlsWrite(sumWs,XLSX.utils.encode_cell({r:sR,c:1}),v,S.cell(C.gray,'FFFFFF',false,'left'));
+    sR++;
+  });
+  sumWs['!cols']=[{wch:24},{wch:40}];
+  xlsRange(sumWs,0,0,sR-1,1);
+  // 요약 시트를 맨 앞으로
+  wb.SheetNames.unshift('요약');
+  wb.Sheets['요약']=sumWs;
+  const fname=`출퇴근기록_${sd.toISOString().slice(0,10)}_${ed.toISOString().slice(0,10)}.xlsx`;
+  XLSX.writeFile(wb,fname,{bookType:'xlsx',type:'binary'});
+  showSyncToast(`엑셀 생성 완료 (시트 ${totalSheets+1}개)`,'ok',4000);
 }
 
 
@@ -5952,6 +9016,8 @@ function sfSaveTbm(){
   const val=document.getElementById('sf-tbm-content').value;
   SAFETY_REC[key+'_tbm']=val;
   sfSave();
+  // 💾 서버 저장 — sfSave는 localStorage만 저장하므로 서버까지 보장하려면 saveLS 추가 필요
+  if(typeof saveLS==='function') saveLS();
   // 한국어가 바뀌면 번역이 구버전임을 표시
   sfUpdTranslateStatus();
 }
@@ -6562,7 +9628,7 @@ function sfInitDeptChips(){
 function sfPmLabel(e){
   const m=e.payMode||'fixed';
   if(m==='pohal')  return{t:'포괄임금',c:'#7C3AED',bg:'#F5F3FF'};
-  if(m==='monthly')return{t:'월급제',  c:'#854F0B',bg:'#FEF3C7'};
+  if(m==='monthly')return{t:'포괄임금제',c:'#854F0B',bg:'#FEF3C7'};
   if(m==='hourly') return{t:'시급제',  c:'#0891B2',bg:'#CFFAFE'};
   return               {t:'통상임금제',c:'#059669',bg:'#ECFDF5'};
 }
@@ -6909,8 +9975,31 @@ function leaveYearNav(d){ leaveYear += d; renderLeave(); }
 // calcMode: 'fiscal' (회계연도 기준, 기본) / 'joinDate' (입사일 기준)
 function calcLeaveForYear(emp, year) {
   const mode = leaveSettings.calcMode || 'fiscal';
-  if (mode === 'joinDate') return calcLeaveByJoinDate(emp, year);
-  return calcLeaveByFiscal(emp, year);
+  const result = (mode === 'joinDate') ? calcLeaveByJoinDate(emp, year) : calcLeaveByFiscal(emp, year);
+  // [GUARD] REC의 annual/halfAnnual이 있는데 used에 반영 안 됐으면 경고 (재발 방지)
+  try {
+    const recUsed = countUsedLeave(emp.id, year, 1);
+    if (recUsed > 0 && result.used < recUsed) {
+      const msg = `[연차 invariant 위반] emp=${emp.id} year=${year} REC=${recUsed} used=${result.used}`;
+      console.warn(msg);
+      if (typeof reportError === 'function') {
+        reportError({ level:'guard', source:'calcLeaveForYear', message:msg, meta:{ empId:emp.id, year, recUsed, used:result.used } });
+      }
+    }
+  } catch(_){}
+  // 🎯 총연차 수동 override: 사용자가 연차관리에서 직접 입력한 값으로 교체
+  // ov.manualTotal이 있으면 자동 계산값을 무시하고 그 값을 총연차로 사용. 잔여 = manualTotal - used
+  const ov = (leaveOverrides[emp.id] && leaveOverrides[emp.id][year]) || null;
+  if (ov && ov.manualTotal !== undefined && ov.manualTotal !== null) {
+    const newTotal = +ov.manualTotal;
+    return {
+      ...result,
+      total: newTotal,
+      accrued: newTotal,
+      remain: Math.round((newTotal - result.used) * 10) / 10,
+    };
+  }
+  return result;
 }
 
 // ── 회계연도(1/1~12/31) 기준 ──
@@ -6931,10 +10020,13 @@ function hadFullAttendance(emp, year, month) {
   return true;
 }
 
+// [INVARIANT] 사용연차(used) 계산 시 출퇴근 기록(REC)의 annual/halfAnnual은 절대 무시 금지.
+// 어떤 override가 있어도 countUsedLeave() 결과는 반드시 합산되어야 함.
+// 수동값 단독 반환(used = ov.used)은 영구 금지 — 2026-05-12 재발 방지 결정.
 function calcLeaveByFiscal(emp, year) {
   const r2 = v => Math.round(v * 10) / 10;
   // Override: 엑셀 기반 {baselineTotal, baselineRemain, untilMonth}
-  // OR 수동 사용 override {used} — 엑셀 미업로드 시 사용자가 직접 입력한 사용일수
+  // OR 수동 사용 override {used} — 엑셀 미업로드 시 사용자가 직접 입력한 사용일수(베이스라인)
   const ov = (leaveOverrides[emp.id] && leaveOverrides[emp.id][year]) || null;
   const hasBaseline = ov && ov.baselineTotal !== undefined && ov.untilMonth;
 
@@ -6943,7 +10035,7 @@ function calcLeaveByFiscal(emp, year) {
     return { total: 0, accrued: 0, used: r2(u), remain: r2(0 - u), monthly: [] };
   }
 
-  const joinDate = new Date(emp.join);
+  const joinDate = parseEmpDate(emp.join);
   const joinY = joinDate.getFullYear();
   const joinM = joinDate.getMonth(); // 0-indexed
 
@@ -6951,7 +10043,7 @@ function calcLeaveByFiscal(emp, year) {
   const today = new Date();
 
   if (emp.leave) {
-    const leaveDate = new Date(emp.leave);
+    const leaveDate = parseEmpDate(emp.leave);
     if (leaveDate < yearStart) {
       const u = (ov && ov.used !== undefined && ov.used !== null) ? ov.used : 0;
       return { total: 0, accrued: 0, used: r2(u), remain: r2(0 - u), monthly: [] };
@@ -6974,7 +10066,7 @@ function calcLeaveByFiscal(emp, year) {
         monthly.push({ month: m + 1, count: 0, date: null });
         continue;
       }
-      const cutoff = emp.leave ? new Date(emp.leave) : today;
+      const cutoff = emp.leave ? parseEmpDate(emp.leave) : today;
       let earned = 0;
       if (accrueDate <= cutoff) {
         // accrueDate 전 calendar 월 = 만근 체크 대상월 (1-indexed)
@@ -7024,16 +10116,19 @@ function calcLeaveByFiscal(emp, year) {
       return sum + mv.count;
     }, 0);
     const tTotal = ov.baselineTotal + postAccrued;
-    // 수동 used가 있으면 우선. 없으면 엑셀 사용분(baselineTotal-baselineRemain) + 이후 REC 사용분.
+    // 수동 used가 있으면 베이스라인으로 사용 + 엑셀 기준월 이후 REC 누적
+    // 없으면 엑셀 사용분(baselineTotal-baselineRemain) + 이후 REC 사용분
+    const postRec = countUsedLeave(emp.id, year, ov.untilMonth + 1);
     const tUsed = (ov.used !== undefined && ov.used !== null)
-      ? ov.used
-      : (ov.baselineTotal - ov.baselineRemain) + countUsedLeave(emp.id, year, ov.untilMonth + 1);
+      ? ov.used + postRec
+      : (ov.baselineTotal - ov.baselineRemain) + postRec;
     const tRemain = tTotal - tUsed;
     return { total: r2(tTotal), accrued: r2(tTotal), used: r2(tUsed), remain: r2(tRemain), monthly };
   }
   // 2) 수동 used override (Excel 없이 사용자가 직접 수정한 값)
+  //    수동값은 베이스라인으로 사용 + 출퇴근 기록의 연차/반차 누적
   if (ov && ov.used !== undefined && ov.used !== null) {
-    const used = ov.used;
+    const used = ov.used + countUsedLeave(emp.id, year, 1);
     return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(total - used), monthly };
   }
   // 3) 자동계산 (override 없음)
@@ -7045,6 +10140,7 @@ function calcLeaveByFiscal(emp, year) {
 // 입사 첫해: 입사 다음달부터 매월 1개씩 (최대 11개)
 // 1년차(입사기념일): 15일 일괄 발생
 // 2년차 이후: 15개 + 2년마다 1개 추가 (최대 25개), 입사기념일에 일괄 발생
+// [INVARIANT] calcLeaveByFiscal과 동일 — 사용연차에서 REC 무시 금지.
 function calcLeaveByJoinDate(emp, year) {
   const r2 = v => Math.round(v * 10) / 10;
   const ov = (leaveOverrides[emp.id] && leaveOverrides[emp.id][year]) || null;
@@ -7055,7 +10151,7 @@ function calcLeaveByJoinDate(emp, year) {
     return { total: 0, accrued: 0, used: r2(u), remain: r2(0 - u), monthly: [] };
   }
 
-  const joinDate = new Date(emp.join);
+  const joinDate = parseEmpDate(emp.join);
   const joinY = joinDate.getFullYear();
   const joinM = joinDate.getMonth(); // 0-indexed
   const joinD = joinDate.getDate();
@@ -7064,7 +10160,7 @@ function calcLeaveByJoinDate(emp, year) {
   const today = new Date();
 
   if (emp.leave) {
-    const leaveDate = new Date(emp.leave);
+    const leaveDate = parseEmpDate(emp.leave);
     if (leaveDate < yearStart) {
       const u = (ov && ov.used !== undefined && ov.used !== null) ? ov.used : 0;
       return { total: 0, accrued: 0, used: r2(u), remain: r2(0 - u), monthly: [] };
@@ -7086,7 +10182,7 @@ function calcLeaveByJoinDate(emp, year) {
         monthly.push({ month: m + 1, count: 0, date: null });
         continue;
       }
-      const cutoff = emp.leave ? new Date(emp.leave) : today;
+      const cutoff = emp.leave ? parseEmpDate(emp.leave) : today;
       let earned = 0;
       if (accrueDate <= cutoff) {
         const workMonth = accrueDate.getMonth(); // 1-indexed prev calendar month
@@ -7125,15 +10221,17 @@ function calcLeaveByJoinDate(emp, year) {
       return sum + mv.count;
     }, 0);
     const tTotal = ov.baselineTotal + postAccrued;
+    // 수동 used = 베이스라인 + 엑셀 기준월 이후 REC 누적
+    const postRec = countUsedLeave(emp.id, year, ov.untilMonth + 1);
     const tUsed = (ov.used !== undefined && ov.used !== null)
-      ? ov.used
-      : (ov.baselineTotal - ov.baselineRemain) + countUsedLeave(emp.id, year, ov.untilMonth + 1);
+      ? ov.used + postRec
+      : (ov.baselineTotal - ov.baselineRemain) + postRec;
     const tRemain = tTotal - tUsed;
     return { total: r2(tTotal), accrued: r2(tTotal), used: r2(tUsed), remain: r2(tRemain), monthly };
   }
-  // 2) 수동 used override
+  // 2) 수동 used override — 수동값은 베이스라인, REC가 그 위에 누적
   if (ov && ov.used !== undefined && ov.used !== null) {
-    const used = ov.used;
+    const used = ov.used + countUsedLeave(emp.id, year, 1);
     return { total: r2(total), accrued: r2(total), used: r2(used), remain: r2(total - used), monthly };
   }
   // 3) 자동계산
@@ -7256,7 +10354,7 @@ function renderLeave() {
       (_ov.used !== undefined && _ov.used !== null)
     );
 
-    return `<tr style="border-bottom:1px solid var(--bd);${emp.leave ? 'opacity:.55;background:var(--rose-dim)' : ''}">
+    return `<tr id="leave-row-${emp.id}" style="border-bottom:1px solid var(--bd);${emp.leave ? 'opacity:.55;background:var(--rose-dim)' : ''}">
       <td style="padding:10px 14px;font-size:12px;font-weight:700">
         <div style="display:flex;align-items:center;gap:6px">
           <div class="av" style="width:26px;height:26px;font-size:11px;background:${safeColor(emp.color,'#DBEAFE')};color:${safeColor(emp.tc,'#1E3A5F')}">${esc(emp.name)[0]}</div>
@@ -7265,8 +10363,18 @@ function renderLeave() {
       </td>
       <td style="padding:10px 8px;font-size:11px;text-align:center;color:var(--ink3)">${emp.join||'-'}</td>
       <td style="padding:10px 8px;text-align:center">
-        <span style="font-size:15px;font-weight:700;color:var(--navy)">${lv.total}</span>
-        <span style="font-size:9px;color:var(--ink3)">개</span>
+        <div style="display:flex;align-items:center;gap:2px;justify-content:center">
+          <input type="number"
+            value="${leaveOverrides[emp.id]&&leaveOverrides[emp.id][leaveYear]&&leaveOverrides[emp.id][leaveYear].manualTotal!==undefined?leaveOverrides[emp.id][leaveYear].manualTotal:''}"
+            placeholder="${lv.total}" min="0" max="50" step="0.5"
+            style="width:50px;padding:3px;font-size:13px;border:1px solid var(--bd2);border-radius:5px;text-align:center;font-weight:700;color:var(--navy)"
+            onchange="overrideLeaveTotal(${emp.id},${leaveYear},this.value===''?null:+this.value)"
+            title="비워두면 자동계산. 직접 입력 시 해당값을 총연차로 사용">
+          ${leaveOverrides[emp.id]&&leaveOverrides[emp.id][leaveYear]&&leaveOverrides[emp.id][leaveYear].manualTotal!==undefined
+            ?`<button onclick="overrideLeaveTotal(${emp.id},${leaveYear},null)" style="width:14px;height:14px;border-radius:50%;background:var(--rose);color:#fff;border:none;cursor:pointer;font-size:9px;line-height:14px;text-align:center" title="자동계산으로 복귀">×</button>`
+            :''}
+          <span style="font-size:9px;color:var(--ink3)">개</span>
+        </div>
       </td>
       <td style="padding:10px 8px;text-align:center;background:var(--gbg)">
         <span style="font-size:15px;font-weight:700;color:var(--green)">${lv.used}</span>
@@ -7335,15 +10443,6 @@ function setLeaveType(empId, type) {
   renderLeave();
 }
 
-function overrideLeaveTotal(empId, year, val) {
-  if (!leaveOverrides[empId]) leaveOverrides[empId] = {};
-  if (!leaveOverrides[empId][year]) leaveOverrides[empId][year] = {};
-  leaveOverrides[empId][year].total = val;
-  localStorage.setItem('npm5_leave_overrides', JSON.stringify(leaveOverrides));
-  saveLS(); // Supabase DB 동기화
-  renderLeave();
-}
-
 function overrideLeaveUsed(empId, year, val) {
   if (!leaveOverrides[empId]) leaveOverrides[empId] = {};
   if (!leaveOverrides[empId][year]) leaveOverrides[empId][year] = {};
@@ -7360,6 +10459,24 @@ function overrideLeaveUsed(empId, year, val) {
   }
   localStorage.setItem('npm5_leave_overrides', JSON.stringify(leaveOverrides));
   saveLS(); // Supabase DB 동기화
+  renderLeave();
+}
+
+// 🎯 총연차 수동 override. null이면 제거 → 자동 계산값 복귀.
+function overrideLeaveTotal(empId, year, val) {
+  if (!leaveOverrides[empId]) leaveOverrides[empId] = {};
+  if (!leaveOverrides[empId][year]) leaveOverrides[empId][year] = {};
+  if (val === null) {
+    delete leaveOverrides[empId][year].manualTotal;
+    if (Object.keys(leaveOverrides[empId][year]).length === 0) {
+      delete leaveOverrides[empId][year];
+      if (Object.keys(leaveOverrides[empId]).length === 0) delete leaveOverrides[empId];
+    }
+  } else {
+    leaveOverrides[empId][year].manualTotal = val;
+  }
+  localStorage.setItem('npm5_leave_overrides', JSON.stringify(leaveOverrides));
+  saveLS();
   renderLeave();
 }
 
@@ -7417,10 +10534,11 @@ function _excelDateToISO(serial){
   return d.toISOString().slice(0,10);
 }
 
-function leaveUploadParseSheet(){
+function leaveUploadParseSheet(event){
   if(!_leaveUploadWB)return;
   const sels=_luEl('leave-upload-sheet');
-  const sheetName=sels.length?sels[0].value:'';
+  // 사용자가 실제로 변경한 select 우선 (중복 ID로 인한 동기화 역전 버그 방지)
+  const sheetName = (event && event.target && event.target.value) || (sels.length?sels[0].value:'');
   // 양쪽 셀렉트 동기화
   sels.forEach(s=>{if(s.value!==sheetName)s.value=sheetName;});
   const ws=_leaveUploadWB.Sheets[sheetName];
@@ -7598,38 +10716,79 @@ function leaveUploadCancel(){
   _leaveUploadWB=null;_leaveUploadMatches=[];
 }
 
+// 🎯 인라인 토글: 클릭한 직원 행 바로 아래에 상세 펼침. 같은 직원 재클릭 시 접힘.
 function toggleLeaveDetail(empId) {
   const emp = EMPS.find(e => e.id === empId);
   if (!emp) return;
-  const panel = document.getElementById('leave-monthly-detail');
-  const grid = document.getElementById('leave-monthly-grid');
-  const title = document.getElementById('leave-detail-title');
-  panel.style.display = 'block';
-  title.textContent = `${emp.name} — ${leaveYear}년 월별 연차 현황`;
-
-  const lv = calcLeaveForYear(emp, leaveYear);
-  const months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-
-  grid.innerHTML = `<div style="display:grid;grid-template-columns:repeat(12,1fr);gap:6px">
-    ${lv.monthly.map((mv, i) => {
-      // 해당 월 사용 연차 수
-      const usedM = countUsedLeaveMonth(empId, leaveYear, i+1);
-      return `<div style="background:${mv.count?'#EFF6FF':'var(--surf)'};border:1px solid ${mv.count?'#BFDBFE':'var(--bd)'};border-radius:8px;padding:7px;text-align:center">
-        <div style="font-size:10px;font-weight:700;color:var(--ink3)">${months[i]}</div>
-        <div style="font-size:14px;font-weight:700;color:${mv.count?'var(--navy2)':'var(--ink3)'};margin:3px 0">${mv.count||0}</div>
-        <div style="font-size:8px;color:var(--ink3)">적립</div>
-        ${usedM > 0 ? `<div style="font-size:11px;font-weight:700;color:var(--rose);margin-top:2px">-${usedM}</div><div style="font-size:8px;color:var(--rose)">사용</div>` : ''}
-      </div>`;
-    }).join('')}
-  </div>
-  <div style="margin-top:8px;display:flex;gap:16px;font-size:11px;color:var(--ink2)">
-    <span>총 연차: <strong>${lv.total}개</strong></span>
-    <span>사용: <strong style="color:var(--rose)">${lv.used}일</strong></span>
-    <span>잔여: <strong style="color:var(--navy2)">${lv.remain}일</strong></span>
-    <span>연차수당(1일): <strong style="color:var(--purple)">${Math.round(getLeavePayAmount(emp,leaveYear)).toLocaleString()}원</strong></span>
-  </div>`;
+  const detailId = `leave-detail-${empId}`;
+  const existing = document.getElementById(detailId);
+  if(existing){ existing.remove(); return; }
+  const row = document.getElementById(`leave-row-${empId}`);
+  if(!row) return;
+  // 컬럼 수 자동 산정 (현재 행의 td 개수)
+  const colspan = row.querySelectorAll('td').length || 11;
+  const tr = document.createElement('tr');
+  tr.id = detailId;
+  tr.style.background = 'linear-gradient(180deg,#F8FAFC 0%,#F1F5F9 100%)';
+  const td = document.createElement('td');
+  td.colSpan = colspan;
+  td.style.padding = '12px 16px';
+  td.style.borderBottom = '1px solid var(--bd)';
+  td.innerHTML = _renderLeaveDetail(emp);
+  tr.appendChild(td);
+  row.parentNode.insertBefore(tr, row.nextSibling);
 }
 
+// 상세 패널 HTML 빌더 — 1~12월 그리드 + 정확한 사용 일자 + 하단 요약
+function _renderLeaveDetail(emp) {
+  const lv = calcLeaveForYear(emp, leaveYear);
+  const months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  return `
+    <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px">
+      ${esc(emp.name)} — ${leaveYear}년 월별 연차 현황
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:6px">
+      ${lv.monthly.map((mv, i) => {
+        const dates = getUsedLeaveDates(emp.id, leaveYear, i+1);
+        const fullDates = dates.filter(x => x.type === 'full').map(x => x.day);
+        const halfDates = dates.filter(x => x.type === 'half').map(x => x.day);
+        const usedM = fullDates.length + halfDates.length * 0.5;
+        const hasUse = dates.length > 0;
+        return `<div style="background:${mv.count?'#EFF6FF':hasUse?'#FFF1F2':'var(--surf)'};border:1px solid ${mv.count?'#BFDBFE':hasUse?'#FECACA':'var(--bd)'};border-radius:8px;padding:7px;text-align:center;min-height:70px">
+          <div style="font-size:10px;font-weight:700;color:var(--ink3)">${months[i]}</div>
+          <div style="font-size:14px;font-weight:700;color:${mv.count?'var(--navy2)':'var(--ink3)'};margin:3px 0">${mv.count||0}</div>
+          <div style="font-size:8px;color:var(--ink3)">적립</div>
+          ${hasUse ? `
+            <div style="font-size:11px;font-weight:700;color:var(--rose);margin-top:3px">-${usedM}</div>
+            <div style="font-size:8px;color:var(--rose);margin-bottom:2px">사용</div>
+            <div style="font-size:9px;color:var(--rose);line-height:1.3;font-weight:600">
+              ${fullDates.map(d => `${i+1}/${d}`).join(', ')}${fullDates.length && halfDates.length ? ', ' : ''}${halfDates.map(d => `${i+1}/${d}<span style="font-size:7px;color:#9333EA">(반)</span>`).join(', ')}
+            </div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="margin-top:10px;display:flex;gap:16px;font-size:11px;color:var(--ink2);flex-wrap:wrap">
+      <span>총 연차: <strong>${lv.total}개</strong></span>
+      <span>사용: <strong style="color:var(--rose)">${lv.used}일</strong></span>
+      <span>잔여: <strong style="color:var(--navy2)">${lv.remain}일</strong></span>
+      <span>연차수당(1일): <strong style="color:var(--purple)">${Math.round(getLeavePayAmount(emp,leaveYear)).toLocaleString()}원</strong></span>
+    </div>`;
+}
+
+// 해당 월의 연차 사용 일자 반환: [{day, type:'full'|'half'}]
+function getUsedLeaveDates(empId, year, month) {
+  const out = [];
+  const days = dim(year, month);
+  for (let d = 1; d <= days; d++) {
+    const rec = REC[rk(empId, year, month, d)];
+    if (!rec) continue;
+    if (rec.annual) out.push({day: d, type: 'full'});
+    else if (rec.halfAnnual) out.push({day: d, type: 'half'});
+  }
+  return out;
+}
+
+// 기존 함수 호환 유지 (다른 곳에서 호출될 수 있음)
 function countUsedLeaveMonth(empId, year, month) {
   let used = 0;
   const days = dim(year, month);
@@ -7833,15 +10992,15 @@ function exportMonthlyExcel(){
   // ── 시트1: 전체 현황표 ──
   {
     const ws = {}; let R=0;
-    const colCount = days+10;
+    const colCount = days+6;
 
     // 타이틀 블록
-    R = xlsTitleBlock(ws, `📊 ${monthStr} 근태 전체 현황`, `출력일: ${new Date().toLocaleDateString('ko-KR')} · 총 ${(()=>{return EMPS.filter(e=>{if(mvFilter!=='all'&&(e.payMode||'fixed')!==mvFilter)return false;if(MF.shift!=='all'&&(e.shift||'day')!==MF.shift)return false;const isFor=e.nation==='foreign'||e.foreigner===true;if(MF.nation==='korean'&&isFor)return false;if(MF.nation==='foreign'&&!isFor)return false;if(MF.dept!=='all'&&(e.dept||'').trim()!==MF.dept)return false;return !e.leave;}).length})()}명`, colCount, R);
+    R = xlsTitleBlock(ws, `📊 ${monthStr} 근태 전체 현황`, `출력일: ${new Date().toLocaleDateString('ko-KR')} · 총 ${(()=>{return EMPS.filter(e=>{if(mvFilter!=='all'&&(e.payMode||'fixed')!==mvFilter)return false;if(MF.shift!=='all'&&(e.shift||'day')!==MF.shift)return false;const isFor=e.nation==='foreign'||e.foreigner===true;if(MF.nation==='korean'&&isFor)return false;if(MF.nation==='foreign'&&!isFor)return false;if(MF.dept!=='all'&&(e.dept||'').trim()!==MF.dept)return false;if(MF.deptCat!=='all'){const ec=(e.deptCat||'').trim();if(MF.deptCat==='none'){if(ec)return false;}else if(ec!==MF.deptCat)return false;}return !e.leave;}).length})()}명`, colCount, R);
     ws['!rows'] = [{hpt:28},{hpt:16}];
 
-    // 헤더행
+    // 헤더행 (사용자 요청: 근무일/연차/실근무/월급여 컬럼 제외)
     const fixedHdrs = ['직원','직종/직급'];
-    const tailHdrs = ['출근','결근','연차','총h','야간h','연장h','급여'];
+    const tailHdrs = ['결근','야간h','연장h'];
     const allHdrs = [...fixedHdrs, ...Array.from({length:days},(_,i)=>`${i+1}`), ...tailHdrs];
 
     // 헤더 스타일
@@ -7857,7 +11016,7 @@ function exportMonthlyExcel(){
       const label=`${d}\n${dowKo[dow]}`;
       xlsWrite(ws, XLSX.utils.encode_cell({r:R,c:ci}), label, S.mainHdr(bg,'FFFFFF','center'));
     }
-    const tailBgs=[C.teal,C.rose,'2E7D32','1565C0',C.purple2,'4527A0','0F2952'];
+    const tailBgs=[C.rose,C.purple2,'4527A0'];
     tailHdrs.forEach((h,i)=>{
       xlsWrite(ws, XLSX.utils.encode_cell({r:R,c:days+2+i}), h, S.mainHdr(tailBgs[i],'FFFFFF','center'));
     });
@@ -7866,14 +11025,15 @@ function exportMonthlyExcel(){
 
     // 데이터
     const emps = EMPS.filter(e=>{
-      if(!e.join||new Date(e.join)>new Date(vY,vM,0)) return false;
-      if(e.leave&&new Date(e.leave)<new Date(vY,vM-1,1)) return false;
+      if(!e.join||parseEmpDate(e.join)>new Date(vY,vM,0)) return false;
+      if(e.leave&&parseEmpDate(e.leave)<new Date(vY,vM-1,1)) return false;
       if(mvFilter!=='all'){const ep=e.payMode||'fixed';if(mvFilter==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}else{if(ep!==mvFilter)return false;}}
       if(MF.shift!=='all'&&(e.shift||'day')!==MF.shift) return false;
       const isFor=e.nation==='foreign'||e.foreigner===true;
       if(MF.nation==='korean'&&isFor) return false;
       if(MF.nation==='foreign'&&!isFor) return false;
       if(MF.dept!=='all'&&(e.dept||'').trim()!==MF.dept) return false;
+      if(MF.deptCat!=='all'){const ec=(e.deptCat||'').trim();if(MF.deptCat==='none'){if(ec)return false;}else if(ec!==MF.deptCat)return false;}
       return true;
     });
 
@@ -7883,17 +11043,19 @@ function exportMonthlyExcel(){
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),emp.name,S.cell(C.navy,bg,true,'center'));
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),`${emp.role}${emp.grade?'/'+emp.grade:''}`,S.cell(C.gray,bg,false,'center'));
 
-      const empLeaveDate = emp.leave ? new Date(emp.leave) : null;
+      const empLeaveDate = emp.leave ? parseEmpDate(emp.leave) : null;
       for(let d=1;d<=days;d++){
         const dow=new Date(vY,vM-1,d).getDay();
         const isWe=[0,6].includes(dow);
-        const autoH=isAutoHol(vY,vM,d);
-        // 퇴사일 이후 날짜는 빈 셀
-        if(empLeaveDate && empLeaveDate<=new Date(vY,vM-1,d)){
+        // 퇴사일 이후 날짜는 빈 셀 (퇴사일 당일은 정상 집계)
+        if(empLeaveDate && empLeaveDate<new Date(vY,vM-1,d)){
           xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:d+1}),'',S.cell(C.gray,'F5F5F5',false,'center'));
           continue;
         }
         const rec=REC[rk(emp.id,vY,vM,d)];
+        // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제
+        // emp 전달: 야간근무자(POL.nightWeekend)와 주간근무자(POL.dayWeekend) 휴일 기준 분리 적용
+        const autoH=(isAutoHol(vY,vM,d,emp) && !(rec&&rec.subWork))||(rec&&rec.subHol);
         let val='', cellBg=bg, fg=C.gray;
         if(autoH||isWe) cellBg=ei%2===0?'FFEBEE':'FFCDD2';
         if(rec){
@@ -7901,7 +11063,7 @@ function exportMonthlyExcel(){
           else if(rec.annual){val='연차';cellBg='C8E6C9';fg=C.green;}
           else if(rec.halfAnnual){val='반차';cellBg='B3E5FC';fg='01579B';}
           else if(rec.start&&rec.end){
-            const _s1Bks=getActiveBk(vY,vM,d);
+            const _s1Bks=getActiveBk(vY,vM,d,emp);
             const _s1ActiveBks = rec.customBk ? (rec.customBkList||[]) : _s1Bks;
             const c2=calcSession(rec.start,rec.end,getEmpRate(emp),autoH,_s1ActiveBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM));
             // m2h가 이미 2자리 반올림 처리. toFixed로 추가 절삭하지 않음 → UI(6.83) ≡ 엑셀(6.83)
@@ -7913,29 +11075,30 @@ function exportMonthlyExcel(){
           isNum?S.numDec(val>=8?C.green:val>0?C.navy:C.gray,cellBg):S.accent(fg,cellBg,true));
       }
 
-      // 집계
-      const totalPay=Math.round(monthSummary(emp.id,vY,vM).tBase);
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+2}),s.wdays,S.num(C.green,ei%2===0?C.green4:'E8F5E9',true));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+3}),s.adays,S.num(s.adays>0?C.rose:C.gray,s.adays>0?(ei%2===0?C.rose4:'FFEBEE'):bg,s.adays>0));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+4}),+s.aldays.toFixed(1),S.numDec(C.orange2,ei%2===0?C.orange4:'FFF3E0'));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+5}),+s.twkH.toFixed(2),S.numDec(C.navy,bg,true));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+6}),+(s.tNightH||0).toFixed(2),S.numDec(C.purple2,ei%2===0?C.purple4:'F3E5F5'));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+7}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),S.numDec(C.blue,ei%2===0?C.blue4:'E3F2FD'));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+8}),totalPay,S.num('FFFFFF','0F2952',true));
+      // 집계 (사용자 요청: 근무일·연차·실근무·월급여 제외)
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+2}),s.adays,S.num(s.adays>0?C.rose:C.gray,s.adays>0?(ei%2===0?C.rose4:'FFEBEE'):bg,s.adays>0));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+3}),+(s.tNightH||0).toFixed(2),S.numDec(C.purple2,ei%2===0?C.purple4:'F3E5F5'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:days+4}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),S.numDec(C.blue,ei%2===0?C.blue4:'E3F2FD'));
       ws['!rows'].push({hpt:20});
       R++;
     });
 
-    ws['!cols']=[{wch:10},{wch:10},...Array(days).fill({wch:5.5}),...[{wch:6},{wch:6},{wch:6},{wch:7},{wch:7},{wch:7},{wch:11}]];
-    xlsRange(ws,0,0,R-1,days+8);
+    ws['!cols']=[{wch:10},{wch:10},...Array(days).fill({wch:5.5}),...[{wch:6},{wch:7},{wch:7}]];
+    xlsRange(ws,0,0,R-1,days+4);
     XLSX.utils.book_append_sheet(wb,ws,`전체현황`);
   }
 
-  // ── 시트2~N: 직원별 캘린더 ──
+  // ── 시트2~N: 직원별 캘린더 (전체현황표 시트와 동일한 필터 적용) ──
   const calEmps=EMPS.filter(e=>{
-    if(!e.join||new Date(e.join)>new Date(vY,vM,0)) return false;
-    if(e.leave&&new Date(e.leave)<new Date(vY,vM-1,1)) return false;
+    if(!e.join||parseEmpDate(e.join)>new Date(vY,vM,0)) return false;
+    if(e.leave&&parseEmpDate(e.leave)<new Date(vY,vM-1,1)) return false;
     if(mvFilter!=='all'){const ep=e.payMode||'fixed';if(mvFilter==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}else{if(ep!==mvFilter)return false;}}
+    if(MF.shift!=='all'&&(e.shift||'day')!==MF.shift) return false;
+    const isFor=e.nation==='foreign'||e.foreigner===true;
+    if(MF.nation==='korean'&&isFor) return false;
+    if(MF.nation==='foreign'&&!isFor) return false;
+    if(MF.dept!=='all'&&(e.dept||'').trim()!==MF.dept) return false;
+    if(MF.deptCat!=='all'){const ec=(e.deptCat||'').trim();if(MF.deptCat==='none'){if(ec)return false;}else if(ec!==MF.deptCat)return false;}
     return true;
   });
 
@@ -7984,19 +11147,23 @@ function exportMonthlyExcel(){
     R++;
     R++; // 공백행
 
-    // 테이블 헤더 (휴게(h) 칼럼 신설)
-    const tHdrs=['날짜','요일','출근','퇴근','휴게(h)','실근무(h)','야간(h)','연장(h)','휴일(h)','연차/결근','비고'];
-    const tBgs=[C.navy,C.navy,C.navy2,C.navy2,'2D6A4F',C.teal2,C.purple2,C.blue,C.orange2,'2E7D32',C.gray];
+    // 테이블 헤더 (실근무 옆에 공제(h) 칼럼 추가 → 12열)
+    const tHdrs=['날짜','요일','출근','퇴근','휴게(h)','실근무(h)','공제(h)','야간(h)','연장(h)','휴일(h)','연차/결근','비고'];
+    const tBgs=[C.navy,C.navy,C.navy2,C.navy2,'2D6A4F',C.teal2,C.rose,C.purple2,C.blue,C.orange2,'2E7D32',C.gray];
     tHdrs.forEach((h,ci)=>{
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),h,S.mainHdr(tBgs[ci],'FFFFFF','center'));
     });
     ws['!rows'].push({hpt:8},{hpt:26});
     R++;
 
-    const empLeaveDate2 = emp.leave ? new Date(emp.leave) : null;
+    const empLeaveDate2 = emp.leave ? parseEmpDate(emp.leave) : null;
     let totalBk = 0;
+    let totalDedH = 0;  // 일별 표시값(둘째자리) 누적 → 합계와 정확히 일치
     for(let d=1;d<=days;d++){
-      const autoH=isAutoHol(vY,vM,d);
+      const _recForAutoH=REC[rk(emp.id,vY,vM,d)];
+      // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제 (배경색·요일색·계산 모두 일치)
+      // emp 전달: 야간근무자(POL.nightWeekend)와 주간근무자(POL.dayWeekend) 휴일 기준 분리 적용
+      const autoH=(isAutoHol(vY,vM,d,emp) && !(_recForAutoH&&_recForAutoH.subWork))||(_recForAutoH&&_recForAutoH.subHol);
       const dow=new Date(vY,vM-1,d).getDay();
       const isSun=dow===0; const isSat=dow===6;
       const phName=getPhName&&getPhName(vY,vM,d)||'';
@@ -8012,42 +11179,57 @@ function exportMonthlyExcel(){
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),dateStr,S.cell(C.navy,rowBg,false,'center'));
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),phName||dowLabel,S.cell(autoH?C.rose:dowColor,rowBg,autoH||isSun||isSat,'center'));
 
-      // 퇴사일 이후 날짜는 빈 행 (REC 무시)
-      if(empLeaveDate2 && empLeaveDate2<=new Date(vY,vM-1,d)){
-        [2,3,4,5,6,7,8,9,10].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty('F5F5F5')));
+      // 퇴사일 이후 날짜는 빈 행 (REC 무시, 퇴사일 당일은 정상 집계)
+      if(empLeaveDate2 && empLeaveDate2<new Date(vY,vM-1,d)){
+        [2,3,4,5,6,7,8,9,10,11].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty('F5F5F5')));
         ws['!rows'].push({hpt:18});
         R++;
         continue;
       }
 
-      const rec=REC[rk(emp.id,vY,vM,d)];
+      const rec=_recForAutoH;
       if(rec){
-        const bks=getActiveBk(vY,vM,d);
-        const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
-        const c2=rec.start&&rec.end?calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],getEmpPayMode(emp),getOrdinaryRate(emp,vY,vM)):null;
-        const note=rec.absent?'결근':rec.annual?'연차':rec.halfAnnual?'반차':'';
-        const noteBg=rec.absent?C.rose3:rec.annual?C.green3:rec.halfAnnual?C.blue3:rowBg;
-        const noteFg=rec.absent?C.rose:rec.annual?C.green:rec.halfAnnual?C.blue:C.gray;
-        const bkH = c2 && c2.bkMins ? +m2h(c2.bkMins).toFixed(2) : 0;
-        if(c2 && c2.bkMins) totalBk += c2.bkMins;
+        // 연차일: 시간 컬럼 모두 비우고 '연차' 표시만 (출퇴근 기록 무시)
+        if(rec.annual){
+          [2,3,4,5,6,7,8,9].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty(rowBg)));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),'연차',S.accent(C.green,C.green3,true));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
+        } else {
+          const bks=getActiveBk(vY,vM,d,emp);
+          const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
+          // 🎯 반차여도 실근무 8h 임계 유지 (반차 4h는 OT 임계에 영향 X) (화면과 동일)
+          const _xlPm = getEmpPayMode(emp);
+          const _xlHalfBaseM = 0;
+          const c2=rec.start&&rec.end?calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],_xlPm,getOrdinaryRate(emp,vY,vM),_xlHalfBaseM):null;
+          const note=rec.absent?'결근':rec.halfAnnual?'반차':'';
+          const noteBg=rec.absent?C.rose3:rec.halfAnnual?C.blue3:rowBg;
+          const noteFg=rec.absent?C.rose:rec.halfAnnual?C.blue:C.gray;
+          const bkH = c2 && c2.bkMins ? +m2h(c2.bkMins).toFixed(2) : 0;
+          if(c2 && c2.bkMins) totalBk += c2.bkMins;
+          // 일별 공제(h) — _nfDedMin과 동일 로직 (반차일은 4h 인정 차감)
+          const _dedMin = c2 ? _nfDedMin(c2, autoH, getEmpPayMode(emp), emp, !!rec.halfAnnual) : 0;
+          const _dedH = _dedMin > 0 ? +m2h(_dedMin).toFixed(2) : 0;
+          totalDedH += _dedH;  // 일별 표시값 그대로 누적 → 합계와 100% 일치
 
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),rec.start||'',S.cell(C.navy,rec.start?C.teal4:rowBg,!!rec.start,'center'));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),rec.end||'',S.cell(C.navy,rec.end?C.teal4:rowBg,!!rec.end,'center'));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),bkH,S.numDec('2D6A4F',bkH>0?'E8F5E9':rowBg,bkH>0));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),c2?+m2h(c2.work).toFixed(2):0,S.numDec(c2?.work>=480?C.green:C.navy,c2?.work>=480?C.green4:rowBg,c2?.work>=480));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),c2&&c2.nightM>0?+m2h(c2.nightM).toFixed(2):0,S.numDec(C.purple2,c2?.nightM>0?C.purple4:rowBg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),c2&&c2.ot>0?+m2h(c2.ot).toFixed(2):0,S.numDec(C.blue,c2?.ot>0?C.blue4:rowBg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),autoH&&c2?+m2h(c2.work).toFixed(2):0,S.numDec(C.orange2,autoH&&c2?C.orange4:rowBg));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),note,S.accent(noteFg,noteBg,!!note));
-        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),rec.start||'',S.cell(C.navy,rec.start?C.teal4:rowBg,!!rec.start,'center'));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),rec.end||'',S.cell(C.navy,rec.end?C.teal4:rowBg,!!rec.end,'center'));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),bkH,S.numDec('2D6A4F',bkH>0?'E8F5E9':rowBg,bkH>0));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),c2?+m2h(c2.work).toFixed(2):0,S.numDec(c2?.work>=480?C.green:C.navy,c2?.work>=480?C.green4:rowBg,c2?.work>=480));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),_dedH,S.numDec(C.rose, _dedH>0?C.rose3:rowBg, _dedH>0));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),c2&&c2.nightM>0?+m2h(c2.nightM).toFixed(2):0,S.numDec(C.purple2,c2?.nightM>0?C.purple4:rowBg));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),c2&&c2.ot>0?+m2h(c2.ot).toFixed(2):0,S.numDec(C.blue,c2?.ot>0?C.blue4:rowBg));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),autoH&&c2?+m2h(c2.work).toFixed(2):0,S.numDec(C.orange2,autoH&&c2?C.orange4:rowBg));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),note,S.accent(noteFg,noteBg,!!note));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
+        }
       } else {
-        [2,3,4,5,6,7,8,9,10].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty(rowBg)));
+        [2,3,4,5,6,7,8,9,10,11].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty(rowBg)));
       }
       ws['!rows'].push({hpt:18});
       R++;
     }
 
-    // 합계행 (휴게 칼럼 추가로 인한 인덱스 shift)
+    // 합계행 (공제 칼럼 추가로 인덱스 shift: 야간 6→7, 연장 7→8, 휴일 8→9, 연차 9→10, 비고 10→11)
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),'합 계',S.mainHdr(C.teal,'FFFFFF','center'));
     xlsMerge(ws,R,0,R,3);
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),'',S.mainHdr(C.teal));
@@ -8055,19 +11237,178 @@ function exportMonthlyExcel(){
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),'',S.mainHdr(C.teal));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),+m2h(totalBk).toFixed(2),XLS.S.total('FFFFFF','2D6A4F'));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),+s.twkH.toFixed(2),XLS.S.total('FFFFFF',C.teal));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),+(s.tNightH||0).toFixed(2),XLS.S.total('FFFFFF',C.purple));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),XLS.S.total('FFFFFF',C.blue));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),+((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0)).toFixed(2),XLS.S.total('FFFFFF',C.orange2));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),+s.aldays.toFixed(1),XLS.S.total('FFFFFF',C.green));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),'',S.mainHdr(C.gray));
+    // 공제 합계: 일별 표시값(둘째자리)의 정확한 합 → 화면 합과 100% 일치 (반올림 차이 제거)
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),totalDedH.toFixed(2),XLS.S.total('FFFFFF',C.rose));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),+(s.tNightH||0).toFixed(2),XLS.S.total('FFFFFF',C.purple));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),XLS.S.total('FFFFFF',C.blue));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),+((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0)).toFixed(2),XLS.S.total('FFFFFF',C.orange2));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),+s.aldays.toFixed(1),XLS.S.total('FFFFFF',C.green));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),'',S.mainHdr(C.gray));
     ws['!rows'].push({hpt:24});
 
-    ws['!cols']=[{wch:7},{wch:6},{wch:7},{wch:7},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},{wch:8},{wch:16}];
-    xlsRange(ws,0,0,R,10);
+    ws['!cols']=[{wch:7},{wch:6},{wch:7},{wch:7},{wch:8},{wch:10},{wch:9},{wch:8},{wch:8},{wch:8},{wch:8},{wch:16}];
+    xlsRange(ws,0,0,R,11);
     XLSX.utils.book_append_sheet(wb,ws,emp.name.slice(0,8));
   });
 
   XLSX.writeFile(wb,`월별현황_${monthStr}.xlsx`);
+}
+
+// ══════════════════════════════════════════════════════
+// 📄 개인별 월간 근태 엑셀 (선택된 직원 1명만)
+// ══════════════════════════════════════════════════════
+function exportMonthlyExcelOne(empId){
+  const emp = EMPS.find(e=>e.id===empId);
+  if(!emp){ alert('직원을 먼저 선택해주세요.'); return; }
+  const monthStart = new Date(vY, vM-1, 1);
+  const monthEnd = new Date(vY, vM, 0);
+  if(emp.join && parseEmpDate(emp.join) > monthEnd){ alert('해당 월에 재직 중이 아닌 직원입니다.'); return; }
+  if(emp.leave && parseEmpDate(emp.leave) < monthStart){ alert('해당 월 이전에 퇴사한 직원입니다.'); return; }
+
+  const wb = XLSX.utils.book_new();
+  const days = dim(vY, vM);
+  const dowKo = ['일','월','화','수','목','금','토'];
+  const monthStr = `${vY}년 ${vM}월`;
+  const C = XLS.C; const S = XLS.S;
+
+  const ws={}; let R=0;
+  const s=monthSummary(emp.id,vY,vM);
+
+  // 타이틀
+  xlsWrite(ws,XLSX.utils.encode_cell({r:0,c:0}),`${emp.name}`, {
+    font:{bold:true,sz:18,color:{rgb:C.navy},name:'맑은 고딕'},
+    fill:{fgColor:{rgb:'EFF6FF'}}, alignment:{horizontal:'left',vertical:'center'},
+  });
+  xlsMerge(ws,0,0,0,4);
+  xlsWrite(ws,XLSX.utils.encode_cell({r:1,c:0}),`${monthStr} 근태 현황  ·  ${emp.role||''}${emp.dept?' · '+emp.dept:''}  ·  입사 ${emp.join||''}${emp.leave?' · 퇴사 '+emp.leave:''}`, {
+    font:{sz:9,color:{rgb:C.gray2},name:'맑은 고딕'},
+    fill:{fgColor:{rgb:'EFF6FF'}}, alignment:{horizontal:'left',vertical:'center'},
+  });
+  xlsMerge(ws,1,0,1,10);
+  R=2;
+
+  // 요약 카드
+  const cards=[
+    ['출근일',s.wdays,'일',C.green,C.green4],
+    ['결근일',s.adays,'일',C.rose,C.rose4],
+    ['연차',+s.aldays.toFixed(1),'일',C.orange2,C.orange4],
+    ['총근무',+s.twkH.toFixed(2),'h',C.navy,C.blue4],
+    ['야간',+(s.tNightH||0).toFixed(2),'h',C.purple2,C.purple4],
+    ['연장',+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),'h',C.blue,C.blue3],
+  ];
+  cards.forEach((card,i)=>{
+    const col=i*2;
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:col}),card[0],{
+      font:{bold:true,sz:9,color:{rgb:card[3]},name:'맑은 고딕'},
+      fill:{fgColor:{rgb:card[4]}},alignment:{horizontal:'center',vertical:'center'},
+      border:XLS.B.thin(card[3]),
+    });
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:col+1}),`${card[1]}${card[2]}`,{
+      font:{bold:true,sz:12,color:{rgb:card[3]},name:'맑은 고딕'},
+      fill:{fgColor:{rgb:card[4]}},alignment:{horizontal:'center',vertical:'center'},
+      border:XLS.B.thin(card[3]),
+    });
+    xlsMerge(ws,R,col,R,col+1);
+  });
+  ws['!rows']=[{hpt:28},{hpt:16},{hpt:28}];
+  R++; R++;
+
+  // 테이블 헤더 (실근무 옆에 공제(h) 칼럼 추가 → 12열)
+  const tHdrs=['날짜','요일','출근','퇴근','휴게(h)','실근무(h)','공제(h)','야간(h)','연장(h)','휴일(h)','연차/결근','비고'];
+  const tBgs=[C.navy,C.navy,C.navy2,C.navy2,'2D6A4F',C.teal2,C.rose,C.purple2,C.blue,C.orange2,'2E7D32',C.gray];
+  tHdrs.forEach((h,ci)=>{
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),h,S.mainHdr(tBgs[ci],'FFFFFF','center'));
+  });
+  ws['!rows'].push({hpt:8},{hpt:26});
+  R++;
+
+  const empLeaveDate = emp.leave ? parseEmpDate(emp.leave) : null;
+  let totalBk = 0;
+  let totalDedH = 0;  // 일별 표시값(둘째자리) 누적 → 합계와 정확히 일치
+  for(let d=1;d<=days;d++){
+    const _recForAutoH2=REC[rk(emp.id,vY,vM,d)];
+    // 대체근무 체크 시 휴일성 무력화 / 대체공휴일은 평일을 휴일로 강제
+    // emp 전달: 야간근무자(POL.nightWeekend)와 주간근무자(POL.dayWeekend) 휴일 기준 분리 적용
+    const autoH=(isAutoHol(vY,vM,d,emp) && !(_recForAutoH2&&_recForAutoH2.subWork))||(_recForAutoH2&&_recForAutoH2.subHol);
+    const dow=new Date(vY,vM-1,d).getDay();
+    const isSun=dow===0, isSat=dow===6;
+    const phName=getPhName&&getPhName(vY,vM,d)||'';
+    let rowBg=xlsRowBg(d-1);
+    if(autoH||isSun) rowBg='FFEBEE';
+    else if(isSat) rowBg='EFF6FF';
+    const dateStr=`${vM}/${d}`;
+    const dowLabel=dowKo[dow];
+    const dowColor=isSun?C.rose:isSat?C.blue:C.navy;
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),dateStr,S.cell(C.navy,rowBg,false,'center'));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),phName||dowLabel,S.cell(autoH?C.rose:dowColor,rowBg,autoH||isSun||isSat,'center'));
+    if(empLeaveDate && empLeaveDate<new Date(vY,vM-1,d)){
+      [2,3,4,5,6,7,8,9,10,11].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty('F5F5F5')));
+      ws['!rows'].push({hpt:18}); R++; continue;
+    }
+    const rec=_recForAutoH2;
+    if(rec){
+      // 연차일: 시간 컬럼 모두 비우고 '연차' 표시만
+      if(rec.annual){
+        [2,3,4,5,6,7,8,9].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty(rowBg)));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),'연차',S.accent(C.green,C.green3,true));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
+      } else {
+        const bks=getActiveBk(vY,vM,d,emp);
+        const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
+        // 🎯 반차여도 실근무 8h 임계 유지 (반차 4h는 OT 임계에 영향 X) (화면과 동일)
+        const _xlPm2 = getEmpPayMode(emp);
+        const _xlHalfBaseM2 = 0;
+        const c2=rec.start&&rec.end?calcSession(rec.start,rec.end,getEmpRate(emp),autoH,activeBks,rec.outTimes||[],_xlPm2,getOrdinaryRate(emp,vY,vM),_xlHalfBaseM2):null;
+        const note=rec.absent?'결근':rec.halfAnnual?'반차':'';
+        const noteBg=rec.absent?C.rose3:rec.halfAnnual?C.blue3:rowBg;
+        const noteFg=rec.absent?C.rose:rec.halfAnnual?C.blue:C.gray;
+        const bkH = c2 && c2.bkMins ? +m2h(c2.bkMins).toFixed(2) : 0;
+        if(c2 && c2.bkMins) totalBk += c2.bkMins;
+        // 일별 공제(h) — _nfDedMin과 동일 로직 (반차일은 4h 인정 차감)
+        const _dedMin = c2 ? _nfDedMin(c2, autoH, getEmpPayMode(emp), emp, !!rec.halfAnnual) : 0;
+        const _dedH = _dedMin > 0 ? +m2h(_dedMin).toFixed(2) : 0;
+        totalDedH += _dedH;  // 일별 표시값 그대로 누적 → 합계와 100% 일치
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),rec.start||'',S.cell(C.navy,rec.start?C.teal4:rowBg,!!rec.start,'center'));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),rec.end||'',S.cell(C.navy,rec.end?C.teal4:rowBg,!!rec.end,'center'));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),bkH,S.numDec('2D6A4F',bkH>0?'E8F5E9':rowBg,bkH>0));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),c2?+m2h(c2.work).toFixed(2):0,S.numDec(c2?.work>=480?C.green:C.navy,c2?.work>=480?C.green4:rowBg,c2?.work>=480));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),_dedH,S.numDec(C.rose, _dedH>0?C.rose3:rowBg, _dedH>0));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),c2&&c2.nightM>0?+m2h(c2.nightM).toFixed(2):0,S.numDec(C.purple2,c2?.nightM>0?C.purple4:rowBg));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),c2&&c2.ot>0?+m2h(c2.ot).toFixed(2):0,S.numDec(C.blue,c2?.ot>0?C.blue4:rowBg));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),autoH&&c2?+m2h(c2.work).toFixed(2):0,S.numDec(C.orange2,autoH&&c2?C.orange4:rowBg));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),note,S.accent(noteFg,noteBg,!!note));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
+      }
+    } else {
+      [2,3,4,5,6,7,8,9,10,11].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty(rowBg)));
+    }
+    ws['!rows'].push({hpt:18});
+    R++;
+  }
+
+  // 합계행 (공제 칼럼 추가로 인덱스 shift: 야간 6→7, 연장 7→8, 휴일 8→9, 연차 9→10, 비고 10→11)
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),'합 계',S.mainHdr(C.teal,'FFFFFF','center'));
+  xlsMerge(ws,R,0,R,3);
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),'',S.mainHdr(C.teal));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),'',S.mainHdr(C.teal));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),'',S.mainHdr(C.teal));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),+m2h(totalBk).toFixed(2),XLS.S.total('FFFFFF','2D6A4F'));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),+s.twkH.toFixed(2),XLS.S.total('FFFFFF',C.teal));
+  // 공제 합계: 일별 표시값(둘째자리)의 정확한 합 → 화면 합과 100% 일치 (반올림 차이 제거)
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),totalDedH.toFixed(2),XLS.S.total('FFFFFF',C.rose));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),+(s.tNightH||0).toFixed(2),XLS.S.total('FFFFFF',C.purple));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),+((s.tOtDayH||0)+(s.tOtNightH||0)).toFixed(2),XLS.S.total('FFFFFF',C.blue));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),+((s.tHolDayH||0)+(s.tHolNightH||0)+(s.tHolDayOtH||0)+(s.tHolNightOtH||0)).toFixed(2),XLS.S.total('FFFFFF',C.orange2));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),+s.aldays.toFixed(1),XLS.S.total('FFFFFF',C.green));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),'',S.mainHdr(C.gray));
+  ws['!rows'].push({hpt:24});
+  ws['!cols']=[{wch:7},{wch:6},{wch:7},{wch:7},{wch:8},{wch:10},{wch:9},{wch:8},{wch:8},{wch:8},{wch:8},{wch:16}];
+  xlsRange(ws,0,0,R,11);
+
+  XLSX.utils.book_append_sheet(wb,ws,(emp.name||'직원').slice(0,8));
+  // 파일명: 안전 문자만
+  const safeName = (emp.name||'직원').replace(/[\\\/:*?"<>|]/g,'_');
+  XLSX.writeFile(wb,`${safeName}_${monthStr}.xlsx`);
 }
 
 // ══════════════════════════════════════════════════════
@@ -8087,22 +11428,22 @@ function exportEmpsExcel(){
     fill:{fgColor:{rgb:'EFF6FF'}},
     alignment:{horizontal:'left',vertical:'center'},
   });
-  xlsMerge(ws,0,0,0,9);
+  xlsMerge(ws,0,0,0,14);
   xlsWrite(ws,XLSX.utils.encode_cell({r:1,c:0}),
     `기준일: ${new Date().toLocaleDateString('ko-KR')}  ·  재직 ${activeEmps.length}명  ·  퇴사 ${leftEmps.length}명  ·  총 ${EMPS.length}명`,{
     font:{sz:9,color:{rgb:C.gray2},italic:true,name:'맑은 고딕'},
     fill:{fgColor:{rgb:'EFF6FF'}},
     alignment:{horizontal:'left',vertical:'center'},
   });
-  xlsMerge(ws,1,0,1,13);
+  xlsMerge(ws,1,0,1,14);
   ws['!rows']=[{hpt:30},{hpt:16}];
   R=2;
 
   // ── 헤더 ──
-  const hdrs = ['사번','이름','직종','직급','소속','급여방식','시급/월급','입사일','성별','내외국인','주야간','연락처','나이','재직상태'];
+  const hdrs = ['사번','이름','직종','직급','소속','부서','급여방식','시급/월급','입사일','성별','내외국인','주야간','연락처','나이','재직상태'];
   const hdrColors = {
     '사번':C.gray,  '이름':C.navy,  '직종':C.navy2, '직급':C.navy2,
-    '소속':C.teal,  '급여방식':C.orange2,'시급/월급':C.orange2,'입사일':C.teal,
+    '소속':C.teal,  '부서':C.teal,  '급여방식':C.orange2,'시급/월급':C.orange2,'입사일':C.teal,
     '성별':C.blue,  '내외국인':C.blue,   '주야간':C.blue,
     '연락처':C.gray,'나이':C.gray,  '재직상태':C.navy,
   };
@@ -8111,11 +11452,12 @@ function exportEmpsExcel(){
   R++;
 
   // ── 데이터 ──
-  const sortedEmps = [...EMPS].sort((a,b)=>{
+  // 화면 필터(F.emps) 반영: 부서 분류·소속·주야간·내외국인·검색까지 모두 엑셀에 그대로
+  const sortedEmps = applyCommonFilter([...EMPS].sort((a,b)=>{
     if(!a.leave&&b.leave) return -1;
     if(a.leave&&!b.leave) return 1;
     return 0;
-  }).filter(e=>empFilter==='all'||(e.payMode||'fixed')===empFilter);
+  }), 'emps').filter(e=>empFilter==='all'||(e.payMode||'fixed')===empFilter);
 
   sortedEmps.forEach((e,ei)=>{
     const isLeft=!!e.leave;
@@ -8131,38 +11473,40 @@ function exportEmpsExcel(){
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),e.role||'',S.cell(C.gray2,bg,false,'left'));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),e.grade||'',S.cell(C.gray2,bg,false,'center'));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),e.dept||'',S.cell(C.gray2,bg,false,'center'));
+    // 부서 분류 (운반/시설/선별 또는 빈값)
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),e.deptCat||'사무',S.cell(C.teal,bg,!!e.deptCat,'center'));
 
     // 급여방식 - 색상 구분
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),payLabel,{
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),payLabel,{
       font:{bold:true,sz:10,color:{rgb:payFg},name:'맑은 고딕'},
       fill:{fgColor:{rgb:payBg}},
       alignment:{horizontal:'center',vertical:'center'},
       border:XLS.B.thin(),
     });
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),payVal||0,S.num(C.navy,bg));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),e.join||'',S.cell(C.gray2,bg,false,'center'));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),payVal||0,S.num(C.navy,bg));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),e.join||'',S.cell(C.gray2,bg,false,'center'));
 
     // 성별 - 남/여 색상
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),e.gender==='female'?'여':'남',{
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),e.gender==='female'?'여':'남',{
       font:{bold:true,sz:10,color:{rgb:e.gender==='female'?C.rose:C.blue},name:'맑은 고딕'},
       fill:{fgColor:{rgb:e.gender==='female'?C.rose4:C.blue4}},
       alignment:{horizontal:'center',vertical:'center'},
       border:XLS.B.thin(),
     });
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:9}),e.nation==='foreign'?'외국인':'내국인',S.cell(C.gray2,bg,false,'center'));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),e.nation==='foreign'?'외국인':'내국인',S.cell(C.gray2,bg,false,'center'));
 
     // 주야간 - 색상
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),e.shift==='night'?'야간':'주간',{
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),e.shift==='night'?'야간':'주간',{
       font:{bold:true,sz:10,color:{rgb:e.shift==='night'?C.purple2:C.orange2},name:'맑은 고딕'},
       fill:{fgColor:{rgb:e.shift==='night'?C.purple4:C.orange4}},
       alignment:{horizontal:'center',vertical:'center'},
       border:XLS.B.thin(),
     });
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),e.phone||'',S.cell(C.gray2,bg,false,'left'));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:12}),e.age||'',S.num(C.gray2,bg));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:12}),e.phone||'',S.cell(C.gray2,bg,false,'left'));
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:13}),e.age||'',S.num(C.gray2,bg));
 
     // 재직상태 - 재직/퇴사 색상
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:13}),isLeft?`퇴사 ${e.leave}`:'재직 중',{
+    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:14}),isLeft?`퇴사 ${e.leave}`:'재직 중',{
       font:{bold:true,sz:10,color:{rgb:isLeft?C.rose:C.green},name:'맑은 고딕'},
       fill:{fgColor:{rgb:isLeft?C.rose4:C.green4}},
       alignment:{horizontal:'center',vertical:'center'},
@@ -8174,14 +11518,14 @@ function exportEmpsExcel(){
 
   // ── 요약 행 ──
   xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),'합 계',S.mainHdr(C.navy));
-  xlsMerge(ws,R,0,R,4);
-  [1,2,3,4].forEach(c=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c}),'',S.mainHdr(C.navy)));
-  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),`총 ${sortedEmps.length}명`,{
+  xlsMerge(ws,R,0,R,5);
+  [1,2,3,4,5].forEach(c=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c}),'',S.mainHdr(C.navy)));
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),`총 ${sortedEmps.length}명`,{
     font:{bold:true,sz:11,color:{rgb:'FFFFFF'},name:'맑은 고딕'},
     fill:{fgColor:{rgb:C.teal}},alignment:{horizontal:'center',vertical:'center'},
     border:XLS.B.thin(C.teal),
   });
-  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:13}),`재직 ${activeEmps.length} / 퇴사 ${leftEmps.length}`,{
+  xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:14}),`재직 ${activeEmps.length} / 퇴사 ${leftEmps.length}`,{
     font:{bold:true,sz:10,color:{rgb:'FFFFFF'},name:'맑은 고딕'},
     fill:{fgColor:{rgb:C.navy}},alignment:{horizontal:'center',vertical:'center'},
     border:XLS.B.thin(),
@@ -8189,17 +11533,15 @@ function exportEmpsExcel(){
   ws['!rows'].push({hpt:24});
   R++;
 
-  ws['!cols']=[{wch:7},{wch:11},{wch:11},{wch:8},{wch:11},{wch:8},{wch:11},{wch:12},{wch:5},{wch:8},{wch:6},{wch:14},{wch:5},{wch:14}];
-  xlsRange(ws,0,0,R-1,13);
+  ws['!cols']=[{wch:7},{wch:11},{wch:11},{wch:8},{wch:11},{wch:7},{wch:8},{wch:11},{wch:12},{wch:5},{wch:8},{wch:6},{wch:14},{wch:5},{wch:14}];
+  xlsRange(ws,0,0,R-1,14);
   XLSX.utils.book_append_sheet(wb,ws,'직원 명부');
   XLSX.writeFile(wb,`직원관리_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
-
 // ══════════════════════════════════════════════════════
 // 📊 직원현황 엑셀 - 프리미엄
 // ══════════════════════════════════════════════════════
-let companyFilter = 'all';
 function exportCompanyExcel(){
   const wb = XLSX.utils.book_new();
   const ws = {}; let R=0;
@@ -8247,8 +11589,7 @@ function exportCompanyExcel(){
 
   // ── 데이터 ──
   const emps=EMPS.filter(e=>{
-    if(companyFilter!=='all'){const ep=e.payMode||'fixed';if(companyFilter==='monthly'){if(ep!=='monthly'&&ep!=='pohal')return false;}else{if(ep!==companyFilter)return false;}}
-    if(!e.join||new Date(e.join)>new Date(companyYear,11,31)) return false;
+    if(!e.join||parseEmpDate(e.join)>new Date(companyYear,11,31)) return false;
     return true;
   });
 
@@ -8315,6 +11656,109 @@ function exportCompanyExcel(){
   ws['!cols']=[{wch:11},{wch:12},{wch:12},...Array(12).fill({wch:6}),{wch:8},{wch:8},{wch:8},{wch:12}];
   xlsRange(ws,0,0,R-1,18);
   XLSX.utils.book_append_sheet(wb,ws,`${companyYear}년 직원현황`);
+
+  // ── 두 번째 시트: 월별 인원 현황 (직접고용/아웃소싱 분리) ──
+  const ws2={}; let R2=0;
+  xlsWrite(ws2,XLSX.utils.encode_cell({r:0,c:0}),`${companyYear}년 월별 인원 현황`,{
+    font:{bold:true,sz:18,color:{rgb:C.navy},name:'맑은 고딕'},
+    fill:{fgColor:{rgb:'EFF6FF'}},alignment:{horizontal:'left',vertical:'center'},
+  });
+  xlsMerge(ws2,0,0,0,13);
+  xlsWrite(ws2,XLSX.utils.encode_cell({r:1,c:0}),
+    `기준연도: ${companyYear}년  ·  고용형태: 소속(dept) 텍스트 기준 자동 분류  ·  출력일: ${new Date().toLocaleDateString('ko-KR')}`,{
+    font:{sz:9,color:{rgb:C.gray2},italic:true,name:'맑은 고딕'},
+    fill:{fgColor:{rgb:'EFF6FF'}},alignment:{horizontal:'left',vertical:'center'},
+  });
+  xlsMerge(ws2,1,0,1,13);
+  ws2['!rows']=[{hpt:30},{hpt:16}];
+  R2=2;
+
+  // 헤더: 구분 | 1월 ~ 12월 | 합계
+  xlsWrite(ws2,XLSX.utils.encode_cell({r:R2,c:0}),'구분',S.mainHdr(C.navy,'FFFFFF','center'));
+  for(let m=1;m<=12;m++) xlsWrite(ws2,XLSX.utils.encode_cell({r:R2,c:m}),m+'월',S.mainHdr(m<=6?C.teal2:C.teal,'FFFFFF','center'));
+  xlsWrite(ws2,XLSX.utils.encode_cell({r:R2,c:13}),'합계',S.mainHdr('0E4D2E','FFFFFF','center'));
+  ws2['!rows'].push({hpt:26});
+  R2++;
+
+  // 월별 데이터 계산 (renderCompany와 동일 로직)
+  const md = [];
+  for(let mi=0;mi<12;mi++){
+    const m=mi+1;
+    const monthStart=new Date(companyYear,mi,1);
+    const monthEnd  =new Date(companyYear,m,0);
+    const activeEmps=EMPS.filter(e=>{
+      if(e.deletedAt) return false; // 🗑️ 휴지통 제외
+      if(!e.join) return false;
+      const jd=parseEmpDate(e.join);
+      if(jd>monthEnd) return false;
+      if(e.leave && parseEmpDate(e.leave)<monthStart) return false;
+      return true;
+    });
+    const directCount    = activeEmps.filter(e=>!isOutsource(e)).length;
+    const outsourceCount = activeEmps.filter(e=> isOutsource(e)).length;
+    const _newEmps  = EMPS.filter(e=>e.join  && parseEmpDate(e.join).getFullYear()===companyYear  && parseEmpDate(e.join).getMonth()+1===m);
+    const _leftEmps = EMPS.filter(e=>e.leave && parseEmpDate(e.leave).getFullYear()===companyYear && parseEmpDate(e.leave).getMonth()+1===m);
+    const newCount  = _newEmps.length;
+    const leftCount = _leftEmps.length;
+    const newDirect    = _newEmps.filter(e=>!isOutsource(e)).length;
+    const newOutsource = _newEmps.filter(e=> isOutsource(e)).length;
+    const leftDirect    = _leftEmps.filter(e=>!isOutsource(e)).length;
+    const leftOutsource = _leftEmps.filter(e=> isOutsource(e)).length;
+    let totalPay=0, totalWorkDays=0;
+    activeEmps.forEach(e=>{ const s=monthSummary(e.id,companyYear,m); totalPay+=s.total; totalWorkDays+=s.wdays; });
+    let weekDays=0;
+    const dim2=dim(companyYear,m);
+    for(let d=1;d<=dim2;d++) if(!isAutoHol(companyYear,m,d)) weekDays++;
+    md.push({activeCount:activeEmps.length, directCount, outsourceCount,
+      newCount, newDirect, newOutsource, leftCount, leftDirect, leftOutsource,
+      totalPay, totalWorkDays, weekDays});
+  }
+  const sum = k => md.reduce((s,x)=>s+x[k],0);
+
+  // 행 정의 (화면과 동일 순서)
+  const sheetRows = [
+    { label:'재직 직원 수',         key:'activeCount',    fg:C.navy,    bg:'EEF2FF', sub:false, agg:'-' },
+    { label:'　ㄴ 인천본점',          key:'directCount',    fg:C.teal,    bg:'F0FDFA', sub:true,  agg:'-' },
+    { label:'　ㄴ 아웃소싱',          key:'outsourceCount', fg:C.purple2||'7C3AED', bg:'F5F3FF', sub:true, agg:'-' },
+    { label:'입사 직원 수',         key:'newCount',       fg:C.teal,    bg:'F0FDFA', agg:sum('newCount') },
+    { label:'　ㄴ 인천본점',          key:'newDirect',      fg:C.teal,    bg:'F0FDFA', sub:true, agg:sum('newDirect') },
+    { label:'　ㄴ 아웃소싱',          key:'newOutsource',   fg:C.purple2||'7C3AED', bg:'F5F3FF', sub:true, agg:sum('newOutsource') },
+    { label:'퇴사 직원 수',         key:'leftCount',      fg:C.rose,    bg:'FEF2F2', agg:sum('leftCount') },
+    { label:'　ㄴ 인천본점',          key:'leftDirect',     fg:C.rose,    bg:'FEF2F2', sub:true, agg:sum('leftDirect') },
+    { label:'　ㄴ 아웃소싱',          key:'leftOutsource',  fg:C.purple2||'7C3AED', bg:'F5F3FF', sub:true, agg:sum('leftOutsource') },
+    { label:'급여지급액(만원)',      key:'totalPayMan',    fg:C.purple2||'7C3AED', bg:'F5F3FF', agg:Math.round(sum('totalPay')/10000) },
+    { label:'직원 총 근무일수',     key:'totalWorkDays',  fg:C.gray2,   bg:'F8FAFC', agg:sum('totalWorkDays') },
+    { label:'평일 영업일수',        key:'weekDays',       fg:C.navy2,   bg:'EFF6FF', agg:sum('weekDays') },
+  ];
+
+  sheetRows.forEach((row,ri)=>{
+    const cellBg = ri%2 ? 'FFFFFF' : 'F8FAFC';
+    xlsWrite(ws2,XLSX.utils.encode_cell({r:R2,c:0}),row.label,{
+      font:{bold:!row.sub,sz:row.sub?10:11,color:{rgb:row.fg},name:'맑은 고딕'},
+      fill:{fgColor:{rgb:row.bg}},alignment:{horizontal:'left',vertical:'center'},
+      border:XLS.B.thin(),
+    });
+    for(let mi=0;mi<12;mi++){
+      const v = row.key==='totalPayMan' ? Math.round((md[mi].totalPay||0)/10000) : md[mi][row.key];
+      xlsWrite(ws2,XLSX.utils.encode_cell({r:R2,c:mi+1}), v||0,{
+        font:{sz:row.sub?10:11,color:{rgb:row.fg},name:'맑은 고딕'},
+        fill:{fgColor:{rgb:cellBg}},alignment:{horizontal:'center',vertical:'center'},
+        border:XLS.B.thin(),numFmt:'#,##0',
+      });
+    }
+    xlsWrite(ws2,XLSX.utils.encode_cell({r:R2,c:13}), row.agg==='-' ? '-' : row.agg,{
+      font:{bold:true,sz:row.sub?10:11,color:{rgb:'FFFFFF'},name:'맑은 고딕'},
+      fill:{fgColor:{rgb:'0E4D2E'}},alignment:{horizontal:'center',vertical:'center'},
+      border:XLS.B.thin(),numFmt:row.agg==='-'?undefined:'#,##0',
+    });
+    ws2['!rows'].push({hpt:row.sub?18:22});
+    R2++;
+  });
+
+  ws2['!cols']=[{wch:18},...Array(12).fill({wch:8}),{wch:10}];
+  xlsRange(ws2,0,0,R2-1,13);
+  XLSX.utils.book_append_sheet(wb,ws2,'월별 인원 현황');
+
   XLSX.writeFile(wb,`직원현황_${companyYear}년.xlsx`);
 }
 
@@ -8323,56 +11767,93 @@ function exportCompanyExcel(){
 // 📋 연차관리 엑셀 - 프리미엄
 // ══════════════════════════════════════════════════════
 function exportLeaveExcel(){
-  const wb=XLSX.utils.book_new(); const ws={}; let R=0;
+  const wb=XLSX.utils.book_new();
   const C=XLS.C; const S=XLS.S;
 
-  xlsWrite(ws,XLSX.utils.encode_cell({r:0,c:0}),`${leaveYear}년 연차 관리 현황`,{
-    font:{bold:true,sz:18,color:{rgb:C.navy},name:'맑은 고딕'},
-    fill:{fgColor:{rgb:'EFF6FF'}},alignment:{horizontal:'left',vertical:'center'},
-  });
-  xlsMerge(ws,0,0,0,6);
-  xlsWrite(ws,XLSX.utils.encode_cell({r:1,c:0}),`기준연도: ${leaveYear}년  ·  출력일: ${new Date().toLocaleDateString('ko-KR')}`,{
-    font:{sz:9,color:{rgb:C.gray2},name:'맑은 고딕'},
-    fill:{fgColor:{rgb:'EFF6FF'}},alignment:{horizontal:'left',vertical:'center'},
-  });
-  xlsMerge(ws,1,0,1,8);
-  ws['!rows']=[{hpt:28},{hpt:16}];
-  R=2;
+  // 화면 필터 적용 (주야간/내외국인/급여방식/소속/부서분류/검색)
+  const filteredEmps = applyCommonFilter([...EMPS], 'leave');
 
-  const hdrs=['이름','직종','입사일','총연차','사용연차','잔여연차','연차형태','1일수당(원)','연차수당합계(원)'];
-  const hdrBgs=[C.navy,C.navy2,C.teal,C.blue,C.orange2,C.green,C.gray,C.purple2,C.teal];
-  hdrs.forEach((h,ci)=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),h,S.mainHdr(hdrBgs[ci],'FFFFFF','center')));
-  ws['!rows'].push({hpt:26});
-  R++;
+  // 직접고용 / 아웃소싱 분리 — emp.dept 텍스트의 '아웃소싱|파견|도급|외주|위탁' 키워드 기반
+  const directEmps     = filteredEmps.filter(e => !isOutsource(e));
+  const outsourcedEmps = filteredEmps.filter(e =>  isOutsource(e));
 
-  const leaveEmps=EMPS.filter(e=>{
-    if(payFilter!=='all'&&(e.payMode||'fixed')!==payFilter) return false;
-    return true;
-  });
+  // 단일 시트 작성 헬퍼
+  const writeSheet = (sheetName, emps) => {
+    const ws={}; let R=0;
 
-  leaveEmps.forEach((emp,ei)=>{
-    const lv=calcLeaveForYear(emp,leaveYear);
-    const payAmt=getLeavePayAmount(emp,leaveYear);
-    const type=leaveSettings['type_'+emp.id]==='promote'?'연차촉진':'연차수당';
-    const bg=xlsRowBg(ei);
-    const total=Math.round(lv.used*payAmt);
+    // 타이틀
+    xlsWrite(ws,XLSX.utils.encode_cell({r:0,c:0}),`${leaveYear}년 ${sheetName} 연차 관리 현황`,{
+      font:{bold:true,sz:18,color:{rgb:C.navy},name:'맑은 고딕'},
+      fill:{fgColor:{rgb:'EFF6FF'}},alignment:{horizontal:'left',vertical:'center'},
+    });
+    xlsMerge(ws,0,0,0,8);
+    // 부제: 기준연도 · 인원수 · 출력일
+    xlsWrite(ws,XLSX.utils.encode_cell({r:1,c:0}),
+      `기준연도: ${leaveYear}년  ·  ${sheetName} ${emps.length}명  ·  출력일: ${new Date().toLocaleDateString('ko-KR')}`,{
+      font:{sz:9,color:{rgb:C.gray2},name:'맑은 고딕'},
+      fill:{fgColor:{rgb:'EFF6FF'}},alignment:{horizontal:'left',vertical:'center'},
+    });
+    xlsMerge(ws,1,0,1,8);
+    ws['!rows']=[{hpt:28},{hpt:16}];
+    R=2;
 
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),emp.name,S.cell(C.navy,bg,true,'left'));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),emp.role||'',S.cell(C.gray,bg,false,'left'));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),emp.join||'',S.cell(C.gray,bg,false,'center'));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),lv.total,S.num(C.blue,C.blue4,true));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),lv.used,S.num(lv.used>0?C.orange2:C.gray,lv.used>0?C.orange4:bg,lv.used>0));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),lv.remain,S.num(lv.remain>5?C.green:lv.remain>0?C.orange2:C.rose,lv.remain>0?C.green4:C.rose4,true));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),type,S.accent(type==='연차촉진'?C.orange2:C.teal,type==='연차촉진'?C.orange4:C.teal4));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),Math.round(payAmt),S.num(C.navy,bg));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),total,S.total('FFFFFF',total>0?C.teal:C.gray));
-    ws['!rows'].push({hpt:20});
+    // 헤더
+    const hdrs=['이름','직종','입사일','총연차','사용연차','잔여연차','연차형태','1일수당(원)','연차수당합계(원)'];
+    const hdrBgs=[C.navy,C.navy2,C.teal,C.blue,C.orange2,C.green,C.gray,C.purple2,C.teal];
+    hdrs.forEach((h,ci)=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),h,S.mainHdr(hdrBgs[ci],'FFFFFF','center')));
+    ws['!rows'].push({hpt:26});
     R++;
-  });
 
-  ws['!cols']=[{wch:10},{wch:8},{wch:12},{wch:7},{wch:7},{wch:7},{wch:10},{wch:12},{wch:14}];
-  xlsRange(ws,0,0,R-1,8);
-  XLSX.utils.book_append_sheet(wb,ws,`${leaveYear}년 연차현황`);
+    // 데이터 (없으면 빈 안내 행)
+    if(emps.length === 0){
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),'해당 인원 없음',{
+        font:{sz:11,italic:true,color:{rgb:C.gray2},name:'맑은 고딕'},
+        fill:{fgColor:{rgb:'F8FAFC'}},alignment:{horizontal:'center',vertical:'center'},
+      });
+      xlsMerge(ws,R,0,R,8);
+      ws['!rows'].push({hpt:24});
+      R++;
+    } else {
+      let grandTotal = 0;
+      emps.forEach((emp,ei)=>{
+        const lv=calcLeaveForYear(emp,leaveYear);
+        const payAmt=getLeavePayAmount(emp,leaveYear);
+        const type=leaveSettings['type_'+emp.id]==='promote'?'연차촉진':'연차수당';
+        const bg=xlsRowBg(ei);
+        const total=Math.round(lv.used*payAmt);
+        grandTotal += total;
+
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),emp.name,S.cell(C.navy,bg,true,'left'));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:1}),emp.role||'',S.cell(C.gray,bg,false,'left'));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:2}),emp.join||'',S.cell(C.gray,bg,false,'center'));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:3}),lv.total,S.num(C.blue,C.blue4,true));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),lv.used,S.num(lv.used>0?C.orange2:C.gray,lv.used>0?C.orange4:bg,lv.used>0));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),lv.remain,S.num(lv.remain>5?C.green:lv.remain>0?C.orange2:C.rose,lv.remain>0?C.green4:C.rose4,true));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:6}),type,S.accent(type==='연차촉진'?C.orange2:C.teal,type==='연차촉진'?C.orange4:C.teal4));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:7}),Math.round(payAmt),S.num(C.navy,bg));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),total,S.total('FFFFFF',total>0?C.teal:C.gray));
+        ws['!rows'].push({hpt:20});
+        R++;
+      });
+
+      // 합계 행
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),`${sheetName} 합계 (${emps.length}명)`,S.mainHdr(C.navy,'FFFFFF','left'));
+      xlsMerge(ws,R,0,R,7);
+      [1,2,3,4,5,6,7].forEach(c=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c}),'',S.mainHdr(C.navy)));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:8}),grandTotal,S.total('FFFFFF','0D47A1'));
+      ws['!rows'].push({hpt:26});
+      R++;
+    }
+
+    ws['!cols']=[{wch:10},{wch:8},{wch:12},{wch:7},{wch:7},{wch:7},{wch:10},{wch:12},{wch:14}];
+    xlsRange(ws,0,0,R-1,8);
+    XLSX.utils.book_append_sheet(wb,ws,sheetName);
+  };
+
+  // 두 시트 작성
+  writeSheet('직접고용',  directEmps);
+  writeSheet('아웃소싱',  outsourcedEmps);
+
   XLSX.writeFile(wb,`연차관리_${leaveYear}년.xlsx`);
 }
 
@@ -8407,13 +11888,6 @@ function setCompanyTab(t) {
 }
 
 
-function setCompanyFilter(f){
-  companyFilter = f;
-  document.querySelectorAll('.cpf-btn').forEach(b=>{
-    b.classList.toggle('on', b.dataset.f===f);
-  });
-  renderCompany();
-}
 function renderCompany() {
   document.getElementById('company-year-disp').textContent = companyYear;
   const cpYrEl=document.getElementById('cp-year'); if(cpYrEl) cpYrEl.textContent=companyYear;
@@ -8431,9 +11905,10 @@ function renderCompany() {
     const rows=months.map((_,mi)=>{
       const m=mi+1;
       const s=monthSummary(emp.id,companyYear,m);
-      const addPay=_isFixed2
+      const addPay=(_isFixed2
         ? (s.tExtraWorkPay||0)+(s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolPayNew||0)
-        : (s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0);
+        : (s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0)
+      )+(s.tSpecialPay||0);
       return{m,s,addPay};
     });
     const totBase=rows.reduce((a,r)=>a+r.s.tBase,0);
@@ -8507,16 +11982,25 @@ function renderCompany() {
 
     // 재직 직원
     const activeEmps = EMPS.filter(emp => {
+      if (emp.deletedAt) return false; // 🗑️ 휴지통 제외
       if (!emp.join) return false;
-      const jd = new Date(emp.join);
+      const jd = parseEmpDate(emp.join);
       if (jd > monthEnd) return false;
-      if (emp.leave && new Date(emp.leave) < monthStart) return false;
+      if (emp.leave && parseEmpDate(emp.leave) < monthStart) return false;
       return true;
     });
 
-    // 입사/퇴사
-    const newEmps  = EMPS.filter(emp => emp.join  && new Date(emp.join).getFullYear()===companyYear  && new Date(emp.join).getMonth()+1===m);
-    const leftEmps = EMPS.filter(emp => emp.leave && new Date(emp.leave).getFullYear()===companyYear && new Date(emp.leave).getMonth()+1===m);
+    // 고용형태 분리: 소속(dept)에 아웃소싱 키워드 있으면 아웃소싱, 그 외(빈값 포함) 인천본점
+    const directCount    = activeEmps.filter(e => !isOutsource(e)).length;
+    const outsourceCount = activeEmps.filter(e =>  isOutsource(e)).length;
+
+    // 입사/퇴사 (인천본점/아웃소싱 분리)
+    const newEmps   = EMPS.filter(emp => emp.join  && parseEmpDate(emp.join).getFullYear()===companyYear  && parseEmpDate(emp.join).getMonth()+1===m);
+    const leftEmps  = EMPS.filter(emp => emp.leave && parseEmpDate(emp.leave).getFullYear()===companyYear && parseEmpDate(emp.leave).getMonth()+1===m);
+    const newDirect    = newEmps.filter(e => !isOutsource(e)).length;
+    const newOutsource = newEmps.filter(e =>  isOutsource(e)).length;
+    const leftDirect    = leftEmps.filter(e => !isOutsource(e)).length;
+    const leftOutsource = leftEmps.filter(e =>  isOutsource(e)).length;
 
     // 급여 합계
     let totalPay = 0, totalWorkDays = 0;
@@ -8544,15 +12028,23 @@ function renderCompany() {
       if (anyWorked) holWorkDays++;
     }
 
-    return { activeCount: activeEmps.length, newCount: newEmps.length,
-      leftCount: leftEmps.length, totalPay, totalWorkDays, weekDays, holWorkDays };
+    return { activeCount: activeEmps.length, directCount, outsourceCount,
+      newCount: newEmps.length, newDirect, newOutsource,
+      leftCount: leftEmps.length, leftDirect, leftOutsource,
+      totalPay, totalWorkDays, weekDays, holWorkDays };
   });
 
-  // 합계
+  // 합계 (재직/인천본점/아웃소싱은 월별 스냅샷이라 연간 합산이 무의미 → '-')
   const totals = {
     activeCount: '-',
+    directCount: '-',
+    outsourceCount: '-',
     newCount:      monthData.reduce((s,d)=>s+d.newCount,0),
+    newDirect:     monthData.reduce((s,d)=>s+d.newDirect,0),
+    newOutsource:  monthData.reduce((s,d)=>s+d.newOutsource,0),
     leftCount:     monthData.reduce((s,d)=>s+d.leftCount,0),
+    leftDirect:    monthData.reduce((s,d)=>s+d.leftDirect,0),
+    leftOutsource: monthData.reduce((s,d)=>s+d.leftOutsource,0),
     totalPay:      monthData.reduce((s,d)=>s+d.totalPay,0),
     totalWorkDays: monthData.reduce((s,d)=>s+d.totalWorkDays,0),
     weekDays:      monthData.reduce((s,d)=>s+d.weekDays,0),
@@ -8560,13 +12052,19 @@ function renderCompany() {
   };
 
   const rows = [
-    { label:'재직 직원 수',       key:'activeCount',  fmt:v=>v==='-'?'-':`${v}명`,      cls:'var(--navy)' },
-    { label:'입사 직원 수',       key:'newCount',     fmt:v=>v?`+${v}명`:'-',           cls:'var(--teal)' },
-    { label:'퇴사 직원 수',       key:'leftCount',    fmt:v=>v?`${v}명`:'-',            cls:'var(--rose)' },
-    { label:'급여지급액(세전)',    key:'totalPay',     fmt:v=>v?`${Math.round(v/10000)}만원`:'-', cls:'var(--purple)' },
-    { label:'직원 총 근무일수',   key:'totalWorkDays',fmt:v=>v?`${v}일`:'-',            cls:'var(--ink2)' },
-    { label:'평일 영업일수',      key:'weekDays',     fmt:v=>`${v}일`,                  cls:'var(--navy2)',  bg:'#EFF6FF' },
-    { label:'휴일 출근일수',      key:'holWorkDays',  fmt:v=>v?`${v}일`:'-',            cls:'var(--amber)', bg:'#FFFBEB' },
+    { label:'재직 직원 수',         key:'activeCount',    fmt:v=>v==='-'?'-':`${v}명`, cls:'var(--navy)' },
+    { label:'　ㄴ 인천본점',         key:'directCount',    fmt:v=>v==='-'?'-':(v?`${v}명`:'-'), cls:'var(--teal)',   sub:true },
+    { label:'　ㄴ 아웃소싱',         key:'outsourceCount', fmt:v=>v==='-'?'-':(v?`${v}명`:'-'), cls:'var(--purple)', sub:true },
+    { label:'입사 직원 수',         key:'newCount',       fmt:v=>v?`+${v}명`:'-',      cls:'var(--teal)' },
+    { label:'　ㄴ 인천본점',         key:'newDirect',      fmt:v=>v?`+${v}명`:'-',      cls:'var(--teal)',   sub:true },
+    { label:'　ㄴ 아웃소싱',         key:'newOutsource',   fmt:v=>v?`+${v}명`:'-',      cls:'var(--purple)', sub:true },
+    { label:'퇴사 직원 수',         key:'leftCount',      fmt:v=>v?`${v}명`:'-',       cls:'var(--rose)' },
+    { label:'　ㄴ 인천본점',         key:'leftDirect',     fmt:v=>v?`${v}명`:'-',       cls:'var(--rose)',   sub:true },
+    { label:'　ㄴ 아웃소싱',         key:'leftOutsource',  fmt:v=>v?`${v}명`:'-',       cls:'var(--purple)', sub:true },
+    { label:'급여지급액(세전)',      key:'totalPay',       fmt:v=>v?`${Math.round(v/10000).toLocaleString()}만원`:'-', cls:'var(--purple)' },
+    { label:'직원 총 근무일수',     key:'totalWorkDays',  fmt:v=>v?`${v}일`:'-',       cls:'var(--ink2)' },
+    { label:'평일 영업일수',        key:'weekDays',       fmt:v=>`${v}일`,             cls:'var(--navy2)', bg:'#EFF6FF' },
+    { label:'휴일 출근일수',        key:'holWorkDays',    fmt:v=>v?`${v}일`:'-',       cls:'var(--amber)', bg:'#FFFBEB' },
   ];
 
   body.innerHTML = `
@@ -8581,14 +12079,14 @@ function renderCompany() {
       </thead>
       <tbody>
         ${rows.map((row,ri)=>`
-        <tr style="border-bottom:1px solid var(--bd)">
-          <td style="padding:10px 14px;font-size:11px;font-weight:700;color:${row.cls};background:${row.bg||'var(--surf)'};position:sticky;left:0;z-index:1;border-right:2px solid var(--bd)">
+        <tr style="border-bottom:1px solid var(--bd)${row.sub?';background:rgba(0,0,0,.015)':''}">
+          <td style="padding:${row.sub?'7px 14px 7px 26px':'10px 14px'};font-size:${row.sub?'10px':'11px'};font-weight:${row.sub?'600':'700'};color:${row.cls};background:${row.bg||(row.sub?'rgba(0,0,0,.02)':'var(--surf)')};position:sticky;left:0;z-index:1;border-right:2px solid var(--bd)">
             ${row.key==='weekDays'?'📅 ':''}${row.key==='holWorkDays'?'🏖️ ':''}${row.label}
             ${row.key==='holWorkDays'?'<div style="font-size:9px;color:var(--ink3);font-weight:400;margin-top:1px">일일근태 입력 기준</div>':''}
             ${row.key==='weekDays'?'<div style="font-size:9px;color:var(--ink3);font-weight:400;margin-top:1px">토/일/공휴일 제외</div>':''}
           </td>
-          ${monthData.map(d=>`<td style="padding:8px 6px;font-size:11px;text-align:center;font-weight:600;color:${row.cls};background:${d[row.key]>0&&row.key==='holWorkDays'?'#FFFBEB':''}">${row.fmt(d[row.key])}</td>`).join('')}
-          <td style="padding:8px 6px;font-size:11px;text-align:center;font-weight:700;color:${row.cls};background:var(--gbg)">${row.fmt(totals[row.key])}</td>
+          ${monthData.map(d=>`<td style="padding:${row.sub?'6px 6px':'8px 6px'};font-size:${row.sub?'10px':'11px'};text-align:center;font-weight:${row.sub?'500':'600'};color:${row.cls};background:${d[row.key]>0&&row.key==='holWorkDays'?'#FFFBEB':''}">${row.fmt(d[row.key])}</td>`).join('')}
+          <td style="padding:${row.sub?'6px 6px':'8px 6px'};font-size:${row.sub?'10px':'11px'};text-align:center;font-weight:700;color:${row.cls};background:var(--gbg)">${row.fmt(totals[row.key])}</td>
         </tr>`).join('')}
       </tbody>
     </table>
@@ -8622,24 +12120,29 @@ function _xlLockedGuard(){
 function xlSaveAllow(inp){
   if(_xlLockedGuard()){ _xlDebouncedRefresh(); return; }
   const eid=+inp.dataset.eid, aid=inp.dataset.aid;
-  setMonthAllowance(eid,pY,pM,aid,+inp.value||0);
+  setMonthAllowance(eid,pY,pM,aid,+String(inp.value).replace(/,/g,'')||0);
+  _payrollSummaryCache.delete(`${eid}_${pY}_${pM}`);
   _xlDebouncedRefresh();
 }
 function xlSaveBonus(inp){
   if(_xlLockedGuard()){ _xlDebouncedRefresh(); return; }
   const eid=+inp.dataset.eid;
-  setMonthBonus(eid,pY,pM,+inp.value||0);
+  setMonthBonus(eid,pY,pM,+String(inp.value).replace(/,/g,'')||0);
+  _payrollSummaryCache.delete(`${eid}_${pY}_${pM}`);
   _xlDebouncedRefresh();
 }
 function xlSaveTax(inp){
   if(_xlLockedGuard()){ _xlDebouncedRefresh(); return; }
   const eid=+inp.dataset.eid, field=inp.dataset.tax;
-  setTaxRec(eid,pY,pM,field,+inp.value||'');
+  const raw = String(inp.value).replace(/,/g,'');
+  setTaxRec(eid,pY,pM,field,raw===''?'':(+raw||0));
+  _payrollSummaryCache.delete(`${eid}_${pY}_${pM}`);
   _xlDebouncedRefresh();
 }
 
 function xlInputNav(inp, shiftKey){
-  const allInputs = Array.from(document.querySelectorAll('#xl-table input[type="number"]'));
+  // type이 text로 변경되어 data-xl-inp 속성 기반으로 네비게이션
+  const allInputs = Array.from(document.querySelectorAll('#xl-table input[data-xl-inp]'));
   const idx = allInputs.indexOf(inp);
   if(idx < 0) return;
   const next = allInputs[shiftKey ? idx-1 : idx+1];
@@ -8670,8 +12173,9 @@ function showTip(title, msg) {
 // ══════════════════════════════════════
 // 초기화
 // ══════════════════════════════════════
-function init(){
-  // DOM 요소 존재 확인 후 안전하게 세팅
+// 급여설정 입력칸들을 POL에서 다시 채움 — init() + gp('settings') 양쪽에서 호출.
+// 계정 전환 후 inp-base-rate 등이 이전 계정 값을 그대로 보여주던 버그 차단.
+function populateSettingsUI(){
   const safe = (id, fn) => { const el=document.getElementById(id); if(el) fn(el); };
   safe('tog-ext',  el=>el.checked=POL.extFixed??true);
   safe('tog-nt',   el=>el.checked=POL.ntFixed??POL.nt??true);
@@ -8684,21 +12188,23 @@ function init(){
   safe('tog-hol-monthly-std', el=>el.checked=POL.holMonthlyStd??true);
   safe('tog-hol-monthly-ot',  el=>el.checked=POL.holMonthlyOt??true);
   safe('tog-ded-monthly',     el=>el.checked=POL.dedMonthly??true);
-  setPremTab('fixed');
   safe('tog-juhyu',el=>el.checked=POL.juhyu);
   safe('inp-sot',       el=>el.value=POL.sot);
-  safe('inp-base-rate', el=>el.value=POL.baseRate);
+  safe('inp-base-rate', el=>el.value=Number(POL.baseRate||0).toLocaleString());
+  safe('inp-base-monthly', el=>el.value=Number(POL.baseMonthly||0).toLocaleString());
   safe('inp-site-code', el=>el.value=POL.siteCode||'');
-  initEmpNoSetting();
   safe('sel-ns',        el=>el.value=POL.nightStart);
   setSize(POL.size||'u5');
   setDupMode(POL.dupMode||'single');
   setDedMode(POL.dedMode||'hour');
   setBasePay(POL.basePayMode||'fixed');
-  const initMonthlyRow=document.getElementById('sr-base-monthly');
-  if(initMonthlyRow&&POL.basePayMode!=='monthly')initMonthlyRow.style.display='none';
-  const initMonthlyInp=document.getElementById('inp-base-monthly');
-  if(initMonthlyInp)initMonthlyInp.value=POL.baseMonthly||2455750;
+  const monthlyRow=document.getElementById('sr-base-monthly');
+  if(monthlyRow&&POL.basePayMode!=='monthly')monthlyRow.style.display='none';
+}
+function init(){
+  populateSettingsUI();
+  setPremTab('fixed');
+  initEmpNoSetting();
   initWeekendChecks();
   sortEMPS(); // 시작 시 주간→야간 정렬
   renderSb();updDbar();renderBks();renderTable();updNotes();
@@ -8769,6 +12275,8 @@ async function doAuthLogin(){
   try{
     const res=await apiFetch('/auth-login','POST',{email,password:pw});
     setNoproSession(res.session);
+    // 🔒 새 로그인 — 이전 계정의 메모리·localStorage 잔여물 즉시 제거 (계정 전환 시 데이터 누출 방지)
+    clearLocalData();
     if(res.session.role==='admin'){
       enterAdmin();
     } else {
@@ -8779,6 +12287,7 @@ async function doAuthLogin(){
     startAuthRefreshTimer();
   } catch(e){
     errEl.textContent=e.message||'로그인 실패';
+    errEl.style.whiteSpace='pre-line';  // 줄바꿈(\n) 표시 — 단일세션 충돌 등 다중 행 메시지용
     errEl.style.display='block';
   } finally {
     if(btn){ btn.textContent='로그인'; btn.disabled=false; }
@@ -8890,9 +12399,21 @@ function admPage(page){
   if(page==='dashboard'){
     const revenue=users.reduce((s,u)=>s+(planRevenue[u.size]||0),0);
     const recent=[...users].sort((a,b)=>(b.joinDate||'').localeCompare(a.joinDate||'')).slice(0,10);
+    const _last = admGetLastBackup();
+    const _lastDays = _last ? Math.floor((Date.now() - _last.ts) / 86400000) : null;
+    const _bkBanner = (_lastDays === null || _lastDays > 7)
+      ? `<div onclick="admPage('backup')" style="background:linear-gradient(90deg,rgba(245,158,11,.15),rgba(239,68,68,.1));border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:14px 20px;margin-bottom:18px;cursor:pointer;display:flex;align-items:center;gap:14px" onmouseover="this.style.background='linear-gradient(90deg,rgba(245,158,11,.22),rgba(239,68,68,.15))'" onmouseout="this.style.background='linear-gradient(90deg,rgba(245,158,11,.15),rgba(239,68,68,.1))'">
+          <div style="font-size:22px">⚠️</div>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:700;color:#FCD34D;margin-bottom:2px">${_lastDays === null ? '백업 기록이 없습니다' : `마지막 백업이 ${_lastDays}일 전입니다`}</div>
+            <div style="font-size:11px;color:#94A3B8">데이터 사고 대비를 위해 주 1회 백업을 권장합니다. 클릭하여 백업 페이지로 이동.</div>
+          </div>
+          <div style="font-size:11px;color:#FCD34D;font-weight:700">백업하기 →</div>
+        </div>` : '';
     cont.innerHTML=`
       <div style="font-size:24px;font-weight:800;color:#fff;margin-bottom:4px;letter-spacing:-.5px">대시보드</div>
       <div style="font-size:13px;color:rgba(240,244,255,.35);margin-bottom:28px;font-weight:500">노프로 서비스 전체 현황</div>
+      ${_bkBanner}
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px">
         ${[
           ['🏢 총 가입 회사',users.length,'#60A5FA'],
@@ -9003,6 +12524,289 @@ function admPage(page){
         </table>
       </div>`;
   }
+  else if(page==='backup'){
+    admRenderBackupPage(users);
+  }
+  else if(page==='monitoring'){
+    admRenderMonitoring();
+  }
+  admUpdateBackupWarn();
+}
+
+// ══ 모니터링 ══
+let _admMonState = { level: '', source: '', sinceDays: 7, offset: 0, limit: 50 };
+
+async function admRenderMonitoring(){
+  const cont = document.getElementById('adm-content');
+  if(!cont) return;
+  cont.innerHTML = `
+    <div style="font-size:22px;font-weight:800;color:#fff;margin-bottom:4px">📊 모니터링</div>
+    <div style="font-size:12px;color:#94A3B8;margin-bottom:24px">시스템 에러·가드 트리거 추적 (자체 로깅, 외부 서비스 미사용)</div>
+    <div id="adm-mon-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px"></div>
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <select id="adm-mon-level" onchange="admMonChange()" style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:12px;font-family:inherit">
+        <option value="">전체 레벨</option>
+        <option value="error">🔴 error</option>
+        <option value="warn">🟡 warn</option>
+        <option value="guard">🛡️ guard</option>
+        <option value="info">ℹ️ info</option>
+      </select>
+      <input id="adm-mon-source" placeholder="🔍 source 필터 (예: pollForUpdates)" oninput="admMonChange()"
+        style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:12px;width:280px;font-family:inherit">
+      <select id="adm-mon-since" onchange="admMonChange()" style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:12px;font-family:inherit">
+        <option value="1">최근 24시간</option>
+        <option value="7" selected>최근 7일</option>
+        <option value="30">최근 30일</option>
+        <option value="90">최근 90일 (전체)</option>
+      </select>
+      <button onclick="admMonRefresh()" style="padding:8px 14px;border-radius:8px;border:1px solid rgba(96,165,250,.3);background:rgba(96,165,250,.1);color:#93C5FD;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">↻ 새로고침</button>
+    </div>
+    <div id="adm-mon-list" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;overflow:hidden;min-height:200px">
+      <div style="padding:30px;text-align:center;color:#64748B">불러오는 중...</div>
+    </div>`;
+  await admMonFetch();
+}
+
+function admMonChange(){
+  _admMonState.level = document.getElementById('adm-mon-level')?.value || '';
+  _admMonState.source = document.getElementById('adm-mon-source')?.value || '';
+  _admMonState.sinceDays = parseInt(document.getElementById('adm-mon-since')?.value || '7', 10);
+  _admMonState.offset = 0;
+  admMonFetch();
+}
+function admMonRefresh(){ admMonFetch(); }
+
+async function admMonFetch(){
+  const list = document.getElementById('adm-mon-list');
+  const stats = document.getElementById('adm-mon-stats');
+  if(!list) return;
+  try {
+    const params = new URLSearchParams();
+    if(_admMonState.level) params.set('level', _admMonState.level);
+    if(_admMonState.source) params.set('source', _admMonState.source);
+    const since = new Date(Date.now() - _admMonState.sinceDays * 86400000).toISOString();
+    params.set('since', since);
+    params.set('limit', String(_admMonState.limit));
+    params.set('offset', String(_admMonState.offset));
+    const res = await apiFetch('/admin-error-log?' + params.toString(), 'GET');
+    if(!res) throw new Error('응답 없음');
+
+    // 통계 카드
+    const sl = res.stats?.byLevel || {};
+    if(stats){
+      stats.innerHTML = [
+        ['🔴 error', sl.error||0, '#FCA5A5'],
+        ['🟡 warn', sl.warn||0, '#FCD34D'],
+        ['🛡️ guard', sl.guard||0, '#93C5FD'],
+        ['📊 총합', (sl.error||0)+(sl.warn||0)+(sl.guard||0)+(sl.info||0), '#6EE7B7']
+      ].map(([l,v,c])=>`
+        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:18px">
+          <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:8px;font-weight:600">${l}</div>
+          <div style="font-size:28px;font-weight:900;color:${c};letter-spacing:-1px">${v}</div>
+        </div>`).join('');
+    }
+
+    // 사이드바 뱃지 (error 누적 표시)
+    const monBadge = document.getElementById('adm-mon-badge');
+    if(monBadge){
+      const errCount = sl.error || 0;
+      if(errCount > 0){ monBadge.style.display='inline'; monBadge.textContent = errCount > 99 ? '99+' : String(errCount); }
+      else monBadge.style.display='none';
+    }
+
+    // 목록
+    if(!res.rows || res.rows.length === 0){
+      list.innerHTML = '<div style="padding:60px;text-align:center;color:#64748B;font-size:13px">조건에 맞는 로그가 없습니다 ✨</div>';
+      return;
+    }
+    const lvlColor = { error: '#FCA5A5', warn: '#FCD34D', guard: '#93C5FD', info: '#94A3B8' };
+    const lvlBg = { error: 'rgba(239,68,68,.15)', warn: 'rgba(245,158,11,.15)', guard: 'rgba(96,165,250,.15)', info: 'rgba(148,163,184,.15)' };
+    list.innerHTML = `
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:rgba(255,255,255,.04)">
+          ${['시각','레벨','source','메시지','회사','URL'].map(h=>`<th style="padding:10px 14px;font-size:10px;font-weight:700;color:#64748B;text-align:left;letter-spacing:.3px;border-bottom:1px solid rgba(255,255,255,.06)">${h}</th>`).join('')}
+        </tr></thead>
+        <tbody>${res.rows.map(r=>`<tr style="border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer" onclick="admMonShowDetail(${r.id})">
+          <td style="padding:9px 14px;font-size:11px;color:#94A3B8;white-space:nowrap;font-variant-numeric:tabular-nums">${new Date(r.occurred_at).toLocaleString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'})}</td>
+          <td style="padding:9px 14px"><span style="padding:2px 8px;border-radius:6px;background:${lvlBg[r.level]||''};color:${lvlColor[r.level]||'#fff'};font-size:10px;font-weight:700">${r.level}</span></td>
+          <td style="padding:9px 14px;font-size:11px;color:#94A3B8;font-family:monospace">${esc(r.source||'-')}</td>
+          <td style="padding:9px 14px;font-size:12px;color:#fff;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.message||'-')}</td>
+          <td style="padding:9px 14px;font-size:11px;color:#64748B">${r.company_id||'-'}</td>
+          <td style="padding:9px 14px;font-size:10px;color:#64748B;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.url||'-')}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+      <div style="padding:14px 20px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid rgba(255,255,255,.04)">
+        <div style="font-size:11px;color:#64748B">${res.total||0}건 중 ${_admMonState.offset+1}~${Math.min(_admMonState.offset+res.rows.length, res.total)}</div>
+        <div style="display:flex;gap:8px">
+          <button onclick="admMonPage(-1)" ${_admMonState.offset<=0?'disabled':''} style="padding:5px 12px;border-radius:6px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#94A3B8;font-size:11px;cursor:pointer;${_admMonState.offset<=0?'opacity:.4;cursor:not-allowed':''}">← 이전</button>
+          <button onclick="admMonPage(1)" ${_admMonState.offset+_admMonState.limit>=res.total?'disabled':''} style="padding:5px 12px;border-radius:6px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#94A3B8;font-size:11px;cursor:pointer;${_admMonState.offset+_admMonState.limit>=res.total?'opacity:.4;cursor:not-allowed':''}">다음 →</button>
+        </div>
+      </div>`;
+
+    // 상세 데이터를 메모리에 캐싱 (모달용)
+    window._admMonRows = (res.rows||[]).reduce((m,r)=>{m[r.id]=r;return m;}, {});
+
+  } catch(e){
+    list.innerHTML = `<div style="padding:40px;text-align:center;color:#FCA5A5;font-size:13px">조회 실패: ${esc(e.message||e)}</div>`;
+  }
+}
+
+function admMonPage(d){
+  _admMonState.offset = Math.max(0, _admMonState.offset + d * _admMonState.limit);
+  admMonFetch();
+}
+
+function admMonShowDetail(id){
+  const r = (window._admMonRows||{})[id];
+  if(!r) return;
+  const existing = document.getElementById('adm-mon-detail-modal');
+  if(existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'adm-mon-detail-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:30px';
+  modal.onclick = (e)=>{ if(e.target===modal) modal.remove(); };
+  modal.innerHTML = `
+    <div style="background:#0A0A0B;border:1px solid rgba(255,255,255,.1);border-radius:14px;max-width:900px;width:100%;max-height:80vh;overflow-y:auto;padding:24px;font-family:'Pretendard Variable','Pretendard',sans-serif">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <div style="font-size:16px;font-weight:800;color:#fff">로그 상세 #${id}</div>
+        <button onclick="document.getElementById('adm-mon-detail-modal').remove()" style="background:none;border:none;color:#94A3B8;font-size:20px;cursor:pointer">✕</button>
+      </div>
+      ${[
+        ['시각', new Date(r.occurred_at).toLocaleString('ko-KR')],
+        ['레벨', r.level],
+        ['source', r.source],
+        ['빌드', r.build_id||'-'],
+        ['회사 ID', r.company_id||'-'],
+        ['사용자', r.user_email||'-'],
+        ['URL', r.url||'-'],
+        ['IP hash', r.ip_hash||'-'],
+        ['User Agent', r.user_agent||'-']
+      ].map(([k,v])=>`<div style="display:grid;grid-template-columns:120px 1fr;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px">
+        <div style="color:#64748B">${k}</div>
+        <div style="color:#fff;word-break:break-all">${esc(String(v))}</div>
+      </div>`).join('')}
+      <div style="margin-top:16px"><div style="color:#64748B;font-size:11px;margin-bottom:6px">메시지</div>
+        <pre style="background:rgba(255,255,255,.03);padding:12px;border-radius:8px;color:#fff;font-size:12px;white-space:pre-wrap;word-break:break-word;max-height:200px;overflow-y:auto">${esc(r.message||'')}</pre>
+      </div>
+      ${r.stack?`<div style="margin-top:12px"><div style="color:#64748B;font-size:11px;margin-bottom:6px">스택</div>
+        <pre style="background:rgba(255,255,255,.03);padding:12px;border-radius:8px;color:#FCA5A5;font-size:11px;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow-y:auto;font-family:monospace">${esc(r.stack)}</pre>
+      </div>`:''}
+      ${r.meta?`<div style="margin-top:12px"><div style="color:#64748B;font-size:11px;margin-bottom:6px">메타</div>
+        <pre style="background:rgba(255,255,255,.03);padding:12px;border-radius:8px;color:#93C5FD;font-size:11px;white-space:pre-wrap;word-break:break-word;max-height:200px;overflow-y:auto;font-family:monospace">${esc(JSON.stringify(r.meta,null,2))}</pre>
+      </div>`:''}
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+// ══ 백업/복구 ══
+function admGetLastBackup(){
+  try { return JSON.parse(localStorage.getItem('nopro_admin_last_backup') || 'null'); } catch { return null; }
+}
+function admSetLastBackup(scope){
+  localStorage.setItem('nopro_admin_last_backup', JSON.stringify({ ts: Date.now(), scope }));
+  admUpdateBackupWarn();
+}
+function admUpdateBackupWarn(){
+  const last = admGetLastBackup();
+  const badge = document.getElementById('adm-backup-warn');
+  if(!badge) return;
+  if(!last){ badge.style.display = 'inline-block'; badge.textContent='!'; return; }
+  const days = Math.floor((Date.now() - last.ts) / 86400000);
+  if(days > 7){ badge.style.display = 'inline-block'; badge.textContent = days + 'd'; }
+  else { badge.style.display = 'none'; }
+}
+
+function admRenderBackupPage(users){
+  const cont = document.getElementById('adm-content');
+  if(!cont) return;
+  const last = admGetLastBackup();
+  const lastDays = last ? Math.floor((Date.now() - last.ts) / 86400000) : null;
+  const warnColor = lastDays === null ? '#FCA5A5' : lastDays > 7 ? '#FCA5A5' : lastDays > 3 ? '#FCD34D' : '#6EE7B7';
+  const warnText = lastDays === null ? '백업 기록 없음 — 첫 백업을 받으세요' :
+                   lastDays === 0 ? '오늘 백업됨 ✓' :
+                   `마지막 백업: ${lastDays}일 전`;
+
+  cont.innerHTML = `
+    <div style="font-size:22px;font-weight:800;color:#fff;margin-bottom:4px">💾 백업/복구</div>
+    <div style="font-size:12px;color:#94A3B8;margin-bottom:24px">데이터 사고에 대비한 외부 백업</div>
+
+    <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:20px;margin-bottom:18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:14px">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#94A3B8;margin-bottom:6px;letter-spacing:.3px">📅 백업 상태</div>
+          <div style="font-size:20px;font-weight:800;color:${warnColor}">${warnText}</div>
+          ${last ? `<div style="font-size:10px;color:#64748B;margin-top:4px">${new Date(last.ts).toLocaleString('ko-KR')} · ${last.scope==='all'?'전체 일괄':'개별'}</div>` : ''}
+        </div>
+        <button onclick="admBackupAll()" style="padding:11px 20px;border-radius:9px;border:1px solid rgba(96,165,250,.4);background:rgba(96,165,250,.15);color:#93C5FD;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">⬇ 전체 회사 일괄 백업</button>
+      </div>
+      <div style="font-size:11px;color:#94A3B8;line-height:1.7;background:rgba(255,255,255,.03);padding:11px 14px;border-radius:8px;border-left:2px solid #60A5FA">
+        💡 <b>주 1회</b>(권장: 매주 월요일) 백업 받아 외부 저장소에 보관하세요.<br>
+        ⚠️ 다운로드 파일은 주민번호·급여 등 민감 정보를 포함합니다. 암호화된 폴더 또는 안전한 클라우드에 보관하고, 불필요한 PC·USB에 방치하지 마세요.
+      </div>
+    </div>
+
+    <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;overflow:hidden">
+      <div style="padding:14px 20px;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px;font-weight:700;color:#fff">회사별 개별 백업 (${users.length}개)</div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:rgba(255,255,255,.03)">
+          ${['#','회사명','담당자','이메일','직원수','액션'].map(h=>`<th style="padding:10px 14px;font-size:10px;font-weight:700;color:#64748B;text-align:left;letter-spacing:.3px;border-bottom:1px solid rgba(255,255,255,.04)">${h}</th>`).join('')}
+        </tr></thead>
+        <tbody>${users.length ? users.map((u,i)=>`<tr style="border-bottom:1px solid rgba(255,255,255,.04)">
+          <td style="padding:10px 14px;font-size:11px;color:#64748B">${i+1}</td>
+          <td style="padding:10px 14px;font-size:13px;font-weight:700;color:#fff">${esc(u.company||'-')}</td>
+          <td style="padding:10px 14px;font-size:12px;color:#94A3B8">${esc(u.name||'-')}</td>
+          <td style="padding:10px 14px;font-size:11px;color:#64748B">${esc(u.email||'-')}</td>
+          <td style="padding:10px 14px;font-size:12px;color:#6EE7B7">${u.empCount!==undefined?u.empCount:0}명</td>
+          <td style="padding:10px 14px"><button onclick="admBackupCompany(${u.id}, ${JSON.stringify(u.company||'unknown').replace(/"/g,'&quot;')})" style="padding:5px 12px;border-radius:7px;border:1px solid rgba(96,165,250,.3);background:rgba(96,165,250,.1);color:#93C5FD;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">📥 백업</button></td>
+        </tr>`).join('') : '<tr><td colspan="6" style="padding:50px;text-align:center;color:#64748B">회사가 없습니다</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+async function admBackupCompany(companyId, companyName){
+  try {
+    const data = await apiFetch('/admin-backup?companyId=' + companyId, 'GET');
+    if(!data) throw new Error('백업 데이터 없음');
+    const safeName = String(companyName||'unknown').replace(/[^가-힣a-zA-Z0-9_-]/g,'_').slice(0,30);
+    const ts = new Date().toISOString().slice(0,10).replace(/-/g,'');
+    _admDownloadJson(data, `nopro-backup-${safeName}-${ts}.json`);
+    admSetLastBackup('single');
+    if(typeof toast === 'function') toast(`✓ ${companyName} 백업 완료`);
+  } catch(e){
+    alert('백업 실패: ' + (e.message||e));
+  }
+}
+
+async function admBackupAll(){
+  const users = getNoproUsers();
+  if(!users || !users.length){ alert('회사 목록이 비어있습니다'); return; }
+  if(!confirm(`${users.length}개 회사를 순차 백업합니다.\n파일이 ${users.length}개 다운로드됩니다.\n진행할까요?`)) return;
+
+  let success = 0, failed = 0;
+  for(const u of users){
+    try {
+      const data = await apiFetch('/admin-backup?companyId=' + u.id, 'GET');
+      if(!data) throw new Error('데이터 없음');
+      const safeName = String(u.company||'unknown').replace(/[^가-힣a-zA-Z0-9_-]/g,'_').slice(0,30);
+      const ts = new Date().toISOString().slice(0,10).replace(/-/g,'');
+      _admDownloadJson(data, `nopro-backup-${safeName}-${ts}.json`);
+      success++;
+      await new Promise(r => setTimeout(r, 500)); // 서버 부하 분산
+    } catch(e){
+      console.warn(`${u.company} 백업 실패:`, e);
+      failed++;
+    }
+  }
+  admSetLastBackup('all');
+  alert(`백업 완료: 성공 ${success}개 / 실패 ${failed}개`);
+}
+
+function _admDownloadJson(obj, filename){
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
 }
 
 function admRenderCompanies(users, filter=''){
@@ -9129,6 +12933,9 @@ async function admDeleteUser(id){
     const data=await res.json();
     if(!data.valid) throw new Error('invalid');
     setNoproSession(data.session);
+    // 🔒 F5/재진입 시 — JS 초기화 단계에서 localStorage로부터 자동 로드된 이전 데이터 클리어
+    // (sbLoadAll의 C-1 가드는 "응답에 키 없으면 메모리 유지" 정책이라, 계정 전환·세션 갱신 시 회사 A 데이터가 잔존할 수 있음)
+    clearLocalData();
     if(data.session.role==='admin'){
       enterAdmin();
     } else {
@@ -9196,7 +13003,7 @@ function clearLocalData(){
     'npm5_emps','npm5_rec','npm5_pol','npm5_bk','npm5_tbk',
     'npm5_bonus','npm5_allow','npm5_tax','npm5_leave_settings',
     'npm5_leave_overrides','npm5_folders','npm5_safety',
-    'npm5_pol_snapshots','npm5_pay_snapshots'
+    'npm5_pol_snapshots','npm5_pay_snapshots','npm5_bk_snapshots'
   ];
   keys.forEach(k => localStorage.removeItem(k));
   EMPS = [];
@@ -9208,10 +13015,15 @@ function clearLocalData(){
   ALLOWANCE_REC = {};
   SAFETY_REC = {};
   if(typeof TAX_REC !== 'undefined') TAX_REC = {};
+  if(typeof leaveOverrides !== 'undefined') leaveOverrides = {};
+  if(typeof leaveSettings !== 'undefined') leaveSettings = {};
   if(typeof POL_SNAPSHOTS !== 'undefined') POL_SNAPSHOTS = {};
   if(typeof PAY_SNAPSHOTS !== 'undefined') PAY_SNAPSHOTS = {};
+  if(typeof BK_SNAPSHOTS !== 'undefined') BK_SNAPSHOTS = {};
   // 🛡️ 스냅샷도 초기화 — 재로그인 직후 가드가 "이전에 데이터 있었다"로 오판 방지
   if(typeof _syncedSnapshot !== 'undefined') _syncedSnapshot = null;
+  // 🛡️ 낙관적 잠금 버전도 초기화 — 새 로그인 시 깨끗하게 다시 받음
+  if(typeof _serverVersions !== 'undefined') _serverVersions = {};
   // 🛡️ 대기 중인 saveLS 타이머도 취소 — logout race로 빈값 저장되는 경로 차단
   if(typeof saveLS !== 'undefined' && saveLS._timer){ clearTimeout(saveLS._timer); saveLS._timer = null; }
 }
@@ -9230,6 +13042,11 @@ async function sbSaveAll(companyId) {
     {key:'leave_overrides', value:JSON.parse(localStorage.getItem('npm5_leave_overrides')||'{}')},
     {key:'pol_snapshots', value:POL_SNAPSHOTS||{}},
     {key:'pay_snapshots', value:PAY_SNAPSHOTS||{}},
+    {key:'bk_snapshots', value:BK_SNAPSHOTS||{}},
+    // 📁 폴더탭 — Phase 4 도입 (PROTECTED 아님 — 가드 영향 없음)
+    {key:'company_info', value: typeof COMPANY_INFO!=='undefined' ? (COMPANY_INFO||{}) : {}},
+    {key:'custom_docs', value: typeof CUSTOM_DOCS!=='undefined' ? (CUSTOM_DOCS||[]) : []},
+    {key:'saved_forms', value: typeof SAVED_FORMS!=='undefined' ? (SAVED_FORMS||[]) : []},
   ];
   // 대형 키: 각각 별도 저장 (타임아웃 방지 + old_value 감사로그 저장)
   const largeItems = [
@@ -9252,23 +13069,74 @@ async function sbSaveAll(companyId) {
       return false;
     } catch(e){ return false; }
   };
-  const _guardKeys = new Set(['emps','rec','bonus','allow','tax','tbk','safety']);
+  const _guardKeys = new Set(['emps','rec','bonus','allow','tax','tbk','safety','bk']);
   const _blockedOverwrite = [];  // 실제 덮어쓰기 시도 (사용자 토스트)
+
+  // 🚀 변경된 키만 전송 (diff 기반) — 한 글자 수정해도 500KB+ 보내던 비효율 제거
+  // snap에 저장된 마지막 sync 시점 값과 비교해서 다른 키만 통과
+  const _hasChanged = (key, value) => {
+    if(!snap) return true;  // snap 없으면(초기) 모두 보냄
+    const snapVal = snap[key];
+    if(snapVal == null) return true;  // snap에 키 없으면 (신규) 보냄
+    try {
+      const cur = JSON.stringify(value);
+      const ref = (typeof snapVal === 'string') ? snapVal : JSON.stringify(snapVal);
+      return cur !== ref;
+    } catch(e){ return true; }
+  };
+
+  // 📊 부분 손실 진단 (옵션 A) — 빈값은 아닌데 키 일부가 사라졌으면 error_log에 기록.
+  // 21중 가드는 "전체 wipe"는 막지만 "일부 누락"은 정상 저장으로 통과 → 사고 패턴 추적용.
+  const _diagPartialLoss = (key, value) => {
+    if(!snap || snap[key] == null) return;
+    let oldObj;
+    try { oldObj = (typeof snap[key]==='string') ? JSON.parse(snap[key]) : snap[key]; }
+    catch { return; }
+    const newObj = value;
+    if(!oldObj || !newObj || typeof oldObj!=='object' || typeof newObj!=='object') return;
+    if(Array.isArray(oldObj) && Array.isArray(newObj)){
+      if(newObj.length < oldObj.length){
+        try { reportError({ level:'guard', source:'sbSaveAll-diff', message:`${key} 항목 감소: ${oldObj.length} → ${newObj.length}`, meta:{ key, oldCount:oldObj.length, newCount:newObj.length, diff:oldObj.length-newObj.length } }); } catch {}
+      }
+      return;
+    }
+    const oldKeys = Object.keys(oldObj);
+    const newSet = new Set(Object.keys(newObj));
+    const missing = oldKeys.filter(k => !newSet.has(k));
+    if(missing.length){
+      try {
+        reportError({
+          level:'guard', source:'sbSaveAll-diff',
+          message:`${key} 키 일부 사라짐: ${missing.length}개`,
+          meta:{ key, missingCount:missing.length, missingSample:missing.slice(0,15), oldCount:oldKeys.length, newCount:newSet.size }
+        });
+      } catch {}
+    }
+  };
+
   const _filter = (items) => items.filter(it => {
-    if(!_guardKeys.has(it.key)) return true;
+    // 🚀 변경 안 된 키는 보내지 않음 (성능 최적화)
+    if(!_hasChanged(it.key, it.value)) return false;
+    if(!_guardKeys.has(it.key)){
+      return true;
+    }
     if(_isEmpty(it.value)){
       // 🛡️ 스냅샷이 아직 없으면(sbLoadAll 미완): 빈값 저장 절대 금지. 콘솔만 로그.
       if(snap === null){
         console.warn('🛡️ 초기 로드 전 빈값 저장 차단:', it.key, '(스냅샷 없음 → 데이터 안전 우선)');
+        try { reportError({ level: 'guard', source: 'sbSaveAll', message: '초기 로드 전 빈값 저장 차단', meta: { key: it.key, reason: 'snap_null' } }); } catch {}
         return false;
       }
       // 스냅샷에 데이터가 있었는데 지금 비어있으면 차단. 사용자에게도 알림.
       if(_snapHasData(snap[it.key])){
         _blockedOverwrite.push(it.key);
         console.warn('🛡️ 빈 값 덮어쓰기 차단:', it.key, '(이전 스냅샷에 데이터 있음)');
+        try { reportError({ level: 'guard', source: 'sbSaveAll', message: '빈값 덮어쓰기 차단 (PROTECTED)', meta: { key: it.key, reason: 'snap_has_data' } }); } catch {}
         return false;
       }
     }
+    // 📊 정상 통과 직전 — 부분 손실 패턴 진단 (저장은 그대로 진행)
+    _diagPartialLoss(it.key, it.value);
     return true;
   });
   const safeSmall = _filter(smallItems);
@@ -9277,11 +13145,43 @@ async function sbSaveAll(companyId) {
     showSyncToast('⚠️ 빈 값 덮어쓰기 차단: '+_blockedOverwrite.join(', ')+'\n서버 데이터 보호 (새로고침으로 재로드 권장)','warn',6000);
   }
 
+  // 🛡️ 낙관적 잠금: 클라가 마지막으로 본 서버 버전을 함께 보냄 (서버가 stale-overwrite 거부)
+  const attachVersion = (item) => ({...item, expectedUpdatedAt: _serverVersions[item.key] || null});
+
+  // 응답 통합 처리 (성공한 키 버전 업데이트 + 충돌 발생 키 통보)
+  const _applyResp = (resp) => {
+    if(!resp) return;
+    if(resp.versions){
+      const savedKeys = Object.keys(resp.versions);
+      Object.entries(resp.versions).forEach(([k,v])=>{ if(v) _serverVersions[k] = v; });
+      // 🔁 다른 탭에 즉시 알림 (같은 브라우저 멀티탭 동기화)
+      if(savedKeys.length) _broadcastSaved(savedKeys);
+    }
+    if(resp.conflicts && resp.conflicts.length){
+      handleConflicts(resp.conflicts);
+    }
+  };
+
   // 소형 키 먼저 저장, 대형 키는 병렬로 개별 저장
-  if(safeSmall.length) await apiFetch('/data-save','POST',{items:safeSmall});
-  if(safeLarge.length) await Promise.all(safeLarge.map(item=>
-    apiFetch('/data-save','POST',{items:[item]}).catch(e=>console.warn('대형 키 저장 오류('+item.key+'):',e))
-  ));
+  if(safeSmall.length){
+    const resp = await apiFetch('/data-save','POST',{items:safeSmall.map(attachVersion)});
+    _applyResp(resp);
+  }
+  if(safeLarge.length){
+    // 🔒 catch에서 console.warn만 하던 silent 버그 수정 — 실패 플래그 누적 후 외부로 propagate
+    // 이전: 401/네트워크 오류로 folders 저장 실패해도 sbSaveAll 정상 종료 → setSyncStatus가 'saved'로 거짓 표시
+    // 이후: 1개라도 실패하면 throw → saveLS의 catch로 propagate → 'unsaved' 표시 + 사용자 토스트
+    const _failedKeys = [];
+    await Promise.all(safeLarge.map(item=>
+      apiFetch('/data-save','POST',{items:[attachVersion(item)]})
+        .then(_applyResp)
+        .catch(e=>{
+          console.warn('대형 키 저장 오류('+item.key+'):',e);
+          _failedKeys.push(item.key);
+        })
+    ));
+    if(_failedKeys.length) throw new Error('대형 키 저장 실패: '+_failedKeys.join(','));
+  }
   // 서버 동기화 완료 시점 스냅샷 (폴링 머지 기준값)
   if(typeof _takeSyncedSnapshot === 'function') _takeSyncedSnapshot();
 }
@@ -9297,6 +13197,68 @@ let _pollTimerId = null;
 const POLL_INTERVAL_MS = 120000;
 const POLL_BACKOFF_MAX = 600000;
 let _pollBackoffMs = 0;
+
+// ══════════════════════════════════════════════════════
+// 🛡️ 낙관적 잠금: 서버 버전(updated_at) 추적
+// ══════════════════════════════════════════════════════
+// data_key → 마지막으로 본 서버 updated_at(ISO string).
+// 저장 시 클라가 본 버전을 함께 보내면, 서버가 이미 더 최신이면 거부.
+// → 다른 디바이스의 옛 상태가 새 데이터를 덮어쓰는 사고 방지.
+let _serverVersions = {};
+let _conflictHandling = false;
+
+// ══════════════════════════════════════════════════════
+// 🔁 BroadcastChannel — 같은 브라우저의 다른 탭 간 즉시 동기화
+// 한 탭이 저장 성공하면 다른 탭에 알림 → 다른 탭은 즉시 polling 트리거
+// 같은 사용자가 멀티탭으로 작업할 때 이벤트 누락 차단
+// ══════════════════════════════════════════════════════
+let _bc = null;
+try {
+  if(typeof BroadcastChannel !== 'undefined'){
+    _bc = new BroadcastChannel('nopro-sync');
+    _bc.onmessage = (ev) => {
+      if(!ev || !ev.data) return;
+      // 🛑 다른 탭 저장 알림 받아도 자동 폴링 안 함 (2026-05-04 입력 유실 사고 차단).
+      // 폴링이 입력 중 메모리/렌더에 끼어드는 모든 경로 제거. 다른 탭의 변경은
+      // F5로 명시적으로 동기화. 단일 로그인 차단 후엔 같은 사용자 멀티탭이 유일한 시나리오.
+      // (메시지 수신 자체는 유지 — 향후 가벼운 알림 등에 재활용 가능)
+    };
+  }
+} catch(e){ console.warn('BroadcastChannel 초기화 실패:', e); }
+function _broadcastSaved(keys){
+  try { if(_bc && keys && keys.length) _bc.postMessage({type:'data-saved', keys, ts:Date.now()}); } catch(e){}
+}
+
+// 🛡️ 단일 사용자 정책 (2026-05-06): 충돌 시 강제 재저장도 폐기.
+// 옛 코드는 /data-load → 강제 재저장 시도 → 그 사이 saveLS B가 끼어들면 또 stale →
+// 또 conflicts → handleConflicts 재호출 → 무한 루프 발생.
+// 새 정책: 서버가 알려준 conflicts[i].actual(서버 현재 버전)을 _serverVersions에 즉시 반영하고
+// 다음 saveLS 디바운스 사이클이 자연스럽게 새 버전으로 재시도하도록 위임. fetch 추가 호출 없음 → race 자체가 발생 안 함.
+// size-drop-blocked는 진짜 위험한 사이즈 급감 차단이므로 사용자에게만 알리고 자동 재시도 안 함.
+async function handleConflicts(conflicts){
+  if(!conflicts || !conflicts.length) return;
+  if(_conflictHandling) return;
+  _conflictHandling = true;
+  try {
+    const sizeDropKeys = [];
+    conflicts.forEach(c => {
+      if(c && c.key){
+        if(c.actual) _serverVersions[c.key] = c.actual; // 서버 최신 버전을 클라에 반영
+        if(c.reason === 'size-drop-blocked') sizeDropKeys.push(c.key);
+      }
+    });
+    // 다음 사용자 액션 시 자연스러운 saveLS 디바운스로 재시도됨 — 여기서 즉시 재호출 안 함.
+    // (옛 코드가 즉시 saveLS 재호출 → 또 conflicts → handleConflicts 재진입 → 무한 루프 발생)
+    if(sizeDropKeys.length && typeof showSyncToast==='function'){
+      showSyncToast('⚠️ 데이터 크기 급감 차단: '+sizeDropKeys.join(', ')+'\n새로고침 권장 (서버 보호)','warn',6000);
+    }
+  } catch(e) {
+    console.warn('충돌 처리 실패:', e);
+  } finally {
+    _conflictHandling = false;
+  }
+}
+
 
 function _deepCopy(x){ try { return JSON.parse(JSON.stringify(x||{})); } catch(e){ return {}; } }
 
@@ -9316,42 +13278,191 @@ function _takeSyncedSnapshot(){
   } catch(e){ console.warn('스냅샷 실패:', e); }
 }
 
-// 서버 블롭과 로컬 블롭을 필드 단위로 머지.
-// 규칙: 서버값 우선 → 내가 편집 중인 필드(스냅샷과 다름)는 로컬 유지 →
-//       로컬에서 지운 필드는 서버값 무시.
+// 서버 블롭과 로컬 블롭을 필드 단위로 머지. 양쪽 삭제·추가·수정 모두 정확히 처리.
+// 핵심 규칙:
+//   - 로컬에서 삭제(snap에 있고 L에 없음) → 서버값 무시 (사용자 삭제 의도 보존)
+//   - 서버에서 삭제(snap에 있고 S에 없음) → 로컬값 제거 (다른 디바이스 삭제 전파)
+//     단, 로컬에서 dirty 수정 중이면 사용자 입력 보존 우선
+//   - 로컬 추가(snap에 없고 L에 있음) → 유지
+//   - 서버 추가(snap에 없고 S에 있음) → 흡수
+//   - 로컬 수정(L ≠ snap) → 로컬 우선
 function _mergeByField(local, server, snapshot){
   const L = local || {}; const S = server || {}; const snap = snapshot || {};
+  // 🛡️ 안전장치: 서버가 빈 객체이고 로컬에 데이터 있음 → 머지 포기, 로컬 보존
+  // (서버 데이터 오류·race condition으로부터 로컬 데이터 보호)
+  if(Object.keys(S).length === 0 && Object.keys(L).length > 0){
+    console.warn('🛡️ 머지 보호: 서버 빈 객체 + 로컬 데이터 있음 → 로컬 그대로 보존');
+    return {...L};
+  }
   const merged = {};
+  // 1단계: 서버값 채택 (단, 로컬에서 삭제한 키는 부활 X)
   Object.keys(S).forEach(k => {
-    // 로컬에서 삭제된 필드는 서버에서 부활시키지 않음
-    if((k in snap) && !(k in L)) return;
+    if((k in snap) && !(k in L)) return; // 로컬 삭제 → 부활 X
     merged[k] = S[k];
   });
+  // 2단계: 로컬 변경/신규 키 처리
   Object.keys(L).forEach(k => {
     const dirty = JSON.stringify(L[k]) !== JSON.stringify(snap[k]);
-    if(dirty || !(k in S)) merged[k] = L[k];
+    if(dirty){
+      // 로컬에서 수정 → 로컬 우선 (사용자 입력 보존, 서버 삭제도 무시)
+      merged[k] = L[k];
+    } else if(!(k in S) && !(k in snap)){
+      // 로컬에서 새로 추가 (서버·스냅샷에 없음) → 유지
+      merged[k] = L[k];
+    }
+    // (k in snap) && !(k in S) && !dirty → 서버 삭제 + 로컬 미수정 → 전파 (merged에 안 추가)
   });
   return merged;
 }
 
+// 🛡️ 직원 객체 필드 단위 머지 — 같은 직원의 다른 필드를 두 디바이스가 동시 수정해도
+// 둘 다 보존. (예: A가 이름 수정, B가 직급 수정 → 머지 결과에 둘 다 반영)
+// 규칙:
+//   - 로컬에서 변경된 필드(스냅샷과 다름) → 로컬 우선
+//   - 로컬은 변경 안 했고 서버만 변경 → 서버 우선
+//   - 양쪽 다 변경(같은 필드) → 로컬 우선 (사용자 입력 절대 보존 원칙)
+//   - 로컬에 있는 필드는 절대 삭제 안 함 (보존성 ↑)
+// 🛡️ 직원 식별·중요 필드 — 서버가 잘못 비웠어도 로컬 값(비어있지 않으면) 보존
+const _PRESERVE_NONEMPTY_FIELDS = new Set([
+  'empNo','name','role','grade','dept','deptCat','phone',
+  'rrnFront','rrnBack','join','leave','age','rate','monthly','sot'
+]);
+
+function _mergeEmpFields(local, server, snap){
+  const L = local || {}; const S = server || {}; const SNAP = snap || {};
+  const merged = {};
+  // 모든 필드 키 수집 (서버+로컬+스냅샷)
+  const allKeys = new Set([...Object.keys(L), ...Object.keys(S), ...Object.keys(SNAP)]);
+  const _isEmptyVal = v => v == null || v === '' || (Array.isArray(v) && v.length===0);
+  allKeys.forEach(k => {
+    const inL = k in L, inS = k in S, inSnap = k in SNAP;
+    const lv = L[k], sv = S[k], snapv = SNAP[k];
+    if(inL){
+      const dirty = JSON.stringify(lv) !== JSON.stringify(snapv);
+      if(dirty){
+        merged[k] = lv;        // 로컬 변경분 우선
+      } else if(inS){
+        // 🛡️ 보호 필드: 로컬 비어있지 않은데 서버가 비었으면 로컬 보존
+        // (예: empNo가 어떤 race로 서버에서 빈값 응답해도 로컬 사번 안 잃음)
+        if(_PRESERVE_NONEMPTY_FIELDS.has(k) && !_isEmptyVal(lv) && _isEmptyVal(sv)){
+          merged[k] = lv;
+        } else {
+          merged[k] = sv;      // 일반 필드: 로컬 미변경이면 서버값 채택
+        }
+      } else {
+        merged[k] = lv;        // 서버에 없으면 로컬값 유지
+      }
+    } else if(inS){
+      // 로컬에 없음
+      if(inSnap && JSON.stringify(snapv) === JSON.stringify(sv)){
+        // 스냅샷=서버라면 로컬에서 의도적으로 지운 것 → 부활 X
+        return;
+      }
+      merged[k] = sv;          // 서버에 새로 추가된 필드 → 흡수
+    }
+    // L,S 모두 없고 snap에만 있으면 → 양쪽 다 삭제 → merged에도 없음 ✓
+  });
+  return merged;
+}
+
+// emp 배열을 id 기준으로 필드 단위 머지.
+// 양쪽 삭제·추가·수정 정확히 처리 — 서버에서 삭제된 직원은 부활시키지 않음.
+function _mergeEmpsArrayByField(localArr, serverArr, snapArr){
+  // 🛡️ 안전장치: 서버 배열이 비어있는데 로컬에 데이터 있음 → 머지 포기, 로컬 보존
+  // (서버 데이터 오류·race condition·잘못된 빈값 응답 등으로부터 로컬 데이터 보호)
+  if((!serverArr || serverArr.length === 0) && localArr && localArr.length > 0){
+    console.warn('🛡️ 머지 보호: 서버 빈 배열 + 로컬 데이터 있음 → 로컬 그대로 보존');
+    return [...localArr];
+  }
+  const toMap = arr => Object.fromEntries((arr||[]).map(x => [String(x.id), x]));
+  const Lmap = toMap(localArr);
+  const Smap = toMap(serverArr);
+  const SNAPmap = toMap(snapArr);
+  const allIds = new Set([...Object.keys(Lmap), ...Object.keys(Smap), ...Object.keys(SNAPmap)]);
+  const merged = [];
+  allIds.forEach(id => {
+    const lEmp = Lmap[id];
+    const sEmp = Smap[id];
+    const snapEmp = SNAPmap[id];
+    if(!lEmp && !sEmp) return;
+    if(!lEmp){
+      // 로컬에 없음
+      if(snapEmp) return;       // 로컬 삭제 → 부활 X (사용자 삭제 의도 보존)
+      merged.push(sEmp);        // 서버가 새로 추가 → 흡수
+      return;
+    }
+    if(!sEmp){
+      // 서버에 없음
+      if(snapEmp){
+        // 스냅샷에 있었는데 서버에 없음 = 다른 디바이스에서 삭제됨
+        // 로컬에서 dirty 수정 중이면 보존, 아니면 삭제 전파
+        const dirty = JSON.stringify(lEmp) !== JSON.stringify(snapEmp);
+        if(dirty) merged.push(lEmp);  // 사용자 수정 중 → 보존 (마음 바뀐 거면 다시 저장)
+        // 미수정 → 삭제 전파 (merged에 안 추가)
+        return;
+      }
+      // 스냅샷에도 없음 → 로컬 신규 → 유지
+      merged.push(lEmp);
+      return;
+    }
+    // 양쪽 다 존재 → 필드 단위 머지
+    merged.push(_mergeEmpFields(lEmp, sEmp, snapEmp));
+  });
+  return merged;
+}
+
+// 🛡️ 폴링 시 받아올 키 화이트리스트 — rec/tbk 제외 (대용량 데이터 504 방지)
+// rec(출퇴근 기록)·tbk(임시 휴게)는 가장 큰 키이며 다른 디바이스 변경은 F5 시 sbLoadAll로 받음.
+// 같은 디바이스 내 변경은 saveLS → sbSaveAll로 즉시 반영되므로 폴링 의존도 없음.
+// CLAUDE.md C-7(EMPS ADD-ONLY), C-9(POL 폴링 무변경)와 동일한 "큰 데이터는 F5에서만" 패턴.
+const POLL_KEYS = ['emps','pol','bk','bonus','allow','tax','leave_settings','leave_overrides','folders','safety','pol_snapshots','pay_snapshots','bk_snapshots'];
+
 async function pollForUpdates(){
   if(document.hidden) return;
+  // 🛡️ 입력 중이면 폴링 자체 스킵 (메모리 갱신 + 재렌더 둘 다 차단)
+  // 기존 코드는 메모리 갱신 후 재렌더만 스킵 → 입력값이 다른 키 머지로 영향받을 수 있었음
+  const _ae = document.activeElement;
+  if(_ae && (_ae.tagName==='INPUT' || _ae.tagName==='TEXTAREA' || _ae.tagName==='SELECT')){
+    return;
+  }
+  // 🛡️ 디바운스 중인 저장이 있으면 스킵 (서버에 아직 안 간 변경분 보호)
+  if(saveLS._timer) return;
   const _sess = (()=>{ try { return JSON.parse(localStorage.getItem('nopro_session')||'null'); } catch(e){ return null; }})();
   if(!_sess || !_sess.companyId) return;
   try {
-    const server = await apiFetch('/data-load','POST',{});
+    const server = await apiFetch('/data-load','POST',{ keys: POLL_KEYS });
     if(!server) return;
+    // 🏷️ 빌드 버전 체크
+    if(server._serverBuild) _checkServerBuild(server._serverBuild);
+    // ⚠️ 낙관적 잠금용 _serverVersions은 이 함수 안에서 "실제로 로컬이 서버와 동기화된 키"만 갱신.
+    // 미저장 변경이 있는 키는 옛 버전 그대로 유지 → 다음 저장 시 충돌 감지로 stale-overwrite 차단.
     let changed = false;
     const snap = _syncedSnapshot || {};
-    // 키 기반 블롭 — 필드 단위 머지
+    // 🛡️ 폴링은 ADD-ONLY: 로컬에 없는 새 키만 흡수, 기존 키는 절대 안 건드림
+    // (사용자 데이터 보호 우선 — 다른 디바이스 변경분은 F5 시 동기화)
     const mergeKeyed = (name, getLocal, setLocal, lsKey)=>{
       if(server[name] === undefined) return;
       const local = getLocal();
-      const m = _mergeByField(local, server[name]||{}, snap[name]);
-      if(JSON.stringify(m) !== JSON.stringify(local)){
-        setLocal(m);
-        if(lsKey) localStorage.setItem(lsKey, JSON.stringify(m));
+      const localStr = JSON.stringify(local);
+      const snapStr = (typeof snap[name]==='string') ? snap[name] : JSON.stringify(snap[name]||null);
+      // ADD-ONLY 머지: 로컬에 없는 서버 키만 추가, 기존 키는 로컬 그대로
+      const merged = {...local};
+      const sv = server[name] || {};
+      let added = false;
+      Object.keys(sv).forEach(k => {
+        if(!(k in merged)){
+          merged[k] = sv[k];
+          added = true;
+        }
+      });
+      if(added){
+        setLocal(merged);
+        if(lsKey) localStorage.setItem(lsKey, JSON.stringify(merged));
         changed = true;
+      }
+      // 버전 갱신: 미저장 변경 없을 때만
+      if(localStr === snapStr && server._versions && server._versions[name]){
+        _serverVersions[name] = server._versions[name];
       }
     };
     // 🛡️ 서버가 비어있는데 로컬에 데이터가 있으면 서버 wipe 전파 방지 (로컬 보호)
@@ -9390,10 +13501,18 @@ async function pollForUpdates(){
       if(server[name] === undefined) return;
       const localStr = getStr();
       const serverStr = JSON.stringify(server[name]);
-      if(localStr !== serverStr && localStr === snap[name]){
+      if(localStr === serverStr){
+        // 이미 서버와 같음 — 버전만 갱신
+        if(server._versions && server._versions[name]) _serverVersions[name] = server._versions[name];
+        return;
+      }
+      if(localStr === snap[name]){
+        // 로컬 미수정 상태 → 서버 데이터로 교체 + 버전 갱신
         apply(server[name]);
         changed = true;
+        if(server._versions && server._versions[name]) _serverVersions[name] = server._versions[name];
       }
+      // localStr ≠ serverStr && localStr ≠ snap → 미저장 변경 있음 → 교체·버전 갱신 모두 스킵
     };
     // 🛡️ EMPS는 빈 배열로 전파 차단 (로컬에 데이터 있으면 서버 빈값 무시)
     const _guardedReplace = (name, getStr, apply)=>{
@@ -9409,18 +13528,51 @@ async function pollForUpdates(){
       }
       replaceIfClean(name, getStr, apply);
     };
-    _guardedReplace('emps', ()=>JSON.stringify(EMPS), v=>{
-      EMPS = v; if(typeof sortEMPS==='function') sortEMPS();
-      localStorage.setItem('npm5_emps', JSON.stringify(EMPS));
-    });
-    replaceIfClean('pol', ()=>JSON.stringify(POL), v=>{
-      POL = Object.assign({...(typeof DEF_POL!=='undefined'?DEF_POL:{})}, v);
-      localStorage.setItem('npm5_pol', JSON.stringify(POL));
-    });
-    _guardedReplace('bk', ()=>JSON.stringify(DEF_BK), v=>{
-      DEF_BK = v;
-      localStorage.setItem('npm5_bk', JSON.stringify(DEF_BK));
-    });
+    // 🛡️ EMPS — ADD-ONLY: 새 직원만 흡수, 기존 직원은 절대 안 건드림
+    // 🔒 편집 모드 중이면 EMPS 동기화 전체 스킵 — 사용자 드래그 정렬 보호
+    if(server.emps !== undefined && Array.isArray(server.emps)){
+      if(_empEditMode){
+        console.warn('🔒 폴링 EMPS 동기화 스킵 — 편집 모드 중');
+      } else {
+      const localIds = new Set((EMPS||[]).map(e => String(e.id)));
+      const newEmps = server.emps.filter(s => !localIds.has(String(s.id)));
+      if(newEmps.length > 0){
+        EMPS = [...EMPS, ...newEmps];
+        if(typeof sortEMPS==='function') sortEMPS();
+        localStorage.setItem('npm5_emps', JSON.stringify(EMPS));
+        changed = true;
+        console.log('🔄 폴링: 새 직원 ' + newEmps.length + '명 흡수');
+      }
+      // 버전 갱신: 미저장 없을 때만
+      const localEmpsStr = JSON.stringify(EMPS);
+      const snapEmpsStr = snap.emps || '';
+      if(localEmpsStr === snapEmpsStr && server._versions && server._versions.emps){
+        _serverVersions.emps = server._versions.emps;
+      }
+      }
+    }
+    // 🛡️ POL — 폴링에서 변경 안 함. F5 시 sbLoadAll로만 동기화. 사용자 설정 보호.
+    if(server.pol !== undefined && server._versions && server._versions.pol){
+      const localStr = JSON.stringify(POL);
+      const snapStr = snap.pol || '';
+      if(localStr === snapStr) _serverVersions.pol = server._versions.pol;
+    }
+    // 🛡️ BK — ADD-ONLY: 새 휴게시간 항목만 흡수, 기존 항목은 절대 안 건드림
+    if(server.bk !== undefined && Array.isArray(server.bk)){
+      const localBkIds = new Set((DEF_BK||[]).map(b => String(b.id)));
+      const newBks = server.bk.filter(s => !localBkIds.has(String(s.id)));
+      if(newBks.length > 0){
+        DEF_BK = [...DEF_BK, ...newBks];
+        localStorage.setItem('npm5_bk', JSON.stringify(DEF_BK));
+        changed = true;
+        console.log('🔄 폴링: 새 휴게시간 ' + newBks.length + '개 흡수');
+      }
+      const localBkStr = JSON.stringify(DEF_BK);
+      const snapBkStr = snap.bk || '';
+      if(localBkStr === snapBkStr && server._versions && server._versions.bk){
+        _serverVersions.bk = server._versions.bk;
+      }
+    }
     // 월별 POL/PAY 스냅샷: 다른 기기에서 확정/해제·정책변경한 내용 반영
     if(server.pol_snapshots !== undefined){
       const sv = JSON.stringify(server.pol_snapshots);
@@ -9435,6 +13587,17 @@ async function pollForUpdates(){
       if(sv !== JSON.stringify(PAY_SNAPSHOTS||{})){
         PAY_SNAPSHOTS = server.pay_snapshots || {};
         localStorage.setItem('npm5_pay_snapshots', sv);
+        changed = true;
+      }
+    }
+    // BK_SNAPSHOTS 머지: 다른 기기에서 freeze된 월별 휴게세트 동기화
+    // 🛡️ 새 값으로 덮여씌워지면 안 됨 — 서버 키와 로컬 키를 합치되, 동일 키는 로컬 우선
+    if(server.bk_snapshots !== undefined && typeof BK_SNAPSHOTS !== 'undefined'){
+      const merged = {...(server.bk_snapshots||{}), ...BK_SNAPSHOTS};
+      const mv = JSON.stringify(merged);
+      if(mv !== JSON.stringify(BK_SNAPSHOTS||{})){
+        BK_SNAPSHOTS = merged;
+        localStorage.setItem('npm5_bk_snapshots', mv);
         changed = true;
       }
     }
@@ -9470,18 +13633,27 @@ async function pollForUpdates(){
     if(isTimeout){
       _pollBackoffMs = Math.min((_pollBackoffMs||POLL_INTERVAL_MS) * 2, POLL_BACKOFF_MAX);
       console.warn('poll 504/timeout — 백오프:', Math.round(_pollBackoffMs/1000)+'초 후 재시도');
+      // 🔭 운영 모니터링: 504 발생 추세 추적
+      try { reportError({ level: 'warn', source: 'pollForUpdates', message: '504/timeout', meta: { backoffMs: _pollBackoffMs } }); } catch {}
       // setInterval 대신 setTimeout으로 재스케줄
       if(_pollTimerId){ clearInterval(_pollTimerId); _pollTimerId = null; }
       _pollTimerId = setTimeout(()=>{ _pollTimerId = null; startAutoPoll(); }, _pollBackoffMs);
     } else {
       console.warn('poll 실패:', e);
+      try { reportError({ level: 'warn', source: 'pollForUpdates', message: msg, stack: e?.stack }); } catch {}
     }
   }
 }
 
 function startAutoPoll(){
   if(_pollTimerId) return;
-  _pollTimerId = setInterval(pollForUpdates, POLL_INTERVAL_MS);
+  // 🛑 폴링 비활성화 (2026-05-04) — 입력값 유실 사고 차단.
+  // 폴링이 입력 중/직후 메모리·렌더에 끼어들어 사용자 입력을 덮어쓰는 사례 발생.
+  // 단일 로그인 차단(예정) 시 폴링은 사실상 무용지물. 빌드 버전 체크는 다음 사용자 액션
+  // 시 발생하는 일반 API 응답에서 _serverBuild로 자연스럽게 처리됨.
+  // 재활성화 필요 시 이 줄 복원.
+  return;
+  // _pollTimerId = setInterval(pollForUpdates, POLL_INTERVAL_MS);
 }
 function stopAutoPoll(){
   if(_pollTimerId){
@@ -9498,6 +13670,13 @@ function stopAutoPoll(){
 async function sbLoadAll(companyId) {
   const map = await apiFetch('/data-load','POST',{});
 
+  // 🛡️ 낙관적 잠금: 서버 updated_at 캡처 (저장 시 충돌 검증용)
+  if(map && map._versions){
+    _serverVersions = {..._serverVersions, ...map._versions};
+  }
+  // 🏷️ 빌드 버전 비교 — 옛 캐시된 클라이언트 감지
+  if(map && map._serverBuild) _checkServerBuild(map._serverBuild);
+
   if('emps' in map)            { EMPS = map.emps || []; localStorage.setItem('npm5_emps', JSON.stringify(EMPS)); }
   sortEMPS();
   if('pol' in map && map.pol)  { POL = Object.assign({...DEF_POL}, map.pol); localStorage.setItem('npm5_pol', JSON.stringify(POL)); }
@@ -9507,12 +13686,23 @@ async function sbLoadAll(companyId) {
   if('bonus' in map)           { BONUS_REC = map.bonus || {}; localStorage.setItem('npm5_bonus', JSON.stringify(BONUS_REC)); }
   if('allow' in map)           { ALLOWANCE_REC = map.allow || {}; localStorage.setItem('npm5_allow', JSON.stringify(ALLOWANCE_REC)); }
   if('tax' in map)             { TAX_REC = map.tax || {}; localStorage.setItem('npm5_tax', JSON.stringify(TAX_REC)); }
-  if('leave_settings' in map)  localStorage.setItem('npm5_leave_settings', JSON.stringify(map.leave_settings||{}));
-  if('leave_overrides' in map) localStorage.setItem('npm5_leave_overrides', JSON.stringify(map.leave_overrides||{}));
+  if('leave_settings' in map)  {
+    localStorage.setItem('npm5_leave_settings', JSON.stringify(map.leave_settings||{}));
+    leaveSettings = map.leave_settings || {};
+  }
+  if('leave_overrides' in map) {
+    localStorage.setItem('npm5_leave_overrides', JSON.stringify(map.leave_overrides||{}));
+    leaveOverrides = loadLeaveOverrides();
+  }
   if('folders' in map)         localStorage.setItem('npm5_folders', JSON.stringify(map.folders||[]));
   if('safety' in map)          { SAFETY_REC = map.safety || {}; localStorage.setItem('npm5_safety', JSON.stringify(SAFETY_REC)); }
   if('pol_snapshots' in map)   { POL_SNAPSHOTS = map.pol_snapshots || {}; localStorage.setItem('npm5_pol_snapshots', JSON.stringify(POL_SNAPSHOTS)); }
   if('pay_snapshots' in map)   { PAY_SNAPSHOTS = map.pay_snapshots || {}; localStorage.setItem('npm5_pay_snapshots', JSON.stringify(PAY_SNAPSHOTS)); }
+  if('bk_snapshots' in map)    { BK_SNAPSHOTS = map.bk_snapshots || {}; localStorage.setItem('npm5_bk_snapshots', JSON.stringify(BK_SNAPSHOTS)); }
+  // 📁 폴더탭 — 새 키 (Phase 4 도입). 반드시 `if('key' in map)` 패턴 (CLAUDE.md 규칙)
+  if('company_info' in map)    { COMPANY_INFO = map.company_info || {}; localStorage.setItem('npm5_company_info', JSON.stringify(COMPANY_INFO)); }
+  if('custom_docs' in map)     { CUSTOM_DOCS = map.custom_docs || []; localStorage.setItem('npm5_custom_docs', JSON.stringify(CUSTOM_DOCS)); }
+  if('saved_forms' in map)     { SAVED_FORMS = map.saved_forms || []; localStorage.setItem('npm5_saved_forms', JSON.stringify(SAVED_FORMS)); }
 
   // 최초 1회: POL_SNAPSHOTS가 비어있고 REC 데이터가 있으면 현재 POL을 과거 달에 복사해 시작점 확보
   try {
@@ -9520,6 +13710,14 @@ async function sbLoadAll(companyId) {
       freezePastMonthsPol();
     }
   } catch(e){}
+  // 동일하게 BK_SNAPSHOTS도 시드: 비어있고 REC 있으면 현재 DEF_BK를 과거 일자에 freeze
+  try {
+    if(typeof BK_SNAPSHOTS!=='undefined' && Object.keys(BK_SNAPSHOTS).length === 0 && Object.keys(REC||{}).length > 0){
+      freezePastDaysBk();
+    }
+  } catch(e){}
+  // BK 변경 감지 기준값 업데이트 (로드 직후 변경 오인 방지)
+  try { _prevBkForSnapshot = JSON.parse(JSON.stringify(DEF_BK)); } catch(e){}
   // 서버에서 POL 로드 후 변경 감지 기준값 업데이트 (로드 후 즉시 변경으로 오인 방지)
   _prevPolForSnapshot = JSON.parse(JSON.stringify(POL));
 
@@ -9728,6 +13926,27 @@ function toggleSmDay(el){
 // ══ 출퇴근 기록 체크박스 + 정상출퇴근 ══
 function dailySelectAll(cb){
   document.querySelectorAll('.daily-row-cb').forEach(c=>c.checked=cb.checked);
+  dailyUpdateSelCount();
+}
+// 체크된 직원 수에 따라 상단 배지 표시/숨김
+function dailyUpdateSelCount(){
+  const n = document.querySelectorAll('.daily-row-cb:checked').length;
+  const badge = document.getElementById('daily-sel-badge');
+  if(!badge) return;
+  if(n > 0){
+    badge.textContent = '☑ ' + n + '명 선택됨';
+    badge.style.display = 'inline-flex';
+  } else {
+    badge.style.display = 'none';
+  }
+  // 전체 선택 체크박스 상태 동기화 — 모두 체크면 ON, 일부만이면 indeterminate, 0이면 OFF
+  const all = document.getElementById('daily-all-cb');
+  if(all){
+    const total = document.querySelectorAll('.daily-row-cb').length;
+    if(n === 0){ all.checked = false; all.indeterminate = false; }
+    else if(n === total){ all.checked = true; all.indeterminate = false; }
+    else { all.checked = false; all.indeterminate = true; }
+  }
 }
 function fillNormalAttendSelected(){
   const checked=[...document.querySelectorAll('.daily-row-cb:checked')].map(c=>parseInt(c.dataset.eid));
@@ -9743,13 +13962,19 @@ function fillNormalAttend(empIds){
   targets.forEach(id=>{
     const emp=EMPS.find(e=>e.id===id);
     if(!emp||!emp.workStart||!emp.workEnd)return;
-    const autoH=isAutoHol(cY,cM,cD,emp);
-    if(autoH){blocked.push(emp.name);return;}
     const k=rk(id,cY,cM,cD);
+    // 대체근무 체크된 직원은 휴일이라도 통과 (평일처럼 처리) / 대체공휴일은 평일을 휴일로 강제
+    const existingRec=REC[k];
+    const autoH=(isAutoHol(cY,cM,cD,emp) && !(existingRec&&existingRec.subWork))||(existingRec&&existingRec.subHol);
+    if(autoH){blocked.push(emp.name);return;}
     if(!REC[k])REC[k]={empId:id,start:'',end:'',absent:false,annual:false,note:'',outTimes:[]};
     REC[k].start=emp.workStart;REC[k].end=emp.workEnd;
     REC[k].absent=false;REC[k].annual=false;
-    if(emp.workBks && emp.workBks.length > 0){
+    // 근무형태가 등록된 직원은 workBks를 그대로 신뢰:
+    //   - 비어있으면 customBkList=[] → 휴게시간 공제 없음 (실근무시간 그대로)
+    //   - 항목이 있으면 그대로 customBkList에 적용
+    // workBks가 undefined인 레거시 데이터에서만 DEF_BK로 폴백
+    if(Array.isArray(emp.workBks)){
       REC[k].customBk = true;
       REC[k].customBkList = emp.workBks.map(b=>({start:b.start||b.s, end:b.end||b.e}));
     }
@@ -10083,7 +14308,7 @@ function renderMyInfo(){
         const now2=new Date(); const thisY2=now2.getFullYear(); const thisM2=now2.getMonth()+1;
         const newHires = EMPS.filter(e=>{
           if(!e.join) return false;
-          const d=new Date(e.join);
+          const d=parseEmpDate(e.join);
           return d.getFullYear()===thisY2 && d.getMonth()+1===thisM2;
         }).length;
         const turnoverRate = EMPS.length ? Math.round(retired/EMPS.length*100) : 0;
@@ -10140,13 +14365,13 @@ function renderMyInfo(){
             <div class="mi-section-hd">급여형태 분포</div>
             <div style="padding:14px 20px;">
               <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
-                <span style="font-size:10px;font-weight:700;color:#0F766E;background:#F0FDF4;padding:3px 9px;border-radius:20px;">소정근무 ${fixedCnt}명 (${fixPct}%)</span>
+                <span style="font-size:10px;font-weight:700;color:#0F766E;background:#F0FDF4;padding:3px 9px;border-radius:20px;">통상임금제 ${fixedCnt}명 (${fixPct}%)</span>
                 <span style="font-size:10px;font-weight:700;color:#D97706;background:#FFFBEB;padding:3px 9px;border-radius:20px;">시급제 ${hourlyCnt}명 (${hourPct}%)</span>
-                <span style="font-size:10px;font-weight:700;color:#7C3AED;background:#F5F3FF;padding:3px 9px;border-radius:20px;">월급제 ${monthlyCnt}명 (${monPct}%)</span>
+                <span style="font-size:10px;font-weight:700;color:#7C3AED;background:#F5F3FF;padding:3px 9px;border-radius:20px;">포괄임금제 ${monthlyCnt}명 (${monPct}%)</span>
               </div>
-              ${bar2('소정근무',fixedCnt,totalActive,'#0F766E','#0F766E',fixPct)}
+              ${bar2('통상임금제',fixedCnt,totalActive,'#0F766E','#0F766E',fixPct)}
               ${bar2('시급제',hourlyCnt,totalActive,'#D97706','#D97706',hourPct)}
-              ${bar2('월급제',monthlyCnt,totalActive,'#7C3AED','#7C3AED',monPct)}
+              ${bar2('포괄임금제',monthlyCnt,totalActive,'#7C3AED','#7C3AED',monPct)}
               <div style="height:6px;border-radius:100px;overflow:hidden;display:flex;margin-top:4px;">
                 <div style="width:${fixPct}%;background:#0F766E;"></div>
                 <div style="width:${hourPct}%;background:#D97706;"></div>
