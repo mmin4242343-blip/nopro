@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-13-12';
+const CLIENT_BUILD = '2026-05-13-13';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -10276,8 +10276,13 @@ function renderSafetyV4() {
   }
   // 기존 자식들 (sfv4-root 외) 숨김
   Array.from(pg.children).forEach(ch => { if (ch.id !== 'sfv4-root') ch.style.display = 'none'; });
-  // 데일리 렌더
-  root.innerHTML = sfV4HeaderHTML() + sfV4DailyHTML();
+  // 탭별 렌더
+  let body = '';
+  if (sfV4State.tab === 'daily') body = sfV4DailyHTML();
+  else if (sfV4State.tab === 'monthly') body = sfV4MonthlyHTML();
+  else if (sfV4State.tab === 'history') body = sfV4HistoryHTML();
+  else if (sfV4State.tab === 'yearly') body = '<div class="sfv4-card"><p style="text-align:center;padding:40px;color:#6B7280;font-size:13px">📅 월간 통계 + 법정의무 추적 — 3c에서 구현 예정</p></div>';
+  root.innerHTML = sfV4HeaderHTML() + body;
 }
 
 // v4 CSS (sfv4- prefix로 충돌 방지)
@@ -10681,11 +10686,166 @@ function sfV4ZoomPhoto(photoId) {
   document.body.appendChild(ov);
 }
 
+// ──────────────────────────────────────
+// 3b: 월별 / 이력 탭
+// ──────────────────────────────────────
+function sfV4MonthlyHTML() {
+  const y = sfV4State.date.y, m = sfV4State.date.m;
+  const eduList = getEduList();
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const firstDow = new Date(y, m-1, 1).getDay();
+  // 해당 월의 일별 교육 집계
+  const monthData = {};  // { day: { edus: [eduKey...], photoCount: N } }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dk = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dayRec = safetyRecords[dk];
+    if (!dayRec) continue;
+    const edus = [];
+    let photoCount = 0;
+    Object.entries(dayRec).forEach(([eduKey, rec]) => {
+      // 내용·서명·체크 중 하나라도 있으면 교육 수행으로 간주
+      const hasData = (rec.content || '').trim() || Object.keys(rec.signs||{}).length > 0 || Object.values(rec.checks||{}).filter(Boolean).length > 0;
+      if (hasData) edus.push(eduKey);
+      photoCount += (rec.photos || []).length;
+    });
+    if (edus.length > 0 || photoCount > 0) monthData[d] = { edus, photoCount };
+  }
+  // 빈 셀 (월 첫째 주 이전)
+  const emptyCells = Array.from({length: firstDow}, () => '<div></div>').join('');
+  return `
+    <div class="sfv4-card">
+      <div class="sfv4-row" style="margin-bottom:12px">
+        <p class="sfv4-h3" style="margin:0;font-size:15px">📊 ${y}년 ${m}월 교육 캘린더</p>
+        <div style="display:flex;gap:5px">
+          <button class="sfv4-btn" onclick="sfV4ShiftMonth(-1)">‹ 이전 달</button>
+          <button class="sfv4-btn" onclick="sfV4ShiftMonth(1)">다음 달 ›</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:8px 10px;background:#F9FAFB;border-radius:5px;font-size:10px;color:#6B7280">
+        <span style="font-weight:600">범례:</span>
+        ${Object.entries(eduList).map(([k,ed]) => `<span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#${ed.color}"></span>${esc(ed.short)}</span>`).join('')}
+        <span style="margin-left:6px;padding-left:8px;border-left:1px solid #E5E7EB;display:flex;align-items:center;gap:4px"><span style="font-size:11px">📷</span><span style="color:#0D7377;font-weight:500">사진</span></span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px">
+        ${['일','월','화','수','목','금','토'].map((d,i)=>`<div style="text-align:center;font-size:11px;color:${i===0?'#EF4444':i===6?'#3B82F6':'#6B7280'};padding:5px;font-weight:600">${d}</div>`).join('')}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">
+        ${emptyCells}
+        ${Array.from({length: daysInMonth}, (_, i) => {
+          const d = i + 1;
+          const data = monthData[d];
+          const hasData = !!data;
+          const photoCount = data?.photoCount || 0;
+          const cellBg = photoCount > 0 ? '#F0FDFA' : (hasData ? '#FAFBFC' : 'white');
+          const cellBorder = photoCount > 0 ? '#0D7377' : '#E5E7EB';
+          return `<div style="border:1.5px solid ${cellBorder};border-radius:6px;padding:6px 7px;min-height:78px;background:${cellBg};cursor:pointer;transition:all .15s" onclick="sfV4JumpDay(${d})" onmouseover="this.style.background='#F0F9FA'" onmouseout="this.style.background='${cellBg}'">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+              <span style="font-size:13px;font-weight:700;color:#1A1A1A">${d}</span>
+              ${photoCount > 0 ? `<span style="font-size:8px;background:#0D7377;color:white;padding:1px 4px;border-radius:5px;font-weight:700">📷${photoCount}</span>` : ''}
+            </div>
+            ${data ? data.edus.map(k => eduList[k] ? `<div style="font-size:10px;color:#${eduList[k].color};line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">• ${esc(eduList[k].short)}</div>` : '').join('') : ''}
+          </div>`;
+        }).join('')}
+      </div>
+      <p style="font-size:10px;color:#6B7280;margin-top:10px">💡 날짜 클릭 시 일일 현황표로 이동 · <span style="color:#0D7377;font-weight:600">청록 테두리 = 사진 업로드 완료</span></p>
+    </div>
+  `;
+}
+
+function sfV4HistoryHTML() {
+  const eduList = getEduList();
+  // safetyRecords에서 모든 (date, edu) 추출
+  const records = [];
+  Object.entries(safetyRecords).forEach(([date, dayRec]) => {
+    Object.entries(dayRec).forEach(([eduKey, rec]) => {
+      const hasData = (rec.content || '').trim() || Object.keys(rec.signs||{}).length > 0;
+      if (hasData) {
+        records.push({
+          date, eduKey,
+          eduName: eduList[eduKey]?.name || eduKey,
+          eduShort: eduList[eduKey]?.short || eduKey,
+          eduColor: eduList[eduKey]?.color || '999999',
+          eduBadge: eduList[eduKey]?.badge || '자율',
+          content: rec.content || '',
+          instructor: rec.instructor || '',
+          duration: rec.duration || '',
+          signed: Object.keys(rec.signs || {}).length,
+          photoCount: (rec.photos || []).length
+        });
+      }
+    });
+  });
+  records.sort((a,b) => b.date.localeCompare(a.date));
+  // 필터
+  const f = sfV4State.histFilter || 'all';
+  const filtered = f === 'all' ? records : records.filter(r => r.eduKey === f);
+  return `
+    <div class="sfv4-card">
+      <div class="sfv4-row" style="margin-bottom:10px">
+        <p class="sfv4-h3" style="margin:0;font-size:15px">🗂 교육 이력 (전체 ${records.length}건)</p>
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px;padding:8px;background:#F9FAFB;border-radius:6px">
+        <button class="sfv4-fbtn ${f==='all'?'on':''}" onclick="sfV4SetHistFilter('all')">전체 (${records.length})</button>
+        ${Object.entries(eduList).map(([k,ed]) => {
+          const cnt = records.filter(r => r.eduKey === k).length;
+          return `<button class="sfv4-fbtn ${f===k?'on':''}" onclick="sfV4SetHistFilter('${k}')">${esc(ed.short)} (${cnt})</button>`;
+        }).join('')}
+      </div>
+      ${filtered.length === 0 ? '<div style="text-align:center;padding:30px;color:#9CA3AF;font-size:12px">조건에 맞는 기록이 없습니다</div>' : `
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${filtered.slice(0, 100).map(r => `
+          <div style="display:flex;gap:10px;padding:10px 12px;border:1px solid #E5E7EB;border-radius:7px;cursor:pointer;align-items:center" onclick="sfV4JumpRec('${r.date}','${r.eduKey}')" onmouseover="this.style.background='#F9FAFB'" onmouseout="this.style.background='white'">
+            <div style="width:4px;align-self:stretch;background:#${r.eduColor};border-radius:2px;flex-shrink:0"></div>
+            <div style="min-width:90px;font-family:monospace;font-size:11px;color:#374151;font-weight:600">${r.date}</div>
+            <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <span style="font-size:12px;font-weight:600;color:#1A1A1A">${esc(r.eduName)}</span>
+                <span class="sfv4-badge sfv4-badge-${r.eduBadge==='법정'?'l':r.eduBadge==='권장'?'r':'t'}">${r.eduBadge}</span>
+              </div>
+              <div style="font-size:11px;color:#6B7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.content) || '내용 없음'}</div>
+            </div>
+            <div style="display:flex;gap:8px;font-size:10px;color:#6B7280;flex-shrink:0">
+              ${r.instructor ? `<span>👨‍🏫 ${esc(r.instructor)}</span>` : ''}
+              ${r.duration ? `<span>⏱ ${r.duration}분</span>` : ''}
+              <span style="color:#047857;font-weight:600">✓ ${r.signed}명</span>
+              ${r.photoCount > 0 ? `<span style="color:#0D7377;font-weight:600">📷${r.photoCount}</span>` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      ${filtered.length > 100 ? `<p style="text-align:center;font-size:10px;color:#9CA3AF;margin-top:10px">최근 100건만 표시 · 전체 ${filtered.length}건</p>` : ''}
+      `}
+    </div>
+  `;
+}
+
+function sfV4ShiftMonth(d) {
+  sfV4State.date.m += d;
+  if (sfV4State.date.m > 12) { sfV4State.date.m = 1; sfV4State.date.y++; }
+  if (sfV4State.date.m < 1) { sfV4State.date.m = 12; sfV4State.date.y--; }
+  renderSafetyV4();
+}
+function sfV4JumpDay(d) {
+  sfV4State.date.d = d;
+  sfV4State.tab = 'daily';
+  renderSafetyV4();
+}
+function sfV4JumpRec(date, eduKey) {
+  const [y,m,d] = date.split('-').map(Number);
+  sfV4State.date = { y, m, d };
+  sfV4State.edu = eduKey;
+  sfV4State.tab = 'daily';
+  renderSafetyV4();
+}
+function sfV4SetHistFilter(f) {
+  sfV4State.histFilter = f;
+  renderSafetyV4();
+}
+
 // v4 인터랙션
 function sfV4SetTab(t) {
   sfV4State.tab = t;
-  if (t === 'daily') renderSafetyV4();
-  else alert(t + ' 탭은 3단계에서 구현 예정입니다 (현재 MVP는 일일 현황표만 동작)');
+  renderSafetyV4();
 }
 function sfV4SelectEdu(k) { sfV4State.edu = k; renderSafetyV4(); }
 function sfV4SetDate(field, val) {
