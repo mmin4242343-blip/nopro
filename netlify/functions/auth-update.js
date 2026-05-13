@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { supabase } from './_shared/supabase.js';
 import { verifyToken, okWithCookie, signToken, err, options } from './_shared/auth.js';
+import { pushAdminNotif } from './_shared/notify.js';
 
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return options(event);
@@ -83,6 +84,25 @@ export const handler = async (event) => {
     // 이메일이 변경된 경우 새 토큰 발급
     const newEmail = updates.email || comp.email;
     const token = signToken({ companyId: comp.id, email: newEmail, role: 'user' });
+
+    // 🔔 관리자 알림: 정보 변경 (실패해도 본 흐름엔 영향 없음)
+    const fieldLabels = {
+      company_name: '회사명', manager_name: '담당자명',
+      phone: '연락처', email: '이메일', password_hash: '비밀번호'
+    };
+    const changedFields = Object.keys(updates).map(k => fieldLabels[k] || k).join(', ');
+    // 회사명·담당자명은 최신값 반영을 위해 다시 조회
+    const { data: refreshed } = await supabase
+      .from('companies')
+      .select('company_name, manager_name')
+      .eq('id', comp.id);
+    const compName = refreshed?.[0]?.company_name || updates.company_name || '회사명 미상';
+    await pushAdminNotif(
+      'profile_change',
+      `회원 정보 변경: ${compName}`,
+      `변경 항목: ${changedFields} | 이메일: ${newEmail}`,
+      { companyId: comp.id, meta: { fields: Object.keys(updates) } }
+    );
 
     return okWithCookie({ success: true }, token, event);
 

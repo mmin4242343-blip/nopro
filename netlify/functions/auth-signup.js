@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { supabase } from './_shared/supabase.js';
 import { signToken, okWithCookie, err, options } from './_shared/auth.js';
+import { pushAdminNotif } from './_shared/notify.js';
 
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return options(event);
@@ -67,6 +68,15 @@ export const handler = async (event) => {
     if (dbErr) return err(500, '서버 오류가 발생했습니다', event);
 
     const newCompany = result[0];
+
+    // 🔔 관리자 알림: 새 회원 가입 (실패해도 가입 흐름엔 영향 없음)
+    await pushAdminNotif(
+      'signup',
+      `새 회원 가입: ${newCompany.company_name}`,
+      `담당자: ${newCompany.manager_name} | 이메일: ${newCompany.email} | 연락처: ${newCompany.phone} | 직원수: ${newCompany.size}`,
+      { companyId: newCompany.id, meta: { size: newCompany.size, name: newCompany.manager_name } }
+    );
+
     const token = signToken({
       companyId: newCompany.id,
       email: newCompany.email,
