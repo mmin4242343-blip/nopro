@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-13-13';
+const CLIENT_BUILD = '2026-05-13-14';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -10281,8 +10281,12 @@ function renderSafetyV4() {
   if (sfV4State.tab === 'daily') body = sfV4DailyHTML();
   else if (sfV4State.tab === 'monthly') body = sfV4MonthlyHTML();
   else if (sfV4State.tab === 'history') body = sfV4HistoryHTML();
-  else if (sfV4State.tab === 'yearly') body = '<div class="sfv4-card"><p style="text-align:center;padding:40px;color:#6B7280;font-size:13px">📅 월간 통계 + 법정의무 추적 — 3c에서 구현 예정</p></div>';
-  root.innerHTML = sfV4HeaderHTML() + body;
+  else if (sfV4State.tab === 'yearly') body = sfV4YearlyHTML();
+  // 모달 (오버레이) — 어느 탭에서든 표시
+  const modals = (sfV4State.compModal?.open ? sfV4CompModalHTML() : '') +
+                 (sfV4State.configModal?.open ? sfV4ConfigModalHTML() : '') +
+                 (sfV4State.dlModal?.open ? sfV4DlModalHTML() : '');
+  root.innerHTML = sfV4HeaderHTML() + body + modals;
 }
 
 // v4 CSS (sfv4- prefix로 충돌 방지)
@@ -10379,8 +10383,9 @@ function sfV4HeaderHTML() {
         <div class="sfv4-hsub">교육 종류 선택 · 전자서명 · 일일/월별/월간 현황 (v4 — MVP)</div>
       </div>
       <div class="sfv4-actions">
-        <button class="sfv4-btn sfv4-btn-g" onclick="alert('엑셀 다운로드는 3단계에서 구현 예정')">📊 엑셀</button>
-        <button class="sfv4-btn sfv4-btn-r" onclick="alert('PDF는 3단계 예정')">📄 PDF</button>
+        <button class="sfv4-btn" onclick="sfV4OpenConfigModal()">⚙️ 설정</button>
+        <button class="sfv4-btn sfv4-btn-g" onclick="sfV4OpenDlModal()">📊 엑셀</button>
+        <button class="sfv4-btn sfv4-btn-r" onclick="alert('PDF는 추후 추가 예정')">📄 PDF</button>
         <button class="sfv4-btn sfv4-btn-d" onclick="sfV4Save()" ${sfV4CanSave()?'':'disabled'}>저장</button>
       </div>
     </div>
@@ -10840,6 +10845,500 @@ function sfV4JumpRec(date, eduKey) {
 function sfV4SetHistFilter(f) {
   sfV4State.histFilter = f;
   renderSafetyV4();
+}
+
+// ──────────────────────────────────────
+// 3c: 연간 탭 + 법정의무 팝업 + 교육 설정 모달 + 다운로드 모달
+// ──────────────────────────────────────
+
+// 모달 상태
+sfV4State.compModal = { open: false, eduKey: '', yearFilter: 'all' };
+sfV4State.configModal = { open: false, tab: 'industry' };
+sfV4State.dlModal = { open: false, eduKey: '', filterSigned: false, filterN: '전체', filterW: '전체', filterP: '전체' };
+
+// 법정 의무 이행 카운트 (해당 연도 기준)
+function sfV4LegalProgress(eduKey, year) {
+  const ed = sfV4GetEdu.bind({})(); // unused
+  const eduDef = SAFETY_EDU[eduKey] || (getEduList()[eduKey]);
+  if (!eduDef) return { required: 0, completed: 0, records: [] };
+  const records = [];
+  Object.entries(safetyRecords).forEach(([date, dayRec]) => {
+    if (!date.startsWith(String(year))) return;
+    if (!dayRec[eduKey]) return;
+    const rec = dayRec[eduKey];
+    const hasData = (rec.content || '').trim() || Object.keys(rec.signs||{}).length > 0;
+    if (hasData) records.push({ date, ...rec });
+  });
+  records.sort((a,b) => b.date.localeCompare(a.date));
+  return { required: eduDef.required || 0, completed: records.length, records };
+}
+
+function sfV4YearlyHTML() {
+  const y = sfV4State.date.y;
+  const eduList = getEduList();
+  // 법정 의무 교육만 (badge='법정' 또는 '권장')
+  const legalKeys = Object.entries(eduList).filter(([k,ed]) => ed.badge === '법정' || ed.badge === '권장').map(([k])=>k);
+  const totalRequired = legalKeys.reduce((a,k) => a + (eduList[k].required || 0), 0);
+  const totalCompleted = legalKeys.reduce((a,k) => a + sfV4LegalProgress(k, y).completed, 0);
+  const doneCount = legalKeys.filter(k => { const p = sfV4LegalProgress(k, y); return p.completed >= p.required; }).length;
+  const missCount = legalKeys.length - doneCount;
+  return `
+    <div class="sfv4-card">
+      <div class="sfv4-row" style="margin-bottom:12px">
+        <p class="sfv4-h3" style="margin:0;font-size:15px">📅 ${y}년 월간 통계</p>
+        <div style="display:flex;gap:5px">
+          <button class="sfv4-btn" onclick="sfV4State.date.y--;renderSafetyV4()">‹ ${y-1}년</button>
+          <button class="sfv4-btn" onclick="sfV4State.date.y++;renderSafetyV4()">${y+1}년 ›</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px">
+        ${Array.from({length:12}, (_,i) => {
+          const month = i + 1;
+          // 그달의 교육별 카운트
+          const monthCounts = {};
+          Object.entries(safetyRecords).forEach(([date, dayRec]) => {
+            if (!date.startsWith(`${y}-${String(month).padStart(2,'0')}`)) return;
+            Object.entries(dayRec).forEach(([eduKey, rec]) => {
+              const hasData = (rec.content || '').trim() || Object.keys(rec.signs||{}).length > 0;
+              if (hasData) monthCounts[eduKey] = (monthCounts[eduKey] || 0) + 1;
+            });
+          });
+          const entries = Object.entries(monthCounts).sort((a,b)=>b[1]-a[1]);
+          return `<div onclick="sfV4State.date.m=${month};sfV4State.tab='monthly';renderSafetyV4()" style="background:white;border:1.5px solid #E5E7EB;border-radius:8px;padding:10px;cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='#0D7377'" onmouseout="this.style.borderColor='#E5E7EB'">
+            <div style="font-weight:700;font-size:14px;color:#0D7377;margin-bottom:5px">${month}월</div>
+            ${entries.length === 0 ? '<div style="font-size:10px;color:#9CA3AF">실시 없음</div>' : entries.slice(0,3).map(([k,c]) => `<div style="font-size:10px;color:#374151;line-height:1.4">${esc(eduList[k]?.short || k)} ${c}회</div>`).join('')}
+            ${entries.length > 3 ? `<div style="font-size:9px;color:#9CA3AF;margin-top:2px">+ ${entries.length-3}건</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <div class="sfv4-card" style="background:linear-gradient(135deg,#FAFBFC,#F0F9FA);border:1px solid #E5E7EB">
+      <div class="sfv4-row" style="margin-bottom:12px">
+        <div>
+          <p class="sfv4-h3" style="margin:0;font-size:15px">⚖️ 법정 의무 교육 이행 현황 <span style="font-size:11px;color:#6B7280;font-weight:500">${y}년</span></p>
+          <p style="font-size:10px;color:#9CA3AF;margin-top:2px">노동부 점검 대비 · 카드 클릭으로 실시 일자 확인</p>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+        <div style="background:white;border-radius:8px;padding:10px;border:1px solid #E5E7EB;text-align:center">
+          <div style="font-size:10px;color:#9CA3AF;margin-bottom:3px;font-weight:500">전체 의무</div>
+          <div style="font-size:20px;font-weight:700">${legalKeys.length}</div>
+        </div>
+        <div style="background:#ECFDF5;border-radius:8px;padding:10px;border:1px solid #A7F3D0;text-align:center">
+          <div style="font-size:10px;color:#047857;margin-bottom:3px;font-weight:600">✓ 이행 완료</div>
+          <div style="font-size:20px;font-weight:700;color:#047857">${doneCount}</div>
+        </div>
+        <div style="background:#FEF2F2;border-radius:8px;padding:10px;border:1px solid #FCA5A5;text-align:center">
+          <div style="font-size:10px;color:#B91C1C;margin-bottom:3px;font-weight:600">⚠ 미실시</div>
+          <div style="font-size:20px;font-weight:700;color:#B91C1C">${missCount}</div>
+        </div>
+        <div style="background:#F0FDFA;border-radius:8px;padding:10px;border:1px solid #99F6E4;text-align:center">
+          <div style="font-size:10px;color:#0F766E;margin-bottom:3px;font-weight:600">전체 이행률</div>
+          <div style="font-size:20px;font-weight:700;color:#0F766E">${totalRequired?Math.round(totalCompleted/totalRequired*100):0}%</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">
+        ${legalKeys.map(k => {
+          const ed = eduList[k];
+          const p = sfV4LegalProgress(k, y);
+          const isDone = p.completed >= p.required;
+          const pct = p.required ? Math.round(p.completed/p.required*100) : 0;
+          const stateLight = isDone ? '#ECFDF5' : '#FEF2F2';
+          const stateText = isDone ? '#047857' : '#B91C1C';
+          const stateBorder = isDone ? '#A7F3D0' : '#FCA5A5';
+          const lastDate = p.records[0]?.date ? p.records[0].date.replace(/-/g,'.') : null;
+          return `<div onclick="sfV4OpenCompModal('${k}')" style="background:white;border:1.5px solid ${stateBorder};border-radius:10px;padding:13px;cursor:pointer;position:relative;overflow:hidden" onmouseover="this.style.borderColor='#${ed.color}'" onmouseout="this.style.borderColor='${stateBorder}'">
+            <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#${ed.color}"></div>
+            <div style="display:flex;justify-content:space-between;gap:8px;padding-left:6px">
+              <div style="flex:1;min-width:0">
+                <span style="display:inline-block;font-size:9px;font-weight:700;padding:1px 7px;border-radius:8px;background:${stateLight};color:${stateText};border:1px solid ${stateBorder};margin-bottom:3px">${isDone?'✓ 이행':'⚠ 미실시'}</span>
+                <div style="font-size:12px;font-weight:700;color:#1A1A1A;line-height:1.3;margin-bottom:2px">${esc(ed.name)}</div>
+                <div style="font-size:10px;color:#6B7280">${esc(ed.cycle)}</div>
+              </div>
+              <div style="text-align:right;flex-shrink:0">
+                <div style="font-size:14px;font-weight:700;color:${stateText}">${pct}%</div>
+                <div style="font-size:9px;color:#9CA3AF;font-weight:600">${p.completed}/${p.required}</div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:7px 6px 0;margin-top:6px;border-top:1px dashed #F3F4F6">
+              <div><div style="font-size:9px;color:#9CA3AF;font-weight:600">📅 최근 실시</div><div style="font-size:10px;font-weight:700;color:${lastDate?'#0D7377':'#9CA3AF'}">${lastDate || '없음'}</div></div>
+              <div style="text-align:right"><div style="font-size:9px;color:#9CA3AF;font-weight:600">📋 실시 건수</div><div style="font-size:10px;font-weight:700;color:#0D7377">${p.records.length}건</div></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// 법정의무 이행 일자 팝업
+function sfV4CompModalHTML() {
+  const cm = sfV4State.compModal;
+  if (!cm.open) return '';
+  const eduList = getEduList();
+  const ed = eduList[cm.eduKey];
+  if (!ed) return '';
+  // 모든 연도 기록 수집
+  const allRecords = [];
+  Object.entries(safetyRecords).forEach(([date, dayRec]) => {
+    if (!dayRec[cm.eduKey]) return;
+    const rec = dayRec[cm.eduKey];
+    const hasData = (rec.content || '').trim() || Object.keys(rec.signs||{}).length > 0;
+    if (hasData) allRecords.push({ date, ...rec });
+  });
+  allRecords.sort((a,b) => b.date.localeCompare(a.date));
+  const years = [...new Set(allRecords.map(h => h.date.split('-')[0]))].sort().reverse();
+  const yf = cm.yearFilter;
+  const filtered = yf === 'all' ? allRecords : allRecords.filter(h => h.date.startsWith(yf));
+  const p = sfV4LegalProgress(cm.eduKey, sfV4State.date.y);
+  const isDone = p.completed >= p.required;
+  const pct = p.required ? Math.round(p.completed/p.required*100) : 0;
+  const themeColor = isDone ? '#10B981' : '#EF4444';
+  const themeBg = isDone ? '#ECFDF5' : '#FEF2F2';
+  const themeText = isDone ? '#047857' : '#B91C1C';
+  // 연도별 그룹
+  const grouped = {};
+  filtered.forEach(h => {
+    const y = h.date.split('-')[0];
+    if (!grouped[y]) grouped[y] = [];
+    grouped[y].push(h);
+  });
+  return `
+    <div onclick="sfV4CloseCompModal()" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:9999">
+      <div onclick="event.stopPropagation()" style="background:white;border-radius:14px;width:600px;max-width:94vw;max-height:90vh;box-shadow:0 20px 60px rgba(0,0,0,0.25);overflow:hidden;display:flex;flex-direction:column">
+        <div style="background:linear-gradient(135deg,#${ed.color},#${ed.color}DD);padding:18px 22px;color:white">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+            <div style="flex:1">
+              <span style="display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;background:rgba(255,255,255,0.25);margin-bottom:5px">${esc(ed.badge)}</span>
+              <div style="font-size:17px;font-weight:700;line-height:1.3">${esc(ed.name)}</div>
+              <div style="font-size:11px;opacity:0.9;margin-top:2px">⚖️ ${esc(ed.law)} · ${esc(ed.cycle)}</div>
+            </div>
+            <button onclick="sfV4CloseCompModal()" style="background:rgba(255,255,255,0.2);border:none;width:30px;height:30px;border-radius:7px;color:white;font-size:16px;cursor:pointer">✕</button>
+          </div>
+        </div>
+        <div style="padding:14px 22px;background:${themeBg};border-bottom:1px solid #E5E7EB">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+            <span style="font-size:11px;color:#6B7280;font-weight:600">${sfV4State.date.y}년 이행 현황</span>
+            <span style="font-size:16px;font-weight:700;color:${themeText}">${p.completed} / ${p.required} (${pct}%)</span>
+          </div>
+          <div style="height:6px;background:rgba(0,0,0,0.06);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${themeColor}"></div>
+          </div>
+          <div style="margin-top:8px;font-size:11px;color:${themeText};font-weight:600">${isDone?'✓ 법정 의무 이행 완료':'⚠ 즉시 실시 필요'+(ed.fine?' · '+esc(ed.fine):'')}</div>
+        </div>
+        <div style="padding:12px 22px;background:white;border-bottom:1px solid #F3F4F6">
+          <div style="display:flex;gap:5px;flex-wrap:wrap">
+            <button onclick="sfV4SetCompYear('all')" class="sfv4-fbtn ${yf==='all'?'on':''}">전체 (${allRecords.length})</button>
+            ${years.map(y => `<button onclick="sfV4SetCompYear('${y}')" class="sfv4-fbtn ${yf===y?'on':''}">${y}년 (${allRecords.filter(h=>h.date.startsWith(y)).length})</button>`).join('')}
+          </div>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:14px 22px;background:#FAFAFA">
+          ${filtered.length === 0 ? `<div style="padding:40px 20px;text-align:center;background:white;border-radius:10px;border:1px dashed #D1D5DB"><div style="font-size:36px;opacity:0.4;margin-bottom:8px">📭</div><p style="font-size:13px;color:#6B7280;font-weight:600">${yf==='all'?'실시 기록이 없습니다':yf+'년 실시 기록이 없습니다'}</p>${ed.fine?`<p style="font-size:10px;color:#9CA3AF;margin-top:4px">법정 의무 미이행 — 즉시 실시 필요</p>`:''}</div>` :
+            Object.keys(grouped).sort().reverse().map(y => `
+              <div style="margin-bottom:14px">
+                <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+                  <span style="font-size:13px;font-weight:700;color:#0D7377">${y}년</span>
+                  <span style="font-size:9px;color:#9CA3AF;background:#F0FDFA;padding:2px 7px;border-radius:7px;border:1px solid #99F6E4">${grouped[y].length}회</span>
+                  <div style="flex:1;height:1px;background:#E5E7EB"></div>
+                </div>
+                ${grouped[y].map(h => {
+                  const [_, m, d] = h.date.split('-').map(Number);
+                  const dn = ['일','월','화','수','목','금','토'][new Date(parseInt(y), m-1, d).getDay()];
+                  const signed = Object.keys(h.signs||{}).length;
+                  return `
+                    <div onclick="sfV4CloseCompModal();sfV4JumpRec('${h.date}','${cm.eduKey}')" style="background:white;border:1px solid #E5E7EB;border-radius:8px;padding:11px;margin-bottom:6px;cursor:pointer" onmouseover="this.style.borderColor='#0D7377'" onmouseout="this.style.borderColor='#E5E7EB'">
+                      <div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:6px">
+                        <div style="flex:1;min-width:0">
+                          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+                            <div style="background:#0D7377;color:white;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700">${m}.${d}</div>
+                            <span style="font-size:11px;color:#6B7280;font-weight:600">${dn}요일</span>
+                          </div>
+                          <div style="font-size:12px;color:#1A1A1A;line-height:1.4;font-weight:500">${esc(h.content || '내용 없음')}</div>
+                        </div>
+                        <span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;background:#ECFDF5;color:#047857;white-space:nowrap;flex-shrink:0;border:1px solid #A7F3D0">✓ ${signed}명</span>
+                      </div>
+                      <div style="font-size:10px;color:#6B7280;padding-top:6px;border-top:1px dashed #F3F4F6;display:flex;gap:6px">
+                        ${h.instructor?`<span>👨‍🏫 ${esc(h.instructor)}</span><span style="color:#D1D5DB">·</span>`:''}
+                        ${h.duration?`<span>⏱ ${h.duration}분</span>`:''}
+                        ${(h.photos||[]).length > 0?`<span style="color:#0D7377;font-weight:600">· 📷${(h.photos||[]).length}</span>`:''}
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            `).join('')
+          }
+        </div>
+        <div style="padding:11px 22px;background:white;border-top:1px solid #E5E7EB;display:flex;gap:6px;justify-content:flex-end">
+          <button class="sfv4-btn" onclick="sfV4CloseCompModal()">닫기</button>
+          ${!isDone ? `<button class="sfv4-btn sfv4-btn-d" onclick="sfV4CloseCompModal();sfV4SelectEdu('${cm.eduKey}');sfV4SetTab('daily')">${esc(ed.short)} 실시하기 →</button>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function sfV4OpenCompModal(eduKey) {
+  sfV4State.compModal = { open: true, eduKey, yearFilter: 'all' };
+  renderSafetyV4();
+}
+function sfV4CloseCompModal() {
+  sfV4State.compModal.open = false;
+  renderSafetyV4();
+}
+function sfV4SetCompYear(yf) {
+  sfV4State.compModal.yearFilter = yf;
+  renderSafetyV4();
+}
+
+// 교육 설정 모달 (업종 변경 + 커스텀 교육)
+function sfV4ConfigModalHTML() {
+  if (!sfV4State.configModal.open) return '';
+  const tab = sfV4State.configModal.tab;
+  const curInd = SAFETY_INDUSTRY[safetyConfig.industry] || SAFETY_INDUSTRY.general;
+  return `
+    <div onclick="sfV4CloseConfigModal()" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9998;display:flex;align-items:center;justify-content:center;padding:18px">
+      <div onclick="event.stopPropagation()" style="background:white;border-radius:14px;width:760px;max-width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+        <div style="padding:18px 22px;background:linear-gradient(135deg,#0D7377,#14959B);color:white;display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-size:17px;font-weight:800">⚙️ 교육 설정</div>
+            <div style="font-size:11px;opacity:0.9;margin-top:2px">업종별 프리셋 + 회사 자체 교육 추가</div>
+          </div>
+          <button onclick="sfV4CloseConfigModal()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:7px;cursor:pointer;font-size:15px">✕</button>
+        </div>
+        <div style="display:flex;border-bottom:1px solid #E5E7EB;background:#F9FAFB;padding:0 14px">
+          <button onclick="sfV4SetConfigTab('industry')" style="padding:11px 18px;background:none;border:none;font-size:12px;font-weight:700;cursor:pointer;border-bottom:3px solid ${tab==='industry'?'#0D7377':'transparent'};color:${tab==='industry'?'#0D7377':'#6B7280'};margin-bottom:-1px">🏭 업종 프리셋</button>
+          <button onclick="sfV4SetConfigTab('custom')" style="padding:11px 18px;background:none;border:none;font-size:12px;font-weight:700;cursor:pointer;border-bottom:3px solid ${tab==='custom'?'#0D7377':'transparent'};color:${tab==='custom'?'#0D7377':'#6B7280'};margin-bottom:-1px">✏️ 커스텀 교육${safetyConfig.customEdu.length>0?` <span style="background:#0D7377;color:white;font-size:9px;padding:1px 6px;border-radius:99px">${safetyConfig.customEdu.length}</span>`:''}</button>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:18px 22px">
+          ${tab === 'industry' ? sfV4ConfigIndustryHTML(curInd) : sfV4ConfigCustomHTML()}
+        </div>
+        <div style="padding:12px 20px;border-top:1px solid #E5E7EB;display:flex;justify-content:flex-end;background:#FAFAFA">
+          <button class="sfv4-btn sfv4-btn-d" onclick="sfV4CloseConfigModal()">닫기</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function sfV4ConfigIndustryHTML(curInd) {
+  return `
+    <div style="background:#F0FDFA;border:1px solid #99F6E4;border-radius:8px;padding:11px 14px;margin-bottom:14px">
+      <div style="font-size:10px;font-weight:700;color:#0F766E;margin-bottom:2px">📌 현재 업종</div>
+      <div style="font-size:15px;font-weight:800;color:#0D7377">${curInd.icon} ${curInd.name}</div>
+      <div style="font-size:11px;color:#374151;margin-top:2px">${esc(curInd.desc)}</div>
+    </div>
+    <div style="font-size:12px;font-weight:800;margin-bottom:8px">업종 변경 — 클릭 시 해당 업종 맞춤 교육 자동 적용</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+      ${Object.entries(SAFETY_INDUSTRY).map(([key, ind]) => {
+        const active = key === safetyConfig.industry;
+        return `<button onclick="sfV4SetIndustry('${key}')" style="text-align:left;padding:11px 13px;border:1.5px solid ${active?'#0D7377':'#E5E7EB'};border-radius:9px;background:${active?'#F0FDFA':'white'};cursor:pointer;font-family:inherit">
+          <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">
+            <span style="font-size:18px">${ind.icon}</span>
+            <span style="font-size:13px;font-weight:700;color:${active?'#0D7377':'#1A1A1A'}">${ind.name}</span>
+            ${active?'<span style="font-size:9px;background:#0D7377;color:white;padding:1px 6px;border-radius:99px;font-weight:700">선택됨</span>':''}
+          </div>
+          <div style="font-size:10px;color:#6B7280;line-height:1.4">${esc(ind.desc)}</div>
+        </button>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+function sfV4ConfigCustomHTML() {
+  return `
+    <div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;padding:11px 14px;margin-bottom:14px">
+      <div style="font-size:11px;color:#78350F">💡 회사 자체 교육(예: 보안 교육, 회사 규정 교육 등)을 추가하면 교육 카드에 표시되고 일지 기록이 가능합니다.</div>
+    </div>
+    <button class="sfv4-btn sfv4-btn-d" style="width:100%;margin-bottom:14px" onclick="sfV4AddCustomEdu()">+ 커스텀 교육 추가</button>
+    ${safetyConfig.customEdu.length === 0 ?
+      '<div style="padding:30px;text-align:center;color:#9CA3AF;font-size:12px">아직 추가된 커스텀 교육이 없습니다</div>' :
+      safetyConfig.customEdu.map((c, i) => `
+        <div style="border:1px solid #E5E7EB;border-radius:8px;padding:11px 14px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#1A1A1A">${esc(c.name)}</div>
+            <div style="font-size:10px;color:#6B7280;margin-top:2px">${esc(c.law||'사내 자율교육')} · ${esc(c.cycle||'수시')} · ${(c.items||[]).length}개 항목</div>
+          </div>
+          <button class="sfv4-btn sfv4-btn-r" onclick="sfV4DelCustomEdu(${i})">삭제</button>
+        </div>
+      `).join('')
+    }
+  `;
+}
+
+function sfV4SetIndustry(key) {
+  if (!confirm(`업종을 "${SAFETY_INDUSTRY[key].name}"(으)로 변경할까요?\n\n변경 시:\n- 업종별 추가 항목이 자동 반영됩니다 (예: 제조업 → MSDS 교육)\n- 기존 교육 기록은 유지됩니다.`)) return;
+  safetyConfig.industry = key;
+  saveSafetyConfigV4();
+  renderSafetyV4();
+}
+
+function sfV4AddCustomEdu() {
+  const name = prompt('커스텀 교육 이름 (예: 보안 교육)');
+  if (!name || !name.trim()) return;
+  const short = prompt('짧은 이름 (예: 보안)', name.length > 6 ? name.slice(0,6) : name);
+  if (!short) return;
+  const itemsStr = prompt('교육 항목 (쉼표로 구분, 예: 비밀번호 관리,데이터 백업,화이트해커 신고)');
+  const items = (itemsStr || '').split(',').map(s => s.trim()).filter(s => s);
+  const key = 'custom_' + Date.now();
+  safetyConfig.customEdu.push({
+    key, name: name.trim(), short: short.trim(), badge: '자율', cycle: '수시',
+    minTime: 30, items, required: 0
+  });
+  saveSafetyConfigV4();
+  renderSafetyV4();
+}
+
+function sfV4DelCustomEdu(idx) {
+  if (!confirm('이 커스텀 교육을 삭제할까요?\n\n주의: 기존 기록은 유지되지만 카드 표시는 사라집니다.')) return;
+  safetyConfig.customEdu.splice(idx, 1);
+  saveSafetyConfigV4();
+  renderSafetyV4();
+}
+
+function sfV4OpenConfigModal() {
+  sfV4State.configModal = { open: true, tab: 'industry' };
+  renderSafetyV4();
+}
+function sfV4CloseConfigModal() {
+  sfV4State.configModal.open = false;
+  renderSafetyV4();
+}
+function sfV4SetConfigTab(t) {
+  sfV4State.configModal.tab = t;
+  renderSafetyV4();
+}
+
+// 다운로드 모달 (엑셀 + 필터)
+function sfV4DlModalHTML() {
+  if (!sfV4State.dlModal.open) return '';
+  const dm = sfV4State.dlModal;
+  const eduList = getEduList();
+  const ed = eduList[dm.eduKey] || sfV4GetEdu();
+  return `
+    <div onclick="sfV4CloseDlModal()" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px">
+      <div onclick="event.stopPropagation()" style="background:white;border-radius:14px;width:480px;max-width:100%;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+        <div style="padding:18px 22px;background:linear-gradient(135deg,#${ed.color},#${ed.color}DD);color:white">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div><div style="font-size:16px;font-weight:700">📊 엑셀 다운로드</div><div style="font-size:11px;opacity:0.9;margin-top:2px">${esc(ed.name)}</div></div>
+            <button onclick="sfV4CloseDlModal()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:14px">✕</button>
+          </div>
+        </div>
+        <div style="padding:18px 22px;display:flex;flex-direction:column;gap:14px">
+          <div>
+            <div style="font-size:12px;font-weight:700;margin-bottom:6px">👥 직원 필터</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+              <span style="font-size:10px;color:#6B7280;width:50px">국적:</span>
+              ${['전체','내국인','외국인'].map(o => `<button class="sfv4-fbtn ${dm.filterN===o?'on':''}" onclick="sfV4SetDlFilter('filterN','${o}')">${o}</button>`).join('')}
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+              <span style="font-size:10px;color:#6B7280;width:50px">주야간:</span>
+              ${['전체','주간','야간'].map(o => `<button class="sfv4-fbtn ${dm.filterW===o?'on':''}" onclick="sfV4SetDlFilter('filterW','${o}')">${o}</button>`).join('')}
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+              <span style="font-size:10px;color:#6B7280;width:50px">급여:</span>
+              ${['전체','통상임금제','포괄임금제','시급제'].map(o => `<button class="sfv4-fbtn ${dm.filterP===o?'on':''}" onclick="sfV4SetDlFilter('filterP','${o}')">${o}</button>`).join('')}
+            </div>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#374151;cursor:pointer;margin-top:6px">
+              <input type="checkbox" ${dm.filterSigned?'checked':''} onchange="sfV4SetDlFilter('filterSigned',this.checked)">
+              <span>서명자만 (해당 날짜·교육 서명 완료자)</span>
+            </label>
+          </div>
+          <div style="border-top:1px solid #F3F4F6;padding-top:12px">
+            <div style="font-size:11px;color:#6B7280;margin-bottom:8px">📅 ${sfV4DateKey()} · ${esc(ed.name)}</div>
+            <button class="sfv4-btn sfv4-btn-d" style="width:100%;padding:10px" onclick="sfV4DoExcel()">📊 엑셀 다운로드 실행</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function sfV4OpenDlModal() {
+  sfV4State.dlModal = { open: true, eduKey: sfV4State.edu, filterSigned: false, filterN: '전체', filterW: '전체', filterP: '전체' };
+  renderSafetyV4();
+}
+function sfV4CloseDlModal() {
+  sfV4State.dlModal.open = false;
+  renderSafetyV4();
+}
+function sfV4SetDlFilter(key, val) {
+  sfV4State.dlModal[key] = val;
+  renderSafetyV4();
+}
+
+async function sfV4DoExcel() {
+  if (typeof ExcelJS === 'undefined') {
+    alert('엑셀 라이브러리 로딩 중... 잠시 후 다시 시도해주세요.');
+    return;
+  }
+  const dm = sfV4State.dlModal;
+  const eduList = getEduList();
+  const ed = eduList[dm.eduKey];
+  const r = sfV4GetRec();
+  // 필터 적용
+  const emps = sfV4GetEmps().filter(e => {
+    if (dm.filterN !== '전체' && e.n !== dm.filterN) return false;
+    if (dm.filterW !== '전체' && e.w !== dm.filterW) return false;
+    if (dm.filterP !== '전체' && e.p !== dm.filterP) return false;
+    if (dm.filterSigned && !e.s) return false;
+    return true;
+  });
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet(ed.short || '교육일지');
+  // 헤더
+  ws.getCell('A1').value = `${ed.name} 교육 일지`;
+  ws.getCell('A1').font = { bold: true, size: 14, color: { argb: 'FF' + ed.color } };
+  ws.mergeCells('A1:F1');
+  ws.getCell('A2').value = `일시: ${sfV4DateKey()} (${ed.cycle})`;
+  ws.getCell('A3').value = `강사: ${r.instructor || '-'} ${r.instructorRole ? '('+r.instructorRole+')' : ''}`;
+  ws.getCell('A4').value = `시간: ${r.duration || 0}분 (최소 ${ed.minTime}분)`;
+  ws.getCell('A5').value = `근거 법령: ${ed.law}`;
+  ws.getCell('A6').value = '교육 내용:';
+  ws.getCell('A7').value = r.content || '';
+  ws.getCell('A7').alignment = { wrapText: true, vertical: 'top' };
+  ws.mergeCells('A7:F7');
+  ws.getRow(7).height = 60;
+  // 필수 항목
+  ws.getCell('A9').value = '필수 포함 항목';
+  ws.getCell('A9').font = { bold: true };
+  let row = 10;
+  (ed.items || []).forEach((it, i) => {
+    ws.getCell(`A${row}`).value = ((r.checks||{})[i] ? '✓' : '☐') + ' ' + it;
+    row++;
+  });
+  // 직원 명단 (서명자만 또는 필터링된 직원)
+  row++;
+  ws.getCell(`A${row}`).value = `참석자 명단 (${emps.length}명)`;
+  ws.getCell(`A${row}`).font = { bold: true };
+  row++;
+  ws.getCell(`A${row}`).value = '순번'; ws.getCell(`B${row}`).value = '이름';
+  ws.getCell(`C${row}`).value = '소속'; ws.getCell(`D${row}`).value = '주야간';
+  ws.getCell(`E${row}`).value = '국적'; ws.getCell(`F${row}`).value = '서명';
+  ws.getRow(row).font = { bold: true };
+  ws.getRow(row).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
+  row++;
+  emps.forEach((emp, i) => {
+    ws.getCell(`A${row}`).value = i+1;
+    ws.getCell(`B${row}`).value = emp.name;
+    ws.getCell(`C${row}`).value = emp.d;
+    ws.getCell(`D${row}`).value = emp.w;
+    ws.getCell(`E${row}`).value = emp.n;
+    ws.getCell(`F${row}`).value = emp.s ? '✓' : '';
+    row++;
+  });
+  ws.columns = [{width:6},{width:14},{width:14},{width:10},{width:10},{width:8}];
+  // 다운로드
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `노프로_${ed.short || ed.name}_${sfV4DateKey()}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+  sfV4CloseDlModal();
 }
 
 // v4 인터랙션
