@@ -863,6 +863,7 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
 
 /* ─── Hero ─── */
 /* ─── HERO (Full Photo BG · Left Text Overlay · Apple-tone) ─── */
+/* ─── HERO (Full Photo BG · Apple-tone · Logo-aligned Text) ─── */
 #landing-overlay .hero{
   padding:0;
   position:relative;
@@ -875,21 +876,7 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
   background-position:center;
   background-repeat:no-repeat;
 }
-
-/* 왼쪽에서 오른쪽으로 어두워지는 그라데이션 — 텍스트 가독성용 */
-#landing-overlay .hero::before{
-  content:'';
-  position:absolute;
-  inset:0;
-  background:linear-gradient(90deg,
-    rgba(0,0,0,.55) 0%,
-    rgba(0,0,0,.35) 35%,
-    rgba(0,0,0,.1) 60%,
-    rgba(0,0,0,0) 80%
-  );
-  z-index:1;
-  pointer-events:none;
-}
+#landing-overlay .hero::before{display:none}
 #landing-overlay .hero::after{display:none}
 
 #landing-overlay .hero .wrap{
@@ -898,122 +885,66 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
   z-index:2;
 }
 
+/* 로고와 같은 라인에서 시작 — margin 0 */
 #landing-overlay .hero-inner{
   text-align:left;
-  max-width:560px;
+  max-width:640px;
   margin:0;
   padding:80px 0;
 }
 
-/* 태그 — 반투명 글래스 */
-#landing-overlay .hero-tag{
-  display:inline-block;
+/* 상단 작은 텍스트 — 소규모 사업장 어쩌고 */
+#landing-overlay .hero-note{
   font-size:13px;
   font-weight:500;
-  color:#fff;
-  background:rgba(255,255,255,.15);
-  padding:8px 18px;
-  border-radius:980px;
-  margin-bottom:28px;
-  border:.5px solid rgba(255,255,255,.25);
-  letter-spacing:-.01em;
-  backdrop-filter:blur(10px);
-  -webkit-backdrop-filter:blur(10px);
-  box-shadow:none;
+  color:rgba(255,255,255,.85);
+  letter-spacing:.04em;
+  margin:0 0 20px 0;
+  text-shadow:0 1px 4px rgba(0,0,0,.18);
 }
 
-/* 메인 헤드라인 — 흰색, 그림자 없음 */
+/* 메인 헤드라인 — 흰색 + 아주 약한 블러그림자 */
 #landing-overlay .hero h1{
-  font-size:clamp(44px,5.8vw,68px);
-  line-height:1.12;
-  letter-spacing:-.045em;
+  font-size:clamp(40px,5vw,60px);
+  line-height:1.15;
+  letter-spacing:-.04em;
   font-weight:700;
-  margin-bottom:24px;
+  margin:0 0 24px 0;
   color:#fff;
-  text-shadow:none;
+  text-shadow:
+    0 2px 12px rgba(0,0,0,.15),
+    0 1px 2px rgba(0,0,0,.1);
 }
 #landing-overlay .hero h1 .highlight{color:#fff}
 
-/* 서브 텍스트 — 흰색 살짝 투명 */
+/* 서브 — 흰색 살짝 투명 */
 #landing-overlay .hero-sub{
-  font-size:17px;
+  font-size:16px;
   color:rgba(255,255,255,.92);
-  margin:0 0 36px 0;
+  margin:0;
   font-weight:400;
-  letter-spacing:-.015em;
-  line-height:1.65;
-  max-width:520px;
-  text-shadow:none;
-}
-
-#landing-overlay .hero-ctas{
-  display:flex;
-  gap:10px;
-  justify-content:flex-start;
-  flex-wrap:wrap;
-  margin-bottom:28px;
-}
-
-/* 무료로 시작하기 — 초록색 (포인트) */
-#landing-overlay .hero .btn-primary{
-  background:#1D1D1F;
-  box-shadow:0 4px 16px rgba(0,0,0,.3);
-}
-#landing-overlay .hero .btn-primary:hover{
-  background:#000;
-}
-#landing-overlay .hero .btn-primary:hover{
-  background:#16A34A;
-  transform:translateY(-1px);
-  box-shadow:0 6px 20px rgba(34,197,94,.45);
-}
-
-/* 제품 둘러보기 — 글래스 */
-#landing-overlay .hero .btn-outline{
-  background:rgba(255,255,255,.15);
-  border:.5px solid rgba(255,255,255,.3);
-  color:#fff;
-  backdrop-filter:blur(10px);
-  -webkit-backdrop-filter:blur(10px);
-  box-shadow:none;
-  font-weight:500;
-}
-#landing-overlay .hero .btn-outline:hover{
-  background:rgba(255,255,255,.25);
-  border-color:rgba(255,255,255,.5);
-  transform:translateY(-1px);
-}
-
-#landing-overlay .hero-note{
-  font-size:13px;
-  color:rgba(255,255,255,.75);
   letter-spacing:-.01em;
-  text-shadow:none;
+  line-height:1.65;
+  max-width:560px;
+  text-shadow:
+    0 1px 8px rgba(0,0,0,.18),
+    0 1px 2px rgba(0,0,0,.12);
 }
 
 /* 태블릿 */
 @media (max-width:1024px){
-  #landing-overlay .hero{min-height:620px}
-  #landing-overlay .hero-inner{max-width:480px}
+  #landing-overlay .hero{min-height:600px}
+  #landing-overlay .hero-inner{padding:60px 0}
+  #landing-overlay .hero h1{font-size:clamp(34px,4.5vw,48px)}
 }
 
 /* 모바일 */
 @media (max-width:768px){
-  #landing-overlay .hero{
-    min-height:560px;
-    align-items:flex-end;
-    padding-bottom:40px;
-  }
-  #landing-overlay .hero::before{
-    background:linear-gradient(180deg,
-      rgba(0,0,0,.2) 0%,
-      rgba(0,0,0,.4) 50%,
-      rgba(0,0,0,.7) 100%
-    );
-  }
-  #landing-overlay .hero-inner{padding:48px 0 0}
-  #landing-overlay .hero h1{font-size:clamp(32px,7vw,44px)}
-  #landing-overlay .hero-sub{font-size:15px}
+  #landing-overlay .hero{min-height:520px}
+  #landing-overlay .hero-inner{padding:48px 0;max-width:100%}
+  #landing-overlay .hero h1{font-size:clamp(28px,6vw,40px)}
+  #landing-overlay .hero-sub{font-size:14px}
+  #landing-overlay .hero-note{font-size:12px}
 }
 /* ─── Stats ─── */
 #landing-overlay .stats{
