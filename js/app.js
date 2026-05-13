@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-13-7';
+const CLIENT_BUILD = '2026-05-13-8';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1503,14 +1503,20 @@ function monthSummary(eid,y,m){
     // 매일 m2h 변환 후 시간(hours) 누적 (출퇴근 기록 소수점 그대로 합산)
     twkH+=m2h(c.work); tAllNightH+=m2h(c.nightM); tAllOtDayH+=m2h(c.otDay); tAllOtNightH+=m2h(c.otNight);
     if(empPayMode==='fixed'){
-      // 🎯 OT 임계는 반차여도 480분(8h) 유지 — 실근무 자체가 8h 초과해야 0.5x 연장가산
-      const fixedThresh = 480;
+      // 🎯 통상임금제 소정근로외 실근무 임계 (1배 추가 지급)
+      // - 반차일: 240분(4h) — 반차 4h가 이미 소정의 절반을 채워 출근 4h 초과는 소정근로외
+      // - 일반일: 480분(8h) — 실근무 8h 초과만 소정근로외
+      // 별도로 c.otDay (0.5배 연장 가산)는 _halfBaseM=0이라 항상 480분 기준
+      // → 반차+9h: tFixExtraH=5h(1배), c.otDay=1h(0.5배)
+      // → 반차+5h: tFixExtraH=1h(1배), c.otDay=0h(0.5배 없음)
+      const fixedThresh = (rec.halfAnnual && !autoH) ? 240 : 480;
       tFixExtraH += m2h(autoH ? c.work : Math.max(0, c.work - fixedThresh));
       if(autoH) tFixHolWorkH += m2h(c.work);
     }
     if(empPayMode==='hourly' && !autoH){
       const dayM = Math.max(0, c.work - c.nightM);
-      // 🎯 반차일: 반차 4h를 base에 추가 + 실근무 8h 초과만 OT 처리 (임계는 480분 유지)
+      // 🎯 시급제: 모든 시간이 시급으로 지급되므로 임계 480 유지 (반차도 동일)
+      // 시급제는 '기본급 209' 개념이 없어 '소정근로외 실근무' 분리 불필요
       const hourlyThresh = 480;
       if(rec.halfAnnual) tHrBaseH += 4; // 반차 4h 시급 기본급 시간 가산 (월급 대신)
       tHrBaseH += m2h(Math.min(dayM, hourlyThresh) + Math.min(c.nightM, hourlyThresh));
