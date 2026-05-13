@@ -739,10 +739,13 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
 }
 #landing-overlay .nav-inner{display:flex;align-items:center;justify-content:space-between;gap:28px}
 #landing-overlay .logo{
-  font-size:22px;font-weight:600;
-  letter-spacing:-.035em;
-  color:var(--lp-primary);
+  font-size:0;                    /* 기존 "nopro" 텍스트 숨김 */
+  display:inline-block;
+  width:110px;                    /* 로고 너비 — 필요시 조정 */
+  height:32px;                    /* 로고 높이 — 필요시 조정 */
+  background:url('/Frame_1.png') no-repeat center/contain;
   cursor:pointer;
+  vertical-align:middle;
 }
 #landing-overlay .nav-links{display:flex;gap:32px;font-size:13.5px;color:var(--lp-ink-2);font-weight:500;letter-spacing:-.01em}
 #landing-overlay .nav-links a{transition:color .2s var(--lp-ease);cursor:pointer}
