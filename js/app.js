@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-13-1';
+const CLIENT_BUILD = '2026-05-13-2';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -4936,6 +4936,9 @@ function bulkKeyDown(e){
     document.removeEventListener('keydown', bulkKeyDown);
     return;
   }
+  // 🛡️ 한글 IME 조합 중에는 키 처리 건너뜀 (Tab/Enter 등 누를 때 글자 중복 방지)
+  // 조합 종료 후 IME가 다음 keydown을 재발생시키므로 Tab 이동은 정상 동작함.
+  if(e.isComposing || e.keyCode === 229) return;
   const {r, c} = bulkSel;
   const rows = bulkData.length;
   const cols = BULK_COLS.length;
