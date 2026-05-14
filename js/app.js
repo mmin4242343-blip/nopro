@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-14-11';
+const CLIENT_BUILD = '2026-05-14-12';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -10460,8 +10460,28 @@ function sfV4DailyHTML() {
     <div class="sfv4-grid-main">
       <div>
         <div class="sfv4-card">
-          <p class="sfv4-h3">📋 교육 내용</p>
+          ${(()=>{
+            const enText = r.content_en || '';
+            const enSrc = r.content_en_src || '';
+            const koCur = r.content || '';
+            const trBtn = !enText ? '🌐 영어 번역' : (enSrc !== koCur ? '🔄 재번역' : '🔄 재번역');
+            const trStatus = !enText ? '번역 없음' : (enSrc !== koCur ? '⚠ 내용 수정됨 — 재번역 필요' : '✓ 번역 완료');
+            const trColor = !enText ? '#9CA3AF' : (enSrc !== koCur ? '#B45309' : '#047857');
+            return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px">
+              <p class="sfv4-h3" style="margin:0">📋 교육 내용</p>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="font-size:10px;color:${trColor};font-weight:600">${trStatus}</span>
+                <button class="sfv4-btn" onclick="sfV4TranslateContent(this)">${trBtn}</button>
+              </div>
+            </div>`;
+          })()}
           <textarea class="sfv4-ta" placeholder="${esc(e.placeholder)}" oninput="sfV4SetField('content',this.value)">${esc(r.content||'')}</textarea>
+          ${(r.content_en||'') ? `
+            <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #E5E7EB">
+              <p style="font-size:11px;color:#0D7377;font-weight:600;margin-bottom:4px">🇬🇧 English (수동 수정 가능)</p>
+              <textarea class="sfv4-ta" style="background:#F0FDFA" oninput="sfV4SetField('content_en',this.value)">${esc(r.content_en||'')}</textarea>
+            </div>
+          ` : ''}
           <div class="sfv4-form-grid">
             <div>
               <label class="sfv4-form-l">⏱ 교육 시간(분)${sfV4IsLegal()?' <span class="sfv4-req">*</span>':''}</label>
@@ -10510,9 +10530,9 @@ function sfV4DailyHTML() {
             return `<div class="sfv4-filter-grp"><div class="sfv4-filter-l">${l}</div><div class="sfv4-filter-btns">${o.map(opt=>`<button class="sfv4-fbtn${sfV4State.filters[k]===opt?' on':''}" onclick="sfV4SetFilter('${k}','${opt}')">${opt}</button>`).join('')}</div></div>`;
           }).join('')}
           <div style="border-top:1px solid #E5E7EB;margin-top:8px;padding-top:8px">
-            <p style="font-size:10px;color:#6B7280;margin-bottom:5px">${f.length}명 표시 (전체 ${t}명) · 클릭으로 토글</p>
+            <p style="font-size:10px;color:#6B7280;margin-bottom:5px">${f.length}명 표시 (전체 ${t}명) · 🔒 외부 서명 페이지에서만 변경</p>
             <div style="max-height:280px;overflow-y:auto">
-              ${f.map(emp=>`<div class="sfv4-emp-row" onclick="sfV4ToggleSign(${emp.id})">
+              ${f.map(emp=>`<div class="sfv4-emp-row" style="cursor:default" title="외부 서명 링크에서 직원이 직접 서명해야만 상태가 변경됩니다">
                 <div style="display:flex;align-items:center;gap:7px;min-width:0">
                   <span class="sfv4-dot" style="background:${emp.s?'#10B981':'#EF4444'}"></span>
                   <div style="min-width:0">
@@ -11428,6 +11448,33 @@ function sfV4SetField(field, val) {
   // 저장 버튼 disabled 상태만 갱신 (전체 재렌더 X — 입력 포커스 보존)
   const sv = document.querySelector('#sfv4-root .sfv4-btn-d');
   if (sv) sv.disabled = !sfV4CanSave();
+}
+
+// 🌐 v4 교육내용 한글→영어 번역 (Google translate 비공식 API 재사용 — 옛 sfTranslateTbm과 동일 방식)
+async function sfV4TranslateContent(btn) {
+  const r = sfV4GetRec();
+  const ko = (r.content || '').trim();
+  if (!ko) { alert('먼저 교육 내용을 입력해주세요.'); return; }
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '번역 중...'; }
+  try {
+    const res = await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q=' + encodeURIComponent(ko));
+    const json = await res.json();
+    const translated = (json[0] || []).map(s => s[0]).join('');
+    if (!translated) throw new Error('빈 번역 결과');
+    sfV4SetRecField('content_en', translated);
+    sfV4SetRecField('content_en_src', ko);   // 번역 시점의 원본 (변경 감지용)
+    sfV4SetRecField('content_en_at', Date.now());
+    // 서버에도 즉시 동기화 (외부 서명 페이지에서 영어 버전 보이도록)
+    try {
+      if (typeof safeItemSave === 'function') await safeItemSave('safety_records', safetyRecords);
+    } catch (e) { console.warn('번역 서버 저장 실패:', e); }
+    if (typeof showSyncToast === 'function') showSyncToast('✓ 영어 번역 완료', 'ok');
+    renderSafetyV4();
+  } catch (e) {
+    alert('번역에 실패했습니다. 인터넷 연결을 확인해주세요.');
+    if (btn) { btn.disabled = false; btn.textContent = orig || '🌐 영어 번역'; }
+  }
 }
 function sfV4ToggleCheck(i) {
   const dk = sfV4DateKey();
