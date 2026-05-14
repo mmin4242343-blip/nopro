@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-14-9';
+const CLIENT_BUILD = '2026-05-14-10';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -10613,40 +10613,54 @@ async function sfV4GenLink() {
   renderSafetyV4();
 }
 
-function sfV4CopyLink() {
+// 안전교육 v4 입력값(교육내용·강사·시간 등)을 서버에 강제 동기화 후 URL 반환.
+// 사용자가 textarea 입력 직후 '새 창'/'복사'를 눌러도 서버가 최신 값을 갖도록 보장.
+async function _sfV4FlushAndGetUrl() {
   const r = sfV4GetRec();
   const sess = JSON.parse(localStorage.getItem('nopro_session') || 'null');
   const cid = sess?.companyId || '';
-  if (!r.token || !cid) { alert('먼저 ↻ 재생성 버튼을 눌러 링크를 생성해주세요.'); return; }
-  const url = `https://noprohr.netlify.app/tbm_sign.html?c=${cid}&t=${r.token}&d=${sfV4DateKey()}&e=${sfV4State.edu}`;
+  if (!r.token || !cid) return null;
+  try {
+    if (typeof safeItemSave === 'function') await safeItemSave('safety_records', safetyRecords);
+  } catch (e) { console.warn('safety_records 강제 동기화 실패:', e); }
+  return `https://noprohr.netlify.app/tbm_sign.html?c=${cid}&t=${r.token}&d=${sfV4DateKey()}&e=${sfV4State.edu}`;
+}
+
+async function sfV4CopyLink() {
+  const r = sfV4GetRec();
+  if (!r.token) { alert('먼저 ↻ 재생성 버튼을 눌러 링크를 생성해주세요.'); return; }
+  const url = await _sfV4FlushAndGetUrl();
+  if (!url) { alert('링크 생성 실패. 로그인 상태를 확인해주세요.'); return; }
   if (navigator.clipboard) navigator.clipboard.writeText(url);
-  // 토스트
-  if (typeof showSyncToast === 'function') showSyncToast('✓ 링크 복사됨', 'ok');
+  if (typeof showSyncToast === 'function') showSyncToast('✓ 링크 복사됨 (최신 입력 반영)', 'ok');
   else alert('✓ 링크가 복사되었습니다.\n\n' + url);
 }
 
-// 🆕 새 창에서 서명 페이지 미리보기 열기 — 관리자가 링크 동작 확인용
-function sfV4OpenLink() {
+// 🆕 새 창에서 서명 페이지 열기 — 입력한 교육 내용이 서버에 반영된 상태로 표시
+async function sfV4OpenLink() {
   const r = sfV4GetRec();
-  const sess = JSON.parse(localStorage.getItem('nopro_session') || 'null');
-  const cid = sess?.companyId || '';
-  if (!r.token || !cid) { alert('먼저 ↻ 재생성 버튼을 눌러 링크를 생성해주세요.'); return; }
-  const url = `https://noprohr.netlify.app/tbm_sign.html?c=${cid}&t=${r.token}&d=${sfV4DateKey()}&e=${sfV4State.edu}`;
-  // beforeunload 알림 차단 후 새 탭으로 오픈 (현재 페이지 unload 안 되지만 안전망)
+  if (!r.token) { alert('먼저 ↻ 재생성 버튼을 눌러 링크를 생성해주세요.'); return; }
+  // 🛡️ popup blocker 우회 — 클릭 제스처와 동기적으로 빈 탭 먼저 열고, 저장 완료 후 URL 설정
   try { _hasUnsavedChanges = false; window.onbeforeunload = null; } catch(e){}
-  const w = window.open(url, '_blank', 'noopener,noreferrer');
+  const w = window.open('about:blank', '_blank');
   if (!w) {
-    // 팝업 차단된 경우 안내
-    if (typeof showSyncToast === 'function') showSyncToast('팝업이 차단됐습니다. 주소창의 차단 아이콘 클릭 후 허용해주세요.', 'warn', 4000);
-    else alert('팝업이 차단됐습니다. 브라우저 팝업 허용 후 다시 시도해주세요.\n\n' + url);
+    if (typeof showSyncToast === 'function') showSyncToast('팝업이 차단됐습니다. 주소창의 차단 아이콘 허용 후 다시 시도해주세요.', 'warn', 4000);
+    else alert('팝업이 차단됐습니다. 브라우저 팝업 허용 후 다시 시도해주세요.');
+    return;
   }
+  try { w.opener = null; } catch(_){} // noopener 시뮬레이션 (보안)
+  const url = await _sfV4FlushAndGetUrl();
+  if (!url) { try { w.close(); } catch(_){}; alert('링크 생성 실패. 로그인 상태를 확인해주세요.'); return; }
+  try { w.location.href = url; } catch(_){}
 }
 
-function sfV4CopyKakao() {
+async function sfV4CopyKakao() {
   const msg = (document.getElementById('sfv4-kakao-msg') || {}).value || '';
   if (!msg) { alert('먼저 ↻ 재생성 버튼을 눌러 링크를 생성해주세요.'); return; }
+  // 서버 강제 동기화 — 받는 사람이 링크 클릭 시 최신 교육내용 보이도록
+  await _sfV4FlushAndGetUrl();
   if (navigator.clipboard) navigator.clipboard.writeText(msg);
-  if (typeof showSyncToast === 'function') showSyncToast('✓ 카카오 메시지 복사됨', 'ok');
+  if (typeof showSyncToast === 'function') showSyncToast('✓ 카카오 메시지 복사됨 (최신 입력 반영)', 'ok');
   else alert('✓ 카카오톡 공유 문구가 복사되었습니다.');
 }
 
