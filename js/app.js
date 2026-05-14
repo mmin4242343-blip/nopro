@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-14-18';
+const CLIENT_BUILD = '2026-05-14-19';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -10313,6 +10313,35 @@ function renderSafetyV4() {
   root.innerHTML = sfV4HeaderHTML() + body + modals;
   // 🆕 실시간 서명 폴링 시작 (외부 서명 페이지에서 들어오는 서명을 자동 반영)
   startSfV4SignPolling();
+  // 🆕 사진 썸네일 lazy-load — 재로그인 후 base64 없이 storagePath만 있는 사진 복원
+  sfV4LoadPhotoThumbs();
+}
+
+// 사진 썸네일 lazy-load — `data-spath`가 있고 src가 비어있는 img에 서명 URL 발급
+async function sfV4LoadPhotoThumbs() {
+  const imgs = document.querySelectorAll('img[data-spath]');
+  if (!imgs.length) return;
+  const tasks = [];
+  // 같은 path 중복 fetch 방지
+  const pathToImgs = {};
+  imgs.forEach(img => {
+    const sp = img.getAttribute('data-spath');
+    if (!sp || img.src) return;
+    (pathToImgs[sp] = pathToImgs[sp] || []).push(img);
+  });
+  const paths = Object.keys(pathToImgs);
+  if (!paths.length) return;
+  try {
+    const urls = await getFileUrls(paths);
+    paths.forEach(sp => {
+      const url = urls[sp];
+      if (!url) return;
+      pathToImgs[sp].forEach(img => {
+        img.src = url;
+        img.style.opacity = '1';
+      });
+    });
+  } catch(e) { console.warn('사진 썸네일 로드 실패:', e); }
 }
 
 // 🆕 v4 서명 실시간 폴링 — 외부 tbm_sign.html에서 직원이 서명하면 관리자 화면에 자동 반영
@@ -10667,7 +10696,13 @@ function sfV4PhotoCardHTML() {
         <p style="font-size:12px;color:#6B7280;font-weight:500">교육 사진 드래그 또는 클릭</p>
         <p style="font-size:10px;color:#9CA3AF;margin-top:3px">JPG · PNG · HEIC · 여러 장 동시 가능</p>
       </label>
-      ${photos.length > 0 ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(85px,1fr));gap:6px;margin-top:8px">${photos.map((p,i)=>`<div style="position:relative;aspect-ratio:1;border-radius:5px;overflow:hidden;border:1px solid #E5E7EB"><img src="${p.data || ''}" data-spath="${esc(p.storagePath||'')}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in" onclick="sfV4ZoomPhoto('${p.id}')" alt="사진${i+1}"><button onclick="sfV4DelPhoto('${p.id}')" style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;border:none;background:rgba(0,0,0,0.6);color:white;cursor:pointer;font-size:11px;line-height:1">×</button></div>`).join('')}</div>` : ''}
+      ${photos.length > 0 ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(85px,1fr));gap:6px;margin-top:8px">${photos.map((p,i)=>{
+        const hasData = (p.data||'').startsWith('data:');
+        const hasPath = !!p.storagePath;
+        const initSrc = hasData ? p.data : '';
+        const initOp = hasData ? '1' : (hasPath ? '0.3' : '0.6');
+        return `<div style="position:relative;aspect-ratio:1;border-radius:5px;overflow:hidden;border:1px solid #E5E7EB;background:#F3F4F6 url('data:image/svg+xml;utf8,<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; width=&quot;24&quot; height=&quot;24&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;%239CA3AF&quot; stroke-width=&quot;2&quot;><rect x=&quot;3&quot; y=&quot;3&quot; width=&quot;18&quot; height=&quot;18&quot; rx=&quot;2&quot;/><circle cx=&quot;9&quot; cy=&quot;9&quot; r=&quot;2&quot;/><path d=&quot;M21 15l-5-5L5 21&quot;/></svg>') center/24px no-repeat"><img src="${initSrc}" data-spath="${esc(p.storagePath||'')}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;opacity:${initOp};transition:opacity .3s" onclick="sfV4ZoomPhoto('${p.id}')" alt="사진${i+1}"><button onclick="sfV4DelPhoto('${p.id}')" style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;border:none;background:rgba(0,0,0,0.6);color:white;cursor:pointer;font-size:11px;line-height:1">×</button></div>`;
+      }).join('')}</div>` : ''}
     </div>
   `;
 }
@@ -10814,19 +10849,52 @@ function sfV4DelPhoto(photoId) {
   renderSafetyV4();
 }
 
-function sfV4ZoomPhoto(photoId) {
+async function sfV4ZoomPhoto(photoId) {
   const dk = sfV4DateKey();
   const rec = safetyRecords[dk]?.[sfV4State.edu];
   if (!rec || !Array.isArray(rec.photos)) return;
   const p = rec.photos.find(x => x.id === photoId);
   if (!p) return;
-  // 간단한 모달
+  // 모달 오버레이 (Esc/클릭으로 닫힘)
   const ov = document.createElement('div');
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out';
-  ov.onclick = () => ov.remove();
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out;flex-direction:column;gap:12px';
+  const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  ov.onclick = (e) => { if (e.target === ov || e.target === img) close(); };
+  document.addEventListener('keydown', onKey);
+  // 닫기 버튼
+  const xBtn = document.createElement('button');
+  xBtn.textContent = '×';
+  xBtn.style.cssText = 'position:absolute;top:18px;right:24px;width:38px;height:38px;border-radius:50%;border:none;background:rgba(255,255,255,0.15);color:white;font-size:22px;cursor:pointer;line-height:1';
+  xBtn.onclick = close;
+  ov.appendChild(xBtn);
+  // 이미지
   const img = document.createElement('img');
-  img.src = p.data || '';
-  img.style.cssText = 'max-width:90vw;max-height:90vh;object-fit:contain';
+  img.style.cssText = 'max-width:90vw;max-height:85vh;object-fit:contain;box-shadow:0 8px 40px rgba(0,0,0,0.5)';
+  // 1) 로컬 base64 우선
+  if ((p.data||'').startsWith('data:')) {
+    img.src = p.data;
+  } else if (p.storagePath) {
+    // 2) storagePath → 서명 URL fetch (로딩 텍스트 동안 표시)
+    const loading = document.createElement('div');
+    loading.textContent = '사진 로드 중...';
+    loading.style.cssText = 'color:white;font-size:14px;font-weight:500';
+    ov.appendChild(loading);
+    document.body.appendChild(ov);
+    try {
+      const urls = await getFileUrls([p.storagePath]);
+      const url = urls[p.storagePath];
+      if (url) { img.src = url; loading.remove(); }
+      else { loading.textContent = '사진을 불러올 수 없습니다'; return; }
+    } catch (e) {
+      loading.textContent = '사진 로드 실패: ' + (e.message || e);
+      return;
+    }
+    ov.appendChild(img);
+    return;
+  } else {
+    return;
+  }
   ov.appendChild(img);
   document.body.appendChild(ov);
 }
