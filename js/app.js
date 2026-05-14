@@ -13328,7 +13328,7 @@ function exportLeaveExcel(){
         const payAmt=getLeavePayAmount(emp,leaveYear);
         const type=leaveSettings['type_'+emp.id]==='promote'?'연차촉진':'연차수당';
         const bg=xlsRowBg(ei);
-        const total=Math.round(lv.used*payAmt);
+        const total=lv.remain>0?Math.round(lv.remain*payAmt):0;
         grandTotal += total;
 
         xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:0}),emp.name,S.cell(C.navy,bg,true,'left'));
