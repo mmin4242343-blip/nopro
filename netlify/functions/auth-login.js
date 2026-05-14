@@ -52,7 +52,7 @@ export const handler = async (event) => {
     // 일반 사용자 로그인
     const { data: rows, error: dbErr } = await supabase
       .from('companies')
-      .select('id, email, company_name, manager_name, password_hash, active_session_id, active_session_at')
+      .select('id, email, company_name, manager_name, password_hash, active_session_id, active_session_at, group_tag')
       .eq('email', email);
 
     if (dbErr) return err(500, '서버 오류가 발생했습니다', event);
@@ -120,7 +120,8 @@ export const handler = async (event) => {
         company: company.company_name,
         name: company.manager_name,
         role: 'user',
-        companyId: company.id
+        companyId: company.id,
+        groupTag: company.group_tag || null
       }
     }, token, event);
 

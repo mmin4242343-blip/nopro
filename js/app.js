@@ -8629,18 +8629,18 @@ function exportDailyExcel(){
     fill:{fgColor:{rgb:'EFF6FF'}},
     alignment:{horizontal:'left',vertical:'center'},
   });
-  xlsMerge(ws,0,0,0,12);
+  xlsMerge(ws,0,0,0,11);
   xlsWrite(ws,XLSX.utils.encode_cell({r:1,c:0}),
     `출력일: ${new Date().toLocaleDateString('ko-KR')}`,{
     font:{sz:9,color:{rgb:C.gray2},italic:true,name:'맑은 고딕'},
     fill:{fgColor:{rgb:'EFF6FF'}},
     alignment:{horizontal:'left',vertical:'center'},
   });
-  xlsMerge(ws,1,0,1,12);
+  xlsMerge(ws,1,0,1,11);
   ws['!rows']=[{hpt:28},{hpt:16}];
 
   // 헤더
-  const hdrs=['순번','이름','급여형태','출근','퇴근','근무시간','휴게h','야간h','연장h','휴일h','상태','급여','비고'];
+  const hdrs=['순번','이름','급여형태','출근','퇴근','근무시간','휴게h','야간h','연장h','휴일h','상태','비고'];
   let R=2;
   hdrs.forEach((h,ci)=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),h,S.mainHdr(C.navy,'FFFFFF','center')));
   ws['!rows'].push({hpt:26});
@@ -8706,7 +8706,6 @@ function exportDailyExcel(){
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c&&autoH?Math.round(c.work/60*100)/100:0,S.num(C.gray,bg,false,'center'));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),status,S.cell(
       status==='연차'||status==='반차'?C.green:status==='결근'?C.rose:C.gray,bg,false,'center'));
-    xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c?Math.round(c.totalPay/10)*10:0,S.num(C.gray,bg,false,'right'));
     xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),rec.note||'',S.cell(C.gray,bg,false,'left'));
     ws['!rows'].push({hpt:22});
     R++;
@@ -8789,7 +8788,7 @@ function _buildRangeExcel(sd, ed, skipEmpty){
   const wb=XLSX.utils.book_new();
   const dowNames=['일','월','화','수','목','금','토'];
   const payModeLabel={fixed:'통상임금제',hourly:'시급제',monthly:'포괄임금제',pohal:'포괄임금제'};
-  const hdrs=['순번','이름','급여형태','출근','퇴근','근무시간','휴게h','야간h','연장h','휴일h','상태','급여','비고'];
+  const hdrs=['순번','이름','급여형태','출근','퇴근','근무시간','휴게h','야간h','연장h','휴일h','상태','비고'];
   let totalSheets=0, totalEmpRows=0, totalWorkH=0, totalPay=0;
   const cur=new Date(sd);
   while(cur<=ed){
@@ -8814,12 +8813,12 @@ function _buildRangeExcel(sd, ed, skipEmpty){
       font:{bold:true,sz:16,color:{rgb:C.navy},name:'맑은 고딕'},
       fill:{fgColor:{rgb:'EFF6FF'}},alignment:{horizontal:'left',vertical:'center'},
     });
-    xlsMerge(ws,0,0,0,12);
+    xlsMerge(ws,0,0,0,11);
     xlsWrite(ws,XLSX.utils.encode_cell({r:1,c:0}),`출력일: ${new Date().toLocaleDateString('ko-KR')}`,{
       font:{sz:9,color:{rgb:C.gray2},italic:true,name:'맑은 고딕'},
       fill:{fgColor:{rgb:'EFF6FF'}},alignment:{horizontal:'left',vertical:'center'},
     });
-    xlsMerge(ws,1,0,1,12);
+    xlsMerge(ws,1,0,1,11);
     ws['!rows']=[{hpt:28},{hpt:16}];
     let R=2;
     hdrs.forEach((h,ci)=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),h,S.mainHdr(C.navy,'FFFFFF','center')));
@@ -8871,7 +8870,6 @@ function _buildRangeExcel(sd, ed, skipEmpty){
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),c&&autoH?Math.round(c.work/60*100)/100:0,S.num(C.gray,bg,false,'center'));
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),status,S.cell(status==='연차'||status==='반차'?C.green:status==='결근'?C.rose:C.gray,bg,false,'center'));
       const pay=c?Math.round(c.totalPay/10)*10:0;
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),pay,S.num(C.gray,bg,false,'right'));
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci++}),rec.note||'',S.cell(C.gray,bg,false,'left'));
       ws['!rows'].push({hpt:22});
       R++;
@@ -8887,8 +8885,7 @@ function _buildRangeExcel(sd, ed, skipEmpty){
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:4}),'',S.cell(C.navy,sumBg,true,'center'));
       xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:5}),Math.round(dayWorkH*100)/100,S.num(C.navy,sumBg,true,'center'));
       for(let cc=6;cc<=10;cc++) xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:cc}),'',S.cell(C.navy,sumBg,true,'center'));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),dayPay,S.num(C.navy,sumBg,true,'right'));
-      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:12}),'',S.cell(C.navy,sumBg,true,'left'));
+      xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),'',S.cell(C.navy,sumBg,true,'left'));
       ws['!rows'].push({hpt:24});
       R++;
     }
@@ -13846,6 +13843,7 @@ function enterApp(company){
   document.querySelector('.app').style.display='flex';
   initSbCollapsed(); // 사이드바 접힘 상태 복원
   loadHolidaysAround(new Date().getFullYear()); // 공휴일 최신화 (작년·올해·내년)
+  applyGroupTagUI(); // 그룹별 UI 분기 (mm_group: wehago 안내 배너 등)
   // 데이터 로드 후 전체 화면 갱신
   setTimeout(()=>{
     try{ sortEMPS(); }catch(e){} // 앱 진입 시 정렬
@@ -13855,6 +13853,14 @@ function enterApp(company){
     try{ initWeekendChecks(); }catch(e){}
     try{ setDupMode(POL.dupMode||'single'); setDedMode(POL.dedMode||'hour'); }catch(e){}
   }, 300);
+}
+
+// 그룹 태그 기반 UI 분기. 세션의 groupTag 값에 따라 특정 회사 그룹만 보이는 안내/기능 토글.
+function applyGroupTagUI(){
+  let tag = null;
+  try { const s = JSON.parse(localStorage.getItem('nopro_session')||'null'); tag = s && s.groupTag; } catch(e){}
+  const mmNotice = document.getElementById('emps-mm-notice');
+  if(mmNotice) mmNotice.style.display = (tag === 'mm_group') ? 'block' : 'none';
 }
 
 function enterAdmin(){

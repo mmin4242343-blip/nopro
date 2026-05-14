@@ -44,7 +44,7 @@ export const handler = async (event) => {
     // 일반 사용자 - 회사 정보 + 활성 세션 확인
     const { data: rows, error: dbErr } = await supabase
       .from('companies')
-      .select('id, company_name, manager_name, email, status, active_session_id, active_session_at')
+      .select('id, company_name, manager_name, email, status, active_session_id, active_session_at, group_tag')
       .eq('id', decoded.companyId);
 
     if (dbErr) {
@@ -153,7 +153,8 @@ export const handler = async (event) => {
       company: company.company_name,
       name: company.manager_name,
       role: 'user',
-      companyId: company.id
+      companyId: company.id,
+      groupTag: company.group_tag || null
     };
 
     // 새 sid 발급했거나 만료 임박이면 새 JWT 발행
