@@ -800,7 +800,7 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
   gap:40px;
   font-size:15px;
   color:var(--lp-ink);
-  font-weight:600;
+  font-weight:800;
   margin-right:auto;
   margin-left:48px;
 }
