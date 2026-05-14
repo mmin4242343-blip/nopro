@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-14-16';
+const CLIENT_BUILD = '2026-05-14-17';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -10206,7 +10206,9 @@ let sfV4State = {
   edu: 'tbm',             // 현재 선택된 교육 키
   date: { y: new Date().getFullYear(), m: new Date().getMonth()+1, d: new Date().getDate() },
   filters: { s: '전체', n: '전체', w: '전체', p: '전체', d: '전체' },
-  search: ''
+  search: '',
+  monthlyView: 'calendar',                              // calendar | dashboard (월별 현황표 하위 뷰)
+  monthlyDashFilter: { n:'전체', w:'전체', p:'전체' }    // 월별 대시보드 필터
 };
 
 function sfV4DateKey() {
@@ -10834,11 +10836,37 @@ function sfV4ZoomPhoto(photoId) {
 // ──────────────────────────────────────
 function sfV4MonthlyHTML() {
   const y = sfV4State.date.y, m = sfV4State.date.m;
+  const view = sfV4State.monthlyView || 'calendar';
+  const catTabs = [['calendar','📅 교육 캘린더'], ['dashboard','✅ 월별 대시보드']];
+  return `
+    <div class="sfv4-card">
+      <div class="sfv4-row" style="margin-bottom:12px">
+        <p class="sfv4-h3" style="margin:0;font-size:15px">📊 ${y}년 ${m}월 ${view==='calendar'?'교육 캘린더':'서명 대시보드'}</p>
+        <div style="display:flex;gap:5px">
+          <button class="sfv4-btn" onclick="sfV4ShiftMonth(-1)">‹ 이전 달</button>
+          <button class="sfv4-btn" onclick="sfV4ShiftMonth(1)">다음 달 ›</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid #E5E7EB">
+        ${catTabs.map(([k,l])=>`
+          <button onclick="sfV4SetMonthlyView('${k}')" style="
+            padding:9px 16px;font-size:13px;cursor:pointer;background:transparent;
+            border:none;border-bottom:2px solid ${view===k?'#0D7377':'transparent'};
+            color:${view===k?'#0D7377':'#6B7280'};font-weight:${view===k?'700':'500'};
+            margin-bottom:-1px">${l}</button>
+        `).join('')}
+      </div>
+      ${view==='calendar' ? sfV4MonthlyCalendarHTML() : sfV4MonthlyDashboardHTML()}
+    </div>
+  `;
+}
+
+function sfV4MonthlyCalendarHTML() {
+  const y = sfV4State.date.y, m = sfV4State.date.m;
   const eduList = getEduList();
   const daysInMonth = new Date(y, m, 0).getDate();
   const firstDow = new Date(y, m-1, 1).getDay();
-  // 해당 월의 일별 교육 집계
-  const monthData = {};  // { day: { edus: [eduKey...], photoCount: N } }
+  const monthData = {};
   for (let d = 1; d <= daysInMonth; d++) {
     const dk = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const dayRec = safetyRecords[dk];
@@ -10846,53 +10874,198 @@ function sfV4MonthlyHTML() {
     const edus = [];
     let photoCount = 0;
     Object.entries(dayRec).forEach(([eduKey, rec]) => {
-      // 내용·서명·체크 중 하나라도 있으면 교육 수행으로 간주
       const hasData = (rec.content || '').trim() || Object.keys(rec.signs||{}).length > 0 || Object.values(rec.checks||{}).filter(Boolean).length > 0;
       if (hasData) edus.push(eduKey);
       photoCount += (rec.photos || []).length;
     });
     if (edus.length > 0 || photoCount > 0) monthData[d] = { edus, photoCount };
   }
-  // 빈 셀 (월 첫째 주 이전)
   const emptyCells = Array.from({length: firstDow}, () => '<div></div>').join('');
   return `
-    <div class="sfv4-card">
-      <div class="sfv4-row" style="margin-bottom:12px">
-        <p class="sfv4-h3" style="margin:0;font-size:15px">📊 ${y}년 ${m}월 교육 캘린더</p>
-        <div style="display:flex;gap:5px">
-          <button class="sfv4-btn" onclick="sfV4ShiftMonth(-1)">‹ 이전 달</button>
-          <button class="sfv4-btn" onclick="sfV4ShiftMonth(1)">다음 달 ›</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:8px 10px;background:#F9FAFB;border-radius:5px;font-size:10px;color:#6B7280">
+      <span style="font-weight:600">범례:</span>
+      ${Object.entries(eduList).map(([k,ed]) => `<span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#${ed.color}"></span>${esc(ed.short)}</span>`).join('')}
+      <span style="margin-left:6px;padding-left:8px;border-left:1px solid #E5E7EB;display:flex;align-items:center;gap:4px"><span style="font-size:11px">📷</span><span style="color:#0D7377;font-weight:500">사진</span></span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px">
+      ${['일','월','화','수','목','금','토'].map((d,i)=>`<div style="text-align:center;font-size:11px;color:${i===0?'#EF4444':i===6?'#3B82F6':'#6B7280'};padding:5px;font-weight:600">${d}</div>`).join('')}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">
+      ${emptyCells}
+      ${Array.from({length: daysInMonth}, (_, i) => {
+        const d = i + 1;
+        const data = monthData[d];
+        const hasData = !!data;
+        const photoCount = data?.photoCount || 0;
+        const cellBg = photoCount > 0 ? '#F0FDFA' : (hasData ? '#FAFBFC' : 'white');
+        const cellBorder = photoCount > 0 ? '#0D7377' : '#E5E7EB';
+        return `<div style="border:1.5px solid ${cellBorder};border-radius:6px;padding:6px 7px;min-height:78px;background:${cellBg};cursor:pointer;transition:all .15s" onclick="sfV4JumpDay(${d})" onmouseover="this.style.background='#F0F9FA'" onmouseout="this.style.background='${cellBg}'">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+            <span style="font-size:13px;font-weight:700;color:#1A1A1A">${d}</span>
+            ${photoCount > 0 ? `<span style="font-size:8px;background:#0D7377;color:white;padding:1px 4px;border-radius:5px;font-weight:700">📷${photoCount}</span>` : ''}
+          </div>
+          ${data ? data.edus.map(k => eduList[k] ? `<div style="font-size:10px;color:#${eduList[k].color};line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">• ${esc(eduList[k].short)}</div>` : '').join('') : ''}
+        </div>`;
+      }).join('')}
+    </div>
+    <p style="font-size:10px;color:#6B7280;margin-top:10px">💡 날짜 클릭 시 일일 현황표로 이동 · <span style="color:#0D7377;font-weight:600">청록 테두리 = 사진 업로드 완료</span></p>
+  `;
+}
+
+function sfV4MonthlyDashboardHTML() {
+  const y = sfV4State.date.y, m = sfV4State.date.m;
+  const daysInMonth = new Date(y, m, 0).getDate();
+  if (!sfV4State.monthlyDashFilter) sfV4State.monthlyDashFilter = { n:'전체', w:'전체', p:'전체' };
+  const f = sfV4State.monthlyDashFilter;
+
+  // 활성 직원 (퇴사 제외) — sfV4GetEmps와 동일 변환
+  const allEmps = (EMPS || []).filter(e => !e.leave).map(e => ({
+    id: e.id,
+    name: e.name || '',
+    w: e.shift === 'night' ? '야간' : '주간',
+    n: (e.nation === 'foreign' || e.foreigner === true) ? '외국인' : '내국인',
+    p: ({fixed:'통상임금제', hourly:'시급제', monthly:'포괄임금제', pohal:'포괄임금제'})[e.payMode||'fixed'] || '통상임금제'
+  }));
+  const filteredEmps = allEmps.filter(e => {
+    if (f.n !== '전체' && e.n !== f.n) return false;
+    if (f.w !== '전체' && e.w !== f.w) return false;
+    if (f.p !== '전체' && e.p !== f.p) return false;
+    return true;
+  });
+
+  // 일별 교육 실시일 + 직원별 서명 매트릭스 집계
+  // signMatrix[empId][day] = true (해당일 어떤 교육이든 서명됨)
+  // eduDays = Set<day> (해당일 교육 1건이라도 있는 날)
+  const eduDays = new Set();
+  const signMatrix = {};
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dk = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dayRec = safetyRecords[dk];
+    if (!dayRec) continue;
+    let dayHasEdu = false;
+    Object.values(dayRec).forEach(rec => {
+      const hasData = (rec.content || '').trim() || Object.keys(rec.signs||{}).length > 0 || Object.values(rec.checks||{}).filter(Boolean).length > 0;
+      if (hasData) dayHasEdu = true;
+      const signs = rec.signs || {};
+      Object.keys(signs).forEach(empId => {
+        if (!signs[empId]) return;
+        if (!signMatrix[empId]) signMatrix[empId] = {};
+        signMatrix[empId][d] = true;
+      });
+    });
+    if (dayHasEdu) eduDays.add(d);
+  }
+  const totalEduDays = eduDays.size;
+
+  // 직원별 서명 일수 (교육 실시일 기준)
+  const signCountByEmp = {};
+  filteredEmps.forEach(emp => {
+    let cnt = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      if (eduDays.has(d) && signMatrix[emp.id] && signMatrix[emp.id][d]) cnt++;
+    }
+    signCountByEmp[emp.id] = cnt;
+  });
+
+  const natOpts = ['전체','내국인','외국인'];
+  const shiftOpts = ['전체','주간','야간'];
+  const payOpts = ['전체','통상임금제','시급제','포괄임금제'];
+  const filterBtn = (cat, val, label) => {
+    const on = f[cat] === val;
+    return `<button onclick="sfV4SetMonthlyDashFilter('${cat}','${val}')" style="
+      padding:6px 12px;font-size:12px;cursor:pointer;border-radius:6px;
+      border:1px solid ${on?'#0D7377':'#E5E7EB'};
+      background:${on?'#0D7377':'white'};color:${on?'white':'#6B7280'};
+      font-weight:${on?'600':'500'}">${label}</button>`;
+  };
+
+  return `
+    <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;flex-wrap:wrap;gap:18px;align-items:center">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#6B7280;margin-bottom:6px;letter-spacing:0.3px">국적</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">${natOpts.map(v => filterBtn('n', v, v)).join('')}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#6B7280;margin-bottom:6px;letter-spacing:0.3px">주야간</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">${shiftOpts.map(v => filterBtn('w', v, v)).join('')}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#6B7280;margin-bottom:6px;letter-spacing:0.3px">급여방식</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">${payOpts.map(v => filterBtn('p', v, v)).join('')}</div>
+        </div>
+        <div style="margin-left:auto;font-size:12px;color:#6B7280">
+          표시 인원: <span style="font-weight:700;color:#0D7377">${filteredEmps.length}</span>명 · 교육일: <span style="font-weight:700;color:#0D7377">${totalEduDays}</span>일
         </div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:8px 10px;background:#F9FAFB;border-radius:5px;font-size:10px;color:#6B7280">
-        <span style="font-weight:600">범례:</span>
-        ${Object.entries(eduList).map(([k,ed]) => `<span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#${ed.color}"></span>${esc(ed.short)}</span>`).join('')}
-        <span style="margin-left:6px;padding-left:8px;border-left:1px solid #E5E7EB;display:flex;align-items:center;gap:4px"><span style="font-size:11px">📷</span><span style="color:#0D7377;font-weight:500">사진</span></span>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px">
-        ${['일','월','화','수','목','금','토'].map((d,i)=>`<div style="text-align:center;font-size:11px;color:${i===0?'#EF4444':i===6?'#3B82F6':'#6B7280'};padding:5px;font-weight:600">${d}</div>`).join('')}
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">
-        ${emptyCells}
-        ${Array.from({length: daysInMonth}, (_, i) => {
-          const d = i + 1;
-          const data = monthData[d];
-          const hasData = !!data;
-          const photoCount = data?.photoCount || 0;
-          const cellBg = photoCount > 0 ? '#F0FDFA' : (hasData ? '#FAFBFC' : 'white');
-          const cellBorder = photoCount > 0 ? '#0D7377' : '#E5E7EB';
-          return `<div style="border:1.5px solid ${cellBorder};border-radius:6px;padding:6px 7px;min-height:78px;background:${cellBg};cursor:pointer;transition:all .15s" onclick="sfV4JumpDay(${d})" onmouseover="this.style.background='#F0F9FA'" onmouseout="this.style.background='${cellBg}'">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-              <span style="font-size:13px;font-weight:700;color:#1A1A1A">${d}</span>
-              ${photoCount > 0 ? `<span style="font-size:8px;background:#0D7377;color:white;padding:1px 4px;border-radius:5px;font-weight:700">📷${photoCount}</span>` : ''}
-            </div>
-            ${data ? data.edus.map(k => eduList[k] ? `<div style="font-size:10px;color:#${eduList[k].color};line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">• ${esc(eduList[k].short)}</div>` : '').join('') : ''}
-          </div>`;
-        }).join('')}
-      </div>
-      <p style="font-size:10px;color:#6B7280;margin-top:10px">💡 날짜 클릭 시 일일 현황표로 이동 · <span style="color:#0D7377;font-weight:600">청록 테두리 = 사진 업로드 완료</span></p>
     </div>
+    <div style="overflow-x:auto;border:1px solid #E5E7EB;border-radius:10px">
+      <table style="border-collapse:collapse;font-size:11px;min-width:100%;background:white">
+        <thead>
+          <tr style="background:#F9FAFB">
+            <th style="position:sticky;left:0;background:#F9FAFB;padding:10px 8px;text-align:left;border-bottom:2px solid #E5E7EB;border-right:1px solid #E5E7EB;font-weight:700;color:#1A1A1A;min-width:110px;z-index:2">이름</th>
+            <th style="padding:10px 6px;text-align:left;border-bottom:2px solid #E5E7EB;border-right:1px solid #E5E7EB;font-weight:600;color:#6B7280;min-width:60px">국적</th>
+            <th style="padding:10px 6px;text-align:left;border-bottom:2px solid #E5E7EB;border-right:1px solid #E5E7EB;font-weight:600;color:#6B7280;min-width:50px">주야</th>
+            <th style="padding:10px 6px;text-align:left;border-bottom:2px solid #E5E7EB;border-right:1px solid #E5E7EB;font-weight:600;color:#6B7280;min-width:90px">급여</th>
+            ${Array.from({length:daysInMonth},(_,i)=>{
+              const d = i+1;
+              const hasEdu = eduDays.has(d);
+              return `<th style="padding:8px 4px;text-align:center;border-bottom:2px solid #E5E7EB;font-weight:${hasEdu?'700':'500'};color:${hasEdu?'#0D7377':'#D1D5DB'};min-width:26px;background:${hasEdu?'#F0FDFA':'#F9FAFB'}">${d}</th>`;
+            }).join('')}
+            <th style="padding:10px 8px;text-align:center;border-bottom:2px solid #E5E7EB;border-left:1px solid #E5E7EB;font-weight:700;color:#0D7377;min-width:70px;background:#F0FDFA">서명/교육</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filteredEmps.length === 0 ? `
+            <tr><td colspan="${daysInMonth+5}" style="padding:40px;text-align:center;color:#9CA3AF;font-size:13px">필터 조건에 해당하는 인원이 없습니다</td></tr>
+          ` : filteredEmps.map((emp, idx) => {
+            const signCnt = signCountByEmp[emp.id] || 0;
+            const pct = totalEduDays > 0 ? Math.round(signCnt/totalEduDays*100) : 0;
+            const pctColor = pct >= 90 ? '#047857' : (pct >= 70 ? '#0F766E' : (pct >= 50 ? '#B45309' : '#B91C1C'));
+            return `
+              <tr style="border-bottom:1px solid #F3F4F6;${idx%2===1?'background:#FAFBFC':''}">
+                <td style="position:sticky;left:0;background:${idx%2===1?'#FAFBFC':'white'};padding:8px;font-weight:600;color:#1A1A1A;border-right:1px solid #E5E7EB;z-index:1">${esc(emp.name)}</td>
+                <td style="padding:8px 6px;color:#6B7280;border-right:1px solid #F3F4F6">${esc(emp.n)}</td>
+                <td style="padding:8px 6px;color:#6B7280;border-right:1px solid #F3F4F6">${esc(emp.w)}</td>
+                <td style="padding:8px 6px;color:#6B7280;border-right:1px solid #F3F4F6;font-size:10.5px">${esc(emp.p)}</td>
+                ${Array.from({length:daysInMonth},(_,i)=>{
+                  const d = i+1;
+                  const hasEdu = eduDays.has(d);
+                  const signed = hasEdu && signMatrix[emp.id] && signMatrix[emp.id][d];
+                  let cell = '';
+                  if (!hasEdu) cell = `<span style="color:#E5E7EB">·</span>`;
+                  else if (signed) cell = `<span style="color:#047857;font-weight:700;font-size:13px">✓</span>`;
+                  else cell = `<span style="color:#DC2626;font-weight:600;font-size:13px">✗</span>`;
+                  return `<td style="padding:6px 2px;text-align:center;background:${hasEdu?'transparent':'#FAFBFC'}">${cell}</td>`;
+                }).join('')}
+                <td style="padding:8px;text-align:center;border-left:1px solid #E5E7EB;background:#F9FFFE">
+                  <div style="font-size:12px;font-weight:700;color:${pctColor}">${signCnt}/${totalEduDays}</div>
+                  <div style="font-size:9.5px;color:${pctColor};margin-top:1px">${pct}%</div>
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:11px;color:#6B7280;margin-top:14px">
+      💡 <span style="color:#047857;font-weight:700">✓</span> = 서명 완료 ·
+      <span style="color:#DC2626;font-weight:700">✗</span> = 미서명 ·
+      <span style="color:#9CA3AF">·</span> = 교육 없는 날 ·
+      청록 컬럼 = 교육 실시일
+    </p>
   `;
+}
+
+function sfV4SetMonthlyView(v) {
+  sfV4State.monthlyView = v;
+  if (v === 'dashboard' && !sfV4State.monthlyDashFilter) sfV4State.monthlyDashFilter = { n:'전체', w:'전체', p:'전체' };
+  renderSafetyV4();
+}
+function sfV4SetMonthlyDashFilter(cat, val) {
+  if (!sfV4State.monthlyDashFilter) sfV4State.monthlyDashFilter = { n:'전체', w:'전체', p:'전체' };
+  sfV4State.monthlyDashFilter[cat] = val;
+  renderSafetyV4();
 }
 
 function sfV4HistoryHTML() {
