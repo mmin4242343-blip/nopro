@@ -9,6 +9,24 @@ const ALLOWED_EXTENSIONS = new Set([
   'txt','csv','hwp','hwpx','zip'
 ]);
 
+// 🛡️ 확장자 → MIME 화이트리스트. 클라가 보낸 fileType은 신뢰 X (HTML/JS 등으로 위장 차단).
+// SVG/HWP/ZIP은 브라우저에서 인라인 렌더링 시 XSS 위험 → 강제 octet-stream(다운로드만).
+const MIME_BY_EXT = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif',
+  webp: 'image/webp', bmp: 'image/bmp',
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  txt: 'text/plain', csv: 'text/csv',
+  svg: 'application/octet-stream',
+  hwp: 'application/octet-stream', hwpx: 'application/octet-stream',
+  zip: 'application/octet-stream',
+};
+
 let bucketReady = false;
 async function ensureBucket() {
   if (bucketReady) return;
@@ -62,12 +80,18 @@ export const handler = async (event) => {
 
     const timestamp = Date.now();
     const safeName = fileName.replace(/[^a-zA-Z0-9가-힣._-]/g, '_');
-    const path = `${companyId}/${category}/${categoryId || 'general'}/${timestamp}_${safeName}`;
+    // 🛡️ H-1: categoryId path traversal 차단 — `../`, `?`, `&` 등 모두 `_`로 normalize.
+    // 정상 패턴(folderId 숫자, `${empId}_${YYYY}-${MM}` 등)은 영향 없음.
+    const safeCategoryId = (String(categoryId || 'general').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64)) || 'general';
+    const path = `${companyId}/${category}/${safeCategoryId}/${timestamp}_${safeName}`;
+
+    // 🛡️ H-2: 확장자 기반 MIME 강제 (클라가 보낸 fileType 무시) — HTML/JS 위장 업로드 차단.
+    const safeContentType = MIME_BY_EXT[ext] || 'application/octet-stream';
 
     const { error: uploadErr } = await supabase.storage
       .from(BUCKET)
       .upload(path, buffer, {
-        contentType: fileType || 'application/octet-stream',
+        contentType: safeContentType,
         upsert: false
       });
 
