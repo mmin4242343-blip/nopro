@@ -152,6 +152,9 @@ status          VARCHAR         -- 'active' | 'inactive'
 created_at      TIMESTAMP
 active_session_id   TEXT        -- 현재 활성 세션 UUID (JWT의 sid와 매칭, 단일 로그인)
 active_session_at   TIMESTAMPTZ -- 마지막 활동 시각 (heartbeat, idle timeout 1시간)
+group_tag       VARCHAR(40)     -- 회사 그룹 태그 (특정 회사 묶음에만 기능 분기용, NULL=일반)
+                                --   현재 운영 중: 'mm_group' (명민 그룹 — wehago 연동 운영)
+                                --   상세는 "회사 그룹 분류" 섹션 참조
 ```
 
 ### `company_data` 테이블
@@ -326,6 +329,61 @@ SELECT id, email, company_name, active_session_at, NOW() - active_session_at AS 
 - `signToken` 호출 시 user payload에 반드시 `sid` 포함 (admin은 제외)
 - 새 인증 함수 만들 때 `auth-verify.js`의 sid 검증 로직 패턴 참조
 - 단일 세션 정책 무력화 우회 코드 추가 금지 (의도적 우회 시 21중 가드와 동급으로 사고 위험)
+
+## 회사 그룹 분류 (group_tag) — 명민 그룹 커스텀화 (2026-05-14 도입)
+
+nopro v5는 **단일 배포 구조** (모든 회사가 같은 코드 1벌). 특정 회사 묶음에만 기능/UI를 노출하기 위해 `companies.group_tag` 컬럼 기반 분기 시스템 도입.
+
+**현재 운영 중인 그룹:**
+| 태그 | 의미 | 멤버 (이메일) |
+|------|------|--------------|
+| `mm_group` | 명민 그룹 — wehago 연동 운영 | `test2@naver.com`, `mmings@naver.com`, `nadabsy@naver.com` (3개, 최대 9개로 확장 예정) |
+
+**현재 활성 분기:**
+- 직원관리 페이지(`pg-emps`) 상단 안내 배너: "신규 등록한 직원의 경우 wehago에도 업데이트 부탁드립니다"
+  - `index.html`의 `#emps-mm-notice` div (기본 `display:none`)
+  - `js/app.js`의 `applyGroupTagUI()` 함수가 세션의 `groupTag === 'mm_group'`일 때만 표시 토글
+
+**아키텍처:**
+```
+companies.group_tag (DB)
+  ↓ auth-login.js / auth-verify.js: SELECT에 group_tag 포함
+  ↓ 응답 session.groupTag로 전달
+  ↓ 프론트: localStorage['nopro_session'].groupTag
+  ↓ enterApp() → applyGroupTagUI() 호출
+  ↓ 그룹 일치 시 해당 UI 요소 display:block, 외엔 display:none
+```
+
+**그룹원 추가/제거 (Supabase SQL):**
+```sql
+-- 추가
+UPDATE companies SET group_tag = 'mm_group' WHERE email = 'new@naver.com';
+-- 제거
+UPDATE companies SET group_tag = NULL WHERE email = 'old@naver.com';
+-- 그룹 멤버 조회
+SELECT id, email, company_name, group_tag FROM companies WHERE group_tag = 'mm_group';
+```
+
+**개발 시 주의:**
+- 새 그룹 분기 요청 → `applyGroupTagUI()` (js/app.js, `enterApp` 직후 호출)에 토글 로직 추가
+- 그룹 전용 UI는 HTML 기본값 `display:none`으로 두고 JS로 토글 (그룹 밖 사용자에게 절대 노출 X — 이중 안전장치)
+- `group_tag`는 회사 `id`에 묶인 값이라 이메일/회사명 변경해도 태그 유지됨
+- 회사 삭제 후 동일 이메일로 재가입 시 새 id 발급 → 태그 다시 박아야 함
+- 기존 로그인 세션은 토큰 갱신(20분 주기) 또는 재로그인 시 새 `groupTag` 반영
+- 새 그룹 만들 땐 태그 값을 의미 명확하게 (예: `'beta_test'`, `'enterprise'`). 위 표에 추가
+- **그룹 외 회사에는 절대 영향 없도록** 분기 조건 `=== '특정태그'` 정확 비교 사용 (truthy 체크 금지)
+
+**관련 파일:**
+- `netlify/functions/auth-login.js` — SELECT에 `group_tag` 포함, session에 `groupTag` 전달
+- `netlify/functions/auth-verify.js` — 동일 (페이지 새로고침 시에도 그룹 태그 유지)
+- `js/app.js` — `applyGroupTagUI()` 함수 + `enterApp` 호출
+- `index.html` — `#emps-mm-notice` 등 그룹별 UI 요소
+
+**마이그레이션 SQL (이미 적용됨):**
+```sql
+ALTER TABLE companies ADD COLUMN group_tag VARCHAR(40);
+CREATE INDEX idx_companies_group_tag ON companies(group_tag);
+```
 
 ## 환경 변수 (Netlify에 설정)
 
