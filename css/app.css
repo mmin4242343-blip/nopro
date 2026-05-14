@@ -803,9 +803,32 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
   letter-spacing:-.01em;
 }
 #landing-overlay .nav-links a{
-  transition:color .2s var(--lp-ease);
+  position:relative;
+  color:var(--lp-ink-2);
+  font-weight:500;
   cursor:pointer;
-  padding:4px 0;
+  padding:8px 14px;
+  border-radius:8px;
+  transition:all .2s var(--lp-ease);
+}
+#landing-overlay .nav-links a:hover{
+  color:var(--lp-primary);
+  background:var(--lp-bg-soft);
+}
+#landing-overlay .nav-links a::after{
+  content:'';
+  position:absolute;
+  left:14px;right:14px;bottom:4px;
+  height:1.5px;
+  background:var(--lp-primary);
+  transform:scaleX(0);
+  transform-origin:center;
+  transition:transform .25s var(--lp-ease);
+  border-radius:2px;
+}
+#landing-overlay .nav-links a:hover::after{
+  transform:scaleX(1);
+}
 }
 #landing-overlay .nav-links a:hover{color:var(--lp-primary)}
 #landing-overlay .nav-cta{
