@@ -2018,7 +2018,7 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
   background:var(--surf);
   border-color:var(--bd);
   color:var(--rose);
-  cursor:default;
+  cursor:pointer;
 }
 
 .sm-bk-row{
