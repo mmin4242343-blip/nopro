@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-14-3';
+const CLIENT_BUILD = '2026-05-14-4';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -13926,19 +13926,23 @@ function enterApp(company){
   document.getElementById('admin-overlay').style.display='none';
   const badge=document.getElementById('company-name-badge');
   if(badge&&company){badge.textContent=company;badge.style.display='inline';}
+  // 🆕 .app 표시 전에 동기 렌더링 — 계정 전환 시 이전 계정 DOM 잔상 차단
+  // (옛 코드는 .app 먼저 표시 + setTimeout 300ms 후 렌더 → 그 사이 옛 직원 목록/표가 잠깐 보였음)
+  try{ sortEMPS(); }catch(e){}
+  try{ renderSb(); }catch(e){}
+  try{ renderTable(); }catch(e){}
+  try{ if(typeof renderEmps==='function') renderEmps(); }catch(e){}
+  try{ if(typeof renderLeave==='function') renderLeave(); }catch(e){}
+  try{ if(typeof renderPayroll==='function') renderPayroll(); }catch(e){}
+  try{ if(typeof renderMonthly==='function') renderMonthly(); }catch(e){}
+  try{ if(typeof renderCompany==='function') renderCompany(); }catch(e){}
+  try{ updateSyncBadge(); updateSyncInfo(); }catch(e){}
+  try{ initWeekendChecks(); }catch(e){}
+  try{ setDupMode(POL.dupMode||'single'); setDedMode(POL.dedMode||'hour'); }catch(e){}
   document.querySelector('.app').style.display='flex';
   initSbCollapsed(); // 사이드바 접힘 상태 복원
   loadHolidaysAround(new Date().getFullYear()); // 공휴일 최신화 (작년·올해·내년)
   applyGroupTagUI(); // 그룹별 UI 분기 (mm_group: wehago 안내 배너 등)
-  // 데이터 로드 후 전체 화면 갱신
-  setTimeout(()=>{
-    try{ sortEMPS(); }catch(e){} // 앱 진입 시 정렬
-    try{ renderSb(); }catch(e){}
-    try{ renderTable(); }catch(e){}
-    try{ updateSyncBadge(); updateSyncInfo(); }catch(e){}
-    try{ initWeekendChecks(); }catch(e){}
-    try{ setDupMode(POL.dupMode||'single'); setDedMode(POL.dedMode||'hour'); }catch(e){}
-  }, 300);
 }
 
 // 그룹 태그 기반 UI 분기. 세션의 groupTag 값에 따라 특정 회사 그룹만 보이는 안내/기능 토글.
