@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-14-15';
+const CLIENT_BUILD = '2026-05-14-16';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -10309,6 +10309,66 @@ function renderSafetyV4() {
                  (sfV4State.configModal?.open ? sfV4ConfigModalHTML() : '') +
                  (sfV4State.dlModal?.open ? sfV4DlModalHTML() : '');
   root.innerHTML = sfV4HeaderHTML() + body + modals;
+  // 🆕 실시간 서명 폴링 시작 (외부 서명 페이지에서 들어오는 서명을 자동 반영)
+  startSfV4SignPolling();
+}
+
+// 🆕 v4 서명 실시간 폴링 — 외부 tbm_sign.html에서 직원이 서명하면 관리자 화면에 자동 반영
+let _sfV4SignPollTimer = null;
+function startSfV4SignPolling() {
+  if (_sfV4SignPollTimer) return;
+  _sfV4SignPollTimer = setInterval(sfV4PollSigns, 8000); // 8초 주기
+}
+function stopSfV4SignPolling() {
+  if (_sfV4SignPollTimer) { clearInterval(_sfV4SignPollTimer); _sfV4SignPollTimer = null; }
+}
+async function sfV4PollSigns() {
+  if (document.hidden) return;
+  // sfv4 화면이 활성 상태가 아니면 스킵 (페이지 이탈 시 자동 중단)
+  const root = document.getElementById('sfv4-root');
+  const pg = document.getElementById('pg-safety');
+  if (!root || !pg || pg.classList.contains('hidden') || pg.style.display === 'none') {
+    stopSfV4SignPolling();
+    return;
+  }
+  // 입력 중이면 폴링 스킵 (입력값 보호)
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) return;
+  // 디바운스 중인 저장이 있으면 스킵
+  if (typeof saveLS !== 'undefined' && saveLS._timer) return;
+  const sess = (() => { try { return JSON.parse(localStorage.getItem('nopro_session') || 'null'); } catch (e) { return null; } })();
+  if (!sess || !sess.companyId) return;
+  try {
+    const res = await apiFetch('/data-load', 'POST', { keys: ['safety_records'] });
+    if (!res || !res.safety_records) return;
+    const sr = res.safety_records;
+    let changed = false;
+    // 모든 (날짜, 교육) 조합의 signs를 머지 — 서버에 새로 추가된 서명만 로컬에 ADD-ONLY 반영
+    Object.keys(sr).forEach(dk => {
+      Object.keys(sr[dk] || {}).forEach(eduKey => {
+        const serverRec = sr[dk][eduKey];
+        if (!serverRec || !serverRec.signs) return;
+        if (!safetyRecords[dk]) safetyRecords[dk] = {};
+        if (!safetyRecords[dk][eduKey]) safetyRecords[dk][eduKey] = {};
+        if (!safetyRecords[dk][eduKey].signs) safetyRecords[dk][eduKey].signs = {};
+        const localSigns = safetyRecords[dk][eduKey].signs;
+        Object.keys(serverRec.signs).forEach(empId => {
+          if (!localSigns[empId]) {
+            localSigns[empId] = serverRec.signs[empId];
+            changed = true;
+          }
+        });
+      });
+    });
+    if (changed) {
+      try { localStorage.setItem('npm5_safety_records', JSON.stringify(safetyRecords)); } catch (e) {}
+      // 입력 중이 아닐 때만 재렌더 (이중 안전장치)
+      const ae2 = document.activeElement;
+      if (!ae2 || (ae2.tagName !== 'INPUT' && ae2.tagName !== 'TEXTAREA' && ae2.tagName !== 'SELECT')) {
+        renderSafetyV4();
+      }
+    }
+  } catch (e) { console.warn('sfV4PollSigns 실패:', e?.message); }
 }
 
 // v4 CSS (sfv4- prefix로 충돌 방지)
@@ -11653,6 +11713,54 @@ async function sfV4DoExcel(btnEl) {
       });
     }
 
+    // 🆕 사진 섹션 (해당 날짜에 사진 있을 때만 추가)
+    const photos = Array.isArray(dayRec.photos) ? dayRec.photos : [];
+    if (photos.length > 0) {
+      // 직원 명단 끝 다음 빈 행 계산
+      let photoStart = (signedCount > 0 ? hdrRow + 1 + fEmps.filter(e => signs[String(e.id)]).length : hdrRow + 2) + 1;
+      // 섹션 헤더
+      ws.mergeCells(`B${photoStart}:I${photoStart}`);
+      const cph = ws.getCell(`B${photoStart}`);
+      cph.value = `  📷  현장 교육 사진 (${photos.length}장)`;
+      cph.font = { bold:true, size:12, color:{argb:'FF1F2937'} };
+      cph.fill = fillColor('F3F4F6');
+      cph.alignment = { vertical:'middle' };
+      ws.getRow(photoStart).height = 26;
+
+      // 사진을 4열 그리드로 배치 (B~I = 8 cols, 한 사진이 2 cols 차지)
+      const photosPerRow = 4;
+      const photoW = 180, photoH = 130;
+      let photoRow = photoStart + 1;
+      for (let pi = 0; pi < photos.length; pi++) {
+        const p = photos[pi];
+        const colInRow = pi % photosPerRow;
+        if (colInRow === 0 && pi > 0) photoRow++;
+        // 새 행 시작 시 행 높이 설정
+        if (colInRow === 0) ws.getRow(photoRow).height = 100;
+        try {
+          const img = await sfFetchPhotoBuffer(p);
+          if (img && img.buf && img.buf.byteLength > 0) {
+            const imgId = wb.addImage({ buffer: img.buf, extension: img.ext });
+            // col index: B=1, D=3, F=5, H=7 (0-indexed: 1,3,5,7)
+            const colIdx = 1 + colInRow * 2;
+            ws.addImage(imgId, {
+              tl: { col: colIdx, row: photoRow - 1 },
+              ext: { width: photoW, height: photoH }
+            });
+          } else {
+            // 로드 실패 표시
+            const cellAddr = String.fromCharCode(66 + colInRow * 2) + photoRow; // B,D,F,H
+            const c = ws.getCell(cellAddr);
+            c.value = `[사진${pi+1}] 로드 실패`;
+            c.font = { size:9, color:{argb:'FFDC2626'}, italic:true };
+            c.alignment = { vertical:'middle', horizontal:'center' };
+          }
+        } catch (e) {
+          console.warn(`[v4 엑셀 사진 ${dk}/${pi+1}] 삽입 실패:`, e?.message);
+        }
+      }
+    }
+
     ws.views = [{ showGridLines: false }];
   }
 
@@ -11730,8 +11838,28 @@ async function sfV4DoPdf(btnEl) {
   const dim = new Date(Y, M, 0).getDate();
   const dowKo = ['일','월','화','수','목','금','토'];
 
+  // PDF용 사진 data URL 페치 (base64 우선, 없으면 storagePath에서 fetch)
+  const _fetchPhotoDataUrl = async (p) => {
+    if (p.data && typeof p.data === 'string' && p.data.startsWith('data:image')) return p.data;
+    if (!p.storagePath || typeof getFileUrls !== 'function') return null;
+    try {
+      const urls = await getFileUrls([p.storagePath]);
+      const u = urls[p.storagePath];
+      if (!u) return null;
+      const resp = await fetch(u);
+      if (!resp.ok) return null;
+      const blob = await resp.blob();
+      return await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = reject;
+        r.readAsDataURL(blob);
+      });
+    } catch (e) { return null; }
+  };
+
   // 한 날짜의 HTML 생성기 — 엑셀과 같은 구조
-  const buildDayHTML = (Y, M, d) => {
+  const buildDayHTML = async (Y, M, d) => {
     const dt = new Date(Y, M-1, d);
     const dow = dowKo[dt.getDay()];
     const dk = `${Y}-${String(M).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
@@ -11750,6 +11878,18 @@ async function sfV4DoPdf(btnEl) {
     const pct = fEmps.length ? Math.round(signedCount / fEmps.length * 100) : 0;
     const checks = dayRec.checks || {};
     const items = ed.items || [];
+    // 🆕 사진 data URL 미리 가져오기 (병렬)
+    const photos = Array.isArray(dayRec.photos) ? dayRec.photos : [];
+    const photoUrls = await Promise.all(photos.map(p => _fetchPhotoDataUrl(p)));
+    const photoSection = photos.length > 0 ? `
+      <div style="background:#F3F4F6;padding:8px 12px;font-weight:700;font-size:12px;margin-top:14px">📷 현장 교육 사진 (${photos.length}장)</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:8px;border:1px solid #E5E7EB">
+        ${photoUrls.map((url, i) => url
+          ? `<div style="aspect-ratio:4/3;overflow:hidden;border:1px solid #E5E7EB;border-radius:4px;background:#F9FAFB"><img src="${url}" style="width:100%;height:100%;object-fit:cover" alt="사진${i+1}"></div>`
+          : `<div style="aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;border:1px dashed #E5E7EB;border-radius:4px;background:#FEF2F2;font-size:9px;color:#DC2626">[사진${i+1}]<br>로드 실패</div>`
+        ).join('')}
+      </div>
+    ` : '';
 
     return `<div style="width:794px;padding:36px;font-family:'Pretendard','맑은 고딕','Malgun Gothic',sans-serif;color:#1a1a1a;background:#fff;box-sizing:border-box">
       <h1 style="text-align:center;color:#${ed.color};margin:0 0 4px 0;font-size:20px;font-weight:700">📋 ${esc(ed.name)} 전자서명</h1>
@@ -11802,6 +11942,7 @@ async function sfV4DoPdf(btnEl) {
               <td style="border:1px solid #E5E7EB;padding:6px;color:#047857;font-weight:600">✓ 서명완료</td>
             </tr>`).join('')}
       </table>
+      ${photoSection}
       <p style="margin-top:18px;font-size:9px;color:#9CA3AF;text-align:right">생성일: ${new Date().toLocaleString('ko-KR')} · 노프로</p>
     </div>`;
   };
@@ -11819,7 +11960,9 @@ async function sfV4DoPdf(btnEl) {
   try {
     for (let d = 1; d <= dim; d++) {
       if (btn) btn.textContent = `⏳ ${d}/${dim} 페이지 생성중...`;
-      container.innerHTML = buildDayHTML(Y, M, d);
+      container.innerHTML = await buildDayHTML(Y, M, d);
+      // 이미지 로드 대기 (data URL이라 즉시 디코딩되지만 안전망)
+      await new Promise(r => setTimeout(r, 50));
       const canvas = await html2canvas(container.firstElementChild, {
         scale: 1.5,
         backgroundColor: '#ffffff',
