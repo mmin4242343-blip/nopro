@@ -945,6 +945,17 @@ window.addEventListener('beforeunload', (e)=>{
   }
 });
 
+// 외부 정적 페이지(faq.html, about.html 등) 이동 시 beforeunload 알림 차단 + 미저장 즉시 저장.
+// target="_blank"로 새 탭 여는 경우 알림 자체가 안 뜨지만, 사용자가 같은 탭에서 우클릭/수정자키 등으로
+// 이동하더라도 데이터 유실 없도록 onclick에서 한 번 더 안전 처리.
+function _safeExtNav(){
+  try{
+    if(typeof flushPendingSave==='function') flushPendingSave();
+    window._hasUnsavedChanges = false;
+    window.onbeforeunload = null;
+  }catch(e){}
+}
+
 // 탭/창 복귀 시 서버 최신값 자동 반영 (동시 접속 반영 — 옵션 A)
 // 내 편집 중 값이 덮어쓰이지 않도록: blur → pending flush → sbLoadAll 순서
 async function reloadOnFocus(){
