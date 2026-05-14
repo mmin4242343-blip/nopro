@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-14-17';
+const CLIENT_BUILD = '2026-05-14-18';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -11224,57 +11224,85 @@ function sfV4YearlyHTML() {
       </div>
     </div>
 
-    <div class="sfv4-card" style="background:linear-gradient(135deg,#FAFBFC,#F0F9FA);border:1px solid #E5E7EB">
-      <div class="sfv4-row" style="margin-bottom:12px">
+    <div class="sfv4-card" style="background:linear-gradient(135deg,#FAFBFC 0%,#F0F9FA 100%);border:1px solid #E5E7EB">
+      <div class="sfv4-row" style="margin-bottom:14px">
         <div>
-          <p class="sfv4-h3" style="margin:0;font-size:15px">⚖️ 법정 의무 교육 이행 현황 <span style="font-size:11px;color:#6B7280;font-weight:500">${y}년</span></p>
-          <p style="font-size:10px;color:#9CA3AF;margin-top:2px">노동부 점검 대비 · 카드 클릭으로 실시 일자 확인</p>
+          <p class="sfv4-h3" style="margin:0;font-size:18px;display:flex;align-items:center;gap:8px">⚖️ 법정 의무 교육 이행 현황 <span style="font-size:13px;color:#6B7280;font-weight:500">${y}년</span></p>
+          <p style="font-size:11px;color:#9CA3AF;margin-top:3px">노동부 점검 대비 · 카드 클릭으로 실시 일자 확인</p>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
-        <div style="background:white;border-radius:8px;padding:10px;border:1px solid #E5E7EB;text-align:center">
-          <div style="font-size:10px;color:#9CA3AF;margin-bottom:3px;font-weight:500">전체 의무</div>
-          <div style="font-size:20px;font-weight:700">${legalKeys.length}</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px">
+        <div style="background:white;border-radius:12px;padding:14px;border:1px solid #E5E7EB;text-align:center">
+          <div style="font-size:11px;color:#9CA3AF;margin-bottom:4px;font-weight:500">전체 의무</div>
+          <div style="font-size:24px;font-weight:700;color:#1A1A1A">${legalKeys.length}</div>
         </div>
-        <div style="background:#ECFDF5;border-radius:8px;padding:10px;border:1px solid #A7F3D0;text-align:center">
-          <div style="font-size:10px;color:#047857;margin-bottom:3px;font-weight:600">✓ 이행 완료</div>
-          <div style="font-size:20px;font-weight:700;color:#047857">${doneCount}</div>
+        <div style="background:#ECFDF5;border-radius:12px;padding:14px;border:1px solid #A7F3D0;text-align:center">
+          <div style="font-size:11px;color:#047857;margin-bottom:4px;font-weight:600">✓ 이행 완료</div>
+          <div style="font-size:24px;font-weight:700;color:#047857">${doneCount}</div>
         </div>
-        <div style="background:#FEF2F2;border-radius:8px;padding:10px;border:1px solid #FCA5A5;text-align:center">
-          <div style="font-size:10px;color:#B91C1C;margin-bottom:3px;font-weight:600">⚠ 미실시</div>
-          <div style="font-size:20px;font-weight:700;color:#B91C1C">${missCount}</div>
+        <div style="background:#FEF2F2;border-radius:12px;padding:14px;border:1px solid #FCA5A5;text-align:center">
+          <div style="font-size:11px;color:#B91C1C;margin-bottom:4px;font-weight:600">⚠ 미실시</div>
+          <div style="font-size:24px;font-weight:700;color:#B91C1C">${missCount}</div>
         </div>
-        <div style="background:#F0FDFA;border-radius:8px;padding:10px;border:1px solid #99F6E4;text-align:center">
-          <div style="font-size:10px;color:#0F766E;margin-bottom:3px;font-weight:600">전체 이행률</div>
-          <div style="font-size:20px;font-weight:700;color:#0F766E">${totalRequired?Math.round(totalCompleted/totalRequired*100):0}%</div>
+        <div style="background:#F0FDFA;border-radius:12px;padding:14px;border:1px solid #99F6E4;text-align:center">
+          <div style="font-size:11px;color:#0F766E;margin-bottom:4px;font-weight:600">전체 이행률</div>
+          <div style="font-size:24px;font-weight:700;color:#0F766E">${totalRequired?Math.round(totalCompleted/totalRequired*100):0}%</div>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px">
         ${legalKeys.map(k => {
           const ed = eduList[k];
           const p = sfV4LegalProgress(k, y);
           const isDone = p.completed >= p.required;
-          const pct = p.required ? Math.round(p.completed/p.required*100) : 0;
+          const pct = p.required ? Math.min(100, Math.round(p.completed/p.required*100)) : 0;
+          const stateColor = isDone ? '#10B981' : '#EF4444';
           const stateLight = isDone ? '#ECFDF5' : '#FEF2F2';
           const stateText = isDone ? '#047857' : '#B91C1C';
           const stateBorder = isDone ? '#A7F3D0' : '#FCA5A5';
           const lastDate = p.records[0]?.date ? p.records[0].date.replace(/-/g,'.') : null;
-          return `<div onclick="sfV4OpenCompModal('${k}')" style="background:white;border:1.5px solid ${stateBorder};border-radius:10px;padding:13px;cursor:pointer;position:relative;overflow:hidden" onmouseover="this.style.borderColor='#${ed.color}'" onmouseout="this.style.borderColor='${stateBorder}'">
-            <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#${ed.color}"></div>
-            <div style="display:flex;justify-content:space-between;gap:8px;padding-left:6px">
+          // 연말까지 남은 일수
+          const today = new Date();
+          const yearEnd = new Date(y, 11, 31);
+          const daysRemaining = Math.max(0, Math.ceil((yearEnd - today) / 86400000));
+          // 진행률 도넛 (SVG)
+          const radius = 28;
+          const circ = 2 * Math.PI * radius;
+          const offset = circ - (pct / 100) * circ;
+          return `<div onclick="sfV4OpenCompModal('${k}')" style="background:white;border:1.5px solid ${stateBorder};border-radius:14px;padding:16px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.04)" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 10px 25px rgba(0,0,0,.08)';this.style.borderColor='#${ed.color}'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 1px 3px rgba(0,0,0,.04)';this.style.borderColor='${stateBorder}'">
+            <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:#${ed.color}"></div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;padding-left:8px;gap:8px">
               <div style="flex:1;min-width:0">
-                <span style="display:inline-block;font-size:9px;font-weight:700;padding:1px 7px;border-radius:8px;background:${stateLight};color:${stateText};border:1px solid ${stateBorder};margin-bottom:3px">${isDone?'✓ 이행':'⚠ 미실시'}</span>
-                <div style="font-size:12px;font-weight:700;color:#1A1A1A;line-height:1.3;margin-bottom:2px">${esc(ed.name)}</div>
-                <div style="font-size:10px;color:#6B7280">${esc(ed.cycle)}</div>
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
+                  <span style="display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:${stateLight};color:${stateText};border:1px solid ${stateBorder}">${isDone?'✓ 이행 완료':'⚠ 미실시'}</span>
+                  ${ed.fine?'<span style="font-size:9px;color:#9CA3AF;font-weight:500">과태료 위험</span>':''}
+                </div>
+                <div style="font-size:14px;font-weight:700;color:#1A1A1A;line-height:1.3;margin-bottom:3px">${esc(ed.name)}</div>
+                <div style="font-size:10.5px;color:#6B7280;line-height:1.4">${esc(ed.law||'')}<br><span style="color:#9CA3AF">${esc(ed.cycle||'')}</span></div>
               </div>
-              <div style="text-align:right;flex-shrink:0">
-                <div style="font-size:14px;font-weight:700;color:${stateText}">${pct}%</div>
-                <div style="font-size:9px;color:#9CA3AF;font-weight:600">${p.completed}/${p.required}</div>
+              <div style="position:relative;width:64px;height:64px;flex-shrink:0">
+                <svg width="64" height="64" viewBox="0 0 64 64" style="transform:rotate(-90deg)">
+                  <circle cx="32" cy="32" r="${radius}" fill="none" stroke="#F3F4F6" stroke-width="6"/>
+                  <circle cx="32" cy="32" r="${radius}" fill="none" stroke="${stateColor}" stroke-width="6" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${offset}" style="transition:stroke-dashoffset .5s ease"/>
+                </svg>
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column">
+                  <div style="font-size:14px;font-weight:700;color:${stateText};line-height:1">${pct}%</div>
+                  <div style="font-size:8.5px;color:#9CA3AF;font-weight:600;margin-top:1px">${p.completed}/${p.required}</div>
+                </div>
               </div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:7px 6px 0;margin-top:6px;border-top:1px dashed #F3F4F6">
-              <div><div style="font-size:9px;color:#9CA3AF;font-weight:600">📅 최근 실시</div><div style="font-size:10px;font-weight:700;color:${lastDate?'#0D7377':'#9CA3AF'}">${lastDate || '없음'}</div></div>
-              <div style="text-align:right"><div style="font-size:9px;color:#9CA3AF;font-weight:600">📋 실시 건수</div><div style="font-size:10px;font-weight:700;color:#0D7377">${p.records.length}건</div></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px 8px;background:#FAFBFC;border-radius:8px;margin-bottom:10px">
+              <div>
+                <div style="font-size:9.5px;color:#9CA3AF;font-weight:600;margin-bottom:2px;letter-spacing:0.3px">📅 마지막 실시</div>
+                <div style="font-size:12px;font-weight:700;color:${lastDate?'#0D7377':'#9CA3AF'}">${lastDate||'기록 없음'}</div>
+              </div>
+              <div>
+                <div style="font-size:9.5px;color:#9CA3AF;font-weight:600;margin-bottom:2px;letter-spacing:0.3px">⏳ 연말까지</div>
+                <div style="font-size:12px;font-weight:700;color:${isDone?'#0D7377':(daysRemaining<60?'#DC2626':'#1A1A1A')}">${daysRemaining}일</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 8px">
+              <span style="font-size:11px;color:#0D7377;font-weight:600;display:flex;align-items:center;gap:4px">📋 실시 ${p.records.length}건 보기</span>
+              <span style="font-size:14px;color:#0D7377">→</span>
             </div>
           </div>`;
         }).join('')}
