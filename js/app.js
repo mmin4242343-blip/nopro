@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-14-12';
+const CLIENT_BUILD = '2026-05-14-13';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -10407,7 +10407,7 @@ function sfV4HeaderHTML() {
       <div class="sfv4-actions">
         <button class="sfv4-btn" onclick="sfV4OpenConfigModal()">⚙️ 설정</button>
         <button class="sfv4-btn sfv4-btn-g" onclick="sfV4OpenDlModal()">📊 엑셀</button>
-        <button class="sfv4-btn sfv4-btn-r" onclick="alert('PDF는 추후 추가 예정')">📄 PDF</button>
+        <button class="sfv4-btn sfv4-btn-r" onclick="sfV4OpenDlModal()">📄 PDF</button>
         <button class="sfv4-btn sfv4-btn-d" onclick="sfV4Save()" ${sfV4CanSave()?'':'disabled'}>저장</button>
       </div>
     </div>
@@ -11299,7 +11299,7 @@ function sfV4DlModalHTML() {
       <div onclick="event.stopPropagation()" style="background:white;border-radius:14px;width:480px;max-width:100%;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
         <div style="padding:18px 22px;background:linear-gradient(135deg,#${ed.color},#${ed.color}DD);color:white">
           <div style="display:flex;justify-content:space-between;align-items:flex-start">
-            <div><div style="font-size:16px;font-weight:700">📊 엑셀 다운로드</div><div style="font-size:11px;opacity:0.9;margin-top:2px">${esc(ed.name)}</div></div>
+            <div><div style="font-size:16px;font-weight:700">📥 교육 일지 다운로드</div><div style="font-size:11px;opacity:0.9;margin-top:2px">${esc(ed.name)}</div></div>
             <button onclick="sfV4CloseDlModal()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:14px">✕</button>
           </div>
         </div>
@@ -11325,7 +11325,10 @@ function sfV4DlModalHTML() {
           </div>
           <div style="border-top:1px solid #F3F4F6;padding-top:12px">
             <div style="font-size:11px;color:#6B7280;margin-bottom:8px">📅 ${sfV4DateKey()} · ${esc(ed.name)}</div>
-            <button class="sfv4-btn sfv4-btn-d" style="width:100%;padding:10px" onclick="sfV4DoExcel()">📊 엑셀 다운로드 실행</button>
+            <div style="display:flex;gap:8px">
+              <button class="sfv4-btn sfv4-btn-d" style="flex:1;padding:10px" onclick="sfV4DoExcel()">📊 엑셀 다운로드</button>
+              <button class="sfv4-btn sfv4-btn-r" style="flex:1;padding:10px" onclick="sfV4DoPdf()">📄 PDF 다운로드</button>
+            </div>
           </div>
         </div>
       </div>
@@ -11346,10 +11349,31 @@ function sfV4SetDlFilter(key, val) {
   renderSafetyV4();
 }
 
+// 외부 라이브러리 lazy-load 헬퍼 (한 번 로드되면 캐시됨)
+function _sfV4LoadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('스크립트 로드 실패: ' + src));
+    document.head.appendChild(s);
+  });
+}
+
 async function sfV4DoExcel() {
+  // 🆕 ExcelJS lazy-load (이전엔 라이브러리 없으면 alert만 뜨고 끝났음)
   if (typeof ExcelJS === 'undefined') {
-    alert('엑셀 라이브러리 로딩 중... 잠시 후 다시 시도해주세요.');
-    return;
+    const btn = event?.target;
+    const orig = btn ? btn.textContent : '';
+    if (btn) { btn.textContent = '⏳ 라이브러리 로딩중...'; btn.disabled = true; }
+    try {
+      await _sfV4LoadScript('https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js');
+    } catch (e) {
+      alert('엑셀 라이브러리 로드 실패. 인터넷 연결을 확인해주세요.');
+      if (btn) { btn.textContent = orig || '📊 엑셀 다운로드 실행'; btn.disabled = false; }
+      return;
+    }
+    if (btn) { btn.textContent = orig || '📊 엑셀 다운로드 실행'; btn.disabled = false; }
   }
   const dm = sfV4State.dlModal;
   const eduList = getEduList();
@@ -11417,6 +11441,129 @@ async function sfV4DoExcel() {
   a.click();
   URL.revokeObjectURL(url);
   sfV4CloseDlModal();
+}
+
+// 🆕 v4 PDF 다운로드 (html2canvas + jsPDF — 한글 정상 렌더링, 브라우저 폰트 사용)
+async function sfV4DoPdf() {
+  // 라이브러리 lazy-load
+  const needHtml2canvas = (typeof html2canvas === 'undefined');
+  const needJsPdf = !(window.jspdf && window.jspdf.jsPDF);
+  if (needHtml2canvas || needJsPdf) {
+    const btn = event?.target;
+    const orig = btn ? btn.textContent : '';
+    if (btn) { btn.textContent = '⏳ PDF 라이브러리 로딩중...'; btn.disabled = true; }
+    try {
+      if (needHtml2canvas) await _sfV4LoadScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js');
+      if (needJsPdf) await _sfV4LoadScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js');
+    } catch (e) {
+      alert('PDF 라이브러리 로드 실패. 인터넷 연결을 확인해주세요.');
+      if (btn) { btn.textContent = orig || '📄 PDF 다운로드 실행'; btn.disabled = false; }
+      return;
+    }
+    if (btn) { btn.textContent = orig || '📄 PDF 다운로드 실행'; btn.disabled = false; }
+  }
+  const dm = sfV4State.dlModal;
+  const eduList = getEduList();
+  const ed = eduList[dm.eduKey];
+  const r = sfV4GetRec();
+  const emps = sfV4GetEmps().filter(e => {
+    if (dm.filterN !== '전체' && e.n !== dm.filterN) return false;
+    if (dm.filterW !== '전체' && e.w !== dm.filterW) return false;
+    if (dm.filterP !== '전체' && e.p !== dm.filterP) return false;
+    if (dm.filterSigned && !e.s) return false;
+    return true;
+  });
+
+  // 인쇄용 HTML 빌드 (오프스크린 캡처)
+  const html = `
+    <div style="width:794px;padding:36px;font-family:'Pretendard','맑은 고딕','Malgun Gothic',sans-serif;color:#1a1a1a;background:#fff;line-height:1.55">
+      <h1 style="text-align:center;color:#${ed.color};margin:0 0 6px 0;font-size:22px;font-weight:700">${esc(ed.name)} 교육 일지</h1>
+      <p style="text-align:center;color:#666;font-size:11px;margin:0 0 18px 0">근거 법령: ${esc(ed.law)}</p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px">
+        <tr><td style="border:1px solid #ddd;padding:8px;background:#f5f5f5;font-weight:600;width:25%">일시</td><td style="border:1px solid #ddd;padding:8px">${sfV4DateKey()} (${esc(ed.cycle||'')})</td></tr>
+        <tr><td style="border:1px solid #ddd;padding:8px;background:#f5f5f5;font-weight:600">강사</td><td style="border:1px solid #ddd;padding:8px">${esc(r.instructor||'-')}${r.instructorRole?' ('+esc(r.instructorRole)+')':''}</td></tr>
+        <tr><td style="border:1px solid #ddd;padding:8px;background:#f5f5f5;font-weight:600">교육 시간</td><td style="border:1px solid #ddd;padding:8px">${r.duration||0}분 (최소 ${ed.minTime||0}분)</td></tr>
+      </table>
+      <h3 style="font-size:14px;margin:16px 0 6px 0">📋 교육 내용</h3>
+      <div style="border:1px solid #ddd;padding:12px;background:#fafafa;white-space:pre-wrap;font-size:11.5px;min-height:60px">${esc(r.content||'-')}</div>
+      <h3 style="font-size:14px;margin:16px 0 6px 0">✅ 필수 포함 항목 (${(((r.checks)||{})?Object.values(r.checks||{}).filter(Boolean).length:0)}/${(ed.items||[]).length})</h3>
+      <ul style="margin:0 0 16px 0;padding-left:22px;font-size:12px">
+        ${(ed.items||[]).map((it,i)=>`<li style="margin-bottom:3px">${(r.checks||{})[i] ? '✓' : '☐'} ${esc(it)}</li>`).join('')}
+      </ul>
+      <h3 style="font-size:14px;margin:16px 0 6px 0">👥 참석자 명단 (${emps.length}명)</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:#f0f0f0">
+          <th style="border:1px solid #ddd;padding:6px;width:8%">순번</th>
+          <th style="border:1px solid #ddd;padding:6px;width:20%">이름</th>
+          <th style="border:1px solid #ddd;padding:6px">소속</th>
+          <th style="border:1px solid #ddd;padding:6px;width:11%">주야간</th>
+          <th style="border:1px solid #ddd;padding:6px;width:11%">국적</th>
+          <th style="border:1px solid #ddd;padding:6px;width:13%">서명</th>
+        </tr></thead>
+        <tbody>
+          ${emps.map((emp,i)=>`<tr>
+            <td style="border:1px solid #ddd;padding:6px;text-align:center">${i+1}</td>
+            <td style="border:1px solid #ddd;padding:6px">${esc(emp.name)}</td>
+            <td style="border:1px solid #ddd;padding:6px">${esc(emp.d)}</td>
+            <td style="border:1px solid #ddd;padding:6px;text-align:center">${esc(emp.w)}</td>
+            <td style="border:1px solid #ddd;padding:6px;text-align:center">${esc(emp.n)}</td>
+            <td style="border:1px solid #ddd;padding:6px;text-align:center;color:${emp.s?'#10B981':'#999'};font-weight:600">${emp.s?'✓ 완료':'-'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      <p style="margin-top:24px;font-size:9px;color:#999;text-align:right">생성일: ${new Date().toLocaleString('ko-KR')} · 노프로</p>
+    </div>
+  `;
+
+  const container = document.createElement('div');
+  container.style.cssText = 'position:fixed;left:-99999px;top:0;z-index:-1';
+  container.innerHTML = html;
+  document.body.appendChild(container);
+
+  try {
+    const canvas = await html2canvas(container.firstElementChild, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      useCORS: true,
+      logging: false
+    });
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pdfW = pdf.internal.pageSize.getWidth();
+    const pdfH = pdf.internal.pageSize.getHeight();
+    const imgW = pdfW;
+    const imgH = canvas.height * imgW / canvas.width;
+
+    if (imgH <= pdfH) {
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, imgW, imgH);
+    } else {
+      // 페이지 분할
+      let position = 0;
+      let pageNum = 0;
+      while (position < canvas.height) {
+        const pageHpx = canvas.width * pdfH / pdfW;
+        const sliceH = Math.min(canvas.height - position, pageHpx);
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceH;
+        const ctx = pageCanvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+        ctx.drawImage(canvas, 0, -position);
+        if (pageNum > 0) pdf.addPage();
+        pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', 0, 0, pdfW, sliceH * pdfW / canvas.width);
+        position += sliceH;
+        pageNum++;
+      }
+    }
+    pdf.save(`노프로_${ed.short || ed.name}_${sfV4DateKey()}.pdf`);
+    sfV4CloseDlModal();
+  } catch (e) {
+    console.error('PDF 생성 실패:', e);
+    alert('PDF 생성 실패: ' + (e.message || '알 수 없는 오류'));
+  } finally {
+    document.body.removeChild(container);
+  }
 }
 
 // v4 인터랙션
