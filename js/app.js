@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-14-7';
+const CLIENT_BUILD = '2026-05-14-8';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -10553,7 +10553,8 @@ function sfV4LinkCardHTML() {
       <div style="display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap">
         <input class="sfv4-input" id="sfv4-link-url" style="flex:1;min-width:200px;background:#F9FAFB;font-family:monospace;font-size:10px" readonly value="${esc(url || '↻ 재생성 버튼으로 링크 만들기')}">
         <button class="sfv4-btn" onclick="sfV4GenLink()">↻ 재생성</button>
-        <button class="sfv4-btn sfv4-btn-d" onclick="sfV4CopyLink()">🔗 복사</button>
+        <button class="sfv4-btn sfv4-btn-d" onclick="sfV4CopyLink()" ${url?'':'disabled'}>🔗 복사</button>
+        <button class="sfv4-btn" onclick="sfV4OpenLink()" ${url?'':'disabled'}>🪟 새 창</button>
       </div>
       <div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:5px;padding:8px;display:flex;justify-content:space-between;align-items:center;gap:8px">
         <div style="min-width:0;flex:1">
@@ -10618,6 +10619,23 @@ function sfV4CopyLink() {
   // 토스트
   if (typeof showSyncToast === 'function') showSyncToast('✓ 링크 복사됨', 'ok');
   else alert('✓ 링크가 복사되었습니다.\n\n' + url);
+}
+
+// 🆕 새 창에서 서명 페이지 미리보기 열기 — 관리자가 링크 동작 확인용
+function sfV4OpenLink() {
+  const r = sfV4GetRec();
+  const sess = JSON.parse(localStorage.getItem('nopro_session') || 'null');
+  const cid = sess?.companyId || '';
+  if (!r.token || !cid) { alert('먼저 ↻ 재생성 버튼을 눌러 링크를 생성해주세요.'); return; }
+  const url = `https://noprohr.netlify.app/tbm_sign.html?c=${cid}&t=${r.token}&d=${sfV4DateKey()}&e=${sfV4State.edu}`;
+  // beforeunload 알림 차단 후 새 탭으로 오픈 (현재 페이지 unload 안 되지만 안전망)
+  try { _hasUnsavedChanges = false; window.onbeforeunload = null; } catch(e){}
+  const w = window.open(url, '_blank', 'noopener,noreferrer');
+  if (!w) {
+    // 팝업 차단된 경우 안내
+    if (typeof showSyncToast === 'function') showSyncToast('팝업이 차단됐습니다. 주소창의 차단 아이콘 클릭 후 허용해주세요.', 'warn', 4000);
+    else alert('팝업이 차단됐습니다. 브라우저 팝업 허용 후 다시 시도해주세요.\n\n' + url);
+  }
 }
 
 function sfV4CopyKakao() {
