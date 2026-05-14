@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-14-8';
+const CLIENT_BUILD = '2026-05-14-9';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -10598,7 +10598,11 @@ async function sfV4GenLink() {
   const rnd = new Uint8Array(24); crypto.getRandomValues(rnd);
   let tok = ''; for (let i=0; i<24; i++) tok += chars[rnd[i]%chars.length];
   sfV4SetRecField('token', tok);
-  saveSafetyRecordsV4();
+  // 🛡️ v4 저장은 await로 처리 — fire-and-forget이면 사용자가 즉시 '새 창' 클릭 시
+  // 서버에 토큰이 도달 전이라 "유효하지 않은 링크" 응답 (race condition).
+  try {
+    if (typeof safeItemSave === 'function') await safeItemSave('safety_records', safetyRecords);
+  } catch (e) { console.warn('safety_records 저장 실패:', e); }
   // 외부 tbm_sign.html 호환을 위해 기존 SAFETY_REC[date+'_token']에도 저장 (v4 첫번째 교육이 TBM일 때 외부 검증용)
   if (sfV4State.edu === 'tbm') {
     SAFETY_REC[sfV4DateKey() + '_token'] = tok;
