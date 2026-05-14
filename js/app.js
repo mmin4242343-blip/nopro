@@ -3854,7 +3854,7 @@ function renderXlPreview(){
       <td class="num">${(getEmpPayMode(emp)==='hourly'||getEmpPayMode(emp)==='monthly')?'':sot}</td>
       <td class="num" style="font-size:11px">${joinStr}</td>
       <td class="num" style="font-size:11px;${leaveStr?'color:var(--rose);font-weight:700':''}">${leaveStr}</td>
-      <td class="num">${getOrdinaryRate(emp, pY, pM).toLocaleString('ko-KR')}</td>
+      <td class="num">${getEmpPayMode(emp)==='monthly'?'-':getOrdinaryRate(emp, pY, pM).toLocaleString('ko-KR')}</td>
       <td class="num" style="font-weight:500">${s.tBase>0?fmt$(s.tBase):'-'}</td>
       <td class="num" style="${getEmpPayMode(emp)==='hourly'&&s.wkly>0?'color:#0D9488;font-weight:700':''}">${getEmpPayMode(emp)==='hourly'?(s.wkly>0?fmt$(s.wkly):''):''}</td>
       <td class="num xl-editable">${s.annualPay>0?fmt$(s.annualPay):''}</td>
@@ -8490,7 +8490,7 @@ function exportExcel(){
       W(ci++,(_pm==='hourly'||_pm==='monthly')?'':sot,S.num(C.gray,bg));
       W(ci++,emp.join||'',S.cell(C.gray,bg,false,'center'));
       W(ci++,emp.leave||'',S.cell(emp.leave?C.rose:C.gray,bg,false,'center'));
-      W(ci++,getOrdinaryRate(emp, pY, pM),S.num(C.blue,C.blue4||bg,true));
+      W(ci++,_pm==='monthly'?'':getOrdinaryRate(emp, pY, pM),_pm==='monthly'?S.empty(bg):S.num(C.blue,C.blue4||bg,true));
 
       // 기본급 + 주휴 + 연차수당
       W(ci++,Math.round(s.tBase)||'',s.tBase?S.num(C.navy,bg):S.empty(bg));
