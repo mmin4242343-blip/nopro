@@ -169,7 +169,7 @@ function renderStep1(){
   app.innerHTML=`
     <div class="hdr">
       <h1>${isKo?'TBM 전자서명':'TBM E-Signature'}</h1>
-      <div class="company">${DATA.company||''}</div>
+      <div class="company">${esc(DATA.company||'')}</div>
       <div class="date">${getDateStr()}</div>
     </div>
     <div class="card">
@@ -234,9 +234,9 @@ function renderList(){
   el.innerHTML=filtered.map(e=>{
     const signed=!!signs[String(e.id)];
     const name=getDisplayName(e);
-    const sub=isKo?`${e.shift==='night'?'야간':'주간'} · ${e.nationality||'내국인'} · ${e.dept||''}`:`${e.shift==='night'?'Night':'Day'} · ${e.nationality==='외국인'?'Foreign':'Korean'} · ${e.dept||''}`;
+    const sub=isKo?`${e.shift==='night'?'야간':'주간'} · ${esc(e.nationality||'내국인')} · ${esc(e.dept||'')}`:`${e.shift==='night'?'Night':'Day'} · ${e.nationality==='외국인'?'Foreign':'Korean'} · ${esc(e.dept||'')}`;
     const badge=signed?(isKo?'서명완료':'Signed'):(isKo?'미서명':'Unsigned');
-    const subName=lang==='en'&&e.name?` <span style="font-size:10px;color:#94A3B8">(${e.name})</span>`:'';
+    const subName=lang==='en'&&e.name?` <span style="font-size:10px;color:#94A3B8">(${esc(e.name)})</span>`:'';
     return`<div class="emp-item ${signed?'signed':''}" ${signed?'':`onclick="goStep2('${e.id}')"`}>
       <div class="emp-dot ${signed?'done':'wait'}"></div>
       <div class="emp-info"><div class="emp-name">${esc(name)}${subName}</div><div class="emp-sub">${sub}</div></div>
@@ -271,7 +271,7 @@ function renderStep2(){
   app.innerHTML=`
     <div class="hdr">
       <h1>${isKo?'TBM 전자서명':'TBM E-Signature'}</h1>
-      <div class="company">${DATA.company||''}</div>
+      <div class="company">${esc(DATA.company||'')}</div>
       <div class="date">${getDateStr()}</div>
     </div>
     <div class="selected-box">
@@ -361,7 +361,7 @@ function showSuccess(){
   app.innerHTML=`
     <div class="hdr">
       <h1>${isKo?'TBM 전자서명':'TBM E-Signature'}</h1>
-      <div class="company">${DATA.company||''}</div>
+      <div class="company">${esc(DATA.company||'')}</div>
       <div class="date">${getDateStr()}</div>
     </div>
     <div class="success-toast">
