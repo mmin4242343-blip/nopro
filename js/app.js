@@ -12971,7 +12971,7 @@ function exportEmpsExcel(){
     const isLeft=!!e.leave;
     const bg = isLeft ? 'FFF5F5' : xlsRowBg(ei);
     const payMode=(e.payMode||'fixed');
-    const payLabel=payMode==='fixed'?'통상임금제':payMode==='hourly'?'시급제':'월급제';
+    const payLabel=payMode==='fixed'?'통상임금제':payMode==='hourly'?'시급제':'포괄임금제';
     const payVal=payMode==='monthly'?(e.monthly||POL.baseMonthly):(e.rate||POL.baseRate);
     const payBg=payMode==='fixed'?C.blue4:payMode==='hourly'?C.green4:C.orange4;
     const payFg=payMode==='fixed'?C.blue:payMode==='hourly'?C.green:C.orange2;
