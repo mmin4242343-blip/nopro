@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-14-14';
+const CLIENT_BUILD = '2026-05-14-15';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -11295,6 +11295,8 @@ function sfV4DlModalHTML() {
   const eduList = getEduList();
   const ed = eduList[dm.eduKey] || sfV4GetEdu();
   const isExcel = dm.format === 'excel';
+  // 🆕 PDF는 빨강(#DC2626)으로 강제 — 엑셀은 교육별 컬러 유지
+  const themeColor = isExcel ? ed.color : 'DC2626';
   const dim = new Date(dm.year, dm.month, 0).getDate();
   const filterSummary = (() => {
     const parts = [];
@@ -11307,7 +11309,7 @@ function sfV4DlModalHTML() {
   return `
     <div onclick="sfV4CloseDlModal()" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px;overflow-y:auto">
       <div onclick="event.stopPropagation()" style="background:white;border-radius:14px;width:520px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
-        <div style="padding:18px 22px;background:linear-gradient(135deg,#${ed.color},#${ed.color}DD);color:white;position:sticky;top:0;z-index:1">
+        <div style="padding:18px 22px;background:linear-gradient(135deg,#${themeColor},#${themeColor}DD);color:white;position:sticky;top:0;z-index:1">
           <div style="display:flex;justify-content:space-between;align-items:flex-start">
             <div><div style="font-size:16px;font-weight:700">${isExcel?'📊 월별 엑셀 다운로드':'📄 월별 PDF 다운로드'}</div><div style="font-size:11px;opacity:0.9;margin-top:2px">${esc(ed.name)}</div></div>
             <button onclick="sfV4CloseDlModal()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:14px">✕</button>
@@ -11361,7 +11363,7 @@ function sfV4DlModalHTML() {
           <div style="border-top:1px solid #F3F4F6;padding-top:12px;background:#F9FAFB;margin:0 -22px;padding:14px 22px">
             <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px">📌 다운로드 정보</div>
             <div style="font-size:11px;color:#6B7280;line-height:1.7">
-              <strong style="color:#${ed.color}">${dm.year}년 ${dm.month}월 ${esc(ed.short||ed.name)}</strong><br>
+              <strong style="color:#${themeColor}">${dm.year}년 ${dm.month}월 ${esc(ed.short||ed.name)}</strong><br>
               · 총 ${dim}개의 ${isExcel?'시트':'페이지'} 생성<br>
               · ${isExcel?'시트':'페이지'} 이름: "${dm.month}월 1일(${'일월화수목금토'[new Date(dm.year,dm.month-1,1).getDay()]})" ~ "${dm.month}월 ${dim}일(${'일월화수목금토'[new Date(dm.year,dm.month-1,dim).getDay()]})"<br>
               · 포함 인원: ${filterSummary}
@@ -11369,7 +11371,7 @@ function sfV4DlModalHTML() {
           </div>
           <div style="display:flex;gap:8px;padding-top:6px">
             <button class="sfv4-btn" style="flex:1;padding:10px;background:#F3F4F6;color:#6B7280" onclick="sfV4CloseDlModal()">취소</button>
-            <button class="sfv4-btn sfv4-btn-d" style="flex:2;padding:10px;background:#${ed.color};color:white;border:none" onclick="${isExcel?'sfV4DoExcel(this)':'sfV4DoPdf(this)'}">${isExcel?'📊':'📄'} ${dm.year}년 ${dm.month}월 다운로드</button>
+            <button class="sfv4-btn sfv4-btn-d" style="flex:2;padding:10px;background:#${themeColor};color:white;border:none" onclick="${isExcel?'sfV4DoExcel(this)':'sfV4DoPdf(this)'}">${isExcel?'📊':'📄'} ${dm.year}년 ${dm.month}월 다운로드</button>
           </div>
         </div>
       </div>
