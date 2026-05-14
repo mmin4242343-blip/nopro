@@ -945,12 +945,12 @@ window.addEventListener('beforeunload', (e)=>{
   }
 });
 
-// 외부 정적 페이지(faq.html, about.html 등) 이동 시 beforeunload 알림 차단 + 미저장 즉시 저장.
-// target="_blank"로 새 탭 여는 경우 알림 자체가 안 뜨지만, 사용자가 같은 탭에서 우클릭/수정자키 등으로
-// 이동하더라도 데이터 유실 없도록 onclick에서 한 번 더 안전 처리.
+// 외부 정적 페이지(faq.html, about.html 등) 같은 탭 이동 시 beforeunload 알림 차단.
+// 핵심: _hasUnsavedChanges만 false로 리셋 → line 940 핸들러가 알림 안 띄움.
+// 데이터 저장은 _safeUnloadFlush(line 934, beforeunload 시점에 sendBeacon으로 reliable 전송)가 처리하므로
+// 여기서 flushPendingSave를 호출하면 saveLS._timer를 미리 클리어해서 beacon 경로가 끊김 → 호출 X.
 function _safeExtNav(){
   try{
-    if(typeof flushPendingSave==='function') flushPendingSave();
     window._hasUnsavedChanges = false;
     window.onbeforeunload = null;
   }catch(e){}
