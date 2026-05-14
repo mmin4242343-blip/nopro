@@ -426,13 +426,13 @@
     <a class="logo" onclick="event.preventDefault();window.scrollTo({top:0,behavior:'smooth'})" aria-label="nopro 홈"></a>
     <div class="nav-links">
 <a href="/about.html" onclick="_safeExtNav()">회사 소개</a>
-      <a onclick="document.getElementById('lp-contact').scrollIntoView({behavior:'smooth'})">고객센터</a>
+      <a href="/contact.html" onclick="window.onbeforeunload=null">고객센터</a>
      <a href="/faq.html" onclick="_safeExtNav()">자주 묻는 질문</a>
       <a onclick="event.preventDefault();showRecruitToast()" style="cursor:pointer">채용</a>
     </div>
     <div class="nav-cta">
       <button class="btn btn-ghost" onclick="showAuthModal('login')">로그인</button>
-      <button class="btn btn-primary" onclick="showAuthModal()">도입 문의하기</button>
+<button class="btn btn-primary btn-sm" onclick="window.onbeforeunload=null;location.href='/contact.html'">도입 문의하기</button>
     </div>
   </div>
 </nav>

@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>도입 문의 — 노프로</title>
+<meta name="description" content="노프로 도입을 검토하시나요? 간단한 문의서를 작성해 주세요. 영업일 1~2일 이내에 회신드립니다.">
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="/favicon.png">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{margin:0;background:#fff;font-family:'Pretendard Variable','Pretendard',-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;color:#1D1D1F;-webkit-font-smoothing:antialiased;line-height:1.47;letter-spacing:-.01em}
+  a{color:inherit;text-decoration:none}
+  button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+  button{cursor:pointer;border:none;background:none}
+  textarea{resize:none}
+
+  :root{
+    --ink:#1D1D1F;
+    --ink-2:#424245;
+    --ink-3:#86868B;
+    --canvas:#fff;
+    --parchment:#F5F5F7;
+    --hairline:#E0E0E0;
+    --hairline-soft:#F0F0F0;
+    --ease:cubic-bezier(.25,.1,.25,1);
+  }
+
+  .wrap{max-width:980px;margin:0 auto;padding:0 32px}
+
+  /* ─── Nav ─── */
+  .lp-nav{
+    position:sticky;top:0;z-index:100;
+    background:rgba(255,255,255,.72);
+    backdrop-filter:saturate(180%) blur(20px);
+    -webkit-backdrop-filter:saturate(180%) blur(20px);
+    border-bottom:.5px solid #E8E8ED;
+    padding:12px 0;
+  }
+  .nav-inner{display:flex;align-items:center;justify-content:space-between;gap:24px;max-width:1200px;margin:0 auto;padding:0 32px}
+  .logo{
+    font-size:0;display:inline-block;
+    width:220px;height:66px;
+    background:url('/images/Frame%201.png') no-repeat left center/contain;
+    cursor:pointer;flex-shrink:0;
+    transition:opacity .2s var(--ease);
+  }
+  .logo:hover{opacity:.7}
+  .nav-links{display:flex;gap:40px;font-size:15px;color:var(--ink);font-weight:600;margin-right:auto;margin-left:48px}
+  .nav-links a{position:relative;padding:8px 14px;border-radius:8px;cursor:pointer;transition:all .2s var(--ease);white-space:nowrap}
+  .nav-links a:hover{background:var(--parchment)}
+  .nav-cta{display:flex;gap:8px;align-items:center;flex-shrink:0}
+  .btn{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:10px 20px;border-radius:980px;
+    font-size:13.5px;font-weight:500;
+    transition:all .22s var(--ease);
+    cursor:pointer;line-height:1;white-space:nowrap;
+  }
+  .btn:active{transform:scale(.95)}
+  .btn-ghost{border:.5px solid #D2D2D7;background:#fff;color:var(--ink)}
+  .btn-ghost:hover{border-color:var(--ink);background:var(--parchment)}
+  .btn-primary{background:#1D1D1F;color:#fff;border:.5px solid #1D1D1F}
+  .btn-primary:hover{background:#000;transform:translateY(-1px)}
+
+  /* ─── Hero ─── */
+  .contact-hero{
+    padding:120px 0 80px;
+    text-align:center;
+    background:#fff;
+  }
+  .contact-hero .eyebrow{
+    display:inline-block;
+    font-size:12.5px;font-weight:600;
+    color:var(--ink-3);
+    letter-spacing:.16em;text-transform:uppercase;
+    margin-bottom:24px;
+  }
+  .contact-hero h1{
+    font-size:clamp(40px,5vw,56px);
+    font-weight:600;
+    letter-spacing:-.028em;
+    line-height:1.07;
+    margin-bottom:20px;
+  }
+  .contact-hero .lead{
+    font-size:21px;
+    color:var(--ink-2);
+    font-weight:400;
+    line-height:1.43;
+    letter-spacing:-.011em;
+    max-width:640px;
+    margin:0 auto;
+  }
+
+  /* ─── Form ─── */
+  .form-section{
+    background:var(--parchment);
+    padding:80px 0 100px;
+  }
+  .form-card{
+    background:#fff;
+    border-radius:18px;
+    padding:56px;
+    border:.5px solid var(--hairline);
+  }
+
+  .form-block{padding:36px 0;border-bottom:.5px solid var(--hairline-soft)}
+  .form-block:first-child{padding-top:0}
+  .form-block:last-of-type{border-bottom:none;padding-bottom:8px}
+
+  .block-title{
+    font-size:21px;
+    font-weight:600;
+    letter-spacing:-.011em;
+    margin-bottom:6px;
+  }
+  .block-sub{
+    font-size:14px;
+    color:var(--ink-3);
+    margin-bottom:24px;
+    letter-spacing:-.016em;
+  }
+
+  .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .field{display:flex;flex-direction:column;gap:8px}
+  .field-full{grid-column:1 / -1}
+  .field label{
+    font-size:13px;
+    font-weight:500;
+    color:var(--ink-2);
+    letter-spacing:-.01em;
+  }
+  .field label .req{color:#FF453A;margin-left:2px}
+
+  .input,.select,.textarea{
+    width:100%;
+    padding:14px 16px;
+    border-radius:11px;
+    background:#fff;
+    border:.5px solid var(--hairline);
+    font-size:15px;
+    color:var(--ink);
+    outline:none;
+    transition:all .2s var(--ease);
+    -webkit-appearance:none;
+    letter-spacing:-.011em;
+  }
+  .input:hover,.select:hover,.textarea:hover{border-color:#B0B0B5}
+  .input:focus,.select:focus,.textarea:focus{
+    border-color:var(--ink);
+    box-shadow:0 0 0 4px rgba(29,29,31,.06);
+  }
+  .input::placeholder,.textarea::placeholder{color:#A0A0A5}
+  .textarea{min-height:120px;font-family:inherit;line-height:1.55}
+
+  .select{
+    cursor:pointer;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%2386868B' stroke-width='2' d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;
+    background-position:right 16px center;
+    padding-right:40px;
+  }
+
+  /* ─── Option Cards (Industry) ─── */
+  .options{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:10px;
+  }
+  .opt{
+    display:flex;flex-direction:column;align-items:flex-start;gap:6px;
+    padding:18px 18px;
+    background:#fff;
+    border:.5px solid var(--hairline);
+    border-radius:14px;
+    cursor:pointer;
+    transition:all .2s var(--ease);
+    text-align:left;
+  }
+  .opt:hover{border-color:var(--ink-2);background:#FAFAFA}
+  .opt.selected{
+    border:1.5px solid var(--ink);
+    background:#FAFAFA;
+    padding:calc(18px - .5px) calc(18px - .5px);
+  }
+  .opt .opt-title{font-size:15px;font-weight:600;letter-spacing:-.012em}
+  .opt .opt-sub{font-size:12px;color:var(--ink-3);letter-spacing:-.01em}
+
+  /* ─── Radio Stack ─── */
+  .radio-stack{display:flex;flex-direction:column;gap:8px}
+  .radio-item{
+    display:flex;align-items:center;gap:14px;
+    padding:16px 20px;
+    background:#fff;
+    border:.5px solid var(--hairline);
+    border-radius:12px;
+    cursor:pointer;
+    transition:all .2s var(--ease);
+  }
+  .radio-item:hover{border-color:var(--ink-2);background:#FAFAFA}
+  .radio-item.selected{
+    border:1.5px solid var(--ink);
+    background:#FAFAFA;
+    padding:calc(16px - .5px) calc(20px - .5px);
+  }
+  .radio-dot{
+    width:18px;height:18px;border-radius:50%;
+    border:1.5px solid #C0C0C5;
+    flex-shrink:0;
+    position:relative;
+    transition:all .2s var(--ease);
+  }
+  .radio-item.selected .radio-dot{border-color:var(--ink)}
+  .radio-item.selected .radio-dot::after{
+    content:'';
+    position:absolute;
+    inset:3px;
+    background:var(--ink);
+    border-radius:50%;
+  }
+  .radio-label{font-size:15px;font-weight:500;letter-spacing:-.01em}
+
+  /* ─── Chips (Multi-select) ─── */
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:10px 18px;
+    background:#fff;
+    border:.5px solid var(--hairline);
+    border-radius:980px;
+    font-size:14px;
+    font-weight:500;
+    color:var(--ink-2);
+    cursor:pointer;
+    transition:all .2s var(--ease);
+    letter-spacing:-.01em;
+  }
+  .chip:hover{border-color:var(--ink-2);color:var(--ink)}
+  .chip.selected{
+    background:var(--ink);
+    border-color:var(--ink);
+    color:#fff;
+  }
+  .chip:active{transform:scale(.95)}
+
+  /* ─── Submit ─── */
+  .form-foot{padding:40px 0 0;text-align:center}
+  .submit-btn{
+    width:100%;
+    padding:18px 32px;
+    background:linear-gradient(180deg,#2E2E30 0%,#1D1D1F 50%,#000 100%);
+    color:#fff;
+    border-radius:980px;
+    font-size:16px;
+    font-weight:600;
+    letter-spacing:-.012em;
+    cursor:pointer;
+    transition:all .22s var(--ease);
+    box-shadow:0 1px 2px rgba(0,0,0,.15),0 4px 16px rgba(0,0,0,.12);
+    margin-bottom:14px;
+  }
+  .submit-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.25),0 8px 24px rgba(0,0,0,.18)}
+  .submit-btn:active{transform:scale(.985)}
+  .submit-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+  .form-note{font-size:12px;color:var(--ink-3);letter-spacing:-.01em;line-height:1.6}
+
+  /* ─── Info Strip ─── */
+  .info-strip{
+    background:#fff;
+    padding:80px 0;
+    border-top:.5px solid #E8E8ED;
+  }
+  .info-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:48px;
+    max-width:880px;
+    margin:0 auto;
+  }
+  .info-item{text-align:center}
+  .info-item .ic{
+    width:44px;height:44px;
+    background:var(--parchment);
+    border-radius:12px;
+    display:inline-flex;align-items:center;justify-content:center;
+    margin-bottom:16px;
+    color:var(--ink);
+  }
+  .info-item .tt{
+    font-size:11.5px;font-weight:600;
+    color:var(--ink-3);
+    letter-spacing:.12em;text-transform:uppercase;
+    margin-bottom:8px;
+  }
+  .info-item .vv{
+    font-size:15px;font-weight:500;
+    color:var(--ink);
+    letter-spacing:-.011em;
+  }
+
+  /* ─── Footer ─── */
+  .lp-footer{
+    padding:60px 0 36px;
+    border-top:.5px solid #E8E8ED;
+    background:var(--parchment);
+  }
+  .foot-bottom{
+    font-size:12px;color:var(--ink-3);
+    text-align:center;line-height:1.8;
+  }
+  .foot-bottom strong{color:var(--ink-2)}
+
+  /* ─── Toast ─── */
+  .toast{
+    position:fixed;bottom:32px;left:50%;
+    transform:translateX(-50%) translateY(20px);
+    background:rgba(29,29,31,.95);
+    backdrop-filter:blur(20px);
+    color:#fff;
+    padding:16px 24px;
+    border-radius:14px;
+    font-size:14px;font-weight:500;
+    letter-spacing:-.01em;
+    opacity:0;visibility:hidden;
+    transition:all .35s var(--ease);
+    z-index:200;
+    box-shadow:0 8px 32px rgba(0,0,0,.2);
+  }
+  .toast.show{opacity:1;visibility:visible;transform:translateX(-50%) translateY(0)}
+
+  /* ─── Responsive ─── */
+  @media (max-width:780px){
+    .nav-links{display:none}
+    .contact-hero{padding:72px 0 56px}
+    .contact-hero h1{font-size:34px}
+    .contact-hero .lead{font-size:17px}
+    .form-section{padding:48px 0 64px}
+    .form-card{padding:32px 24px;border-radius:16px}
+    .field-grid{grid-template-columns:1fr}
+    .options{grid-template-columns:1fr 1fr}
+    .info-grid{grid-template-columns:1fr;gap:32px}
+    .info-strip{padding:56px 0}
+  }
+  @media (max-width:480px){
+    .nav-cta .btn-ghost{display:none}
+    .options{grid-template-columns:1fr}
+    .form-card{padding:28px 20px}
+    .block-title{font-size:18px}
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══ Nav ═══ -->
+<nav class="lp-nav">
+  <div class="nav-inner">
+    <a class="logo" href="/" aria-label="nopro 홈"></a>
+    <div class="nav-links">
+      <a href="/about.html">회사 소개</a>
+      <a href="/contact.html" style="background:var(--parchment)">고객센터</a>
+      <a href="/faq.html">자주 묻는 질문</a>
+      <a onclick="alert('채용 페이지는 준비 중입니다')">채용</a>
+    </div>
+    <div class="nav-cta">
+      <button class="btn btn-ghost" onclick="location.href='/'">홈으로</button>
+      <button class="btn btn-primary" onclick="document.getElementById('contact-form').scrollIntoView({behavior:'smooth'})">문의 작성</button>
+    </div>
+  </div>
+</nav>
+
+<!-- ═══ Hero ═══ -->
+<section class="contact-hero">
+  <div class="wrap">
+    <div class="eyebrow">Get in Touch</div>
+    <h1>노프로 도입을 검토하시나요?</h1>
+    <p class="lead">간단한 문의서를 작성해 주시면, 영업일 1~2일 이내에 담당자가 직접 회신드립니다.</p>
+  </div>
+</section>
+
+<!-- ═══ Form ═══ -->
+<section class="form-section">
+  <div class="wrap">
+    <form id="contact-form" class="form-card" onsubmit="submitForm(event)">
+
+      <!-- 1. 기본 정보 -->
+      <div class="form-block">
+        <h2 class="block-title">기본 정보</h2>
+        <p class="block-sub">담당자 정보를 알려주세요. 연락드릴 때 사용됩니다.</p>
+        <div class="field-grid">
+          <div class="field">
+            <label>회사명 <span class="req">*</span></label>
+            <input class="input" type="text" name="company" placeholder="(주)명민산업" required>
+          </div>
+          <div class="field">
+            <label>담당자 성함 <span class="req">*</span></label>
+            <input class="input" type="text" name="name" placeholder="홍길동" required>
+          </div>
+          <div class="field">
+            <label>이메일 <span class="req">*</span></label>
+            <input class="input" type="email" name="email" placeholder="admin@company.com" required>
+          </div>
+          <div class="field">
+            <label>휴대폰 번호 <span class="req">*</span></label>
+            <input class="input" type="tel" name="phone" placeholder="010-0000-0000" required>
+          </div>
+          <div class="field field-full">
+            <label>직원 수</label>
+            <select class="select" name="size">
+              <option value="">선택해 주세요</option>
+              <option value="5인 미만">5인 미만</option>
+              <option value="5~10인">5~10인</option>
+              <option value="11~30인">11~30인</option>
+              <option value="31~50인">31~50인</option>
+              <option value="51~100인">51~100인</option>
+              <option value="100인 이상">100인 이상</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. 업종 -->
+      <div class="form-block">
+        <h2 class="block-title">어떤 업종이신가요?</h2>
+        <p class="block-sub">맞춤 안내를 위해 사용됩니다. 가장 가까운 항목 하나만 선택해 주세요.</p>
+        <div class="options" data-name="industry">
+          <button type="button" class="opt" data-value="제조·공장">
+            <span class="opt-title">제조·공장</span>
+            <span class="opt-sub">생산 현장</span>
+          </button>
+          <button type="button" class="opt" data-value="건설·시공">
+            <span class="opt-title">건설·시공</span>
+            <span class="opt-sub">현장 중심</span>
+          </button>
+          <button type="button" class="opt" data-value="물류·운수">
+            <span class="opt-title">물류·운수</span>
+            <span class="opt-sub">교대 근무</span>
+          </button>
+          <button type="button" class="opt" data-value="요식·서비스">
+            <span class="opt-title">요식·서비스</span>
+            <span class="opt-sub">접객·매장</span>
+          </button>
+          <button type="button" class="opt" data-value="노무·세무 사무소">
+            <span class="opt-title">노무·세무 사무소</span>
+            <span class="opt-sub">전문 대행</span>
+          </button>
+          <button type="button" class="opt" data-value="기타">
+            <span class="opt-title">기타</span>
+            <span class="opt-sub">위에 없음</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 3. 현재 관리 방식 -->
+      <div class="form-block">
+        <h2 class="block-title">현재 노무 관리는 어떻게 하고 계신가요?</h2>
+        <p class="block-sub">가장 가까운 한 가지를 골라주세요.</p>
+        <div class="radio-stack" data-name="current">
+          <div class="radio-item" data-value="엑셀·종이 장부">
+            <div class="radio-dot"></div>
+            <span class="radio-label">엑셀이나 종이 장부로 직접 관리합니다</span>
+          </div>
+          <div class="radio-item" data-value="노무사 외주">
+            <div class="radio-dot"></div>
+            <span class="radio-label">노무사 사무실에 외주를 맡기고 있습니다</span>
+          </div>
+          <div class="radio-item" data-value="타사 솔루션 사용">
+            <div class="radio-dot"></div>
+            <span class="radio-label">다른 솔루션을 사용 중인데 바꾸려고 합니다</span>
+          </div>
+          <div class="radio-item" data-value="아직 관리 안 함">
+            <div class="radio-dot"></div>
+            <span class="radio-label">아직 체계적으로 관리하지 못하고 있습니다</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. 관심 기능 -->
+      <div class="form-block">
+        <h2 class="block-title">어떤 기능에 관심이 있으신가요?</h2>
+        <p class="block-sub">여러 개 선택할 수 있습니다.</p>
+        <div class="chips" data-name="interests">
+          <button type="button" class="chip" data-value="출퇴근·근태">출퇴근·근태 관리</button>
+          <button type="button" class="chip" data-value="급여 자동 계산">급여 자동 계산</button>
+          <button type="button" class="chip" data-value="야간·연장 수당">야간·연장·휴일 수당</button>
+          <button type="button" class="chip" data-value="안전교육 서명">안전교육 전자서명</button>
+          <button type="button" class="chip" data-value="외국인 근로자">외국인 근로자 관리</button>
+          <button type="button" class="chip" data-value="4대보험">4대보험 신고</button>
+          <button type="button" class="chip" data-value="휴가 관리">연차·휴가 관리</button>
+          <button type="button" class="chip" data-value="문서 자동화">고용노동부 문서 자동 작성</button>
+        </div>
+      </div>
+
+      <!-- 5. 도입 시기 -->
+      <div class="form-block">
+        <h2 class="block-title">언제쯤 도입을 고려하고 계신가요?</h2>
+        <p class="block-sub">상담 일정 안내에 사용됩니다.</p>
+        <div class="radio-stack" data-name="timing">
+          <div class="radio-item" data-value="즉시">
+            <div class="radio-dot"></div>
+            <span class="radio-label">바로 시작하고 싶습니다</span>
+          </div>
+          <div class="radio-item" data-value="1개월 내">
+            <div class="radio-dot"></div>
+            <span class="radio-label">1개월 안에 도입 예정입니다</span>
+          </div>
+          <div class="radio-item" data-value="3개월 내">
+            <div class="radio-dot"></div>
+            <span class="radio-label">3개월 안에 검토 중입니다</span>
+          </div>
+          <div class="radio-item" data-value="시기 미정">
+            <div class="radio-dot"></div>
+            <span class="radio-label">아직 시기는 정하지 않았습니다</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. 추가 메모 -->
+      <div class="form-block">
+        <h2 class="block-title">남기고 싶은 말씀이 있나요?</h2>
+        <p class="block-sub">선택 항목입니다. 자유롭게 적어주세요.</p>
+        <textarea class="textarea" name="memo" placeholder="예) 외국인 근로자가 절반이라 다국어 안전교육이 꼭 필요합니다. 또는 특별히 우려되는 점, 궁금한 점 등을 자유롭게 적어주세요."></textarea>
+      </div>
+
+      <!-- Submit -->
+      <div class="form-foot">
+        <button type="submit" class="submit-btn" id="submit-btn">문의 보내기</button>
+        <p class="form-note">제출 시 개인정보 처리방침에 동의하는 것으로 간주됩니다.<br>입력하신 정보는 도입 상담 외 목적으로 사용되지 않습니다.</p>
+      </div>
+
+    </form>
+  </div>
+</section>
+
+<!-- ═══ Info Strip ═══ -->
+<section class="info-strip">
+  <div class="wrap">
+    <div class="info-grid">
+      <div class="info-item">
+        <div class="ic">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+            <polyline points="22,6 12,13 2,6"/>
+          </svg>
+        </div>
+        <div class="tt">Email</div>
+        <div class="vv">infonopro@google.com</div>
+      </div>
+      <div class="info-item">
+        <div class="ic">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>
+          </svg>
+        </div>
+        <div class="tt">Phone</div>
+        <div class="vv">010-2349-4208</div>
+      </div>
+      <div class="info-item">
+        <div class="ic">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </div>
+        <div class="tt">Response</div>
+        <div class="vv">영업일 1~2일 이내</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Footer ═══ -->
+<footer class="lp-footer">
+  <div class="wrap foot-bottom">
+    <strong>노프로</strong> · 대표: 이상민 · 사업자등록번호: 231-49-01150<br>
+    경기도 성남시 수정구 위례순환로 100, 3307동 6층 4호 · 010-2349-4208 · infonopro@google.com<br>
+    © 2025-2026 nopro. All rights reserved.
+  </div>
+</footer>
+
+<!-- ═══ Toast ═══ -->
+<div class="toast" id="toast">문의가 정상 접수되었습니다.</div>
+
+<script>
+  // 단일 선택 옵션 카드 (업종)
+  document.querySelectorAll('.options').forEach(group=>{
+    group.querySelectorAll('.opt').forEach(opt=>{
+      opt.addEventListener('click',()=>{
+        group.querySelectorAll('.opt').forEach(o=>o.classList.remove('selected'));
+        opt.classList.add('selected');
+      });
+    });
+  });
+
+  // 단일 선택 라디오 스택
+  document.querySelectorAll('.radio-stack').forEach(group=>{
+    group.querySelectorAll('.radio-item').forEach(item=>{
+      item.addEventListener('click',()=>{
+        group.querySelectorAll('.radio-item').forEach(i=>i.classList.remove('selected'));
+        item.classList.add('selected');
+      });
+    });
+  });
+
+  // 다중 선택 칩
+  document.querySelectorAll('.chips .chip').forEach(chip=>{
+    chip.addEventListener('click',()=>chip.classList.toggle('selected'));
+  });
+
+  // 폼 제출
+  function submitForm(e){
+    e.preventDefault();
+    const form = e.target;
+    const data = new FormData(form);
+    const payload = {
+      회사명: data.get('company'),
+      담당자: data.get('name'),
+      이메일: data.get('email'),
+      휴대폰: data.get('phone'),
+      직원수: data.get('size') || '미선택',
+      업종: document.querySelector('.options .opt.selected')?.dataset.value || '미선택',
+      현재방식: document.querySelector('[data-name="current"] .radio-item.selected')?.dataset.value || '미선택',
+      관심기능: Array.from(document.querySelectorAll('.chips .chip.selected')).map(c=>c.dataset.value).join(', ') || '미선택',
+      도입시기: document.querySelector('[data-name="timing"] .radio-item.selected')?.dataset.value || '미선택',
+      메모: data.get('memo') || '없음',
+    };
+
+    // 이메일로 전송 — mailto 방식 (간단)
+    const subject = encodeURIComponent(`[노프로 도입문의] ${payload.회사명} / ${payload.담당자}`);
+    const body = encodeURIComponent(
+      Object.entries(payload).map(([k,v])=>`■ ${k}\n${v}\n`).join('\n')
+    );
+
+    // 토스트 표시
+    const toast = document.getElementById('toast');
+    toast.classList.add('show');
+    setTimeout(()=>toast.classList.remove('show'), 3500);
+
+    // 메일 클라이언트 열기
+    setTimeout(()=>{
+      window.location.href = `mailto:infonopro@google.com?subject=${subject}&body=${body}`;
+    }, 400);
+
+    // 폼 리셋
+    setTimeout(()=>{
+      form.reset();
+      document.querySelectorAll('.opt.selected,.radio-item.selected,.chip.selected').forEach(el=>el.classList.remove('selected'));
+    }, 1000);
+  }
+</script>
+
+</body>
+</html>
