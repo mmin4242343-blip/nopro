@@ -795,14 +795,18 @@ button[onclick="sfCopyLink()"][style*="#FEE500"]:hover{background:#1D1D1F!import
 }
 #landing-overlay .logo:hover{opacity:.7}
 #landing-overlay .nav-links{
-  #landing-overlay .nav-links{
-  display:flex;
-  gap:40px;
+  display:flex !important;
+  flex-direction:row !important;
+  gap:40px !important;
   font-size:15px;
   color:var(--lp-ink);
   font-weight:600;
   margin-right:auto;
   margin-left:48px;
+  align-items:center;
+}
+#landing-overlay .nav-links a{
+  white-space:nowrap;
 }
 #landing-overlay .nav-links a{
   position:relative;
