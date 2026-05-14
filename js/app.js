@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-14-6';
+const CLIENT_BUILD = '2026-05-14-7';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -3702,7 +3702,7 @@ function renderPayroll(){
           const isDirect = hasDirectAllowance(emp.id,pY,pM,a.id);
           return `<div class="pr" style="${isDeduct?'background:var(--rose-dim);margin:-2px -4px;padding:4px;border-radius:6px':''}">
           <span class="prl" style="${isDeduct?'color:var(--rose);font-weight:700':''}">
-            ${isDeduct?'🔴 ':''}${a.name}${!isDirect&&rawV?'<span style="font-size:8px;color:var(--ink3);margin-left:3px">자동</span>':''}
+            ${isDeduct?'🔴 ':''}${esc(a.name)}${!isDirect&&rawV?'<span style="font-size:8px;color:var(--ink3);margin-left:3px">자동</span>':''}
           </span>
           <span style="display:flex;align-items:center;gap:4px">
             <input type="text" inputmode="numeric" value="${rawV?Number(rawV).toLocaleString():''}" placeholder="0" ${_monthLocked?'readonly title="확정된 달 — 입력하려면 확정 해제 먼저"':''}
@@ -3775,7 +3775,7 @@ function renderXlPreview(){
     <th style="min-width:72px;background:#0D9488;color:#fff">주휴수당<br><span style="font-size:9px;opacity:.7">(시간급 전용)</span></th>
     <th style="min-width:70px;background:#1a3a6e;color:#fff">연차수당</th>
 
-    ${allowList.map(a=>`<th style="min-width:70px">${a.name}</th>`).join('')}
+    ${allowList.map(a=>`<th style="min-width:70px">${esc(a.name)}</th>`).join('')}
     <th style="min-width:80px;background:#1a3a6e;color:#fff">급여</th>
     <th style="min-width:46px">실근무<br>(h)</th>
     <th style="min-width:52px;background:#1565C0;color:#fff">소정근로외<br>실근무(h)<br><span style="font-size:8px;opacity:.8">×1.0</span></th>
@@ -3796,7 +3796,7 @@ function renderXlPreview(){
     <th style="min-width:72px;background:#A32D2D;color:#F7C1C1">결근차감</th>
     <th class="yw" style="min-width:80px">상여금<br>(선지급)</th>
     <th style="min-width:90px;background:#1a3a6e;color:#fff">총급여</th>
-    ${deductAllow.map(a=>`<th style="min-width:72px">${a.name}</th>`).join('')}
+    ${deductAllow.map(a=>`<th style="min-width:72px">${esc(a.name)}</th>`).join('')}
     <th style="min-width:72px;background:#7C3AED;color:#EDE9FE">국민<br>연금</th>
     <th style="min-width:72px;background:#7C3AED;color:#EDE9FE">건강<br>보험</th>
     <th style="min-width:72px;background:#7C3AED;color:#EDE9FE">고용<br>보험</th>
@@ -10069,8 +10069,8 @@ function sfRenderM(){
     const naLabel=e.nation==='foreign'?'외국인':'내국인';
     const pm2=sfPmLabel(e);
     h+=`<tr><td style="padding:6px 9px;border-bottom:1px solid var(--bd);position:sticky;left:0;z-index:1;background:var(--card);border-right:1px solid var(--bd)">
-      <div style="font-size:10px;font-weight:700">${e.name||''}</div>
-      <div style="font-size:8px;color:var(--ink3)">${shLabel} · ${naLabel} · ${e.dept||''}</div>
+      <div style="font-size:10px;font-weight:700">${esc(e.name||'')}</div>
+      <div style="font-size:8px;color:var(--ink3)">${shLabel} · ${naLabel} · ${esc(e.dept||'')}</div>
       <span style="font-size:7px;padding:1px 4px;border-radius:20px;background:${pm2.bg};color:${pm2.c};font-weight:700">${pm2.t}</span>
     </td>`;
     rec.forEach(v=>{h+=v===1?`<td style="padding:6px 9px;border-bottom:1px solid var(--bd);text-align:center"><span style="background:var(--gbg);color:#065F46;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700">✓</span></td>`:`<td style="padding:6px 9px;border-bottom:1px solid var(--bd);text-align:center;color:var(--ink3);font-size:9px">—</td>`;});
@@ -15412,8 +15412,8 @@ function renderShiftList(){
       <input type="checkbox" ${chk?'checked':''} style="accent-color:var(--navy);" onclick="event.stopPropagation();shiftCheckRow(${emp.id},this)">
       <span style="color:var(--ink3);">${esc(emp.empNo||'')}</span>
       <div style="display:flex;align-items:center;gap:6px;">
-        <div style="width:26px;height:26px;border-radius:50%;background:var(--nbg);color:var(--navy2);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;">${(emp.name||'?')[0]}</div>
-        <span style="font-weight:500;">${emp.name||''}</span>
+        <div style="width:26px;height:26px;border-radius:50%;background:var(--nbg);color:var(--navy2);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;">${esc((emp.name||'?')[0])}</div>
+        <span style="font-weight:500;">${esc(emp.name||'')}</span>
       </div>
       <div>${sBadge}</div><div>${pBadge}</div>
       <div style="font-size:11px;color:var(--ink3);">${days||'—'}</div>

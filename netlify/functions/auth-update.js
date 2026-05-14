@@ -1,7 +1,8 @@
 import bcrypt from 'bcryptjs';
 import { supabase } from './_shared/supabase.js';
-import { verifyToken, okWithCookie, signToken, err, options } from './_shared/auth.js';
+import { verifyToken, okWithCookie, signToken, err, options, cors } from './_shared/auth.js';
 import { pushAdminNotif } from './_shared/notify.js';
+import { checkRateLimit, recordLoginAttempt } from './_shared/rate-limit.js';
 
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return options(event);
@@ -21,6 +22,20 @@ export const handler = async (event) => {
     const { currentPassword, company, name, phone, email, password } = parsed;
     if (!currentPassword) return err(400, '현재 비밀번호를 입력해주세요', event);
 
+    // 🛡️ M-4: currentPassword brute-force 방어 — login_attempts 테이블 재사용 (auth-login과 동일 정책: 15분 내 10회 초과 차단)
+    // 세션 탈취 후 무제한 비번 추측 시도 차단. 정상 사용자는 영향 없음.
+    const rawIp = event.headers['x-forwarded-for'] || event.headers['client-ip'] || 'unknown';
+    const clientIp = rawIp.split(',')[0].trim();
+    const rateCheck = await checkRateLimit(decoded.email, clientIp, false);
+    if (!rateCheck.allowed) {
+      const wait = Math.ceil((rateCheck.retryAfter || 60) / 60);
+      return {
+        statusCode: 429,
+        headers: { ...cors(event), 'Retry-After': String(rateCheck.retryAfter || 60) },
+        body: JSON.stringify({ error: `시도가 너무 많습니다. ${wait}분 후 다시 시도해주세요.` })
+      };
+    }
+
     // 현재 회사 정보 조회
     const { data: rows, error: dbErr } = await supabase
       .from('companies')
@@ -35,7 +50,11 @@ export const handler = async (event) => {
       return err(500, '비밀번호 설정 오류', event);
     }
     const match = await bcrypt.compare(currentPassword, comp.password_hash);
-    if (!match) return err(401, '현재 비밀번호가 올바르지 않습니다', event);
+    if (!match) {
+      // 🛡️ M-4: 실패 시 시도 기록 (성공 시는 기록 안 함 — 정상 사용 흐름 보호)
+      await recordLoginAttempt(decoded.email, clientIp);
+      return err(401, '현재 비밀번호가 올바르지 않습니다', event);
+    }
 
     // 업데이트할 필드 구성
     const updates = {};
