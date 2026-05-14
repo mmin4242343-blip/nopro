@@ -178,7 +178,28 @@ UNIQUE(company_id, data_key)    -- atomic upsert용 유니크 제약
 - `tax` — 세금 기록
 - `leave_settings` — 연차 설정
 - `leave_overrides` — 직원별 연차 오버라이드
+- `safety` — TBM 안전교육 옛 데이터 (date+'_token', date+'_signs', date+'_tbm' 등)
+- `safety_records` — 안전교육 v4 데이터 (`{ 'YYYY-MM-DD': { 'tbm'|'safety'|...: { content, content_en, checks, duration, instructor, token, signs, photos, savedAt } } }`)
+- `safety_config` — 안전교육 v4 설정 (`{ industry, customEdu, hiddenEdu, migrated }`)
+- `folders` — 폴더 관리
+- `pol_snapshots` / `pay_snapshots` — 정책·급여 월별 스냅샷
 - `bk_snapshots` — **일별** 기본 휴게세트 스냅샷 (DEF_BK 변경 시 변경 직전 값을 과거 일자에 freeze, 키 형식 `YYYY-MM-DD`. 호환을 위해 옛 월 키 `YYYY-MM`도 fallback 인식). DEF_BK 각 엔트리는 `shift` 필드(`'all'|'day'|'night'`)로 적용 직원 분류 가능 — `getActiveBk(y,m,d,emp)`가 emp.shift에 맞춰 필터링.
+- `company_info` / `custom_docs` / `saved_forms` — 폴더탭 관련
+
+> **⚠️ ALLOWED_KEYS 화이트리스트 — 새 data_key 도입 시 반드시 5곳 동시 갱신**
+>
+> 백엔드 `data-save.js`와 `data-load.js`에 각각 `ALLOWED_KEYS` 배열이 있다. 이 목록에 없는 키는 서버가 **silent skip**(`continue`)으로 무시한다. 클라는 200 응답 받지만 DB엔 한 글자도 안 들어감 — 디버깅 매우 어려움.
+>
+> **2026-05-14 사고**: 안전교육 v4의 `safety_records`/`safety_config`가 ALLOWED_KEYS에 빠져있어서 클라 저장 요청이 모두 무효였음. "교육 내용이 새 창에 안 들어온다" 보고 받기까지 4번의 무효 fix 시도 발생.
+>
+> **새 data_key 추가 시 갱신 필요한 5곳:**
+> 1. `netlify/functions/data-save.js`의 `ALLOWED_KEYS` 배열 (line ~28)
+> 2. `netlify/functions/data-load.js`의 `ALLOWED_KEYS` 배열 (line ~20)
+> 3. `js/app.js`의 `sbLoadAll`에 `if('새키' in map) { ... }` 분기 추가 (C-1 가드 패턴)
+> 4. `js/app.js`의 `sbSaveAll`에 키 포함 (smallItems 또는 largeItems)
+> 5. 위 "data_key 종류" 목록에 한 줄 추가
+>
+> **검증**: 새 키 도입 직후 Supabase 콘솔에서 `SELECT data_key FROM company_data WHERE data_key = '새키'`로 실제 저장 여부 확인 권장. 데이터 유실 방지 가드(PROTECTED) 추가 여부도 같이 검토.
 
 ### `audit_log` 테이블
 ```
@@ -804,3 +825,14 @@ reportError() (js/app.js)
     - `clearLocalData`를 authLogout 외 다른 곳에서 호출 시 반드시 `_syncedSnapshot = null` + `clearTimeout(saveLS._timer)` 동반.
     - 서버측 가드(`PROTECTED` 빈값 거부 / 낙관적 잠금 / 레거시 클라 차단 / 사이즈 30% 급감 차단) 어느 하나도 약화시키지 말 것.
     - 상세 규칙은 "데이터 유실 방지 다중 가드" 섹션 참조 (클라 14 + 서버 7 = 21중).
+15. **⚠️ 새 `data_key` 도입 시 ALLOWED_KEYS 5곳 동시 갱신 필수** (2026-05-14 사고 이후 도입)
+    - 갱신 누락 시 서버가 **silent skip** (`continue`)으로 무시. 클라는 200 받지만 DB엔 미저장 → 디버깅 매우 어려움.
+    - 갱신 필요한 5곳:
+      1. `netlify/functions/data-save.js`의 `ALLOWED_KEYS` 배열
+      2. `netlify/functions/data-load.js`의 `ALLOWED_KEYS` 배열
+      3. `js/app.js` `sbLoadAll`에 `if('새키' in map) { ... }` 분기 추가
+      4. `js/app.js` `sbSaveAll`에 키 포함 (smallItems 또는 largeItems)
+      5. CLAUDE.md "Supabase 테이블 구조 → data_key 종류" 목록에 추가
+    - 검증: Supabase 콘솔 `SELECT data_key FROM company_data WHERE data_key = '새키'`로 실제 저장 확인
+    - **2026-05-14 사고**: `safety_records`/`safety_config`가 ALLOWED_KEYS에 없어서 클라 fix 4번이 모두 무효였음. 자세한 내용은 "Supabase 테이블 구조 → company_data" 섹션의 ⚠️ 박스 참조.
+16. **⚠️ 배포 시 빌드 ID 갱신** — `js/app.js` 또는 `netlify/functions/*` 수정 시 push 직전에 `CLIENT_BUILD` 3곳 동시 갱신 (`YYYY-MM-DD-N` 형식). 누락 시 사용자 브라우저가 옛 캐시 app.js를 계속 사용 → 변경이 안 보임. 자세한 내용은 "남은 보안 작업" 섹션 위의 "**배포 시 빌드 ID 갱신**" 항목 참조.
