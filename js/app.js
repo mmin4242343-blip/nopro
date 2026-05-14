@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-14-1';
+const CLIENT_BUILD = '2026-05-14-2';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -954,6 +954,19 @@ function _safeExtNav(){
     window._hasUnsavedChanges = false;
     window.onbeforeunload = null;
   }catch(e){}
+}
+
+// 랜딩/about/faq 채용 링크용 안내 토스트 (네이티브 alert 대체)
+function showRecruitToast(){
+  let t = document.getElementById('recruit-toast');
+  if(t) return;
+  t = document.createElement('div');
+  t.id = 'recruit-toast';
+  t.textContent = '채용 페이지는 준비 중입니다';
+  t.style.cssText = 'position:fixed;bottom:32px;left:50%;transform:translateX(-50%);background:#1D1D1F;color:#fff;padding:12px 24px;border-radius:8px;font-size:13px;font-weight:500;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,.2);opacity:0;transition:opacity .25s';
+  document.body.appendChild(t);
+  requestAnimationFrame(()=>{ t.style.opacity = '1'; });
+  setTimeout(()=>{ t.style.opacity = '0'; setTimeout(()=>t.remove(), 300); }, 2200);
 }
 
 // 탭/창 복귀 시 서버 최신값 자동 반영 (동시 접속 반영 — 옵션 A)

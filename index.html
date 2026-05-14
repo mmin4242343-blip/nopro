@@ -428,7 +428,7 @@
 <a href="/about.html" onclick="_safeExtNav()">회사 소개</a>
       <a onclick="document.getElementById('lp-contact').scrollIntoView({behavior:'smooth'})">고객센터</a>
      <a href="/faq.html" onclick="_safeExtNav()">자주 묻는 질문</a>
-      <a onclick="alert('채용 페이지는 준비 중입니다')">채용</a>
+      <a onclick="event.preventDefault();showRecruitToast()" style="cursor:pointer">채용</a>
     </div>
     <div class="nav-cta">
       <button class="btn btn-ghost" onclick="showAuthModal('login')">로그인</button>
@@ -2285,7 +2285,7 @@ noprohr.netlify.app/tbm_sign.html
 </div>
 
 </div></div></div>
-<script src="/js/app.js?v=2026-05-14-1"></script>
+<script src="/js/app.js?v=2026-05-14-2"></script>
 <!-- 인라인 핸들러용 unsafe-inline은 추후 단계적 제거 예정 -->
 <script>
 // placeholder - app.js에서 모든 로직 처리
