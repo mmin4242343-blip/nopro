@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-14-13';
+const CLIENT_BUILD = '2026-05-14-14';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -10406,8 +10406,8 @@ function sfV4HeaderHTML() {
       </div>
       <div class="sfv4-actions">
         <button class="sfv4-btn" onclick="sfV4OpenConfigModal()">⚙️ 설정</button>
-        <button class="sfv4-btn sfv4-btn-g" onclick="sfV4OpenDlModal()">📊 엑셀</button>
-        <button class="sfv4-btn sfv4-btn-r" onclick="sfV4OpenDlModal()">📄 PDF</button>
+        <button class="sfv4-btn sfv4-btn-g" onclick="sfV4OpenDlModal('excel')">📊 월별 엑셀</button>
+        <button class="sfv4-btn sfv4-btn-r" onclick="sfV4OpenDlModal('pdf')">📄 월별 PDF</button>
         <button class="sfv4-btn sfv4-btn-d" onclick="sfV4Save()" ${sfV4CanSave()?'':'disabled'}>저장</button>
       </div>
     </div>
@@ -10932,7 +10932,7 @@ function sfV4SetHistFilter(f) {
 // 모달 상태
 sfV4State.compModal = { open: false, eduKey: '', yearFilter: 'all' };
 sfV4State.configModal = { open: false, tab: 'industry' };
-sfV4State.dlModal = { open: false, eduKey: '', filterSigned: false, filterN: '전체', filterW: '전체', filterP: '전체' };
+sfV4State.dlModal = { open: false, format: 'excel', eduKey: '', year: new Date().getFullYear(), month: new Date().getMonth()+1, filterSigned: false, filterN: '전체', filterW: '전체', filterP: '전체' };
 
 // 법정 의무 이행 카운트 (해당 연도 기준)
 function sfV4LegalProgress(eduKey, year) {
@@ -11294,41 +11294,82 @@ function sfV4DlModalHTML() {
   const dm = sfV4State.dlModal;
   const eduList = getEduList();
   const ed = eduList[dm.eduKey] || sfV4GetEdu();
+  const isExcel = dm.format === 'excel';
+  const dim = new Date(dm.year, dm.month, 0).getDate();
+  const filterSummary = (() => {
+    const parts = [];
+    if (dm.filterSigned) parts.push('서명자만');
+    if (dm.filterN !== '전체') parts.push(dm.filterN);
+    if (dm.filterW !== '전체') parts.push(dm.filterW);
+    if (dm.filterP !== '전체') parts.push(dm.filterP);
+    return parts.length ? parts.join(' · ') : '전체 직원';
+  })();
   return `
-    <div onclick="sfV4CloseDlModal()" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px">
-      <div onclick="event.stopPropagation()" style="background:white;border-radius:14px;width:480px;max-width:100%;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
-        <div style="padding:18px 22px;background:linear-gradient(135deg,#${ed.color},#${ed.color}DD);color:white">
+    <div onclick="sfV4CloseDlModal()" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px;overflow-y:auto">
+      <div onclick="event.stopPropagation()" style="background:white;border-radius:14px;width:520px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+        <div style="padding:18px 22px;background:linear-gradient(135deg,#${ed.color},#${ed.color}DD);color:white;position:sticky;top:0;z-index:1">
           <div style="display:flex;justify-content:space-between;align-items:flex-start">
-            <div><div style="font-size:16px;font-weight:700">📥 교육 일지 다운로드</div><div style="font-size:11px;opacity:0.9;margin-top:2px">${esc(ed.name)}</div></div>
+            <div><div style="font-size:16px;font-weight:700">${isExcel?'📊 월별 엑셀 다운로드':'📄 월별 PDF 다운로드'}</div><div style="font-size:11px;opacity:0.9;margin-top:2px">${esc(ed.name)}</div></div>
             <button onclick="sfV4CloseDlModal()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:14px">✕</button>
           </div>
         </div>
         <div style="padding:18px 22px;display:flex;flex-direction:column;gap:14px">
+          <p style="font-size:11px;color:#6B7280;margin:0;line-height:1.5">다운로드할 연도와 월을 선택해주세요.<br>해당 월의 1일~${dim}일 모든 날짜가 ${isExcel?'시트':'페이지'}로 만들어집니다.</p>
+          <div style="display:flex;gap:10px">
+            <div style="flex:1">
+              <label style="font-size:11px;color:#374151;font-weight:600">연도</label>
+              <div style="display:flex;align-items:center;gap:4px;border:1px solid #E5E7EB;border-radius:8px;padding:6px 8px;margin-top:4px">
+                <button onclick="sfV4SetDlYear(-1)" style="border:none;background:none;cursor:pointer;font-size:13px;color:#6B7280;padding:0 4px">‹</button>
+                <span style="flex:1;text-align:center;font-weight:700;color:#1F2937">${dm.year}</span>
+                <button onclick="sfV4SetDlYear(1)" style="border:none;background:none;cursor:pointer;font-size:13px;color:#6B7280;padding:0 4px">›</button>
+              </div>
+            </div>
+            <div style="flex:1">
+              <label style="font-size:11px;color:#374151;font-weight:600">월</label>
+              <div style="display:flex;align-items:center;gap:4px;border:1px solid #E5E7EB;border-radius:8px;padding:6px 8px;margin-top:4px">
+                <button onclick="sfV4SetDlMonth(-1)" style="border:none;background:none;cursor:pointer;font-size:13px;color:#6B7280;padding:0 4px">‹</button>
+                <span style="flex:1;text-align:center;font-weight:700;color:#1F2937">${dm.month}</span>
+                <button onclick="sfV4SetDlMonth(1)" style="border:none;background:none;cursor:pointer;font-size:13px;color:#6B7280;padding:0 4px">›</button>
+              </div>
+            </div>
+          </div>
           <div>
-            <div style="font-size:12px;font-weight:700;margin-bottom:6px">👥 직원 필터</div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
-              <span style="font-size:10px;color:#6B7280;width:50px">국적:</span>
-              ${['전체','내국인','외국인'].map(o => `<button class="sfv4-fbtn ${dm.filterN===o?'on':''}" onclick="sfV4SetDlFilter('filterN','${o}')">${o}</button>`).join('')}
+            <label style="font-size:11px;color:#374151;font-weight:600">빠른 선택</label>
+            <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:4px">
+              ${Array.from({length:12},(_,i)=>i+1).map(m=>`<button class="sfv4-fbtn ${dm.month===m?'on':''}" style="padding:6px 0;font-size:11px" onclick="sfV4SetDlFilter('month',${m})">${m}월</button>`).join('')}
             </div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
-              <span style="font-size:10px;color:#6B7280;width:50px">주야간:</span>
-              ${['전체','주간','야간'].map(o => `<button class="sfv4-fbtn ${dm.filterW===o?'on':''}" onclick="sfV4SetDlFilter('filterW','${o}')">${o}</button>`).join('')}
-            </div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
-              <span style="font-size:10px;color:#6B7280;width:50px">급여:</span>
-              ${['전체','통상임금제','포괄임금제','시급제'].map(o => `<button class="sfv4-fbtn ${dm.filterP===o?'on':''}" onclick="sfV4SetDlFilter('filterP','${o}')">${o}</button>`).join('')}
-            </div>
-            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#374151;cursor:pointer;margin-top:6px">
-              <input type="checkbox" ${dm.filterSigned?'checked':''} onchange="sfV4SetDlFilter('filterSigned',this.checked)">
-              <span>서명자만 (해당 날짜·교육 서명 완료자)</span>
-            </label>
           </div>
           <div style="border-top:1px solid #F3F4F6;padding-top:12px">
-            <div style="font-size:11px;color:#6B7280;margin-bottom:8px">📅 ${sfV4DateKey()} · ${esc(ed.name)}</div>
-            <div style="display:flex;gap:8px">
-              <button class="sfv4-btn sfv4-btn-d" style="flex:1;padding:10px" onclick="sfV4DoExcel()">📊 엑셀 다운로드</button>
-              <button class="sfv4-btn sfv4-btn-r" style="flex:1;padding:10px" onclick="sfV4DoPdf()">📄 PDF 다운로드</button>
+            <div style="font-size:12px;font-weight:700;margin-bottom:6px">🔍 직원 필터 <span style="font-weight:400;color:#6B7280">(${isExcel?'엑셀':'PDF'}에 포함될 인원)</span></div>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#374151;cursor:pointer;margin-bottom:8px">
+              <input type="checkbox" ${dm.filterSigned?'checked':''} onchange="sfV4SetDlFilter('filterSigned',this.checked)">
+              <span>✍ 서명한 인원만 포함</span>
+            </label>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;align-items:center">
+              <span style="font-size:10px;color:#6B7280;width:60px">🌐 국적</span>
+              ${['전체','내국인','외국인'].map(o => `<button class="sfv4-fbtn ${dm.filterN===o?'on':''}" onclick="sfV4SetDlFilter('filterN','${o}')">${o}</button>`).join('')}
             </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;align-items:center">
+              <span style="font-size:10px;color:#6B7280;width:60px">☀ 주야간</span>
+              ${['전체','주간','야간'].map(o => `<button class="sfv4-fbtn ${dm.filterW===o?'on':''}" onclick="sfV4SetDlFilter('filterW','${o}')">${o}</button>`).join('')}
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+              <span style="font-size:10px;color:#6B7280;width:60px">💰 급여</span>
+              ${[['전체','전체'],['시급제','시급제'],['통상임금제','통상'],['포괄임금제','포괄']].map(([v,l]) => `<button class="sfv4-fbtn ${dm.filterP===v?'on':''}" onclick="sfV4SetDlFilter('filterP','${v}')">${l}</button>`).join('')}
+            </div>
+          </div>
+          <div style="border-top:1px solid #F3F4F6;padding-top:12px;background:#F9FAFB;margin:0 -22px;padding:14px 22px">
+            <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px">📌 다운로드 정보</div>
+            <div style="font-size:11px;color:#6B7280;line-height:1.7">
+              <strong style="color:#${ed.color}">${dm.year}년 ${dm.month}월 ${esc(ed.short||ed.name)}</strong><br>
+              · 총 ${dim}개의 ${isExcel?'시트':'페이지'} 생성<br>
+              · ${isExcel?'시트':'페이지'} 이름: "${dm.month}월 1일(${'일월화수목금토'[new Date(dm.year,dm.month-1,1).getDay()]})" ~ "${dm.month}월 ${dim}일(${'일월화수목금토'[new Date(dm.year,dm.month-1,dim).getDay()]})"<br>
+              · 포함 인원: ${filterSummary}
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;padding-top:6px">
+            <button class="sfv4-btn" style="flex:1;padding:10px;background:#F3F4F6;color:#6B7280" onclick="sfV4CloseDlModal()">취소</button>
+            <button class="sfv4-btn sfv4-btn-d" style="flex:2;padding:10px;background:#${ed.color};color:white;border:none" onclick="${isExcel?'sfV4DoExcel(this)':'sfV4DoPdf(this)'}">${isExcel?'📊':'📄'} ${dm.year}년 ${dm.month}월 다운로드</button>
           </div>
         </div>
       </div>
@@ -11336,8 +11377,16 @@ function sfV4DlModalHTML() {
   `;
 }
 
-function sfV4OpenDlModal() {
-  sfV4State.dlModal = { open: true, eduKey: sfV4State.edu, filterSigned: false, filterN: '전체', filterW: '전체', filterP: '전체' };
+function sfV4OpenDlModal(format) {
+  const now = new Date();
+  sfV4State.dlModal = {
+    open: true,
+    format: format || 'excel',
+    eduKey: sfV4State.edu,
+    year: sfV4State.date.y || now.getFullYear(),
+    month: sfV4State.date.m || (now.getMonth()+1),
+    filterSigned: false, filterN: '전체', filterW: '전체', filterP: '전체'
+  };
   renderSafetyV4();
 }
 function sfV4CloseDlModal() {
@@ -11346,6 +11395,19 @@ function sfV4CloseDlModal() {
 }
 function sfV4SetDlFilter(key, val) {
   sfV4State.dlModal[key] = val;
+  renderSafetyV4();
+}
+function sfV4SetDlYear(d) {
+  sfV4State.dlModal.year = (sfV4State.dlModal.year || new Date().getFullYear()) + d;
+  renderSafetyV4();
+}
+function sfV4SetDlMonth(d) {
+  let m = (sfV4State.dlModal.month || 1) + d;
+  let y = sfV4State.dlModal.year || new Date().getFullYear();
+  if (m > 12) { m = 1; y++; }
+  if (m < 1)  { m = 12; y--; }
+  sfV4State.dlModal.month = m;
+  sfV4State.dlModal.year = y;
   renderSafetyV4();
 }
 
@@ -11360,96 +11422,292 @@ function _sfV4LoadScript(src) {
   });
 }
 
-async function sfV4DoExcel() {
-  // 🆕 ExcelJS lazy-load (이전엔 라이브러리 없으면 alert만 뜨고 끝났음)
+// 🆕 v4 월별 엑셀: 1일~말일 시트 + 사용 안내 시트 (총 31~32개 시트)
+async function sfV4DoExcel(btnEl) {
   if (typeof ExcelJS === 'undefined') {
-    const btn = event?.target;
+    const btn = btnEl || event?.target;
     const orig = btn ? btn.textContent : '';
     if (btn) { btn.textContent = '⏳ 라이브러리 로딩중...'; btn.disabled = true; }
     try {
       await _sfV4LoadScript('https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js');
     } catch (e) {
       alert('엑셀 라이브러리 로드 실패. 인터넷 연결을 확인해주세요.');
-      if (btn) { btn.textContent = orig || '📊 엑셀 다운로드 실행'; btn.disabled = false; }
+      if (btn) { btn.textContent = orig; btn.disabled = false; }
       return;
     }
-    if (btn) { btn.textContent = orig || '📊 엑셀 다운로드 실행'; btn.disabled = false; }
+    if (btn) { btn.textContent = orig; btn.disabled = false; }
   }
+  const btn = btnEl || event?.target;
   const dm = sfV4State.dlModal;
   const eduList = getEduList();
-  const ed = eduList[dm.eduKey];
-  const r = sfV4GetRec();
-  // 필터 적용
-  const emps = sfV4GetEmps().filter(e => {
-    if (dm.filterN !== '전체' && e.n !== dm.filterN) return false;
-    if (dm.filterW !== '전체' && e.w !== dm.filterW) return false;
-    if (dm.filterP !== '전체' && e.p !== dm.filterP) return false;
-    if (dm.filterSigned && !e.s) return false;
-    return true;
-  });
+  const ed = eduList[dm.eduKey] || sfV4GetEdu();
+  const Y = dm.year, M = dm.month;
+  const dim = new Date(Y, M, 0).getDate();
+  const dowKo = ['일','월','화','수','목','금','토'];
+  const filterSummary = (() => {
+    const parts = [];
+    if (dm.filterSigned) parts.push('서명자만');
+    if (dm.filterN !== '전체') parts.push(dm.filterN);
+    if (dm.filterW !== '전체') parts.push(dm.filterW);
+    if (dm.filterP !== '전체') parts.push(dm.filterP);
+    return parts.length ? parts.join(' · ') : '전체 직원';
+  })();
+
+  if (btn) { btn.textContent = '⏳ 시트 생성중...'; btn.disabled = true; }
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet(ed.short || '교육일지');
-  // 헤더
-  ws.getCell('A1').value = `${ed.name} 교육 일지`;
-  ws.getCell('A1').font = { bold: true, size: 14, color: { argb: 'FF' + ed.color } };
-  ws.mergeCells('A1:F1');
-  ws.getCell('A2').value = `일시: ${sfV4DateKey()} (${ed.cycle})`;
-  ws.getCell('A3').value = `강사: ${r.instructor || '-'} ${r.instructorRole ? '('+r.instructorRole+')' : ''}`;
-  ws.getCell('A4').value = `시간: ${r.duration || 0}분 (최소 ${ed.minTime}분)`;
-  ws.getCell('A5').value = `근거 법령: ${ed.law}`;
-  ws.getCell('A6').value = '교육 내용:';
-  ws.getCell('A7').value = r.content || '';
-  ws.getCell('A7').alignment = { wrapText: true, vertical: 'top' };
-  ws.mergeCells('A7:F7');
-  ws.getRow(7).height = 60;
-  // 필수 항목
-  ws.getCell('A9').value = '필수 포함 항목';
-  ws.getCell('A9').font = { bold: true };
-  let row = 10;
-  (ed.items || []).forEach((it, i) => {
-    ws.getCell(`A${row}`).value = ((r.checks||{})[i] ? '✓' : '☐') + ' ' + it;
-    row++;
+  const colorFg = ed.color.replace('#','');
+
+  // 색상 도우미
+  const fillColor = (argb) => ({ type:'pattern', pattern:'solid', fgColor:{argb:'FF'+argb} });
+  const border = { top:{style:'thin',color:{argb:'FFE5E7EB'}}, left:{style:'thin',color:{argb:'FFE5E7EB'}}, bottom:{style:'thin',color:{argb:'FFE5E7EB'}}, right:{style:'thin',color:{argb:'FFE5E7EB'}} };
+
+  for (let d = 1; d <= dim; d++) {
+    const dt = new Date(Y, M-1, d);
+    const dow = dowKo[dt.getDay()];
+    const sheetName = `${M}월 ${d}일(${dow})`;
+    const ws = wb.addWorksheet(sheetName);
+    ws.columns = [{width:3},{width:13},{width:14},{width:14},{width:14},{width:14},{width:14},{width:14},{width:14},{width:3}];
+
+    const dk = `${Y}-${String(M).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dayRec = (safetyRecords[dk] && safetyRecords[dk][dm.eduKey]) || {};
+    const signs = dayRec.signs || {};
+    // 필터 적용 직원
+    const fEmps = sfV4GetEmps().filter(e => {
+      if (dm.filterN !== '전체' && e.n !== dm.filterN) return false;
+      if (dm.filterW !== '전체' && e.w !== dm.filterW) return false;
+      if (dm.filterP !== '전체' && e.p !== dm.filterP) return false;
+      const isSigned = !!signs[String(e.id)];
+      if (dm.filterSigned && !isSigned) return false;
+      return true;
+    });
+    const signedCount = fEmps.filter(e => signs[String(e.id)]).length;
+    const pct = fEmps.length ? Math.round(signedCount / fEmps.length * 100) : 0;
+
+    // Row 2: 메인 타이틀
+    ws.mergeCells('B2:I2');
+    const c2 = ws.getCell('B2');
+    c2.value = `📋  ${ed.name} 전자서명`;
+    c2.font = { bold:true, size:16, color:{argb:'FF'+colorFg} };
+    c2.alignment = { vertical:'middle', horizontal:'center' };
+    ws.getRow(2).height = 42;
+
+    // Row 3: 부제
+    ws.mergeCells('B3:I3');
+    const c3 = ws.getCell('B3');
+    c3.value = `${ed.law || '자율'} · ${ed.cycle || '수시'}`;
+    c3.font = { size:11, color:{argb:'FF6B7280'} };
+    c3.alignment = { vertical:'middle', horizontal:'center' };
+    ws.getRow(3).height = 24;
+
+    // Row 6-7: 요약 카드 (3분할)
+    ws.mergeCells('B6:D6'); ws.mergeCells('E6:F6'); ws.mergeCells('G6:I6');
+    ws.getCell('B6').value = '📅  조회 날짜';
+    ws.getCell('E6').value = '👥  전체 인원';
+    ws.getCell('G6').value = '✅  서명 완료';
+    ['B6','E6','G6'].forEach(addr => {
+      const c = ws.getCell(addr);
+      c.font = { size:10, bold:true, color:{argb:'FF6B7280'} };
+      c.fill = fillColor('F9FAFB');
+      c.alignment = { vertical:'middle', horizontal:'center' };
+      c.border = border;
+    });
+    ws.getRow(6).height = 22;
+
+    ws.mergeCells('B7:D7'); ws.mergeCells('E7:F7'); ws.mergeCells('G7:I7');
+    ws.getCell('B7').value = `${dk} (${dow})`;
+    ws.getCell('E7').value = `${fEmps.length} 명`;
+    ws.getCell('G7').value = `${signedCount} 명 (${pct}%)`;
+    ['B7','E7','G7'].forEach(addr => {
+      const c = ws.getCell(addr);
+      c.font = { size:13, bold:true, color:{argb:'FF1F2937'} };
+      c.alignment = { vertical:'middle', horizontal:'center' };
+      c.border = border;
+    });
+    ws.getRow(7).height = 32;
+
+    // Row 10: 교육 내용 헤더
+    ws.mergeCells('B10:I10');
+    const c10 = ws.getCell('B10');
+    c10.value = '  📝  교육 내용';
+    c10.font = { bold:true, size:12, color:{argb:'FF1F2937'} };
+    c10.fill = fillColor('F3F4F6');
+    c10.alignment = { vertical:'middle' };
+    ws.getRow(10).height = 26;
+
+    ws.mergeCells('B11:I11');
+    const c11 = ws.getCell('B11');
+    c11.value = (dayRec.content && dayRec.content.trim()) ? dayRec.content : '(교육 내용 미입력)';
+    c11.font = { size:11, color:(dayRec.content?{argb:'FF1F2937'}:{argb:'FF9CA3AF'}) };
+    c11.alignment = { vertical:'top', wrapText:true };
+    c11.border = border;
+    ws.getRow(11).height = 50;
+
+    // Row 13: 교육 정보 헤더
+    ws.mergeCells('B13:I13');
+    const c13 = ws.getCell('B13');
+    c13.value = '  ⚖️  교육 정보';
+    c13.font = { bold:true, size:12, color:{argb:'FF1F2937'} };
+    c13.fill = fillColor('F3F4F6');
+    c13.alignment = { vertical:'middle' };
+    ws.getRow(13).height = 26;
+
+    // Row 14-17: 교육 정보 4행 × 4셀 (label/value 4쌍 / 행)
+    const infoRows = [
+      [['근거 법령', ed.law||'자율 (의무 아님)'], ['실시 주기', ed.cycle||'수시']],
+      [['필수 시간', `${ed.minTime||0}분 이상 권장`], ['실제 진행', dayRec.duration ? `${dayRec.duration} 분` : '- 분']],
+      [['강사', dayRec.instructor||'-'], ['강사 자격', dayRec.instructorRole||'-']],
+      [['증빙 보관', '1년'], ['과태료', '해당 없음']],
+    ];
+    infoRows.forEach((pair, i) => {
+      const r = 14 + i;
+      ws.mergeCells(`B${r}:C${r}`); ws.mergeCells(`D${r}:E${r}`);
+      ws.mergeCells(`F${r}:G${r}`); ws.mergeCells(`H${r}:I${r}`);
+      const [l1,v1] = pair[0], [l2,v2] = pair[1];
+      ws.getCell(`B${r}`).value = l1;
+      ws.getCell(`D${r}`).value = v1;
+      ws.getCell(`F${r}`).value = l2;
+      ws.getCell(`H${r}`).value = v2;
+      [`B${r}`,`F${r}`].forEach(a=>{const c=ws.getCell(a);c.font={bold:true,size:10,color:{argb:'FF6B7280'}};c.fill=fillColor('F9FAFB');c.alignment={vertical:'middle',horizontal:'center'};c.border=border;});
+      [`D${r}`,`H${r}`].forEach(a=>{const c=ws.getCell(a);c.font={size:10,color:{argb:'FF1F2937'}};c.alignment={vertical:'middle',horizontal:'center'};c.border=border;});
+      ws.getRow(r).height = 22;
+    });
+
+    // Row 19: 필수 포함 항목 헤더
+    ws.mergeCells('B19:I19');
+    const c19 = ws.getCell('B19');
+    c19.value = '  ✅  필수 포함 항목 체크리스트';
+    c19.font = { bold:true, size:12, color:{argb:'FF1F2937'} };
+    c19.fill = fillColor('F3F4F6');
+    c19.alignment = { vertical:'middle' };
+    ws.getRow(19).height = 26;
+
+    // Row 20: 헤더
+    ws.mergeCells('C20:H20');
+    ws.getCell('B20').value = 'No.';
+    ws.getCell('C20').value = '필수 포함 항목';
+    ws.getCell('I20').value = '포함 여부';
+    ['B20','C20','I20'].forEach(a=>{const c=ws.getCell(a);c.font={bold:true,size:10,color:{argb:'FFFFFFFF'}};c.fill=fillColor(colorFg);c.alignment={vertical:'middle',horizontal:'center'};c.border=border;});
+    ws.getRow(20).height = 22;
+
+    // Items
+    const items = ed.items || [];
+    items.forEach((it, idx) => {
+      const r = 21 + idx;
+      ws.mergeCells(`C${r}:H${r}`);
+      ws.getCell(`B${r}`).value = idx + 1;
+      ws.getCell(`C${r}`).value = it;
+      const checked = !!(dayRec.checks && dayRec.checks[idx]);
+      ws.getCell(`I${r}`).value = checked ? '✓ 포함' : '✗ 누락';
+      [`B${r}`,`C${r}`,`I${r}`].forEach(a=>{const c=ws.getCell(a);c.font={size:10,color:{argb:checked?'FF047857':'FFB91C1C'}};c.alignment={vertical:'middle',horizontal:a==='C'+r?'left':'center'};c.border=border;});
+      ws.getRow(r).height = 20;
+    });
+
+    // 직원별 서명 기록
+    const sigStartRow = 21 + Math.max(items.length, 1) + 2;
+    ws.mergeCells(`B${sigStartRow}:I${sigStartRow}`);
+    const cs = ws.getCell(`B${sigStartRow}`);
+    cs.value = '  👥  직원별 서명 기록';
+    cs.font = { bold:true, size:12, color:{argb:'FF1F2937'} };
+    cs.fill = fillColor('F3F4F6');
+    cs.alignment = { vertical:'middle' };
+    ws.getRow(sigStartRow).height = 26;
+
+    // 헤더
+    const hdrRow = sigStartRow + 1;
+    ws.getCell(`B${hdrRow}`).value = 'No.';
+    ws.getCell(`C${hdrRow}`).value = '이름';
+    ws.getCell(`D${hdrRow}`).value = '소속';
+    ws.getCell(`E${hdrRow}`).value = '주야간';
+    ws.getCell(`F${hdrRow}`).value = '국적';
+    ws.getCell(`G${hdrRow}`).value = '급여방식';
+    ws.getCell(`H${hdrRow}`).value = '본인 인증';
+    ['B','C','D','E','F','G','H'].forEach(col=>{const c=ws.getCell(`${col}${hdrRow}`);c.font={bold:true,size:10,color:{argb:'FFFFFFFF'}};c.fill=fillColor(colorFg);c.alignment={vertical:'middle',horizontal:'center'};c.border=border;});
+    ws.getRow(hdrRow).height = 22;
+
+    // 직원 행 또는 빈 안내
+    if (fEmps.length === 0 || signedCount === 0) {
+      const er = hdrRow + 1;
+      ws.mergeCells(`B${er}:H${er}`);
+      const cE = ws.getCell(`B${er}`);
+      cE.value = '(아직 서명한 직원이 없습니다)';
+      cE.font = { size:10, italic:true, color:{argb:'FF9CA3AF'} };
+      cE.alignment = { vertical:'middle', horizontal:'center' };
+      cE.border = border;
+      ws.getRow(er).height = 24;
+    } else {
+      let rr = hdrRow + 1;
+      const signedEmps = fEmps.filter(e => signs[String(e.id)]);
+      signedEmps.forEach((emp, idx) => {
+        ws.getCell(`B${rr}`).value = idx + 1;
+        ws.getCell(`C${rr}`).value = emp.name;
+        ws.getCell(`D${rr}`).value = emp.d || '-';
+        ws.getCell(`E${rr}`).value = emp.w;
+        ws.getCell(`F${rr}`).value = emp.n;
+        ws.getCell(`G${rr}`).value = emp.p;
+        ws.getCell(`H${rr}`).value = '✓ 서명완료';
+        ['B','C','D','E','F','G','H'].forEach(col=>{const c=ws.getCell(`${col}${rr}`);c.font={size:10,color:{argb:col==='H'?'FF047857':'FF1F2937'}};c.alignment={vertical:'middle',horizontal:'center'};c.border=border;});
+        ws.getRow(rr).height = 22;
+        rr++;
+      });
+    }
+
+    ws.views = [{ showGridLines: false }];
+  }
+
+  // 마지막 시트: 사용 안내
+  const guideWs = wb.addWorksheet('📘  사용 안내');
+  guideWs.columns = [{width:3},{width:18},{width:60}];
+  guideWs.mergeCells('B2:C2');
+  guideWs.getCell('B2').value = `${ed.short || ed.name} — ${Y}년 ${M}월 월별 일일 일지`;
+  guideWs.getCell('B2').font = { bold:true, size:16, color:{argb:'FF'+colorFg} };
+  guideWs.getCell('B2').alignment = { vertical:'middle', horizontal:'center' };
+  guideWs.getRow(2).height = 36;
+
+  const guideItems = [
+    ['01', '시트 구성', `본 파일은 ${dim}개의 일일 시트 + 사용 안내 시트로 구성되어 있습니다.\n  · 하단 시트 탭에서 원하는 날짜를 선택하세요\n  · 시트 이름: "${M}월 1일(요일)" ~ "${M}월 ${dim}일(요일)"\n  · 빈 날짜도 모두 시트로 포함됨 (현장 교육이 없었던 날 표시용)`],
+    ['02', '교육 정보', `교육 종류: ${ed.short || ed.name}\n근거 법령: ${ed.law || '자율'}\n실시 주기: ${ed.cycle || '수시'}\n필수 시간: ${ed.minTime || 0}분 이상 권장\n보관 기간: 1년`],
+    ['03', '포함 인원 (필터 적용)', `필터 조건: ${filterSummary}\n  · ${dm.filterSigned ? '해당일에 서명한 인원만 포함됨' : '서명 여부 무관하게 포함되었습니다'}`],
+    ['04', '법적 근거', ed.law || '자율 교육 (법적 의무 없음)'],
+    ['05', '발급 정보', `사업장: 노프로 (nopro.today)\n발급일: ${Y}년 ${M}월\n출력본은 노동부 점검 시 증빙으로 활용 가능합니다.`],
+  ];
+  let gr = 4;
+  guideItems.forEach(([no, title, body]) => {
+    guideWs.getCell(`B${gr}`).value = no;
+    guideWs.getCell(`C${gr}`).value = title;
+    guideWs.getCell(`B${gr}`).font = { bold:true, size:14, color:{argb:'FF'+colorFg} };
+    guideWs.getCell(`C${gr}`).font = { bold:true, size:13, color:{argb:'FF1F2937'} };
+    guideWs.getCell(`B${gr}`).alignment = { vertical:'middle', horizontal:'center' };
+    guideWs.getRow(gr).height = 26;
+    gr++;
+    guideWs.mergeCells(`B${gr}:C${gr}`);
+    guideWs.getCell(`B${gr}`).value = body;
+    guideWs.getCell(`B${gr}`).font = { size:11, color:{argb:'FF374151'} };
+    guideWs.getCell(`B${gr}`).alignment = { vertical:'top', wrapText:true };
+    guideWs.getRow(gr).height = (body.split('\n').length * 18) + 8;
+    gr += 2;
   });
-  // 직원 명단 (서명자만 또는 필터링된 직원)
-  row++;
-  ws.getCell(`A${row}`).value = `참석자 명단 (${emps.length}명)`;
-  ws.getCell(`A${row}`).font = { bold: true };
-  row++;
-  ws.getCell(`A${row}`).value = '순번'; ws.getCell(`B${row}`).value = '이름';
-  ws.getCell(`C${row}`).value = '소속'; ws.getCell(`D${row}`).value = '주야간';
-  ws.getCell(`E${row}`).value = '국적'; ws.getCell(`F${row}`).value = '서명';
-  ws.getRow(row).font = { bold: true };
-  ws.getRow(row).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
-  row++;
-  emps.forEach((emp, i) => {
-    ws.getCell(`A${row}`).value = i+1;
-    ws.getCell(`B${row}`).value = emp.name;
-    ws.getCell(`C${row}`).value = emp.d;
-    ws.getCell(`D${row}`).value = emp.w;
-    ws.getCell(`E${row}`).value = emp.n;
-    ws.getCell(`F${row}`).value = emp.s ? '✓' : '';
-    row++;
-  });
-  ws.columns = [{width:6},{width:14},{width:14},{width:10},{width:10},{width:8}];
+  guideWs.views = [{ showGridLines: false }];
+
   // 다운로드
+  if (btn) btn.textContent = '⏳ 파일 생성중...';
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `노프로_${ed.short || ed.name}_${sfV4DateKey()}.xlsx`;
+  a.download = `노프로_${ed.short || ed.name}_${Y}-${String(M).padStart(2,'0')}_월별일지.xlsx`;
   a.click();
   URL.revokeObjectURL(url);
+  if (btn) { btn.textContent = `📊 ${Y}년 ${M}월 다운로드`; btn.disabled = false; }
   sfV4CloseDlModal();
 }
 
-// 🆕 v4 PDF 다운로드 (html2canvas + jsPDF — 한글 정상 렌더링, 브라우저 폰트 사용)
-async function sfV4DoPdf() {
-  // 라이브러리 lazy-load
+// 🆕 v4 월별 PDF: 1일~말일 페이지 (총 31~32 페이지). html2canvas + jsPDF 사용.
+async function sfV4DoPdf(btnEl) {
   const needHtml2canvas = (typeof html2canvas === 'undefined');
   const needJsPdf = !(window.jspdf && window.jspdf.jsPDF);
   if (needHtml2canvas || needJsPdf) {
-    const btn = event?.target;
+    const btn = btnEl || event?.target;
     const orig = btn ? btn.textContent : '';
     if (btn) { btn.textContent = '⏳ PDF 라이브러리 로딩중...'; btn.disabled = true; }
     try {
@@ -11457,112 +11715,135 @@ async function sfV4DoPdf() {
       if (needJsPdf) await _sfV4LoadScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js');
     } catch (e) {
       alert('PDF 라이브러리 로드 실패. 인터넷 연결을 확인해주세요.');
-      if (btn) { btn.textContent = orig || '📄 PDF 다운로드 실행'; btn.disabled = false; }
+      if (btn) { btn.textContent = orig; btn.disabled = false; }
       return;
     }
-    if (btn) { btn.textContent = orig || '📄 PDF 다운로드 실행'; btn.disabled = false; }
+    if (btn) { btn.textContent = orig; btn.disabled = false; }
   }
+  const btn = btnEl || event?.target;
   const dm = sfV4State.dlModal;
   const eduList = getEduList();
-  const ed = eduList[dm.eduKey];
-  const r = sfV4GetRec();
-  const emps = sfV4GetEmps().filter(e => {
-    if (dm.filterN !== '전체' && e.n !== dm.filterN) return false;
-    if (dm.filterW !== '전체' && e.w !== dm.filterW) return false;
-    if (dm.filterP !== '전체' && e.p !== dm.filterP) return false;
-    if (dm.filterSigned && !e.s) return false;
-    return true;
-  });
+  const ed = eduList[dm.eduKey] || sfV4GetEdu();
+  const Y = dm.year, M = dm.month;
+  const dim = new Date(Y, M, 0).getDate();
+  const dowKo = ['일','월','화','수','목','금','토'];
 
-  // 인쇄용 HTML 빌드 (오프스크린 캡처)
-  const html = `
-    <div style="width:794px;padding:36px;font-family:'Pretendard','맑은 고딕','Malgun Gothic',sans-serif;color:#1a1a1a;background:#fff;line-height:1.55">
-      <h1 style="text-align:center;color:#${ed.color};margin:0 0 6px 0;font-size:22px;font-weight:700">${esc(ed.name)} 교육 일지</h1>
-      <p style="text-align:center;color:#666;font-size:11px;margin:0 0 18px 0">근거 법령: ${esc(ed.law)}</p>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px">
-        <tr><td style="border:1px solid #ddd;padding:8px;background:#f5f5f5;font-weight:600;width:25%">일시</td><td style="border:1px solid #ddd;padding:8px">${sfV4DateKey()} (${esc(ed.cycle||'')})</td></tr>
-        <tr><td style="border:1px solid #ddd;padding:8px;background:#f5f5f5;font-weight:600">강사</td><td style="border:1px solid #ddd;padding:8px">${esc(r.instructor||'-')}${r.instructorRole?' ('+esc(r.instructorRole)+')':''}</td></tr>
-        <tr><td style="border:1px solid #ddd;padding:8px;background:#f5f5f5;font-weight:600">교육 시간</td><td style="border:1px solid #ddd;padding:8px">${r.duration||0}분 (최소 ${ed.minTime||0}분)</td></tr>
+  // 한 날짜의 HTML 생성기 — 엑셀과 같은 구조
+  const buildDayHTML = (Y, M, d) => {
+    const dt = new Date(Y, M-1, d);
+    const dow = dowKo[dt.getDay()];
+    const dk = `${Y}-${String(M).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dayRec = (safetyRecords[dk] && safetyRecords[dk][dm.eduKey]) || {};
+    const signs = dayRec.signs || {};
+    const fEmps = sfV4GetEmps().filter(e => {
+      if (dm.filterN !== '전체' && e.n !== dm.filterN) return false;
+      if (dm.filterW !== '전체' && e.w !== dm.filterW) return false;
+      if (dm.filterP !== '전체' && e.p !== dm.filterP) return false;
+      const isSigned = !!signs[String(e.id)];
+      if (dm.filterSigned && !isSigned) return false;
+      return true;
+    });
+    const signedEmps = fEmps.filter(e => signs[String(e.id)]);
+    const signedCount = signedEmps.length;
+    const pct = fEmps.length ? Math.round(signedCount / fEmps.length * 100) : 0;
+    const checks = dayRec.checks || {};
+    const items = ed.items || [];
+
+    return `<div style="width:794px;padding:36px;font-family:'Pretendard','맑은 고딕','Malgun Gothic',sans-serif;color:#1a1a1a;background:#fff;box-sizing:border-box">
+      <h1 style="text-align:center;color:#${ed.color};margin:0 0 4px 0;font-size:20px;font-weight:700">📋 ${esc(ed.name)} 전자서명</h1>
+      <p style="text-align:center;color:#6B7280;font-size:11px;margin:0 0 16px 0">${esc(ed.law||'자율')} · ${esc(ed.cycle||'수시')}</p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:14px;font-size:12px;text-align:center">
+        <tr style="background:#F9FAFB">
+          <td style="border:1px solid #E5E7EB;padding:7px;font-weight:600;color:#6B7280">📅 조회 날짜</td>
+          <td style="border:1px solid #E5E7EB;padding:7px;font-weight:600;color:#6B7280">👥 전체 인원</td>
+          <td style="border:1px solid #E5E7EB;padding:7px;font-weight:600;color:#6B7280">✅ 서명 완료</td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #E5E7EB;padding:10px;font-weight:700;font-size:13px">${dk} (${dow})</td>
+          <td style="border:1px solid #E5E7EB;padding:10px;font-weight:700;font-size:13px">${fEmps.length} 명</td>
+          <td style="border:1px solid #E5E7EB;padding:10px;font-weight:700;font-size:13px">${signedCount} 명 (${pct}%)</td>
+        </tr>
       </table>
-      <h3 style="font-size:14px;margin:16px 0 6px 0">📋 교육 내용</h3>
-      <div style="border:1px solid #ddd;padding:12px;background:#fafafa;white-space:pre-wrap;font-size:11.5px;min-height:60px">${esc(r.content||'-')}</div>
-      <h3 style="font-size:14px;margin:16px 0 6px 0">✅ 필수 포함 항목 (${(((r.checks)||{})?Object.values(r.checks||{}).filter(Boolean).length:0)}/${(ed.items||[]).length})</h3>
-      <ul style="margin:0 0 16px 0;padding-left:22px;font-size:12px">
-        ${(ed.items||[]).map((it,i)=>`<li style="margin-bottom:3px">${(r.checks||{})[i] ? '✓' : '☐'} ${esc(it)}</li>`).join('')}
-      </ul>
-      <h3 style="font-size:14px;margin:16px 0 6px 0">👥 참석자 명단 (${emps.length}명)</h3>
-      <table style="width:100%;border-collapse:collapse;font-size:11px">
-        <thead><tr style="background:#f0f0f0">
-          <th style="border:1px solid #ddd;padding:6px;width:8%">순번</th>
-          <th style="border:1px solid #ddd;padding:6px;width:20%">이름</th>
-          <th style="border:1px solid #ddd;padding:6px">소속</th>
-          <th style="border:1px solid #ddd;padding:6px;width:11%">주야간</th>
-          <th style="border:1px solid #ddd;padding:6px;width:11%">국적</th>
-          <th style="border:1px solid #ddd;padding:6px;width:13%">서명</th>
-        </tr></thead>
-        <tbody>
-          ${emps.map((emp,i)=>`<tr>
-            <td style="border:1px solid #ddd;padding:6px;text-align:center">${i+1}</td>
-            <td style="border:1px solid #ddd;padding:6px">${esc(emp.name)}</td>
-            <td style="border:1px solid #ddd;padding:6px">${esc(emp.d)}</td>
-            <td style="border:1px solid #ddd;padding:6px;text-align:center">${esc(emp.w)}</td>
-            <td style="border:1px solid #ddd;padding:6px;text-align:center">${esc(emp.n)}</td>
-            <td style="border:1px solid #ddd;padding:6px;text-align:center;color:${emp.s?'#10B981':'#999'};font-weight:600">${emp.s?'✓ 완료':'-'}</td>
-          </tr>`).join('')}
-        </tbody>
+      <div style="background:#F3F4F6;padding:8px 12px;font-weight:700;font-size:12px;margin-bottom:0">📝 교육 내용</div>
+      <div style="border:1px solid #E5E7EB;padding:12px;background:#fff;white-space:pre-wrap;font-size:11px;min-height:50px;color:${dayRec.content?'#1F2937':'#9CA3AF'}">${esc(dayRec.content && dayRec.content.trim() ? dayRec.content : '(교육 내용 미입력)')}</div>
+      <div style="background:#F3F4F6;padding:8px 12px;font-weight:700;font-size:12px;margin-top:14px">⚖️ 교육 정보</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;text-align:center">
+        <tr><td style="border:1px solid #E5E7EB;padding:7px;background:#F9FAFB;font-weight:600;color:#6B7280;width:14%">근거 법령</td><td style="border:1px solid #E5E7EB;padding:7px;width:36%">${esc(ed.law||'자율')}</td><td style="border:1px solid #E5E7EB;padding:7px;background:#F9FAFB;font-weight:600;color:#6B7280;width:14%">실시 주기</td><td style="border:1px solid #E5E7EB;padding:7px;width:36%">${esc(ed.cycle||'수시')}</td></tr>
+        <tr><td style="border:1px solid #E5E7EB;padding:7px;background:#F9FAFB;font-weight:600;color:#6B7280">필수 시간</td><td style="border:1px solid #E5E7EB;padding:7px">${ed.minTime||0}분 이상</td><td style="border:1px solid #E5E7EB;padding:7px;background:#F9FAFB;font-weight:600;color:#6B7280">실제 진행</td><td style="border:1px solid #E5E7EB;padding:7px">${dayRec.duration?dayRec.duration+' 분':'- 분'}</td></tr>
+        <tr><td style="border:1px solid #E5E7EB;padding:7px;background:#F9FAFB;font-weight:600;color:#6B7280">강사</td><td style="border:1px solid #E5E7EB;padding:7px">${esc(dayRec.instructor||'-')}</td><td style="border:1px solid #E5E7EB;padding:7px;background:#F9FAFB;font-weight:600;color:#6B7280">강사 자격</td><td style="border:1px solid #E5E7EB;padding:7px">${esc(dayRec.instructorRole||'-')}</td></tr>
       </table>
-      <p style="margin-top:24px;font-size:9px;color:#999;text-align:right">생성일: ${new Date().toLocaleString('ko-KR')} · 노프로</p>
-    </div>
-  `;
+      <div style="background:#F3F4F6;padding:8px 12px;font-weight:700;font-size:12px;margin-top:14px">✅ 필수 포함 항목 체크리스트</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;text-align:center">
+        <tr style="background:#${ed.color};color:#fff"><td style="border:1px solid #E5E7EB;padding:6px;width:8%">No.</td><td style="border:1px solid #E5E7EB;padding:6px">필수 포함 항목</td><td style="border:1px solid #E5E7EB;padding:6px;width:18%">포함 여부</td></tr>
+        ${items.map((it,i)=>`<tr><td style="border:1px solid #E5E7EB;padding:6px">${i+1}</td><td style="border:1px solid #E5E7EB;padding:6px;text-align:left">${esc(it)}</td><td style="border:1px solid #E5E7EB;padding:6px;color:${checks[i]?'#047857':'#B91C1C'};font-weight:600">${checks[i]?'✓ 포함':'✗ 누락'}</td></tr>`).join('')}
+      </table>
+      <div style="background:#F3F4F6;padding:8px 12px;font-weight:700;font-size:12px;margin-top:14px">👥 직원별 서명 기록</div>
+      <table style="width:100%;border-collapse:collapse;font-size:10.5px;text-align:center">
+        <tr style="background:#${ed.color};color:#fff">
+          <td style="border:1px solid #E5E7EB;padding:6px;width:7%">No.</td>
+          <td style="border:1px solid #E5E7EB;padding:6px;width:15%">이름</td>
+          <td style="border:1px solid #E5E7EB;padding:6px">소속</td>
+          <td style="border:1px solid #E5E7EB;padding:6px;width:10%">주야간</td>
+          <td style="border:1px solid #E5E7EB;padding:6px;width:10%">국적</td>
+          <td style="border:1px solid #E5E7EB;padding:6px;width:14%">급여방식</td>
+          <td style="border:1px solid #E5E7EB;padding:6px;width:14%">본인 인증</td>
+        </tr>
+        ${signedEmps.length === 0
+          ? `<tr><td colspan="7" style="border:1px solid #E5E7EB;padding:14px;color:#9CA3AF;font-style:italic">(아직 서명한 직원이 없습니다)</td></tr>`
+          : signedEmps.map((emp,i)=>`<tr>
+              <td style="border:1px solid #E5E7EB;padding:6px">${i+1}</td>
+              <td style="border:1px solid #E5E7EB;padding:6px">${esc(emp.name)}</td>
+              <td style="border:1px solid #E5E7EB;padding:6px">${esc(emp.d||'-')}</td>
+              <td style="border:1px solid #E5E7EB;padding:6px">${esc(emp.w)}</td>
+              <td style="border:1px solid #E5E7EB;padding:6px">${esc(emp.n)}</td>
+              <td style="border:1px solid #E5E7EB;padding:6px">${esc(emp.p)}</td>
+              <td style="border:1px solid #E5E7EB;padding:6px;color:#047857;font-weight:600">✓ 서명완료</td>
+            </tr>`).join('')}
+      </table>
+      <p style="margin-top:18px;font-size:9px;color:#9CA3AF;text-align:right">생성일: ${new Date().toLocaleString('ko-KR')} · 노프로</p>
+    </div>`;
+  };
+
+  if (btn) { btn.textContent = '⏳ PDF 페이지 생성중...'; btn.disabled = true; }
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pdfW = pdf.internal.pageSize.getWidth();
+  const pdfH = pdf.internal.pageSize.getHeight();
 
   const container = document.createElement('div');
   container.style.cssText = 'position:fixed;left:-99999px;top:0;z-index:-1';
-  container.innerHTML = html;
   document.body.appendChild(container);
 
   try {
-    const canvas = await html2canvas(container.firstElementChild, {
-      scale: 2,
-      backgroundColor: '#ffffff',
-      useCORS: true,
-      logging: false
-    });
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const pdfW = pdf.internal.pageSize.getWidth();
-    const pdfH = pdf.internal.pageSize.getHeight();
-    const imgW = pdfW;
-    const imgH = canvas.height * imgW / canvas.width;
-
-    if (imgH <= pdfH) {
-      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, imgW, imgH);
-    } else {
-      // 페이지 분할
-      let position = 0;
-      let pageNum = 0;
-      while (position < canvas.height) {
-        const pageHpx = canvas.width * pdfH / pdfW;
-        const sliceH = Math.min(canvas.height - position, pageHpx);
-        const pageCanvas = document.createElement('canvas');
-        pageCanvas.width = canvas.width;
-        pageCanvas.height = sliceH;
-        const ctx = pageCanvas.getContext('2d');
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-        ctx.drawImage(canvas, 0, -position);
-        if (pageNum > 0) pdf.addPage();
-        pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', 0, 0, pdfW, sliceH * pdfW / canvas.width);
-        position += sliceH;
-        pageNum++;
+    for (let d = 1; d <= dim; d++) {
+      if (btn) btn.textContent = `⏳ ${d}/${dim} 페이지 생성중...`;
+      container.innerHTML = buildDayHTML(Y, M, d);
+      const canvas = await html2canvas(container.firstElementChild, {
+        scale: 1.5,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false
+      });
+      const imgW = pdfW;
+      const imgH = canvas.height * imgW / canvas.width;
+      if (d > 1) pdf.addPage();
+      if (imgH <= pdfH) {
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, imgW, imgH);
+      } else {
+        // 한 날짜가 한 페이지를 넘으면 비율 축소 (드물지만 안전망)
+        const scale = pdfH / imgH;
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', (pdfW - imgW*scale)/2, 0, imgW*scale, pdfH);
       }
     }
-    pdf.save(`노프로_${ed.short || ed.name}_${sfV4DateKey()}.pdf`);
+    if (btn) btn.textContent = '⏳ 파일 저장중...';
+    pdf.save(`노프로_${ed.short || ed.name}_${Y}-${String(M).padStart(2,'0')}_월별일지.pdf`);
     sfV4CloseDlModal();
   } catch (e) {
     console.error('PDF 생성 실패:', e);
     alert('PDF 생성 실패: ' + (e.message || '알 수 없는 오류'));
   } finally {
     document.body.removeChild(container);
+    if (btn) { btn.textContent = `📄 ${Y}년 ${M}월 다운로드`; btn.disabled = false; }
   }
 }
 
