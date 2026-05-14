@@ -7,6 +7,11 @@
 <title>노프로</title>
 <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/app.css?v=10">
+<script>
+  // app.js 로드 완료 전 랜딩 nav 링크 클릭 시 ReferenceError 방지용 stub.
+  // app.js 로드 후엔 진짜 함수로 자연스럽게 덮어씌워짐 (동작 동일).
+  window._safeExtNav = function(){ try{ window.onbeforeunload = null; }catch(e){} };
+</script>
 <style>
   /* 🔴 새 버전 배너 표시 중일 때 본문이 가리지 않도록 padding-top 확보 */
   body.has-version-banner { padding-top: 76px; }
@@ -2285,7 +2290,7 @@ noprohr.netlify.app/tbm_sign.html
 </div>
 
 </div></div></div>
-<script src="/js/app.js?v=2026-05-14-19"></script>
+<script src="/js/app.js?v=2026-05-14-20"></script>
 <!-- 인라인 핸들러용 unsafe-inline은 추후 단계적 제거 예정 -->
 <script>
 // placeholder - app.js에서 모든 로직 처리

@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-14-19';
+const CLIENT_BUILD = '2026-05-14-20';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -955,6 +955,28 @@ function _safeExtNav(){
     _hasUnsavedChanges = false;
     window.onbeforeunload = null;
   }catch(e){}
+}
+
+// 클립보드 복사 (포커스 빠진 상태에서도 안전).
+// navigator.clipboard.writeText는 document에 포커스 없으면 reject → unhandledrejection 사고.
+// 표준 API 1차 시도 → 실패 시 옛 방식(execCommand)으로 자동 fallback.
+async function _copyToClipboard(text){
+  try{
+    if(navigator.clipboard && document.hasFocus()){
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  }catch(e){}
+  try{
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;opacity:0;left:-9999px;top:0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return !!ok;
+  }catch(e){ return false; }
 }
 
 // 랜딩/about/faq 채용 링크용 안내 토스트 (네이티브 alert 대체)
@@ -8170,7 +8192,7 @@ function doGet(e){
         <div style="font-size:11px;font-weight:700;color:var(--ink3);margin-bottom:6px;letter-spacing:.3px">APPS SCRIPT 코드</div>
         <div style="position:relative">
           <textarea readonly style="width:100%;height:160px;background:var(--surf);border:1px solid var(--bd);border-radius:9px;padding:12px;font-family:monospace;font-size:11px;color:var(--ink2);resize:none;outline:none">${gasCode}</textarea>
-          <button onclick="navigator.clipboard.writeText(document.querySelector('#sync-setup-modal textarea').value);this.textContent='✓ 복사됨';setTimeout(()=>this.textContent='복사',1500)"
+          <button onclick="_copyToClipboard(document.querySelector('#sync-setup-modal textarea').value);this.textContent='✓ 복사됨';setTimeout(()=>this.textContent='복사',1500)"
             style="position:absolute;top:8px;right:8px;padding:4px 10px;border-radius:6px;border:1px solid var(--bd);background:var(--card);color:var(--ink2);font-size:10px;font-weight:600;cursor:pointer">복사</button>
         </div>
       </div>
@@ -9384,7 +9406,7 @@ function sfCopyLink(){
   let url=(document.getElementById('sf-link-url')||{}).textContent||'';
   if(!url||url.includes('링크를 생성')){alert('먼저 🔄 재생성 버튼을 눌러 링크를 생성해주세요.');return;}
   if(!url.startsWith('http'))url='https://'+url;
-  if(navigator.clipboard)navigator.clipboard.writeText(url);
+  _copyToClipboard(url);
   const t=document.getElementById('sf-toast');
   if(t){t.style.display='block';setTimeout(()=>t.style.display='none',2500);}
 }
@@ -10748,8 +10770,8 @@ async function sfV4CopyLink() {
   if (!r.token) { alert('먼저 ↻ 재생성 버튼을 눌러 링크를 생성해주세요.'); return; }
   const url = await _sfV4FlushAndGetUrl();
   if (!url) { alert('링크 생성 실패. 로그인 상태를 확인해주세요.'); return; }
-  if (navigator.clipboard) navigator.clipboard.writeText(url);
-  if (typeof showSyncToast === 'function') showSyncToast('✓ 링크 복사됨 (최신 입력 반영)', 'ok');
+  const _copied = await _copyToClipboard(url);
+  if (typeof showSyncToast === 'function') showSyncToast(_copied ? '✓ 링크 복사됨 (최신 입력 반영)' : '복사 실패 — URL: '+url, _copied ? 'ok' : 'warn');
   else alert('✓ 링크가 복사되었습니다.\n\n' + url);
 }
 
@@ -10776,8 +10798,8 @@ async function sfV4CopyKakao() {
   if (!msg) { alert('먼저 ↻ 재생성 버튼을 눌러 링크를 생성해주세요.'); return; }
   // 서버 강제 동기화 — 받는 사람이 링크 클릭 시 최신 교육내용 보이도록
   await _sfV4FlushAndGetUrl();
-  if (navigator.clipboard) navigator.clipboard.writeText(msg);
-  if (typeof showSyncToast === 'function') showSyncToast('✓ 카카오 메시지 복사됨 (최신 입력 반영)', 'ok');
+  const _copied = await _copyToClipboard(msg);
+  if (typeof showSyncToast === 'function') showSyncToast(_copied ? '✓ 카카오 메시지 복사됨 (최신 입력 반영)' : '복사 실패 — 메시지를 직접 복사해주세요', _copied ? 'ok' : 'warn');
   else alert('✓ 카카오톡 공유 문구가 복사되었습니다.');
 }
 
