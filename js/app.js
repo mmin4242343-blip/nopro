@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-14-21';
+const CLIENT_BUILD = '2026-05-15-1';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -9124,10 +9124,25 @@ function saveSafetyConfigV4() {
     safeItemSave('safety_config', safetyConfig).catch(e => console.warn('safety_config 저장 실패:', e));
   }
 }
+// 🛡️ safety_records 서버 저장 시 base64(`photos[].data`) 제거 — DB 용량 절감.
+// 사진 원본은 Storage(p.storagePath)에 있고, 로컬은 메모리에서만 base64 유지.
+// 이 헬퍼를 거치지 않고 `safeItemSave('safety_records', safetyRecords)` 직접 호출 금지.
+function _slimSafetyRecords(records) {
+  const slim = JSON.parse(JSON.stringify(records || {}));
+  Object.values(slim).forEach(byDate => {
+    if (!byDate || typeof byDate !== 'object') return;
+    Object.values(byDate).forEach(rec => {
+      if (rec && Array.isArray(rec.photos)) {
+        rec.photos = rec.photos.map(({ data, ...rest }) => rest);
+      }
+    });
+  });
+  return slim;
+}
 function saveSafetyRecordsV4() {
-  if (typeof safeItemSave === 'function') {
-    safeItemSave('safety_records', safetyRecords).catch(e => console.warn('safety_records 저장 실패:', e));
-  }
+  if (typeof safeItemSave !== 'function') return Promise.resolve();
+  return safeItemSave('safety_records', _slimSafetyRecords(safetyRecords))
+    .catch(e => { console.warn('safety_records 저장 실패:', e); });
 }
 
 // EDU 객체에 업종 추가 항목·커스텀 교육 병합 (UI 표시용 - 원본 SAFETY_EDU는 변경하지 않음)
@@ -10740,7 +10755,7 @@ async function sfV4GenLink() {
   // 🛡️ v4 저장은 await로 처리 — fire-and-forget이면 사용자가 즉시 '새 창' 클릭 시
   // 서버에 토큰이 도달 전이라 "유효하지 않은 링크" 응답 (race condition).
   try {
-    if (typeof safeItemSave === 'function') await safeItemSave('safety_records', safetyRecords);
+    await saveSafetyRecordsV4();
   } catch (e) { console.warn('safety_records 저장 실패:', e); }
   // 외부 tbm_sign.html 호환을 위해 기존 SAFETY_REC[date+'_token']에도 저장 (v4 첫번째 교육이 TBM일 때 외부 검증용)
   if (sfV4State.edu === 'tbm') {
@@ -10760,7 +10775,7 @@ async function _sfV4FlushAndGetUrl() {
   const cid = sess?.companyId || '';
   if (!r.token || !cid) return null;
   try {
-    if (typeof safeItemSave === 'function') await safeItemSave('safety_records', safetyRecords);
+    await saveSafetyRecordsV4();
   } catch (e) { console.warn('safety_records 강제 동기화 실패:', e); }
   return `https://noprohr.netlify.app/tbm_sign.html?c=${cid}&t=${r.token}&d=${sfV4DateKey()}&e=${sfV4State.edu}`;
 }
@@ -10837,12 +10852,7 @@ async function sfV4HandlePhotos(files) {
     } catch (e) { console.error('[v4 사진] 처리 실패:', file.name, e); }
   }
   if (success > 0) {
-    // 서버 저장 시에는 data 필드(base64) 제외 — 용량 절감
-    const slim = JSON.parse(JSON.stringify(safetyRecords));
-    Object.values(slim).forEach(byDate => Object.values(byDate).forEach(rec => {
-      if (Array.isArray(rec.photos)) rec.photos = rec.photos.map(({data, ...rest}) => rest);
-    }));
-    try { await safeItemSave('safety_records', slim); }
+    try { await saveSafetyRecordsV4(); }
     catch(e) { console.warn('safety_records 서버 저장 실패:', e); }
     if (typeof showSyncToast === 'function') showSyncToast(success + '장 업로드 완료', 'ok');
   }
@@ -10858,12 +10868,8 @@ function sfV4DelPhoto(photoId) {
   if (idx < 0) return;
   const p = rec.photos[idx];
   rec.photos.splice(idx, 1);
-  // 서버 저장 (data 제거 후)
-  const slim = JSON.parse(JSON.stringify(safetyRecords));
-  Object.values(slim).forEach(byDate => Object.values(byDate).forEach(r => {
-    if (Array.isArray(r.photos)) r.photos = r.photos.map(({data, ...rest}) => rest);
-  }));
-  safeItemSave('safety_records', slim).catch(e => console.warn('사진 삭제 저장 실패:', e));
+  // 서버 저장 (헬퍼가 photos[].data 자동 제거)
+  saveSafetyRecordsV4().catch(e => console.warn('사진 삭제 저장 실패:', e));
   // Storage 파일도 삭제 시도
   if (p.storagePath && typeof deleteFileFromStorage === 'function') {
     deleteFileFromStorage(p.storagePath).catch(()=>{});
@@ -12331,7 +12337,7 @@ async function sfV4TranslateContent(btn) {
     sfV4SetRecField('content_en_at', Date.now());
     // 서버에도 즉시 동기화 (외부 서명 페이지에서 영어 버전 보이도록)
     try {
-      if (typeof safeItemSave === 'function') await safeItemSave('safety_records', safetyRecords);
+      await saveSafetyRecordsV4();
     } catch (e) { console.warn('번역 서버 저장 실패:', e); }
     if (typeof showSyncToast === 'function') showSyncToast('✓ 영어 번역 완료', 'ok');
     renderSafetyV4();
