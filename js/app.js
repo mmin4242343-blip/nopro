@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-15-2';
+const CLIENT_BUILD = '2026-05-15-3';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1112,7 +1112,7 @@ let REC=load(LS.R,{});
 let BONUS_REC=load(LS.BN,{});
 let ALLOWANCE_REC=load(LS.AL,{});
 
-function getEmpPayMode(emp){const m=emp.payMode||POL.basePayMode;return m==='monthly'?'monthly':m==='hourly'?'hourly':m==='pohal'?'pohal':'fixed';}
+function getEmpPayMode(emp){const m=emp.payMode||'fixed';return m==='monthly'?'monthly':m==='hourly'?'hourly':m==='pohal'?'pohal':'fixed';}
 function getEmpPayModeLabel(emp){
   const m=getEmpPayMode(emp);
   if(m==='fixed')return{text:'통상임금제',cls:'emb-fixed'};
@@ -1315,7 +1315,7 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate,halfD
   const _otThresh = Math.max(0, 480 - _halfBase);
   const ot=Math.max(0,work-_otThresh);
   const crossed=eR<=s;
-  const mode=empMode||POL.basePayMode;
+  const mode=empMode||'fixed';
 
   // 연장 구간 분리 (야간/주간) — 임계값 반영
   const otNight=Math.max(0, nightM - Math.max(0, _otThresh-dayM));
@@ -1358,7 +1358,7 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate,halfD
       if(_holMO) holDayOtPay =r10(pRate*2.0*m2h(otM));
     }
     const totalPay=holDayStdPay+holDayOtPay;
-    return{gross,deduct,bkMins,nightBkMins,work,nightM:0,otDay:0,otNight:0,ot:Math.max(0,work-480),crossed,
+    return{gross,deduct,bkMins,nightBkMins,work,nightM,otDay,otNight,ot,crossed,
       basePay:0,nightPay:0,otDayPay:0,otNightPay:0,
       holDayStdPay,holNightStdPay:0,holDayOtPay,holNightOtPay:0,totalPay};
   }
@@ -4417,7 +4417,7 @@ function renderEmps(){
         <div class="rb-g" style="justify-content:center">
           <div class="rb ${!e.payMode||e.payMode==='fixed'?'on':''}" onclick="updE(${e.id},'payMode','fixed');renderEmps()" style="font-size:9px;padding:3px 6px">통상임금제</div>
           <div class="rb ${e.payMode==='hourly'?'on':''}" onclick="updE(${e.id},'payMode','hourly');renderEmps()" style="font-size:9px;padding:3px 6px">시급제</div>
-          <div class="rb ${e.payMode==='monthly'?'on':''}" onclick="updE(${e.id},'payMode','monthly');renderEmps()" style="font-size:9px;padding:3px 6px">포괄임금제</div>
+          <div class="rb ${e.payMode==='monthly'||e.payMode==='pohal'?'on':''}" onclick="updE(${e.id},'payMode','pohal');renderEmps()" style="font-size:9px;padding:3px 6px">포괄임금제</div>
         </div>
       </td>
       <td>
