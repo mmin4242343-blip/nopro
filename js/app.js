@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-15-1';
+const CLIENT_BUILD = '2026-05-15-2';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -16568,7 +16568,14 @@ function fillNormalAttend(empIds){
 }
 
 // ══ 직원 정보 이력 관리 ══
+// 🚫 시계열(history) 비활성화 (2026-05-15) — 직원관리 현재값(emp.payMode/rate/monthly 등)을 단일 진실 기준으로 사용.
+// 비활성 사유: 시계열이 부분적으로만 적용돼 monthSummary는 history 우선, 화면/엑셀 일별은 emp 현재값 사용.
+// 결과: 직원관리에서 '통상임금제' 선택돼 있어도 history에 옛 'monthly'가 박혀있으면 월급제로 계산 → 야간 시간 0 등 사고
+//   (2026-05-15 mmings 박경문/이규훈/홍성현 사례).
+// 단순안: emp 현재값만 신뢰. history는 참고 데이터로만 보존(미래 활성화 시 USE_EMP_HISTORY=true).
+const USE_EMP_HISTORY = false;
 function getEmpHistoryAt(emp, y, m, d) {
+  if (!USE_EMP_HISTORY) return null;
   const dateStr = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
   if (!emp.history || emp.history.length === 0) return null;
   const valid = emp.history
