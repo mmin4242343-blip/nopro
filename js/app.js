@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-18-1';
+const CLIENT_BUILD = '2026-05-18-2';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1500,7 +1500,7 @@ function monthSummary(eid,y,m){
   let tMhExtraH=0; // 포괄/월급 평일 8h초과 (소정외 가산용, 2026-05-18 신설 토글)
   const empPayMode=getEmpPayModeAt(emp, y, m, 1);
   // 소정근로 1일 기준시간: 고정/월급제=8h, 시급제=sot기반
-  const dailyStd = (empPayMode==='fixed'||empPayMode==='monthly') ? 8 : sot/4.345/5;
+  const dailyStd = (empPayMode==='fixed'||empPayMode==='monthly'||empPayMode==='pohal') ? 8 : sot/4.345/5;
   // 해당 월 첫날 기준으로 시급/모드 이력 적용
   const rate = getEmpRateAt(emp, y, m, 1);
   const ordRate = getOrdinaryRate(emp, y, m); // 통상시급 (가산수당용)
@@ -1524,12 +1524,14 @@ function monthSummary(eid,y,m){
     }
     if(rec.absent){
       adays++;
-      if(empPayMode==='monthly'){
-        // 월급제: 주말/공휴일 결근은 공제 안 함 (원래 안 나와도 되는 날) — 대체근무 무관 (결근이라 가산 자체 없음)
+      if(empPayMode==='monthly' || empPayMode==='pohal'){
+        // 포괄임금제(monthly/pohal): 주말/공휴일 결근은 공제 안 함 (원래 안 나와도 되는 날) — 대체근무 무관
         // 대체공휴일 체크 시도 휴일 취급 → 차감 안 함
         const isHolDay = isAutoHol(y,m,d,emp) || rec.subHol;
         if(!isHolDay && (POL.dedMonthly??true)){
-          const monthlyBase=getEmpMonthlyAt(emp, y, m, 1);
+          const monthlyBase = (empPayMode==='monthly')
+            ? (getEmpMonthlyAt(emp, y, m, 1) || _resolveMonthly(emp))
+            : _resolveMonthly(emp);
           const workDaysInMonth=Array.from({length:days},(_,i)=>i+1).filter(dd=>{
             return !isAutoHol(y,m,dd,emp);
           }).length;
@@ -1612,8 +1614,8 @@ function monthSummary(eid,y,m){
     if(!autoH && _shMins > 0){
       dedShortHByDay += +m2h(_shMins).toFixed(2);
     }
-    // 💰 결근차감 금액 + 분 단위 정밀 누적: 기존 조건 (통상/포괄임금제 + 시간단위 공제 모드 + 평일만)
-    if(empPayMode!=='monthly' && empPayMode!=='hourly' && POL.dedMode==='hour' && !autoH && _shMins > 0){
+    // 💰 결근차감 금액 + 분 단위 정밀 누적: 통상임금제만 시간 단위 공제 (포괄임금제는 일할공제로 별도 처리됨)
+    if(empPayMode==='fixed' && POL.dedMode==='hour' && !autoH && _shMins > 0){
       deduction += r10(rate*m2h(_shMins));
       dedShortMins += _shMins;
     }
@@ -1733,7 +1735,10 @@ function monthSummary(eid,y,m){
   // 결근차감: 통상시급(= 기본시급 + '통상' 체크된 수당만 반영) 기준으로 재계산
   // 근로기준법상 결근 1일=통상임금 1일분 공제
   // 표시 공제시간(dedShortHByDay) 그대로 사용 → 표시 × 통상시급 = 차감 금액 정확히 일치 (사용자 요구)
-  if(empPayMode!=='monthly' && empPayMode!=='hourly'){
+  // 포괄임금제(monthly/pohal): 위 일별 루프의 일할공제(월급÷평일수)가 이미 deduction에 누적됨 → 재계산 안 함
+  // 시급제(hourly): 결근=미근무로 급여 자체 미발생 → 별도 공제 없음
+  // 통상임금제(fixed)만 통상시급 × (결근일×8h + 부족시간) 기준으로 재계산
+  if(empPayMode==='fixed'){
     deduction = Math.round(ordRate * (adays * dailyStd + dedShortHByDay) / 10 + FP_EPS) * 10;
   }
   // 총급여 = 기본급 + 수당 + 주휴 + 연차 + 총가산수당(고정특근수당 포함) + 월급제휴일 + 상여 - 결근차감
@@ -3270,7 +3275,7 @@ function _nfDedMin(c, autoH, mode, emp, isHalf){
   if(!c) return 0;
   if(autoH) return 0;  // 휴일 제외
   const sot = (emp && emp.sot) || POL.sot || 209;
-  const dailyStdH = (mode==='fixed' || mode==='monthly') ? 8 : sot/4.345/5;
+  const dailyStdH = (mode==='fixed' || mode==='monthly' || mode==='pohal') ? 8 : sot/4.345/5;
   const adjStdM = dailyStdH*60 - (isHalf ? 240 : 0);
   const dedShMin = adjStdM - c.work;
   return dedShMin > 0 ? dedShMin : 0;
@@ -3281,7 +3286,7 @@ function _nfDedChip(c, autoH, mode, emp, isHalf){
   const dedShMin = _nfDedMin(c, autoH, mode, emp, isHalf);
   if(dedShMin === 0) return '';
   const sot = (emp && emp.sot) || POL.sot || 209;
-  const dailyStdH = (mode==='fixed' || mode==='monthly') ? 8 : sot/4.345/5;
+  const dailyStdH = (mode==='fixed' || mode==='monthly' || mode==='pohal') ? 8 : sot/4.345/5;
   const tipBase = isHalf ? `반차 4h + 출근 ${m2h(c.work).toFixed(2)}h` : `소정 ${dailyStdH.toFixed(2)}h`;
   return `<span class="tch" style="background:#FEE2E2;color:#B91C1C" title="${tipBase}이 8h 미달 (시급 차감)">공${m2h(dedShMin).toFixed(2)}h</span>`;
 }
@@ -3709,8 +3714,8 @@ function renderPayroll(){
       <div class="pcb">
         ${(()=>{
           const _pm=getEmpPayMode(emp);
-          if(_pm==='monthly'){
-            const holPay=(s.tHolDayPay||0)+(s.tHolDayOtPay||0);
+          if(_pm==='monthly' || _pm==='pohal'){
+            const holPay=(s.tMonthlyHolStdPay||0)+(s.tMonthlyHolOtPay||0);
             return `<div class="pr"><span class="prl">월급</span><span class="prv">${fmt$(s.tBase)}원</span></div>`
               +(holPay>0?`<div class="pr"><span class="prl" style="color:#854F0B">휴일수당</span><span class="prv" style="color:#854F0B">${fmt$(holPay)}원</span></div>`:'');
           }
@@ -6946,7 +6951,7 @@ function nfMapEmp(empOrName){
   // workType 매핑
   const workType = e.shift==='night' ? '야간' : (e.shift==='day' ? '주간' : '');
   // payType 매핑
-  const payType = e.payMode==='fixed' ? '고정급' : (e.payMode==='hourly' ? '시급제' : (e.payMode==='monthly' ? '포괄임금제' : ''));
+  const payType = e.payMode==='fixed' ? '고정급' : (e.payMode==='hourly' ? '시급제' : ((e.payMode==='monthly'||e.payMode==='pohal') ? '포괄임금제' : ''));
   // salary: monthly가 있으면 우선, 없으면 rate*209 추정
   const salary = Number(e.monthly) || (e.rate ? Number(e.rate)*209 : 0);
   return {
@@ -8576,10 +8581,10 @@ function exportExcel(){
       W(ci++,getEmpPayModeLabel(emp).text,S.cell(C.blue,bg,false,'center'));
       W(ci++,Number(annualTotal||0),S.num(C.gray,bg,false,'0.0'));
       W(ci++,s.wdays||0,S.num(C.navy,bg));
-      W(ci++,(_pm==='hourly'||_pm==='monthly')?'':sot,S.num(C.gray,bg));
+      W(ci++,(_pm==='hourly'||_pm==='monthly'||_pm==='pohal')?'':sot,S.num(C.gray,bg));
       W(ci++,emp.join||'',S.cell(C.gray,bg,false,'center'));
       W(ci++,emp.leave||'',S.cell(emp.leave?C.rose:C.gray,bg,false,'center'));
-      W(ci++,_pm==='monthly'?'':getOrdinaryRate(emp, pY, pM),_pm==='monthly'?S.empty(bg):S.num(C.blue,C.blue4||bg,true));
+      W(ci++,(_pm==='monthly'||_pm==='pohal')?'':getOrdinaryRate(emp, pY, pM),(_pm==='monthly'||_pm==='pohal')?S.empty(bg):S.num(C.blue,C.blue4||bg,true));
 
       // 기본급 + 주휴 + 연차수당
       W(ci++,Math.round(s.tBase)||'',s.tBase?S.num(C.navy,bg):S.empty(bg));
@@ -13989,7 +13994,8 @@ function exportEmpsExcel(){
     const bg = isLeft ? 'FFF5F5' : xlsRowBg(ei);
     const payMode=(e.payMode||'fixed');
     const payLabel=payMode==='fixed'?'통상임금제':payMode==='hourly'?'시급제':'포괄임금제';
-    const payVal=payMode==='monthly'?(e.monthly||POL.baseMonthly):(e.rate||POL.baseRate);
+    // 포괄임금제(monthly/pohal): _resolveMonthly로 안전 처리 (강서 사고 패턴 — pohal 모드에서 rate에 월급 잘못 저장된 케이스 자동 보정)
+    const payVal=(payMode==='monthly'||payMode==='pohal')?_resolveMonthly(e):(e.rate||POL.baseRate);
     const payBg=payMode==='fixed'?C.blue4:payMode==='hourly'?C.green4:C.orange4;
     const payFg=payMode==='fixed'?C.blue:payMode==='hourly'?C.green:C.orange2;
 
@@ -16813,7 +16819,7 @@ function renderMyInfo(){
   const nightEmps = activeEmps.filter(e=>e.shift==='night');
   const fixedCnt = activeEmps.filter(e=>(e.payMode||'fixed')==='fixed').length;
   const hourlyCnt = activeEmps.filter(e=>e.payMode==='hourly').length;
-  const monthlyCnt = activeEmps.filter(e=>e.payMode==='monthly').length;
+  const monthlyCnt = activeEmps.filter(e=>e.payMode==='monthly'||e.payMode==='pohal').length;
   const korCnt = activeEmps.filter(e=>e.nation!=='foreign'&&e.foreigner!==true).length;
   const forCnt = activeEmps.filter(e=>e.nation==='foreign'||e.foreigner===true).length;
   const totalActive = activeEmps.length||1;
