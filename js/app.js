@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-18-5';
+const CLIENT_BUILD = '2026-05-18-6';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1968,10 +1968,11 @@ function resetBkToday(){delete TBK[`${cY}-${pad(cM)}-${pad(cD)}`];bkEdit=false;d
 
 function setPohalAtt(eid, type){
   const k=rk(eid,cY,cM,cD);
-  if(!REC[k])REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,note:'',outTimes:[]};
-  if(type==='work'){REC[k].absent=false;REC[k].annual=false;}
-  else if(type==='annual'){REC[k].annual=!REC[k].annual;if(REC[k].annual)REC[k].absent=false;}
-  else if(type==='absent'){REC[k].absent=!REC[k].absent;if(REC[k].absent)REC[k].annual=false;}
+  if(!REC[k])REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[]};
+  // annual/halfAnnual/absent 셋 다 함께 정리 — halfAnnual만 잔존하는 모순 방지
+  if(type==='work'){REC[k].absent=false;REC[k].annual=false;REC[k].halfAnnual=false;}
+  else if(type==='annual'){REC[k].annual=!REC[k].annual;if(REC[k].annual){REC[k].absent=false;REC[k].halfAnnual=false;}}
+  else if(type==='absent'){REC[k].absent=!REC[k].absent;if(REC[k].absent){REC[k].annual=false;REC[k].halfAnnual=false;}}
   saveLS();renderTable();
   // 연차/결근 변경 시 연차관리·근태현황·급여 탭 갱신
   const lvPage=document.getElementById('pg-leave');
@@ -16596,9 +16597,11 @@ function fillNormalAttend(empIds){
     const existingRec=REC[k];
     const autoH=(isAutoHol(cY,cM,cD,emp) && !(existingRec&&existingRec.subWork))||(existingRec&&existingRec.subHol);
     if(autoH){blocked.push(emp.name);return;}
-    if(!REC[k])REC[k]={empId:id,start:'',end:'',absent:false,annual:false,note:'',outTimes:[]};
+    // 이미 연차/반차/결근 체크된 사람은 조용히 건너뜀 (일괄 입력으로 풀리지 않게)
+    if(existingRec && (existingRec.annual || existingRec.halfAnnual || existingRec.absent)) return;
+    if(!REC[k])REC[k]={empId:id,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[],customBk:false,customBkList:[]};
     REC[k].start=emp.workStart;REC[k].end=emp.workEnd;
-    REC[k].absent=false;REC[k].annual=false;
+    REC[k].absent=false;REC[k].annual=false;REC[k].halfAnnual=false;
     // 근무형태가 등록된 직원은 workBks를 그대로 신뢰:
     //   - 비어있으면 customBkList=[] → 휴게시간 공제 없음 (실근무시간 그대로)
     //   - 항목이 있으면 그대로 customBkList에 적용
