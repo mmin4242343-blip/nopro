@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-18-4';
+const CLIENT_BUILD = '2026-05-18-5';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -10152,7 +10152,7 @@ function sfRenderM(){
       <div style="font-size:8px;color:var(--ink3)">${shLabel} · ${naLabel} · ${esc(e.dept||'')}</div>
       <span style="font-size:7px;padding:1px 4px;border-radius:20px;background:${pm2.bg};color:${pm2.c};font-weight:700">${pm2.t}</span>
     </td>`;
-    rec.forEach(v=>{h+=v===1?`<td style="padding:6px 9px;border-bottom:1px solid var(--bd);text-align:center"><span style="background:var(--gbg);color:#065F46;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700">✓</span></td>`:`<td style="padding:6px 9px;border-bottom:1px solid var(--bd);text-align:center;color:var(--ink3);font-size:9px">—</td>`;});
+    rec.forEach(v=>{h+=v===1?`<td style="padding:6px 9px;border-bottom:1px solid var(--bd);text-align:center"><span style="background:var(--gbg);color:#065F46;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700">TBM</span></td>`:`<td style="padding:6px 9px;border-bottom:1px solid var(--bd);text-align:center;color:var(--ink3);font-size:9px">—</td>`;});
     h+=`<td style="padding:6px 9px;border-bottom:1px solid var(--bd);text-align:center;font-weight:700;color:${pc};font-size:10px">${pct}%<br><span style="font-size:8px;color:var(--ink3)">${total}/${days.length}</span></td></tr>`;
   });
   h+=`</tbody>`;t.innerHTML=h;
