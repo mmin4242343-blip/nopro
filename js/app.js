@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-18-2';
+const CLIENT_BUILD = '2026-05-18-3';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1525,13 +1525,12 @@ function monthSummary(eid,y,m){
     if(rec.absent){
       adays++;
       if(empPayMode==='monthly' || empPayMode==='pohal'){
-        // 포괄임금제(monthly/pohal): 주말/공휴일 결근은 공제 안 함 (원래 안 나와도 되는 날) — 대체근무 무관
+        // 포괄임금제(monthly/pohal): monthly·pohal 100% 동일 로직 (사용자 요구: 어느 쪽 선택하든 같은 정의)
+        // 주말/공휴일 결근은 공제 안 함 (원래 안 나와도 되는 날) — 대체근무 무관
         // 대체공휴일 체크 시도 휴일 취급 → 차감 안 함
         const isHolDay = isAutoHol(y,m,d,emp) || rec.subHol;
         if(!isHolDay && (POL.dedMonthly??true)){
-          const monthlyBase = (empPayMode==='monthly')
-            ? (getEmpMonthlyAt(emp, y, m, 1) || _resolveMonthly(emp))
-            : _resolveMonthly(emp);
+          const monthlyBase = _resolveMonthly(emp);
           const workDaysInMonth=Array.from({length:days},(_,i)=>i+1).filter(dd=>{
             return !isAutoHol(y,m,dd,emp);
           }).length;
@@ -1648,11 +1647,9 @@ function monthSummary(eid,y,m){
       tHolNightOtPay=r10(ordRate*2.5*tHolNightOtH);
     }
   } else if(empPayMode==='monthly' || empPayMode==='pohal'){
-    // 포괄임금제 (monthly=신규 / pohal=레거시, 동일 처리)
+    // 포괄임금제: monthly·pohal 100% 동일 로직 (사용자 요구: 어느 쪽 선택하든 같은 정의)
     // 강서 사고 안전화: _resolveMonthly로 emp.monthly 우선 + 휴리스틱 fallback
-    const monthlyAmount = (empPayMode==='monthly')
-      ? (getEmpMonthlyAt(emp, y, m, 1) || _resolveMonthly(emp))
-      : _resolveMonthly(emp);
+    const monthlyAmount = _resolveMonthly(emp);
     tBase = r10(monthlyAmount * _prorate);
     const pohalRate = ordRate || Math.round(monthlyAmount/209);
     // 휴일 가산
