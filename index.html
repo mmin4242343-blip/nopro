@@ -2058,6 +2058,19 @@ noprohr.netlify.app/tbm_sign.html
             예) 월급 3,000,000원 → 통상시급 3,000,000÷209 ≈ 14,354원</span>
           </div>
           <div class="sr">
+            <div><div class="sl">소정근로외 실근무수당</div><div class="ss" id="ext-monthly-note" style="color:var(--ink3)">OFF (포괄임금제 월급에 포함 가정)</div></div>
+            <label class="tgl"><input type="checkbox" id="tog-ext-monthly" onchange="updNotes()"><div class="ttr"></div><div class="tth"></div></label>
+          </div>
+          <div class="sr">
+            <div><div class="sl">야간 가산</div><div class="ss" id="nt-monthly-note" style="color:var(--ink3)">OFF (포괄임금제 월급에 포함 가정)</div></div>
+            <label class="tgl"><input type="checkbox" id="tog-nt-monthly" onchange="updNotes()"><div class="ttr"></div><div class="tth"></div></label>
+          </div>
+          <div class="sr">
+            <div><div class="sl">연장 가산 (8h 초과)</div><div class="ss" id="ot-monthly-note" style="color:var(--ink3)">OFF (포괄임금제 월급에 포함 가정)</div></div>
+            <label class="tgl"><input type="checkbox" id="tog-ot-monthly" onchange="updNotes()"><div class="ttr"></div><div class="tth"></div></label>
+          </div>
+          <div class="divider"></div>
+          <div class="sr">
             <div>
               <div class="sl">휴일수당 지급</div>
               <div class="ss" id="hol-monthly-note" style="color:var(--teal)">ON</div>
@@ -2290,7 +2303,7 @@ noprohr.netlify.app/tbm_sign.html
 </div>
 
 </div></div></div>
-<script src="/js/app.js?v=2026-05-15-3"></script>
+<script src="/js/app.js?v=2026-05-18-1"></script>
 <!-- 인라인 핸들러용 unsafe-inline은 추후 단계적 제거 예정 -->
 <script>
 // placeholder - app.js에서 모든 로직 처리

@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-15-3';
+const CLIENT_BUILD = '2026-05-18-1';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1065,6 +1065,8 @@ const DEF_POL={
   ntFixed:true,otFixed:true,holFixed:true,extFixed:true,
   ntHourly:true,otHourly:true,holHourly:true,
   holMonthly:true,holMonthlyStd:true,holMonthlyOt:true,dedMonthly:true,
+  // 포괄임금제 평일 가산 토글 (2026-05-18 신설) — 통상임금제 구조 미러. 기본 OFF (회사 정책에 따라 ON)
+  ntMonthly:false,otMonthly:false,extMonthly:false,
   dupMode:'legal',dedMode:'hour',
   alMode:'legal',alYear:15,alMonth:1,
   dayWeekend:[0,6],
@@ -1124,17 +1126,30 @@ function getEmpShiftLabel(emp){
   return emp.shift==='night'?{text:'야간',color:'#4C1D95',bg:'#EDE9FE'}:{text:'주간',color:'#92400E',bg:'#FEF3C7'};
 }
 // 특정 날짜에 유효한 변경 이력값 조회
+// 포괄임금제(monthly/pohal) 통합: emp.monthly 우선, 없으면 emp.rate를 안전 휴리스틱으로 해석
+// - emp.rate < 200000 → 시급으로 보고 ×209
+// - emp.rate >= 200000 → 월급이 시급칸에 잘못 저장된 케이스(강서 사고 패턴)로 보고 그대로 사용
+// emp.rate 원본 값은 어떤 경우에도 삭제·수정하지 않음 (박스 영구 보존)
+function _resolveMonthly(emp){
+  if(emp.monthly!==null && emp.monthly!==undefined) return emp.monthly;
+  if(emp.rate!==null && emp.rate!==undefined){
+    return emp.rate < 200000 ? emp.rate * 209 : emp.rate;
+  }
+  return POL.baseMonthly;
+}
 function getEmpRate(emp){
   const mode=getEmpPayMode(emp);
-  if(mode==='monthly'){
-    // 통상시급 = 월급 ÷ 209h
-    const monthly=emp.monthly!==null&&emp.monthly!==undefined?emp.monthly:POL.baseMonthly;
-    return Math.round(monthly/209);
+  if(mode==='monthly' || mode==='pohal'){
+    return Math.round(_resolveMonthly(emp)/209);
   }
   return emp.rate!==null&&emp.rate!==undefined?emp.rate:POL.baseRate;
 }
 
-function getEmpMonthly(emp){return emp.monthly!==null&&emp.monthly!==undefined?emp.monthly:POL.baseMonthly;}
+function getEmpMonthly(emp){
+  const mode=getEmpPayMode(emp);
+  if(mode==='monthly' || mode==='pohal') return _resolveMonthly(emp);
+  return emp.monthly!==null&&emp.monthly!==undefined?emp.monthly:POL.baseMonthly;
+}
 function getMonthBonus(eid,y,m){
   const key=`${y}-${pad(m)}`;
   if(BONUS_REC[eid]&&BONUS_REC[eid][key]!==undefined)return BONUS_REC[eid][key];
@@ -1321,46 +1336,40 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate,halfD
   const otNight=Math.max(0, nightM - Math.max(0, _otThresh-dayM));
   const otDay=Math.max(0, ot-otNight);
 
-  if(mode==='pohal'){
-    // 평일: 수당 미산출 (기존 동일)
-    // 휴일 특근: 휴게시간(bks) 자동 공제된 실근무(work)로 계산
+  if(mode==='pohal' || mode==='monthly'){
+    // 포괄임금제 (pohal=레거시 / monthly=신규, 동일 처리)
+    // - 휴일: 휴일수당 토글에 따라 ×1.5/×2.0 가산
+    // - 평일: 2026-05-18 신설 토글 (소정외 ×1.0 / 야간 ×0.5 / 연장 ×0.5). 기본 OFF — 회사 정책에 따라 ON
     let holDayStdPay=0,holDayOtPay=0;
+    let extraWorkPay=0, nightPay=0, otDayPay=0, otNightPay=0;
+    // 통상시급 = 포괄임금 월급 ÷ 209h
+    const pohalRate = pRate || Math.round((POL.baseMonthly||2455750)/209);
     if(isHol){
-      const _holMS=POL.holMonthlyStd??true;
-      const _holMO=POL.holMonthlyOt??true;
-      // 통상시급 = 포괄임금 월급 ÷ 209h
-      const pohalRate=pRate||Math.round((POL.baseMonthly||2455750)/209);
-      if(_holMS){
+      const _holM  = POL.holMonthly??true;
+      const _holMS = POL.holMonthlyStd??true;
+      const _holMO = POL.holMonthlyOt??true;
+      if(_holM){
         const stdM=Math.min(work,480);
-        holDayStdPay=r10(pohalRate*1.5*m2h(stdM));
-      }
-      if(_holMO){
         const otM=Math.max(0,work-480);
-        holDayOtPay=r10(pohalRate*2.0*m2h(otM));
+        if(_holMS) holDayStdPay=r10(pohalRate*1.5*m2h(stdM));
+        if(_holMO) holDayOtPay =r10(pohalRate*2.0*m2h(otM));
       }
+    } else {
+      // 평일: 토글 ON일 때만 가산. 209h에 연장 미포함 가정 → 8h초과는 ×1.0 별도 + ×0.5 연장 가산
+      const _extM = POL.extMonthly ?? false;
+      const _ntM  = POL.ntMonthly  ?? false;
+      const _otM  = POL.otMonthly  ?? false;
+      const extraWork = Math.max(0, work-480);
+      extraWorkPay = _extM ? r10(pohalRate*1.0*m2h(extraWork)) : 0;
+      nightPay     = _ntM  ? r10(pohalRate*0.5*m2h(nightM))    : 0;
+      otDayPay     = (_otM && otDay > 0)             ? r10(pohalRate*0.5*m2h(otDay))   : 0;
+      otNightPay   = (_otM && _ntM && otNight > 0)   ? r10(pohalRate*0.5*m2h(otNight)) : 0;
     }
-    const totalPay=holDayStdPay+holDayOtPay;
+    const totalPay = holDayStdPay+holDayOtPay + extraWorkPay+nightPay+otDayPay+otNightPay;
     return{gross,deduct,bkMins,nightBkMins,work,nightM,otDay,otNight,ot,crossed,
-      basePay:0,nightPay:0,otDayPay:0,otNightPay:0,
-      holDayStdPay,holNightStdPay:0,holDayOtPay,holNightOtPay:0,totalPay};
-  }
-
-  if(mode==='monthly'){
-    // 월급제: 통상시급 = 월급÷209h (rate = monthly/209)
-    let holDayStdPay=0,holDayOtPay=0;
-    const _holM  = POL.holMonthly??true;
-    const _holMS = POL.holMonthlyStd??true;
-    const _holMO = POL.holMonthlyOt??true;
-    if(isHol&&_holM){
-      const stdM=Math.min(work,480);
-      const otM=Math.max(0,work-480);
-      if(_holMS) holDayStdPay=r10(pRate*1.5*m2h(stdM));
-      if(_holMO) holDayOtPay =r10(pRate*2.0*m2h(otM));
-    }
-    const totalPay=holDayStdPay+holDayOtPay;
-    return{gross,deduct,bkMins,nightBkMins,work,nightM,otDay,otNight,ot,crossed,
-      basePay:0,nightPay:0,otDayPay:0,otNightPay:0,
-      holDayStdPay,holNightStdPay:0,holDayOtPay,holNightOtPay:0,totalPay};
+      basePay:0,nightPay,otDayPay,otNightPay,
+      holDayStdPay,holNightStdPay:0,holDayOtPay,holNightOtPay:0,
+      extraWorkPay,totalPay};
   }
 
   const isU5 = POL.size === 'u5'; // 5인 미만: 가산수당 법적 의무 없음
@@ -1488,6 +1497,7 @@ function monthSummary(eid,y,m){
   let tFixExtraDisplayH=0; // 통상임금제 소정근로외 실근무 표시용 (반차일 cap 4h, 그 초과분은 연장으로 분류)
   let tHrBaseH=0,tHrNightH=0,tHrOtDayH=0,tHrOtNightH=0; // 시급제 (비휴일, 일별 cap)
   let tMhHolStdH=0,tMhHolOtH=0; // 포괄/월급 휴일
+  let tMhExtraH=0; // 포괄/월급 평일 8h초과 (소정외 가산용, 2026-05-18 신설 토글)
   const empPayMode=getEmpPayModeAt(emp, y, m, 1);
   // 소정근로 1일 기준시간: 고정/월급제=8h, 시급제=sot기반
   const dailyStd = (empPayMode==='fixed'||empPayMode==='monthly') ? 8 : sot/4.345/5;
@@ -1582,6 +1592,10 @@ function monthSummary(eid,y,m){
       tMhHolStdH += m2h(Math.min(c.work, 480));
       tMhHolOtH += m2h(Math.max(0, c.work - 480));
     }
+    // 2026-05-18 신설: 포괄임금제 평일 8h초과 누적 (소정외 가산 토글용)
+    if((empPayMode==='pohal'||empPayMode==='monthly') && !autoH){
+      tMhExtraH += m2h(Math.max(0, c.work - 480));
+    }
     if(autoH){
       const holDayM=Math.max(0,c.work-c.nightM);
       tHolDayH   +=m2h(Math.min(holDayM,480));
@@ -1631,15 +1645,25 @@ function monthSummary(eid,y,m){
       tHolDayOtPay=r10(ordRate*2.0*tHolDayOtH);
       tHolNightOtPay=r10(ordRate*2.5*tHolNightOtH);
     }
-  } else if(empPayMode==='monthly'){
-    tBase=r10(getEmpMonthlyAt(emp, y, m, 1)*_prorate);
-    tMonthlyHolStdPay=(POL.holMonthlyStd??true)?r10(ordRate*1.5*tMhHolStdH):0;
-    tMonthlyHolOtPay=(POL.holMonthlyOt??true)?r10(ordRate*2.0*tMhHolOtH):0;
-  } else if(empPayMode==='pohal'){
-    tBase=r10(rate*sot*_prorate);
-    const pohalRate=ordRate||Math.round((POL.baseMonthly||2455750)/209);
-    tMonthlyHolStdPay=(POL.holMonthlyStd??true)?r10(pohalRate*1.5*tMhHolStdH):0;
-    tMonthlyHolOtPay=(POL.holMonthlyOt??true)?r10(pohalRate*2.0*tMhHolOtH):0;
+  } else if(empPayMode==='monthly' || empPayMode==='pohal'){
+    // 포괄임금제 (monthly=신규 / pohal=레거시, 동일 처리)
+    // 강서 사고 안전화: _resolveMonthly로 emp.monthly 우선 + 휴리스틱 fallback
+    const monthlyAmount = (empPayMode==='monthly')
+      ? (getEmpMonthlyAt(emp, y, m, 1) || _resolveMonthly(emp))
+      : _resolveMonthly(emp);
+    tBase = r10(monthlyAmount * _prorate);
+    const pohalRate = ordRate || Math.round(monthlyAmount/209);
+    // 휴일 가산
+    tMonthlyHolStdPay = (POL.holMonthlyStd??true) ? r10(pohalRate*1.5*tMhHolStdH) : 0;
+    tMonthlyHolOtPay  = (POL.holMonthlyOt??true)  ? r10(pohalRate*2.0*tMhHolOtH)  : 0;
+    // 2026-05-18 신설: 포괄임금제 평일 가산 토글 (소정외 ×1.0 / 야간 ×0.5 / 연장 ×0.5). 기본 OFF.
+    const _ntM = POL.ntMonthly ?? false;
+    const _otM = POL.otMonthly ?? false;
+    const _extM = POL.extMonthly ?? false;
+    tNightPay = _ntM ? r10(pohalRate*0.5*_rh(tAllNightH)) : 0;
+    const otHExcel = _rh(tAllOtDayH) + (_ntM ? _rh(tAllOtNightH) : 0);
+    tOtDayPay = _otM ? r10(pohalRate*0.5*otHExcel) : 0;
+    tExtraWorkPay = _extM ? r10(pohalRate*1.0*_rh(tMhExtraH)) : 0;
   }
   const annualPay=0;
   let wkly=0;
@@ -1698,8 +1722,12 @@ function monthSummary(eid,y,m){
     totalAllowance+=effectiveV;
   });
   // 총 가산수당 합계 (고정특근수당 포함 — tSpecialPay는 여기에만 합산되고, total 합산식에서는 별도 가산하지 않음)
+  // 2026-05-18: 포괄임금제(monthly/pohal) 평일 가산 토글이 ON일 때만 tExtraWorkPay/tNightPay/tOtDayPay 발생.
+  // 휴일 가산은 tMonthlyHolStdPay/tMonthlyHolOtPay로 별도 합산됨 (total 합산식 참조).
   const tTotalBonus = (empPayMode==='fixed'
     ? tExtraWorkPay + tNightPay + tOtDayPay + tOtNightPay + tHolPayNew
+    : (empPayMode==='monthly' || empPayMode==='pohal')
+    ? tExtraWorkPay + tNightPay + tOtDayPay + tOtNightPay
     : tNightPay + tOtDayPay + tOtNightPay + (tHolDayPay||0) + (tHolNightPay||0) + (tHolDayOtPay||0) + (tHolNightOtPay||0)
   ) + tSpecialPay;
   // 결근차감: 통상시급(= 기본시급 + '통상' 체크된 수당만 반영) 기준으로 재계산
@@ -2422,7 +2450,7 @@ function renderTable(){
         <td class="td-bk" style="font-size:10px;color:#2D6A4F">${c&&c.bkMins>0?fmtH(c.bkMins)+(c.nightBkMins>0?`<div style="font-size:8px;color:#7C3AED;margin-top:1px">야간${fmtH(c.nightBkMins)}</div>`:''):''}</td>
         <td class="td-nt">${c&&c.nightM>30?fmtH(c.nightM):''}</td>
         <td class="td-ot">${c&&c.ot>0?fmtH(c.ot):''}</td>
-        <td class="td-hol">${autoH&&holPay>0?`<span style="color:#854F0B;font-weight:700;font-size:11px">${Math.round(holPay/1000)}k</span>`:autoH&&c?fmtH(c.work):''}</td>
+        <td class="td-hol">${autoH&&holPay>0?`<div style="color:#854F0B;font-weight:700;font-size:11px;line-height:1.1">${Math.round(holPay/1000)}k</div><div style="font-size:8px;color:#A16207;opacity:0.9;margin-top:1px;font-weight:600">휴일수당</div>`:autoH&&c?fmtH(c.work):''}</td>
         <td>
           <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
             <label style="font-size:10px;color:var(--green);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600">
@@ -2504,7 +2532,7 @@ function renderTable(){
         <td class="td-bk" style="font-size:10px;color:#2D6A4F">${c&&c.bkMins>0?fmtH(c.bkMins)+(c.nightBkMins>0?`<div style="font-size:8px;color:#7C3AED;margin-top:1px">야간${fmtH(c.nightBkMins)}</div>`:''):''}</td>
         <td class="td-nt" style="font-size:10px;color:var(--ink3)"></td>
         <td class="td-ot" style="font-size:10px;color:var(--ink3)"></td>
-        <td class="td-hol">${autoH&&holPay>0?`<span style="color:#854F0B;font-weight:700;font-size:11px">${Math.round(holPay/1000)}k</span>`:autoH&&c?fmtH(c.work):''}</td>
+        <td class="td-hol">${autoH&&holPay>0?`<div style="color:#854F0B;font-weight:700;font-size:11px;line-height:1.1">${Math.round(holPay/1000)}k</div><div style="font-size:8px;color:#A16207;opacity:0.9;margin-top:1px;font-weight:600">휴일수당</div>`:autoH&&c?fmtH(c.work):''}</td>
         <td>
           <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
             <label style="font-size:10px;color:var(--green);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600">
@@ -3692,10 +3720,13 @@ function renderPayroll(){
 
         ${(()=>{
           const _pm2=getEmpPayMode(emp);
-          if(_pm2==='monthly') return ''; // 월급제: 가산수당 없음 (휴일수당은 위에서 처리)
           const _isFixed=_pm2==='fixed';
+          const _isPohal=(_pm2==='monthly'||_pm2==='pohal');
+          // 2026-05-18: 포괄임금제도 평일 가산 토글 ON 시 추가수당 표시 (이전: 무조건 빈 칸이었음)
           const addPay=(_isFixed
             ? (s.tExtraWorkPay||0)+(s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolPayNew||0)
+            : _isPohal
+            ? (s.tExtraWorkPay||0)+(s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)
             : (s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0)
           )+(s.tSpecialPay||0);
           return addPay>0?`<div class="pr"><span class="prl">추가수당</span><span class="prv" style="color:#3C3489">${fmt$(addPay)}원</span></div>`:'';
@@ -4393,10 +4424,10 @@ function renderEmps(){
         </div>
       </td>
       <td>
-        ${(e.payMode||POL.basePayMode)==='monthly'
+        ${(()=>{const _m=(e.payMode||POL.basePayMode); return (_m==='monthly'||_m==='pohal')
           ?`<div style="display:flex;align-items:center;gap:2px"><input class="ei2" type="text" inputmode="numeric" value="${e.monthly!==null&&e.monthly!==undefined?Number(e.monthly).toLocaleString():''}" oninput="formatNumInput(this)" onchange="updE(${e.id},'monthly',+this.value.replace(/,/g,'')||0)" style="text-align:right" placeholder="${Number(POL.baseMonthly||0).toLocaleString()}" autocomplete="off"><span style="font-size:9px;color:var(--ink3)">원/월</span></div>`
           :`<div style="display:flex;align-items:center;gap:2px"><input class="ei2" type="text" inputmode="numeric" value="${e.rate!==null&&e.rate!==undefined?Number(e.rate).toLocaleString():''}" oninput="formatNumInput(this)" onchange="updE(${e.id},'rate',+this.value.replace(/,/g,'')||0)" style="text-align:right" placeholder="${Number(POL.baseRate||0).toLocaleString()}" autocomplete="off"><span style="font-size:9px;color:var(--ink3)">원/h</span></div>`
-        }
+        ;})()}
       </td>
       <td><input class="ei2" type="date" value="${esc(e.join||'')}" onchange="updE(${e.id},'join',this.value)"></td>
       <td>
@@ -4417,7 +4448,7 @@ function renderEmps(){
         <div class="rb-g" style="justify-content:center">
           <div class="rb ${!e.payMode||e.payMode==='fixed'?'on':''}" onclick="updE(${e.id},'payMode','fixed');renderEmps()" style="font-size:9px;padding:3px 6px">통상임금제</div>
           <div class="rb ${e.payMode==='hourly'?'on':''}" onclick="updE(${e.id},'payMode','hourly');renderEmps()" style="font-size:9px;padding:3px 6px">시급제</div>
-          <div class="rb ${e.payMode==='monthly'||e.payMode==='pohal'?'on':''}" onclick="updE(${e.id},'payMode','pohal');renderEmps()" style="font-size:9px;padding:3px 6px">포괄임금제</div>
+          <div class="rb ${e.payMode==='monthly'||e.payMode==='pohal'?'on':''}" onclick="updE(${e.id},'payMode','monthly');renderEmps()" style="font-size:9px;padding:3px 6px">포괄임금제</div>
         </div>
       </td>
       <td>
@@ -5970,6 +6001,13 @@ function updNotes(){
   if(holMStd!==undefined) POL.holMonthlyStd=holMStd;
   if(holMOt!==undefined) POL.holMonthlyOt=holMOt;
   if(dedM!==undefined) POL.dedMonthly=dedM;
+  // 포괄임금제 평일 가산 토글 (2026-05-18 신설) — 통상임금제 구조 미러
+  const extM=document.getElementById('tog-ext-monthly')?.checked;
+  const ntM=document.getElementById('tog-nt-monthly')?.checked;
+  const otM=document.getElementById('tog-ot-monthly')?.checked;
+  if(extM!==undefined) POL.extMonthly=extM;
+  if(ntM!==undefined)  POL.ntMonthly=ntM;
+  if(otM!==undefined)  POL.otMonthly=otM;
   const ns=+(document.getElementById('sel-ns')?.value||22);
   const dupStr=POL.dupMode==='single'?'단일 최대 1.5배':'법정 최대 2.0배';
   const c=v=>v?'var(--teal)':'var(--rose)';
@@ -5984,6 +6022,10 @@ function updNotes(){
   const el_hms=document.getElementById('hol-monthly-std-note');if(el_hms){el_hms.textContent=(holMStd??true)?'ON: ×150%':'OFF';el_hms.style.color=c(holMStd??true);}
   const el_hmo=document.getElementById('hol-monthly-ot-note');if(el_hmo){el_hmo.textContent=(holMOt??true)?'ON: ×200%':'OFF';el_hmo.style.color=c(holMOt??true);}
   const el_dm=document.getElementById('ded-monthly-note');if(el_dm){el_dm.textContent=(dedM??true)?'ON: 월급÷평일수':'OFF';el_dm.style.color=c(dedM??true);}
+  // 포괄임금제 평일 가산 노트 (소정외 ×1.0 / 야간 ×0.5 / 연장 ×0.5)
+  const el_em=document.getElementById('ext-monthly-note');if(el_em){el_em.textContent=extM?'ON: ×1.0 (평일 8h초과 실근무)':'OFF (포괄임금제 월급에 포함 가정)';el_em.style.color=c(!!extM);}
+  const el_nm=document.getElementById('nt-monthly-note');if(el_nm){el_nm.textContent=ntM?`ON: ×0.5 추가 (${pad(ns)}:00~06:00)`:'OFF (포괄임금제 월급에 포함 가정)';el_nm.style.color=c(!!ntM);}
+  const el_om=document.getElementById('ot-monthly-note');if(el_om){el_om.textContent=otM?'ON: ×0.5 추가 (8h초과 연장)':'OFF (포괄임금제 월급에 포함 가정)';el_om.style.color=c(!!otM);}
   const holDetail=document.getElementById('hol-monthly-detail');
   if(holDetail){
     const parentOn = (holM??true);
@@ -14411,12 +14453,17 @@ function renderCompany() {
     const emp=EMPS.find(e=>e.id===empId);
     if(!emp){body.innerHTML='';return;}
     const months=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-    const _isFixed2=getEmpPayMode(emp)==='fixed';
+    const _pm2=getEmpPayMode(emp);
+    const _isFixed2=_pm2==='fixed';
+    const _isPohal2=(_pm2==='monthly'||_pm2==='pohal');
     const rows=months.map((_,mi)=>{
       const m=mi+1;
       const s=monthSummary(emp.id,companyYear,m);
+      // 2026-05-18: 포괄임금제도 평일 가산 토글 ON 시 추가수당 포함
       const addPay=(_isFixed2
         ? (s.tExtraWorkPay||0)+(s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolPayNew||0)
+        : _isPohal2
+        ? (s.tExtraWorkPay||0)+(s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)
         : (s.tNightPay||0)+(s.tOtDayPay||0)+(s.tOtNightPay||0)+(s.tHolDayPay||0)+(s.tHolNightPay||0)+(s.tHolDayOtPay||0)+(s.tHolNightOtPay||0)
       )+(s.tSpecialPay||0);
       return{m,s,addPay};
@@ -14732,6 +14779,10 @@ function populateSettingsUI(){
   safe('tog-hol-monthly-std', el=>el.checked=POL.holMonthlyStd??true);
   safe('tog-hol-monthly-ot',  el=>el.checked=POL.holMonthlyOt??true);
   safe('tog-ded-monthly',     el=>el.checked=POL.dedMonthly??true);
+  // 포괄임금제 평일 가산 (2026-05-18 신설, 기본 OFF)
+  safe('tog-ext-monthly',     el=>el.checked=POL.extMonthly??false);
+  safe('tog-nt-monthly',      el=>el.checked=POL.ntMonthly??false);
+  safe('tog-ot-monthly',      el=>el.checked=POL.otMonthly??false);
   safe('tog-juhyu',el=>el.checked=POL.juhyu);
   safe('inp-sot',       el=>el.value=POL.sot);
   safe('inp-base-rate', el=>el.value=Number(POL.baseRate||0).toLocaleString());
@@ -16587,11 +16638,10 @@ function getEmpHistoryAt(emp, y, m, d) {
 function getEmpRateAt(emp, y, m, d) {
   const hist = getEmpHistoryAt(emp, y, m, d);
   if (hist && hist.rate) return hist.rate;
-  // 월급제: 월급/209를 시급 상당으로 환산 (getEmpRate와 동일 로직)
+  // 월급제/포괄임금제: _resolveMonthly로 안전 처리 (강서 사고 fallback 포함, pohal 모드도 동일 분기)
   const mode = (hist && hist.payMode) || emp.payMode;
-  if (mode === 'monthly') {
-    const monthly = (hist && hist.monthly) || emp.monthly || POL.baseMonthly || 0;
-    if (monthly > 0) return Math.round(monthly / 209);
+  if (mode === 'monthly' || mode === 'pohal') {
+    return Math.round(_resolveMonthly(emp) / 209);
   }
   return emp.rate || POL.baseRate || 0;
 }
