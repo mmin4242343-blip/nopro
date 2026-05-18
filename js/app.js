@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-18-3';
+const CLIENT_BUILD = '2026-05-18-4';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1339,9 +1339,10 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate,halfD
   if(mode==='pohal' || mode==='monthly'){
     // 포괄임금제 (pohal=레거시 / monthly=신규, 동일 처리)
     // - 휴일: 휴일수당 토글에 따라 ×1.5/×2.0 가산
-    // - 평일: 2026-05-18 신설 토글 (소정외 ×1.0 / 야간 ×0.5 / 연장 ×0.5). 기본 OFF — 회사 정책에 따라 ON
+    // - 평일: 야간 토글 ON → ×0.5 / 연장 토글 ON → ×1.5 (소정외 1.0 + 연장가산 0.5 통합 처리)
+    //   소정외 별도 토글 없음 (사용자 요청 2026-05-18: 소정외는 표시 정리용 컬럼일 뿐, 포괄임금제 동작엔 의미 없음)
     let holDayStdPay=0,holDayOtPay=0;
-    let extraWorkPay=0, nightPay=0, otDayPay=0, otNightPay=0;
+    let nightPay=0, otDayPay=0, otNightPay=0;
     // 통상시급 = 포괄임금 월급 ÷ 209h
     const pohalRate = pRate || Math.round((POL.baseMonthly||2455750)/209);
     if(isHol){
@@ -1355,21 +1356,20 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate,halfD
         if(_holMO) holDayOtPay =r10(pohalRate*2.0*m2h(otM));
       }
     } else {
-      // 평일: 토글 ON일 때만 가산. 209h에 연장 미포함 가정 → 8h초과는 ×1.0 별도 + ×0.5 연장 가산
-      const _extM = POL.extMonthly ?? false;
+      // 평일 가산
       const _ntM  = POL.ntMonthly  ?? false;
       const _otM  = POL.otMonthly  ?? false;
-      const extraWork = Math.max(0, work-480);
-      extraWorkPay = _extM ? r10(pohalRate*1.0*m2h(extraWork)) : 0;
-      nightPay     = _ntM  ? r10(pohalRate*0.5*m2h(nightM))    : 0;
-      otDayPay     = (_otM && otDay > 0)             ? r10(pohalRate*0.5*m2h(otDay))   : 0;
-      otNightPay   = (_otM && _ntM && otNight > 0)   ? r10(pohalRate*0.5*m2h(otNight)) : 0;
+      nightPay   = _ntM ? r10(pohalRate*0.5*m2h(nightM)) : 0;
+      // 8h 초과: 연장 토글 ON → ×1.5 (소정외 1.0 + 연장 0.5 통합). 야간 8h초과 시간도 동일 ×1.5.
+      // 야간 연장은 nightPay(야간 0.5)에 이미 야간 가산이 포함되므로 otNight도 ×1.5만 적용 → 결과적으로 ×2.0
+      otDayPay   = (_otM && otDay > 0)   ? r10(pohalRate*1.5*m2h(otDay))   : 0;
+      otNightPay = (_otM && otNight > 0) ? r10(pohalRate*1.5*m2h(otNight)) : 0;
     }
-    const totalPay = holDayStdPay+holDayOtPay + extraWorkPay+nightPay+otDayPay+otNightPay;
+    const totalPay = holDayStdPay+holDayOtPay + nightPay+otDayPay+otNightPay;
     return{gross,deduct,bkMins,nightBkMins,work,nightM,otDay,otNight,ot,crossed,
       basePay:0,nightPay,otDayPay,otNightPay,
       holDayStdPay,holNightStdPay:0,holDayOtPay,holNightOtPay:0,
-      extraWorkPay,totalPay};
+      extraWorkPay:0,totalPay};
   }
 
   const isU5 = POL.size === 'u5'; // 5인 미만: 가산수당 법적 의무 없음
@@ -1647,7 +1647,7 @@ function monthSummary(eid,y,m){
       tHolNightOtPay=r10(ordRate*2.5*tHolNightOtH);
     }
   } else if(empPayMode==='monthly' || empPayMode==='pohal'){
-    // 포괄임금제: monthly·pohal 100% 동일 로직 (사용자 요구: 어느 쪽 선택하든 같은 정의)
+    // 포괄임금제: monthly·pohal 100% 동일 로직 (사용자 요구)
     // 강서 사고 안전화: _resolveMonthly로 emp.monthly 우선 + 휴리스틱 fallback
     const monthlyAmount = _resolveMonthly(emp);
     tBase = r10(monthlyAmount * _prorate);
@@ -1655,14 +1655,15 @@ function monthSummary(eid,y,m){
     // 휴일 가산
     tMonthlyHolStdPay = (POL.holMonthlyStd??true) ? r10(pohalRate*1.5*tMhHolStdH) : 0;
     tMonthlyHolOtPay  = (POL.holMonthlyOt??true)  ? r10(pohalRate*2.0*tMhHolOtH)  : 0;
-    // 2026-05-18 신설: 포괄임금제 평일 가산 토글 (소정외 ×1.0 / 야간 ×0.5 / 연장 ×0.5). 기본 OFF.
+    // 평일 가산 토글 (2026-05-18): 야간 ×0.5 / 연장 ×1.5 (소정외 1.0 + 연장 0.5 통합). 기본 OFF.
+    // 소정외 별도 토글 없음 — 사용자 요청: 표시 정리용 컬럼이라 토글로 분리할 의미 없음.
     const _ntM = POL.ntMonthly ?? false;
     const _otM = POL.otMonthly ?? false;
-    const _extM = POL.extMonthly ?? false;
     tNightPay = _ntM ? r10(pohalRate*0.5*_rh(tAllNightH)) : 0;
-    const otHExcel = _rh(tAllOtDayH) + (_ntM ? _rh(tAllOtNightH) : 0);
-    tOtDayPay = _otM ? r10(pohalRate*0.5*otHExcel) : 0;
-    tExtraWorkPay = _extM ? r10(pohalRate*1.0*_rh(tMhExtraH)) : 0;
+    // 연장: 주간연장 + 야간연장 모두 ×1.5. 야간연장은 nightPay에 야간 가산 별도 포함되어 최종 ×2.0.
+    tOtDayPay = _otM ? r10(pohalRate*1.5*(_rh(tAllOtDayH) + _rh(tAllOtNightH))) : 0;
+    // tExtraWorkPay는 통상임금제(fixed) 전용 — 포괄임금제는 위 tOtDayPay에 통합 처리
+    tExtraWorkPay = 0;
   }
   const annualPay=0;
   let wkly=0;
@@ -6003,11 +6004,9 @@ function updNotes(){
   if(holMStd!==undefined) POL.holMonthlyStd=holMStd;
   if(holMOt!==undefined) POL.holMonthlyOt=holMOt;
   if(dedM!==undefined) POL.dedMonthly=dedM;
-  // 포괄임금제 평일 가산 토글 (2026-05-18 신설) — 통상임금제 구조 미러
-  const extM=document.getElementById('tog-ext-monthly')?.checked;
+  // 포괄임금제 평일 가산 토글 (2026-05-18 신설) — 야간 ×0.5 / 연장 ×1.5 (소정외+연장 통합)
   const ntM=document.getElementById('tog-nt-monthly')?.checked;
   const otM=document.getElementById('tog-ot-monthly')?.checked;
-  if(extM!==undefined) POL.extMonthly=extM;
   if(ntM!==undefined)  POL.ntMonthly=ntM;
   if(otM!==undefined)  POL.otMonthly=otM;
   const ns=+(document.getElementById('sel-ns')?.value||22);
@@ -6024,10 +6023,9 @@ function updNotes(){
   const el_hms=document.getElementById('hol-monthly-std-note');if(el_hms){el_hms.textContent=(holMStd??true)?'ON: ×150%':'OFF';el_hms.style.color=c(holMStd??true);}
   const el_hmo=document.getElementById('hol-monthly-ot-note');if(el_hmo){el_hmo.textContent=(holMOt??true)?'ON: ×200%':'OFF';el_hmo.style.color=c(holMOt??true);}
   const el_dm=document.getElementById('ded-monthly-note');if(el_dm){el_dm.textContent=(dedM??true)?'ON: 월급÷평일수':'OFF';el_dm.style.color=c(dedM??true);}
-  // 포괄임금제 평일 가산 노트 (소정외 ×1.0 / 야간 ×0.5 / 연장 ×0.5)
-  const el_em=document.getElementById('ext-monthly-note');if(el_em){el_em.textContent=extM?'ON: ×1.0 (평일 8h초과 실근무)':'OFF (포괄임금제 월급에 포함 가정)';el_em.style.color=c(!!extM);}
+  // 포괄임금제 평일 가산 노트 (야간 ×0.5 / 연장 ×1.5 — 소정외+연장 통합)
   const el_nm=document.getElementById('nt-monthly-note');if(el_nm){el_nm.textContent=ntM?`ON: ×0.5 추가 (${pad(ns)}:00~06:00)`:'OFF (포괄임금제 월급에 포함 가정)';el_nm.style.color=c(!!ntM);}
-  const el_om=document.getElementById('ot-monthly-note');if(el_om){el_om.textContent=otM?'ON: ×0.5 추가 (8h초과 연장)':'OFF (포괄임금제 월급에 포함 가정)';el_om.style.color=c(!!otM);}
+  const el_om=document.getElementById('ot-monthly-note');if(el_om){el_om.textContent=otM?'ON: ×1.5 추가 (8h초과 — 소정외×1.0 + 연장가산×0.5)':'OFF (포괄임금제 월급에 포함 가정)';el_om.style.color=c(!!otM);}
   const holDetail=document.getElementById('hol-monthly-detail');
   if(holDetail){
     const parentOn = (holM??true);
@@ -14782,8 +14780,7 @@ function populateSettingsUI(){
   safe('tog-hol-monthly-std', el=>el.checked=POL.holMonthlyStd??true);
   safe('tog-hol-monthly-ot',  el=>el.checked=POL.holMonthlyOt??true);
   safe('tog-ded-monthly',     el=>el.checked=POL.dedMonthly??true);
-  // 포괄임금제 평일 가산 (2026-05-18 신설, 기본 OFF)
-  safe('tog-ext-monthly',     el=>el.checked=POL.extMonthly??false);
+  // 포괄임금제 평일 가산 (2026-05-18 신설, 기본 OFF) — 야간/연장만, 소정외는 연장에 통합됨
   safe('tog-nt-monthly',      el=>el.checked=POL.ntMonthly??false);
   safe('tog-ot-monthly',      el=>el.checked=POL.otMonthly??false);
   safe('tog-juhyu',el=>el.checked=POL.juhyu);
