@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-19-1';
+const CLIENT_BUILD = '2026-05-19-2';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -1091,6 +1091,9 @@ const DEF_POL={
 
 let EMPS=load(LS.E,null)||[];
 let POL=Object.assign({...DEF_POL},load(LS.P,{}));
+// 💡 localStorage 초기 로드 직후 payMode 정규화 — sbLoadAll 호출 전에도 일관성 보장
+// _normEmpPayModes는 line 1128에 정의 (function declaration 호이스팅으로 여기서 호출 가능)
+try { _normEmpPayModes(); } catch(e){ /* 정의 전이면 sbLoadAll에서 처리됨 */ }
 // 월별 정책 스냅샷: "YYYY-MM" → POL 복사본. 과거 달 계산 시 그 달 스냅샷 사용.
 let POL_SNAPSHOTS = JSON.parse(localStorage.getItem('npm5_pol_snapshots')||'{}');
 let BK_SNAPSHOTS = JSON.parse(localStorage.getItem('npm5_bk_snapshots')||'{}');
@@ -4656,6 +4659,7 @@ function exitEmpOrderEditMode(save){
       // 취소: 진입 시점 EMPS로 100% 복원
       if(Array.isArray(_empEditModeSnapshot)){
         EMPS = JSON.parse(JSON.stringify(_empEditModeSnapshot));
+        try { _normEmpPayModes(); } catch(_){}  // 💡 옛 스냅샷의 monthly 라벨 정규화
         try { localStorage.setItem('npm5_emps', JSON.stringify(EMPS)); } catch(e){}
       }
     }
@@ -4663,7 +4667,7 @@ function exitEmpOrderEditMode(save){
     console.error('exitEmpOrderEditMode 오류:', e);
     // 오류 시 안전: 스냅샷 복원
     if(Array.isArray(_empEditModeSnapshot)){
-      try { EMPS = JSON.parse(JSON.stringify(_empEditModeSnapshot)); } catch(_){}
+      try { EMPS = JSON.parse(JSON.stringify(_empEditModeSnapshot)); _normEmpPayModes(); } catch(_){}
     }
   } finally {
     _empEditMode = false;
@@ -5865,6 +5869,8 @@ function rmAllEmps(){
 // 정책 설정
 // ══════════════════════════════════════
 function setBasePay(m){
+  // 💡 입력 정규화 — 옛 캐시 클라가 'monthly'로 호출해도 'pohal'로 통일 저장
+  m = _normPayMode(m);
   POL.basePayMode=m;
   ['fixed','hourly','monthly','pohal'].forEach(x=>{const el=document.getElementById('rb-base-'+x);if(el)el.classList.toggle('on',x===m);});
   const badge=document.getElementById('mode-badge');
@@ -10005,9 +10011,9 @@ function sfInitDeptChips(){
 
 // 급여방식 레이블/색상
 function sfPmLabel(e){
-  const m=e.payMode||'fixed';
-  if(m==='pohal')  return{t:'포괄임금',c:'#7C3AED',bg:'#F5F3FF'};
-  if(m==='monthly')return{t:'포괄임금제',c:'#854F0B',bg:'#FEF3C7'};
+  // 💡 monthly·pohal 통합 — _normPayMode로 라벨 일관성 (옛 monthly 직원도 동일 표시)
+  const m=_normPayMode(e.payMode||'fixed');
+  if(m==='pohal')  return{t:'포괄임금제',c:'#7C3AED',bg:'#F5F3FF'};
   if(m==='hourly') return{t:'시급제',  c:'#0891B2',bg:'#CFFAFE'};
   return               {t:'통상임금제',c:'#059669',bg:'#ECFDF5'};
 }
@@ -16682,7 +16688,9 @@ function getEmpRateAt(emp, y, m, d) {
 function getEmpPayModeAt(emp, y, m, d) {
   const hist = getEmpHistoryAt(emp, y, m, d);
   const mode = hist ? (hist.payMode || emp.payMode) : emp.payMode;
-  return mode === 'monthly' ? 'monthly' : mode === 'hourly' ? 'hourly' : mode === 'pohal' ? 'pohal' : 'fixed';
+  // 💡 _normPayMode로 monthly→pohal 통일 (강서 사고 시점별 조회 경로 차단)
+  const norm = _normPayMode(mode);
+  return norm === 'pohal' ? 'pohal' : norm === 'hourly' ? 'hourly' : 'fixed';
 }
 
 function getEmpMonthlyAt(emp, y, m, d) {
