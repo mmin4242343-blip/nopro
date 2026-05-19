@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-19-10';
+const CLIENT_BUILD = '2026-05-19-11';
 
 // 🔑 클라 보호 키 단일 정의 (2026-05-19)
 // 백엔드 _shared/data-keys.js의 PROTECTED_KEYS와 동기화 필수.
@@ -13588,7 +13588,14 @@ const XLS = {
 // ── 셀 쓰기 ──
 function xlsWrite(ws, addr, v, s){
   ws[addr] = {v, t: typeof v==='number'?'n':'s'};
-  if(s) ws[addr].s = s;
+  if(s){
+    // 🔧 fill에 patternType 누락 시 Excel "복구된 레코드" 경고 발생 → 자동 보강
+    // (xlsx-js-style 호환성: 단색 채우기는 patternType: 'solid' 명시 필요)
+    if(s.fill && !s.fill.patternType){
+      s = {...s, fill: {patternType:'solid', ...s.fill}};
+    }
+    ws[addr].s = s;
+  }
 }
 
 // ── 범위 설정 ──
