@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-19-9';
+const CLIENT_BUILD = '2026-05-19-10';
 
 // 🔑 클라 보호 키 단일 정의 (2026-05-19)
 // 백엔드 _shared/data-keys.js의 PROTECTED_KEYS와 동기화 필수.
@@ -15754,6 +15754,12 @@ function showAuthModal(tab){
   document.getElementById('landing-overlay').style.display='none';
   document.getElementById('auth-overlay').style.display='flex';
   if(tab) authTab(tab);
+}
+// 🔓 SES/MetaMask 등 보안 확장 환경에서도 인라인 onclick이 찾을 수 있게 명시 노출
+// (일반 환경에선 자동 글로벌이지만 SES는 격리할 수 있음)
+if(typeof window !== 'undefined'){
+  window.showAuthModal = showAuthModal;
+  window.showLanding = showLanding;
 }
 
 
