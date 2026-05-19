@@ -3,7 +3,28 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-19-14';
+const CLIENT_BUILD = '2026-05-19-15';
+
+// 🇰🇷 한국어 IME 글로벌 가드 (2026-05-19)
+// 증상: 한글 조합 중(예: "도급" 타이핑 중) Tab/Enter/다른 칸 클릭으로 blur 발생 시
+//       조합 미완성 처리되어 oninput이 잘못된 값(예: 옛 텍스트 "아웃소싱"의 "싱" 잔재)으로 호출됨
+//       → 사용자 화면엔 "도급" 보이지만 실제 input.value는 "싱" → 서버에 "싱" 저장 → 새로고침 시 발견
+// 해결: composition 중에는 dataset.composing='1' 표시. updE 등 저장 함수가 이를 보고 스킵.
+//       compositionend 시 input 이벤트 강제 재발화 → 최종 완성 값으로 정상 저장.
+if(typeof document !== 'undefined'){
+  document.addEventListener('compositionstart', function(e){
+    if(e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')){
+      e.target.dataset.composing = '1';
+    }
+  }, true);
+  document.addEventListener('compositionend', function(e){
+    if(e.target && e.target.dataset && e.target.dataset.composing){
+      e.target.dataset.composing = '';
+      // 조합 완료 후 최종값으로 input 이벤트 강제 재발화 (oninput 핸들러가 정상 호출됨)
+      try { e.target.dispatchEvent(new Event('input', {bubbles:true})); } catch(_){}
+    }
+  }, true);
+}
 
 // 🔑 클라 보호 키 단일 정의 (2026-05-19)
 // 백엔드 _shared/data-keys.js의 PROTECTED_KEYS와 동기화 필수.
@@ -2206,6 +2227,13 @@ function _updateDailyRowCells(eid){
   }catch(err){console.warn('row update 오류:',err);}
 }
 function setR(eid,f,v){
+  // 🇰🇷 한국어 IME 가드 (텍스트 필드만, note 등) — 조합 중 잘못된 값 저장 차단
+  if(f === 'note'){
+    try {
+      const ae = document.activeElement;
+      if(ae && ae.dataset && ae.dataset.composing === '1') return;
+    } catch(_){}
+  }
   const k=rk(eid,cY,cM,cD);
   if(!REC[k])REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[]};
   // 상호 배타
@@ -4832,6 +4860,14 @@ function sortEMPS(){
 }
 
 function updE(id,f,v){
+  // 🇰🇷 한국어 IME 가드: 조합 중인 input은 값 저장 안 함
+  // (Tab/Enter/blur로 조합 미완료 종료 시 잘못된 부분값 또는 옛 값 잔재 저장 차단)
+  // compositionend 시점에 dispatchEvent로 정상 input 이벤트 재발화 → 최종값으로 다시 호출됨
+  try {
+    const ae = document.activeElement;
+    if(ae && ae.dataset && ae.dataset.composing === '1') return;
+  } catch(_){}
+
   const e=EMPS.find(x=>x.id===id);
   if(!e)return;
   // 숫자 필드는 음수 방지 (실수 입력으로 음의 급여가 들어가는 것 차단)
