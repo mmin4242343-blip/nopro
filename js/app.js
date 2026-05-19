@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-19-8';
+const CLIENT_BUILD = '2026-05-19-9';
 
 // 🔑 클라 보호 키 단일 정의 (2026-05-19)
 // 백엔드 _shared/data-keys.js의 PROTECTED_KEYS와 동기화 필수.
@@ -764,6 +764,10 @@ let _hasUnsavedChanges = false;
 // 🛡️ 단일 키 서버 저장 래퍼 — 직접 /data-save 호출 시 반드시 이 함수 사용.
 // sbSaveAll을 우회하는 경로에도 동일한 "빈값 덮어쓰기 차단" 가드 적용.
 async function safeItemSave(key, value){
+  // 🛡️ 근원적 차단: 초기 로드 전엔 서버 저장 시도 자체 안 함 (sbSaveAll과 동일 정책)
+  if(typeof _syncedSnapshot !== 'undefined' && _syncedSnapshot === null){
+    return { skipped:'pre-load' };
+  }
   const snap = (typeof _syncedSnapshot!=='undefined' && _syncedSnapshot) || null;
   const isEmpty = v => v==null || (Array.isArray(v)?v.length===0:(typeof v==='object' && Object.keys(v).length===0));
   const snapHas = s => {
@@ -15790,6 +15794,13 @@ function clearLocalData(){
 
 // ── 전체 저장 (서버 프록시) ──
 async function sbSaveAll(companyId) {
+  // 🛡️ 근원적 차단 (2026-05-19): 초기 로드 전(_syncedSnapshot===null)엔 서버 저장 시도 자체 차단
+  // 분할 로드(베타) 환경에서 1차/2차 사이 시점에 saveLS 디바운스가 발화하면 빈값 도달했음.
+  // _filter 가드가 막아주긴 하지만, 가드 뚫릴 가능성 차단 + 콘솔 노이즈 + CPU 낭비 제거.
+  // 1차 로드 완료 전 입력값은 localStorage·메모리에 유지 → 다음 저장 사이클에 정상 전송.
+  if(typeof _syncedSnapshot !== 'undefined' && _syncedSnapshot === null){
+    return;
+  }
   // 소형 키: 한 번에 저장
   const smallItems = [
     {key:'emps', value:EMPS},
@@ -15883,12 +15894,10 @@ async function sbSaveAll(companyId) {
     if(_isEmpty(it.value)){
       // 🛡️ 스냅샷이 아직 없으면(sbLoadAll 미완): 빈값 저장 절대 금지. 콘솔만 로그.
       if(snap === null){
+        // 진입 가드(sbSaveAll 시작점)에서 이미 차단됨 → 여기 도달 시점은 진짜 사고 신호.
+        // 가드 뚫린 경로가 있다는 뜻이므로 운영 모니터링에 명확히 기록.
         console.warn('🛡️ 초기 로드 전 빈값 저장 차단:', it.key, '(스냅샷 없음 → 데이터 안전 우선)');
-        // 🔍 베타: 호출 스택 출력 — 누가 saveLS 트리거했는지 추적용
-        if(typeof _isBetaSplitLoad === 'function' && _isBetaSplitLoad()){
-          try { console.trace('🔍 sbSaveAll 호출 추적'); } catch {}
-        }
-        try { reportError({ level: 'guard', source: 'sbSaveAll', message: '초기 로드 전 빈값 저장 차단', meta: { key: it.key, reason: 'snap_null' } }); } catch {}
+        try { reportError({ level: 'guard', source: 'sbSaveAll', message: '초기 로드 전 빈값 저장 차단 (진입 가드 우회)', meta: { key: it.key, reason: 'snap_null' } }); } catch {}
         return false;
       }
       // 스냅샷에 데이터가 있었는데 지금 비어있으면 차단. 사용자에게도 알림.
