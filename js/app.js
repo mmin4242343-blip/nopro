@@ -3,7 +3,16 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-19-2';
+const CLIENT_BUILD = '2026-05-19-3';
+
+// 🔑 클라 보호 키 단일 정의 (2026-05-19)
+// 백엔드 _shared/data-keys.js의 PROTECTED_KEYS와 동기화 필수.
+// 빈값 저장 차단 가드의 대상 키. safeItemSave·sbSaveAll·_flushSaveOnUnload 3곳에서 참조.
+// 이전: 3곳에 각자 하드코딩 (특히 _flushSaveOnUnload는 4개만 — 다중방어 결손).
+// 이후: 한 곳에서만 관리 → 동기화 위험 0. 새 보호 키 추가 시 이 한 줄과 백엔드만 갱신.
+const CLIENT_PROTECTED_KEYS = Object.freeze(
+  new Set(['emps','rec','bonus','allow','tax','tbk','safety','bk'])
+);
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -743,9 +752,8 @@ async function safeItemSave(key, value){
     if(s==null) return false;
     try { const p = typeof s==='string'?JSON.parse(s):s; return Array.isArray(p)?p.length>0:(typeof p==='object' && Object.keys(p).length>0); } catch(e){ return false; }
   };
-  const PROTECTED = new Set(['emps','rec','bonus','allow','tax','tbk','safety','bk']);
-  // 🛡️ 우회 경로 없음 — 빈값 저장은 무조건 차단
-  if(PROTECTED.has(key) && isEmpty(value)){
+  // 🛡️ 우회 경로 없음 — 빈값 저장은 무조건 차단 (CLIENT_PROTECTED_KEYS 단일 소스 사용)
+  if(CLIENT_PROTECTED_KEYS.has(key) && isEmpty(value)){
     if(snap === null){
       console.warn('🛡️ safeItemSave: 초기 로드 전 빈값 저장 차단 ('+key+')');
       try { reportError({ level: 'guard', source: 'safeItemSave', message: '초기 로드 전 빈값 저장 차단', meta: { key, reason: 'snap_null' } }); } catch {}
@@ -895,10 +903,10 @@ function _flushSaveOnUnload(){
       try { const p = typeof s==='string'?JSON.parse(s):s; return Array.isArray(p)?p.length>0:(typeof p==='object' && Object.keys(p).length>0); } catch(e){ return false; }
     };
     // 🛡️ 우회 경로 없음 — 빈값 저장 조건 없이 무조건 차단
-    const guardKeys = new Set(['emps','bonus','allow','tax']);
+    // CLIENT_PROTECTED_KEYS 단일 소스 사용 → 자동으로 8개 키 모두 보호 (이전: 4개만)
     const snapNull = (typeof _syncedSnapshot==='undefined' || _syncedSnapshot === null);
     items = items.filter(it => {
-      if(!guardKeys.has(it.key)) return true;
+      if(!CLIENT_PROTECTED_KEYS.has(it.key)) return true;
       if(isEmpty(it.value)){
         if(snapNull){
           console.warn('🛡️ beacon: 초기 로드 전 빈값 저장 차단 ('+it.key+')');
@@ -15723,7 +15731,7 @@ async function sbSaveAll(companyId) {
       return false;
     } catch(e){ return false; }
   };
-  const _guardKeys = new Set(['emps','rec','bonus','allow','tax','tbk','safety','bk']);
+  const _guardKeys = CLIENT_PROTECTED_KEYS;  // 단일 소스 참조
   const _blockedOverwrite = [];  // 실제 덮어쓰기 시도 (사용자 토스트)
 
   // 🚀 변경된 키만 전송 (diff 기반) — 한 글자 수정해도 500KB+ 보내던 비효율 제거
@@ -15925,7 +15933,11 @@ function _deepCopy(x){ try { return JSON.parse(JSON.stringify(x||{})); } catch(e
 
 function _takeSyncedSnapshot(){
   try {
+    // 💡 ALLOWED_KEYS 20개 모두 스냅샷 (이전: 9개만 — diff 기반 변경 감지에서 나머지 11개는
+    // 항상 "변경됨"으로 판단되어 매번 전송됨 + 빈값 가드도 적용 안 됨)
+    const _safeLS = (k, d) => { try { return JSON.parse(localStorage.getItem(k)||JSON.stringify(d)); } catch { return d; } };
     _syncedSnapshot = {
+      // 기존 9개
       emps: JSON.stringify(EMPS),
       pol:  JSON.stringify(POL),
       bk:   JSON.stringify(DEF_BK),
@@ -15935,6 +15947,18 @@ function _takeSyncedSnapshot(){
       allow: _deepCopy(ALLOWANCE_REC),
       leave_overrides: _deepCopy(typeof leaveOverrides!=='undefined'?leaveOverrides:{}),
       safety: _deepCopy(typeof SAFETY_REC!=='undefined'?SAFETY_REC:{}),
+      // 추가 11개 (ALLOWED_KEYS와 동일 범위)
+      tax: _deepCopy(typeof TAX_REC!=='undefined'?TAX_REC:_safeLS('npm5_tax',{})),
+      leave_settings: _deepCopy(typeof leaveSettings!=='undefined'?leaveSettings:_safeLS('npm5_leave_settings',{})),
+      folders: _deepCopy(typeof FOLDERS!=='undefined'?FOLDERS:[]),
+      safety_records: _deepCopy(typeof safetyRecords!=='undefined'?safetyRecords:{}),
+      safety_config: _deepCopy(typeof safetyConfig!=='undefined'?safetyConfig:{}),
+      pol_snapshots: _deepCopy(typeof POL_SNAPSHOTS!=='undefined'?POL_SNAPSHOTS:{}),
+      pay_snapshots: _deepCopy(typeof PAY_SNAPSHOTS!=='undefined'?PAY_SNAPSHOTS:{}),
+      bk_snapshots: _deepCopy(typeof BK_SNAPSHOTS!=='undefined'?BK_SNAPSHOTS:{}),
+      company_info: _deepCopy(typeof COMPANY_INFO!=='undefined'?COMPANY_INFO:{}),
+      custom_docs: _deepCopy(typeof CUSTOM_DOCS!=='undefined'?CUSTOM_DOCS:[]),
+      saved_forms: _deepCopy(typeof SAVED_FORMS!=='undefined'?SAVED_FORMS:[]),
     };
   } catch(e){ console.warn('스냅샷 실패:', e); }
 }
