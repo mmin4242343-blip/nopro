@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-19-7';
+const CLIENT_BUILD = '2026-05-19-8';
 
 // 🔑 클라 보호 키 단일 정의 (2026-05-19)
 // 백엔드 _shared/data-keys.js의 PROTECTED_KEYS와 동기화 필수.
@@ -1917,7 +1917,14 @@ if(typeof window !== 'undefined'){
       const active = document.querySelector('.pg.on');
       if(!active) return;
       const page = active.id.replace('pg-','');
-      if(_needsRemainder(page) && typeof gp === 'function') gp(page);
+      if(!_needsRemainder(page)) return;
+      // 🔁 daily는 gp() 분기에서 render 함수를 부르지 않음 (구조적 누락) — 명시 호출 필요
+      // 다른 페이지는 gp() 안에 render*() 호출이 있어 그대로 사용
+      if(page === 'daily' && typeof renderTable === 'function'){
+        renderTable();
+      } else if(typeof gp === 'function'){
+        gp(page);
+      }
     } catch(e){ console.warn('remainder-loaded 핸들러 오류:', e); }
   });
 }
@@ -15877,6 +15884,10 @@ async function sbSaveAll(companyId) {
       // 🛡️ 스냅샷이 아직 없으면(sbLoadAll 미완): 빈값 저장 절대 금지. 콘솔만 로그.
       if(snap === null){
         console.warn('🛡️ 초기 로드 전 빈값 저장 차단:', it.key, '(스냅샷 없음 → 데이터 안전 우선)');
+        // 🔍 베타: 호출 스택 출력 — 누가 saveLS 트리거했는지 추적용
+        if(typeof _isBetaSplitLoad === 'function' && _isBetaSplitLoad()){
+          try { console.trace('🔍 sbSaveAll 호출 추적'); } catch {}
+        }
         try { reportError({ level: 'guard', source: 'sbSaveAll', message: '초기 로드 전 빈값 저장 차단', meta: { key: it.key, reason: 'snap_null' } }); } catch {}
         return false;
       }
