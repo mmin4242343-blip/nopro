@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-18-6';
+const CLIENT_BUILD = '2026-05-19-1';
 
 // ══════════════════════════════════════
 // 🔭 운영 모니터링 — Supabase error_log 자체 로깅 (외부 서비스 미사용)
@@ -760,7 +760,7 @@ async function safeItemSave(key, value){
   // 🛡️ 낙관적 잠금: 마지막으로 본 서버 버전을 함께 보냄
   const expectedUpdatedAt = (typeof _serverVersions!=='undefined' && _serverVersions) ? (_serverVersions[key]||null) : null;
   const resp = await apiFetch('/data-save','POST',{key,value,expectedUpdatedAt});
-  // 응답 처리: 버전 갱신 + 충돌 발생 시 통보
+  // 응답 처리: 버전 갱신 + 충돌 발생 시 통보 + 거부 키 운영 기록
   if(resp){
     if(resp.versions && typeof _serverVersions!=='undefined'){
       const savedKeys = Object.keys(resp.versions);
@@ -770,6 +770,13 @@ async function safeItemSave(key, value){
     }
     if(resp.conflicts && resp.conflicts.length && typeof handleConflicts==='function'){
       handleConflicts(resp.conflicts);
+    }
+    // 🆕 silent skip 제거 — 서버가 키 자체를 거부했으면 운영 모니터링에 기록
+    if(resp.rejected && resp.rejected.length){
+      resp.rejected.forEach(r => {
+        console.error(`🚫 서버가 데이터 키 거부: ${r.key} (사유: ${r.reason})`);
+        try { reportError({ level:'guard', source:'safeItemSave-rejected', message:`서버 키 거부: ${r.key} (${r.reason})`, meta:{ key:r.key, reason:r.reason } }); } catch {}
+      });
     }
   }
   return resp;
@@ -1114,7 +1121,21 @@ let REC=load(LS.R,{});
 let BONUS_REC=load(LS.BN,{});
 let ALLOWANCE_REC=load(LS.AL,{});
 
-function getEmpPayMode(emp){const m=emp.payMode||'fixed';return m==='monthly'?'monthly':m==='hourly'?'hourly':m==='pohal'?'pohal':'fixed';}
+// 💡 payMode 정규화 (2026-05-19) — 옛 'monthly'와 'pohal'은 동일 모드(포괄임금제).
+// 라벨 혼용이 강서지점 209배 폭발 사고의 잠재 원인. 한 단어 'pohal'로 통일.
+// EMPS 로드 직후·POL 로드 직후 1회 호출 → 메모리상 payMode 값에서 'monthly' 제거.
+// DB 데이터는 건드리지 않음 — 다음 저장 시 자연스럽게 pohal로 마이그레이션.
+function _normPayMode(m){ return m === 'monthly' ? 'pohal' : m; }
+function _normEmpPayModes(){
+  try {
+    if(typeof EMPS !== 'undefined' && Array.isArray(EMPS)){
+      EMPS.forEach(e => { if(e && e.payMode === 'monthly') e.payMode = 'pohal'; });
+    }
+    if(typeof POL !== 'undefined' && POL && POL.basePayMode === 'monthly') POL.basePayMode = 'pohal';
+  } catch(e){ console.warn('payMode 정규화 실패:', e); }
+}
+
+function getEmpPayMode(emp){const m=_normPayMode(emp.payMode||'fixed');return m==='hourly'?'hourly':m==='pohal'?'pohal':'fixed';}
 function getEmpPayModeLabel(emp){
   const m=getEmpPayMode(emp);
   if(m==='fixed')return{text:'통상임금제',cls:'emb-fixed'};
@@ -4452,7 +4473,7 @@ function renderEmps(){
         <div class="rb-g" style="justify-content:center">
           <div class="rb ${!e.payMode||e.payMode==='fixed'?'on':''}" onclick="updE(${e.id},'payMode','fixed');renderEmps()" style="font-size:9px;padding:3px 6px">통상임금제</div>
           <div class="rb ${e.payMode==='hourly'?'on':''}" onclick="updE(${e.id},'payMode','hourly');renderEmps()" style="font-size:9px;padding:3px 6px">시급제</div>
-          <div class="rb ${e.payMode==='monthly'||e.payMode==='pohal'?'on':''}" onclick="updE(${e.id},'payMode','monthly');renderEmps()" style="font-size:9px;padding:3px 6px">포괄임금제</div>
+          <div class="rb ${e.payMode==='monthly'||e.payMode==='pohal'?'on':''}" onclick="updE(${e.id},'payMode','pohal');renderEmps()" style="font-size:9px;padding:3px 6px">포괄임금제</div>
         </div>
       </td>
       <td>
@@ -4752,7 +4773,7 @@ const BULK_COLS = [
   { key:'payMode', label:'급여방식', type:'select', w:96,
     // 인라인 UI(통상임금제/시급제/포괄임금제)와 통일. 월급제·포괄임금 라벨 제거.
     // 기존 monthly/pohal 직원 데이터는 그대로 유지됨 (calcSession이 두 분기 모두 처리).
-    opts:[{v:'fixed',l:'통상임금제'},{v:'hourly',l:'시급제'},{v:'monthly',l:'포괄임금제'}] },
+    opts:[{v:'fixed',l:'통상임금제'},{v:'hourly',l:'시급제'},{v:'pohal',l:'포괄임금제'}] },
   { key:'rate',    label:'시급/월급',type:'number', w:96  },
   { key:'join',    label:'입사일',   type:'date',   w:116 },
   { key:'gender',  label:'성별',     type:'select', w:72,
@@ -5165,10 +5186,8 @@ function bulkPasteText(text){
       else if(key === 'nation') bulkData[r+ri][key] = (trimVal==='외국인'||trimVal==='foreign') ? 'foreign' : trimVal ? 'local' : '';
       else if(key === 'payMode'){
         if(trimVal==='시급'||trimVal==='시급제'||trimVal==='hourly') bulkData[r+ri][key]='hourly';
-        // 포괄임금제·월급제·포괄임금 모두 monthly로 통합 (인라인 UI와 일치)
-        else if(trimVal==='포괄임금제'||trimVal==='포괄임금'||trimVal==='월급제'||trimVal==='monthly') bulkData[r+ri][key]='monthly';
-        // 명시적 'pohal' 문자열만 pohal 값 유지 (레거시 호환)
-        else if(trimVal==='pohal') bulkData[r+ri][key]='pohal';
+        // 💡 포괄임금제·월급제·포괄임금·monthly·pohal 모두 pohal로 통합 (2026-05-19 라벨 정규화)
+        else if(trimVal==='포괄임금제'||trimVal==='포괄임금'||trimVal==='월급제'||trimVal==='monthly'||trimVal==='pohal') bulkData[r+ri][key]='pohal';
         else if(trimVal) bulkData[r+ri][key]='fixed';
         else bulkData[r+ri][key]='';
       }
@@ -5242,7 +5261,8 @@ function confirmBulkAdd(){
     const ci=(EMPS.length+i)%colors.length;
     const joinDate = row.join ? parseDate(row.join) : '';
     const pm=row.payMode||null;
-    const isMonthly=pm==='monthly';
+    // 💡 monthly·pohal 둘 다 포괄임금제 — 둘 중 어느 라벨이든 월급 필드(monthly)에 저장
+    const isMonthly=pm==='monthly' || pm==='pohal';
     EMPS.push({
       id:maxId, name:row.name.trim(),
       role:row.role||'', grade:row.grade||'', dept:row.dept||'', deptCat:row.deptCat||'',
@@ -15776,7 +15796,7 @@ async function sbSaveAll(companyId) {
   // 🛡️ 낙관적 잠금: 클라가 마지막으로 본 서버 버전을 함께 보냄 (서버가 stale-overwrite 거부)
   const attachVersion = (item) => ({...item, expectedUpdatedAt: _serverVersions[item.key] || null});
 
-  // 응답 통합 처리 (성공한 키 버전 업데이트 + 충돌 발생 키 통보)
+  // 응답 통합 처리 (성공한 키 버전 업데이트 + 충돌 발생 키 통보 + 거부 키 운영 기록)
   const _applyResp = (resp) => {
     if(!resp) return;
     if(resp.versions){
@@ -15787,6 +15807,13 @@ async function sbSaveAll(companyId) {
     }
     if(resp.conflicts && resp.conflicts.length){
       handleConflicts(resp.conflicts);
+    }
+    // 🆕 silent skip 제거 (2026-05-14 사고 재발 방지) — 서버가 거부한 키 운영 모니터링 기록
+    if(resp.rejected && resp.rejected.length){
+      resp.rejected.forEach(r => {
+        console.error(`🚫 서버가 데이터 키 거부: ${r.key} (사유: ${r.reason})`);
+        try { reportError({ level:'guard', source:'sbSaveAll-rejected', message:`서버 키 거부: ${r.key} (${r.reason})`, meta:{ key:r.key, reason:r.reason } }); } catch {}
+      });
     }
   };
 
@@ -16308,6 +16335,9 @@ async function sbLoadAll(companyId) {
   if('emps' in map)            { EMPS = map.emps || []; localStorage.setItem('npm5_emps', JSON.stringify(EMPS)); }
   sortEMPS();
   if('pol' in map && map.pol)  { POL = Object.assign({...DEF_POL}, map.pol); localStorage.setItem('npm5_pol', JSON.stringify(POL)); }
+  // 💡 payMode 정규화 — 옛 'monthly' 라벨을 'pohal'로 통일. EMPS·POL 모두 한 번에.
+  // 211곳 호출처가 둘을 일관되게 처리하도록 보장 (강서지점 사고 패턴 차단)
+  _normEmpPayModes();
   if('bk' in map)              { DEF_BK = map.bk || []; localStorage.setItem('npm5_bk', JSON.stringify(DEF_BK)); }
   if('tbk' in map)             { TBK = map.tbk || {}; localStorage.setItem('npm5_tbk', JSON.stringify(TBK)); }
   if('rec' in map)             { REC = map.rec || {}; localStorage.setItem('npm5_rec', JSON.stringify(REC)); }

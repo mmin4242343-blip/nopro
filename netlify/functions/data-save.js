@@ -1,6 +1,7 @@
 import { supabase } from './_shared/supabase.js';
 import { verifyToken, ok, err, options } from './_shared/auth.js';
 import { encryptEmps } from './_shared/crypto.js';
+import { ALLOWED_KEYS, PROTECTED_KEYS } from './_shared/data-keys.js';
 
 // 모든 키의 old_value를 감사 로그에 저장 (전체 복구 가능)
 // 대용량 키는 프론트에서 별도 API 호출로 분리하여 타임아웃 방지
@@ -24,15 +25,26 @@ export const handler = async (event) => {
     let body;
     try { body = JSON.parse(event.body); } catch { return err(400, '잘못된 요청 형식입니다', event); }
 
-    // 단일 저장 또는 bulk 저장
-    const ALLOWED_KEYS = ['emps','pol','bk','tbk','rec','bonus','allow','tax','leave_settings','leave_overrides','folders','safety','safety_records','safety_config','pol_snapshots','pay_snapshots','bk_snapshots','company_info','custom_docs','saved_forms'];
+    // 단일 저장 또는 bulk 저장 — ALLOWED_KEYS는 _shared/data-keys.js의 단일 진실 소스 사용
     const items = body.items || [{ key: body.key, value: body.value, expectedUpdatedAt: body.expectedUpdatedAt }];
 
     const versions = {};   // 저장 성공한 키 → 새 updated_at (클라가 자기 _serverVersions 갱신용)
     const conflicts = [];  // 낙관적 잠금 충돌 — 클라가 stale 상태로 덮어쓰려 한 키 정보
+    const rejected = [];   // 🆕 명시적 거부 — silent skip 제거 (2026-05-14 사고 재발 방지)
 
     for (const item of items) {
-      if (!item.key || !ALLOWED_KEYS.includes(item.key)) continue;
+      // 🆕 알 수 없는 키 → 조용히 무시하지 않고 명시적으로 거부 사유 응답에 포함
+      // 이전: continue로 silent skip → 클라는 200 받지만 DB엔 미저장 → 디버깅 매우 어려움
+      // 이후: rejected 배열로 통지 → 클라 _applyResp가 reportError로 운영 모니터링 자동 기록
+      if (!item.key || typeof item.key !== 'string') {
+        rejected.push({ key: String(item.key), reason: 'missing-key' });
+        continue;
+      }
+      if (!ALLOWED_KEYS.includes(item.key)) {
+        rejected.push({ key: item.key, reason: 'unknown-key' });
+        console.warn(`🚫 알 수 없는 data_key 거부 (company=${companyId}, key=${item.key}, by=${changedBy})`);
+        continue;
+      }
 
       let value = item.value;
 
@@ -62,7 +74,8 @@ export const handler = async (event) => {
       }
 
       // 🛡️ 서버측 2차 방어: 빈값 저장 절대 금지 (보호 대상 키)
-      const PROTECTED = new Set(['emps','rec','bonus','allow','tax','tbk','safety','bk']);
+      // PROTECTED_KEYS는 _shared/data-keys.js의 단일 진실 소스
+      const PROTECTED = PROTECTED_KEYS;
       if (PROTECTED.has(item.key)) {
         const clientIsEmpty = Array.isArray(value) ? value.length === 0 : (value && typeof value==='object' && Object.keys(value).length===0);
         if (clientIsEmpty) {
@@ -139,7 +152,7 @@ export const handler = async (event) => {
       }
     }
 
-    return ok({ success: true, versions, conflicts }, event);
+    return ok({ success: true, versions, conflicts, rejected }, event);
 
   } catch (e) {
     if (e.message.includes('토큰') || e.message.includes('jwt')) return err(401, '세션이 만료되었습니다', event);
