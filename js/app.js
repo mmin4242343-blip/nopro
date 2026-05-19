@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-19-5';
+const CLIENT_BUILD = '2026-05-19-6';
 
 // 🔑 클라 보호 키 단일 정의 (2026-05-19)
 // 백엔드 _shared/data-keys.js의 PROTECTED_KEYS와 동기화 필수.
@@ -1873,6 +1873,45 @@ function initSbCollapsed(){
 // 페이지
 // ══════════════════════════════════════
 const PAGES=['daily','monthly','payroll','leave','company','emps','shift','safety','folder','myinfo','settings'];
+
+// 🚀 PDF 방안 2 Day 3 — 화면별 2차 데이터 의존 가드
+// 2차 의존 페이지: 출퇴근(REC)·근태(REC)·급여(REC·BONUS·ALLOW·TAX)·안전교육(SAFETY)·폴더(FOLDERS)
+// 1차만으로 충분: emps·leave·company·shift·myinfo·settings
+function _needsRemainder(p){
+  return p==='daily' || p==='monthly' || p==='payroll' || p==='safety' || p==='folder';
+}
+function _isBetaSplitLoad(){
+  try { const s = JSON.parse(localStorage.getItem('nopro_session')||'null'); return s && s.groupTag === 'beta_split_load'; } catch(e){ return false; }
+}
+// 2차 로드 전 빈 화면 대신 표시할 안내 (Day 4에서 스타일 다듬음)
+function _showRemainderPlaceholder(){
+  let ph = document.getElementById('remainder-placeholder');
+  if(!ph){
+    ph = document.createElement('div');
+    ph.id = 'remainder-placeholder';
+    ph.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;border:1px solid #E5E7EB;border-radius:8px;padding:20px 28px;box-shadow:0 6px 20px rgba(0,0,0,0.12);z-index:9999;font-size:13px;color:#1E3A5F;font-family:inherit';
+    ph.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><div style="width:16px;height:16px;border:2px solid #E5E7EB;border-top-color:#2563EB;border-radius:50%;animation:nopro-spin 0.8s linear infinite"></div><span>📥 데이터 불러오는 중...</span></div><style>@keyframes nopro-spin{to{transform:rotate(360deg)}}</style>';
+    document.body.appendChild(ph);
+  }
+  ph.style.display = 'block';
+}
+function _hideRemainderPlaceholder(){
+  const ph = document.getElementById('remainder-placeholder');
+  if(ph) ph.style.display = 'none';
+}
+// 2차 로드 완료 이벤트 → 현재 페이지가 2차 의존이면 자동 재렌더
+if(typeof window !== 'undefined'){
+  window.addEventListener('nopro:remainder-loaded', () => {
+    _hideRemainderPlaceholder();
+    try {
+      const active = document.querySelector('.pg.on');
+      if(!active) return;
+      const page = active.id.replace('pg-','');
+      if(_needsRemainder(page) && typeof gp === 'function') gp(page);
+    } catch(e){ console.warn('remainder-loaded 핸들러 오류:', e); }
+  });
+}
+
 function gp(p){
   closeMobSb();
   if(p!=='safety'&&typeof sfStopPoll==='function')sfStopPoll();
@@ -1880,6 +1919,13 @@ function gp(p){
     const pe=document.getElementById('pg-'+x);if(pe)pe.classList.toggle('on',x===p);
     const ne=document.getElementById('nt-'+x);if(ne)ne.classList.toggle('on',x===p);
   });
+  // 🚀 베타 그룹: 2차 의존 페이지인데 아직 2차 로드 전이면 placeholder 표시 + return
+  // 일반 회사(sbLoadAll 사용)는 2차 개념 없으므로 가드 안 탐 — 영향 0
+  if(_needsRemainder(p) && _isBetaSplitLoad() && !_remainderLoaded){
+    _showRemainderPlaceholder();
+    return;  // 비싼 렌더 작업 스킵 — 데이터 도착 시 이벤트 핸들러가 재호출
+  }
+  _hideRemainderPlaceholder();
   if(p==='monthly')renderMonthly();
   if(p==='payroll'){
     // 급여요약 진입 시 필터 버튼 상태 동기화
