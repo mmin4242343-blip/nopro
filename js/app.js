@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-19-13';
+const CLIENT_BUILD = '2026-05-19-14';
 
 // 🔑 클라 보호 키 단일 정의 (2026-05-19)
 // 백엔드 _shared/data-keys.js의 PROTECTED_KEYS와 동기화 필수.
@@ -2539,7 +2539,7 @@ function renderTable(){
     </td>`;
 
     if(isPohalEmp){
-      const isWork=!rec.absent&&!rec.annual;
+      const isWork=!rec.absent&&!rec.annual&&!rec.halfAnnual;
       const holPay=c?(c.holDayStdPay+c.holDayOtPay):0;
       // 개별휴게 UI (통상임금제와 동일)
       const pohalBkUI = rec.customBk ? `<div style="margin-top:4px;padding:5px 8px;background:var(--gbg);border:1px solid #BBF7D0;border-radius:6px">
@@ -2580,6 +2580,9 @@ function renderTable(){
             <label style="font-size:10px;color:var(--green);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600">
               <input type="checkbox" ${rec.annual?'checked':''} onchange="setR(${emp.id},'annual',this.checked)">연차
             </label>
+            <label style="font-size:10px;color:#0891B2;display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:600">
+              <input type="checkbox" ${rec.halfAnnual?'checked':''} onchange="setR(${emp.id},'halfAnnual',this.checked)">반차
+            </label>
             <label style="font-size:10px;color:var(--ink2);display:flex;align-items:center;gap:2px;cursor:pointer;font-weight:500">
               <input type="checkbox" ${rec.absent?'checked':''} onchange="setR(${emp.id},'absent',this.checked)">결근
             </label>
@@ -2613,6 +2616,7 @@ function renderTable(){
         <td style="padding:4px 6px;font-size:10px">
           ${autoH&&holPay>0
             ?`<span style="color:#854F0B;font-weight:700">휴일수당 ${fmt$(holPay)}</span>`
+            :rec.halfAnnual?'<span style="color:#0891B2;font-weight:600">반차 (월급 지급)</span>'
             :isWork?'<span style="color:var(--green);font-weight:600">월급 지급</span>'
             :rec.annual?'<span style="color:var(--green)">연차</span>'
             :'<span style="color:var(--rose)">결근차감</span>'}
