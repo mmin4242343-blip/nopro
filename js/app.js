@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-19-12';
+const CLIENT_BUILD = '2026-05-19-13';
 
 // 🔑 클라 보호 키 단일 정의 (2026-05-19)
 // 백엔드 _shared/data-keys.js의 PROTECTED_KEYS와 동기화 필수.
@@ -765,8 +765,11 @@ let _hasUnsavedChanges = false;
 // sbSaveAll을 우회하는 경로에도 동일한 "빈값 덮어쓰기 차단" 가드 적용.
 async function safeItemSave(key, value){
   // 🛡️ 근원적 차단: 초기 로드 전엔 서버 저장 시도 자체 안 함 (sbSaveAll과 동일 정책)
-  if(typeof _syncedSnapshot !== 'undefined' && _syncedSnapshot === null){
-    return { skipped:'pre-load' };
+  // TDZ 보호: _syncedSnapshot은 let이라 선언 전 참조 시 ReferenceError
+  try {
+    if(_syncedSnapshot === null) return { skipped:'pre-load' };
+  } catch(_){
+    return { skipped:'tdz' };
   }
   const snap = (typeof _syncedSnapshot!=='undefined' && _syncedSnapshot) || null;
   const isEmpty = v => v==null || (Array.isArray(v)?v.length===0:(typeof v==='object' && Object.keys(v).length===0));
@@ -15840,7 +15843,12 @@ async function sbSaveAll(companyId) {
   // 분할 로드(베타) 환경에서 1차/2차 사이 시점에 saveLS 디바운스가 발화하면 빈값 도달했음.
   // _filter 가드가 막아주긴 하지만, 가드 뚫릴 가능성 차단 + 콘솔 노이즈 + CPU 낭비 제거.
   // 1차 로드 완료 전 입력값은 localStorage·메모리에 유지 → 다음 저장 사이클에 정상 전송.
-  if(typeof _syncedSnapshot !== 'undefined' && _syncedSnapshot === null){
+  // TDZ 보호: _syncedSnapshot은 let 변수라 선언 전 참조 시 ReferenceError 발생.
+  // init() 흐름이 _syncedSnapshot 선언 전에 saveLS→sbSaveAll 호출하는 경로가 있음.
+  try {
+    if(_syncedSnapshot === null) return;
+  } catch(_){
+    // 변수 선언 전 (TDZ) — 어차피 메모리 미초기화 상태 → 저장 시도 안 함
     return;
   }
   // 소형 키: 한 번에 저장
@@ -16913,7 +16921,10 @@ function fillNormalAttend(empIds){
 // 단순안: emp 현재값만 신뢰. history는 참고 데이터로만 보존(미래 활성화 시 USE_EMP_HISTORY=true).
 const USE_EMP_HISTORY = false;
 function getEmpHistoryAt(emp, y, m, d) {
-  if (!USE_EMP_HISTORY) return null;
+  // TDZ 보호: USE_EMP_HISTORY는 const라 선언 전 참조 시 ReferenceError
+  // (페이지 초기 init→renderTable→getOrdinaryRate→getEmpRateAt→여기 흐름이 USE_EMP_HISTORY 선언보다 먼저)
+  try { if (!USE_EMP_HISTORY) return null; }
+  catch(_){ return null; }  // 선언 전이면 안전하게 false 효과 (기본 정책: history 비활성)
   const dateStr = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
   if (!emp.history || emp.history.length === 0) return null;
   const valid = emp.history
