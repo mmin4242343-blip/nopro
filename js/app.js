@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-19-6';
+const CLIENT_BUILD = '2026-05-19-7';
 
 // 🔑 클라 보호 키 단일 정의 (2026-05-19)
 // 백엔드 _shared/data-keys.js의 PROTECTED_KEYS와 동기화 필수.
@@ -1883,16 +1883,26 @@ function _needsRemainder(p){
 function _isBetaSplitLoad(){
   try { const s = JSON.parse(localStorage.getItem('nopro_session')||'null'); return s && s.groupTag === 'beta_split_load'; } catch(e){ return false; }
 }
-// 2차 로드 전 빈 화면 대신 표시할 안내 (Day 4에서 스타일 다듬음)
-function _showRemainderPlaceholder(){
+// 2차 로드 전 빈 화면 대신 표시할 안내 — 페이지별 다른 메시지로 친절도 ↑
+const _REMAINDER_MESSAGES = {
+  daily: '출퇴근 기록 불러오는 중...',
+  monthly: '근태 현황 불러오는 중...',
+  payroll: '급여 데이터 불러오는 중...',
+  safety: '안전교육 기록 불러오는 중...',
+  folder: '문서 폴더 불러오는 중...',
+};
+function _showRemainderPlaceholder(page){
+  const msg = (_REMAINDER_MESSAGES[page]) || '데이터 불러오는 중...';
   let ph = document.getElementById('remainder-placeholder');
   if(!ph){
     ph = document.createElement('div');
     ph.id = 'remainder-placeholder';
     ph.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;border:1px solid #E5E7EB;border-radius:8px;padding:20px 28px;box-shadow:0 6px 20px rgba(0,0,0,0.12);z-index:9999;font-size:13px;color:#1E3A5F;font-family:inherit';
-    ph.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><div style="width:16px;height:16px;border:2px solid #E5E7EB;border-top-color:#2563EB;border-radius:50%;animation:nopro-spin 0.8s linear infinite"></div><span>📥 데이터 불러오는 중...</span></div><style>@keyframes nopro-spin{to{transform:rotate(360deg)}}</style>';
+    ph.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><div style="width:16px;height:16px;border:2px solid #E5E7EB;border-top-color:#2563EB;border-radius:50%;animation:nopro-spin 0.8s linear infinite"></div><span id="remainder-placeholder-msg"></span></div><style>@keyframes nopro-spin{to{transform:rotate(360deg)}}</style>';
     document.body.appendChild(ph);
   }
+  const msgEl = ph.querySelector('#remainder-placeholder-msg');
+  if(msgEl) msgEl.textContent = '📥 ' + msg;
   ph.style.display = 'block';
 }
 function _hideRemainderPlaceholder(){
@@ -1922,7 +1932,7 @@ function gp(p){
   // 🚀 베타 그룹: 2차 의존 페이지인데 아직 2차 로드 전이면 placeholder 표시 + return
   // 일반 회사(sbLoadAll 사용)는 2차 개념 없으므로 가드 안 탐 — 영향 0
   if(_needsRemainder(p) && _isBetaSplitLoad() && !_remainderLoaded){
-    _showRemainderPlaceholder();
+    _showRemainderPlaceholder(p);  // 페이지별 친절 메시지
     return;  // 비싼 렌더 작업 스킵 — 데이터 도착 시 이벤트 핸들러가 재호출
   }
   _hideRemainderPlaceholder();
@@ -16442,6 +16452,7 @@ function stopAutoPoll(){
 // ── 1차: 핵심 데이터 (필수 await) ──
 // ESSENTIAL_KEYS만 keys 파라미터로 요청 → 응답 크기 ~50~100KB, 응답시간 0.5~1초
 async function sbLoadEssential(companyId) {
+  const _t0 = (typeof performance!=='undefined') ? performance.now() : Date.now();
   const map = await apiFetch('/data-load','POST',{ keys: ESSENTIAL_KEYS });
 
   // 🛡️ 낙관적 잠금: 서버 updated_at 캡처 (저장 시 충돌 검증용)
@@ -16472,6 +16483,12 @@ async function sbLoadEssential(companyId) {
   try { _prevBkForSnapshot = JSON.parse(JSON.stringify(DEF_BK)); } catch(e){}
   _prevPolForSnapshot = JSON.parse(JSON.stringify(POL));
 
+  // 🔭 성능 측정 — 베타 그룹에서만 콘솔에 표시 (큰 회사 확대 결정 근거)
+  if(_isBetaSplitLoad()){
+    const _ms = Math.round(((typeof performance!=='undefined') ? performance.now() : Date.now()) - _t0);
+    const _kb = Math.round((JSON.stringify(map).length || 0) / 1024);
+    console.log(`⚡ 1차 로드 완료: ${_ms}ms (${_kb} KB, ${ESSENTIAL_KEYS.length}개 키)`);
+  }
   return map;
 }
 
@@ -16479,6 +16496,7 @@ async function sbLoadEssential(companyId) {
 // REMAINDER_KEYS만 요청 → 가장 큰 rec 포함 (~300~400KB)
 // 실패해도 1차 데이터로 화면 사용 가능. 재시도 + 토스트 알림 자동.
 async function sbLoadRemainder(companyId) {
+  const _t0 = (typeof performance!=='undefined') ? performance.now() : Date.now();
   try {
     const map = await apiFetch('/data-load','POST',{ keys: REMAINDER_KEYS });
 
@@ -16524,6 +16542,12 @@ async function sbLoadRemainder(companyId) {
         window.dispatchEvent(new CustomEvent('nopro:remainder-loaded'));
       }
     } catch(e){}
+    // 🔭 성능 측정 — 베타 그룹에서만
+    if(_isBetaSplitLoad()){
+      const _ms = Math.round(((typeof performance!=='undefined') ? performance.now() : Date.now()) - _t0);
+      const _kb = Math.round((JSON.stringify(map).length || 0) / 1024);
+      console.log(`📦 2차 로드 완료: ${_ms}ms (${_kb} KB, ${REMAINDER_KEYS.length}개 키)`);
+    }
     return map;
   } catch(e) {
     // 2차 실패 시 재시도 (최대 2회, 지수 백오프)
