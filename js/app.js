@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-19-11';
+const CLIENT_BUILD = '2026-05-19-12';
 
 // 🔑 클라 보호 키 단일 정의 (2026-05-19)
 // 백엔드 _shared/data-keys.js의 PROTECTED_KEYS와 동기화 필수.
@@ -15691,10 +15691,21 @@ async function admDeleteUser(id){
         else { enterApp(sess.company||''); }
         return;
       }
-      throw new Error('verify-failed');
+      // 🔴 정확한 사유 추적: 응답 본문에서 reason 추출
+      let serverReason = '';
+      try { const errBody = await res.json(); serverReason = errBody.reason || errBody.error || ''; } catch {}
+      const err = new Error('verify-failed');
+      err.status = res.status;
+      err.reason = serverReason;
+      throw err;
     }
     const data=await res.json();
-    if(!data.valid) throw new Error('invalid');
+    if(!data.valid){
+      const err = new Error('invalid');
+      err.status = 200;
+      err.reason = data.reason || 'token-invalid';
+      throw err;
+    }
     setNoproSession(data.session);
     // 🔒 F5/재진입 시 — JS 초기화 단계에서 localStorage로부터 자동 로드된 이전 데이터 클리어
     // (sbLoadAll의 C-1 가드는 "응답에 키 없으면 메모리 유지" 정책이라, 계정 전환·세션 갱신 시 회사 A 데이터가 잔존할 수 있음)
@@ -15705,7 +15716,15 @@ async function admDeleteUser(id){
       // 🚀 PDF 방안 2 — 베타 그룹만 분할 로드 (F5/재진입 경로)
       if(data.session.groupTag === 'beta_split_load'){
         console.log('🚀 베타 그룹 — 분할 로드 사용 (F5)');
-        await sbLoadEssential(data.session.companyId);
+        // 🛡️ B: 1차 로드 실패 시 sbLoadAll로 자동 폴백 (튕김 방지)
+        // 인증은 성공했는데 데이터 로드만 실패한 경우 옛 동작으로 복구
+        try {
+          await sbLoadEssential(data.session.companyId);
+        } catch(e1) {
+          console.warn('⚠️ 1차 로드 실패 → sbLoadAll 폴백:', e1.message);
+          try { reportError({ level:'warn', source:'initAuth', message:'1차 로드 실패 → 폴백', meta:{ origMsg:e1.message } }); } catch {}
+          await sbLoadAll(data.session.companyId);
+        }
         enterApp(data.session.company||'');
         sbLoadRemainder(data.session.companyId).catch(()=>{});
       } else {
@@ -15716,7 +15735,17 @@ async function admDeleteUser(id){
     }
     startAuthRefreshTimer();
   } catch(e){
-    console.warn('initAuth 실패:', e.message);
+    // 🔴 A: 정확한 사유 분류해 콘솔 + 모니터링 기록
+    let reason = '알 수 없는 원인';
+    if(e.reason === 'session_replaced') reason = '다른 PC/브라우저에서 로그인 (단일 로그인 차단)';
+    else if(e.status === 409) reason = '다른 PC/브라우저에서 로그인 (단일 로그인 차단)';
+    else if(e.status === 401) reason = '세션 만료 또는 토큰 무효';
+    else if(e.status === 403) reason = '접근 권한 거부';
+    else if(e.message === 'invalid') reason = '서버가 토큰 거부 (토큰 변조 또는 무효)';
+    else if(e.message && (e.message.includes('NetworkError') || e.message.includes('Failed to fetch'))) reason = '네트워크 오류 (서버 응답 없음)';
+    else if(e.message && e.message.includes('1차 로드')) reason = '초기 데이터 로드 실패';
+    console.error('🔴 로그인 끊김 사유:', reason, '| 상세:', { status:e.status||'-', reason:e.reason||'-', msg:e.message });
+    try { reportError({ level:'warn', source:'initAuth', message:'로그인 끊김: '+reason, meta:{ status:e.status, reason:e.reason, origMsg:e.message } }); } catch {}
     localStorage.removeItem('nopro_session');
     localStorage.removeItem('nopro_jwt'); // 레거시 토큰 정리
     showLanding();
