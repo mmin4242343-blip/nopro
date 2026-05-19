@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-19-4';
+const CLIENT_BUILD = '2026-05-19-5';
 
 // 🔑 클라 보호 키 단일 정의 (2026-05-19)
 // 백엔드 _shared/data-keys.js의 PROTECTED_KEYS와 동기화 필수.
@@ -14928,8 +14928,17 @@ async function doAuthLogin(){
     if(res.session.role==='admin'){
       enterAdmin();
     } else {
-      await sbLoadAll(res.session.companyId);
-      enterApp(res.session.company);
+      // 🚀 PDF 방안 2 — 베타 그룹만 분할 로드 (testnam1@naver.com 등)
+      // 다른 회사는 옛 sbLoadAll로 100% 동일 동작 보장. 점진 롤아웃.
+      if(res.session.groupTag === 'beta_split_load'){
+        console.log('🚀 베타 그룹 — 분할 로드 사용');
+        await sbLoadEssential(res.session.companyId);
+        enterApp(res.session.company);
+        sbLoadRemainder(res.session.companyId).catch(()=>{});  // 재시도는 함수 내부
+      } else {
+        await sbLoadAll(res.session.companyId);
+        enterApp(res.session.company);
+      }
       if(typeof startAutoPoll === 'function') startAutoPoll();
     }
     startAuthRefreshTimer();
@@ -15619,8 +15628,16 @@ async function admDeleteUser(id){
     if(data.session.role==='admin'){
       enterAdmin();
     } else {
-      await sbLoadAll(data.session.companyId);
-      enterApp(data.session.company||'');
+      // 🚀 PDF 방안 2 — 베타 그룹만 분할 로드 (F5/재진입 경로)
+      if(data.session.groupTag === 'beta_split_load'){
+        console.log('🚀 베타 그룹 — 분할 로드 사용 (F5)');
+        await sbLoadEssential(data.session.companyId);
+        enterApp(data.session.company||'');
+        sbLoadRemainder(data.session.companyId).catch(()=>{});
+      } else {
+        await sbLoadAll(data.session.companyId);
+        enterApp(data.session.company||'');
+      }
       if(typeof startAutoPoll === 'function') startAutoPoll();
     }
     startAuthRefreshTimer();
