@@ -1604,6 +1604,32 @@
   </div>
 </div>
 
+<!-- 급여 보정 모달 — 확정된 PAY_SNAPSHOTS 직접 수정 (2026-05-20 2차 작업 도입) -->
+<div id="pay-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:var(--card);border-radius:14px;width:100%;max-width:560px;max-height:90vh;border:1px solid var(--bd);display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.18);">
+    <div style="padding:18px 22px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:flex-start;justify-content:space-between;gap:16px;">
+      <div style="flex:1;min-width:0">
+        <div id="pay-edit-title" style="font-size:18px;font-weight:800;color:var(--ink);letter-spacing:-.3px">-</div>
+        <div id="pay-edit-sub" style="font-size:12px;color:var(--muted);margin-top:4px">-</div>
+      </div>
+      <button onclick="closePayEditModal()" style="background:var(--nbg);border:0;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;color:var(--muted);flex-shrink:0;font-family:inherit">×</button>
+    </div>
+    <div style="padding:18px 22px;overflow-y:auto;flex:1">
+      <div id="pay-edit-body"></div>
+    </div>
+    <div style="padding:14px 22px;border-top:1px solid var(--bd);background:var(--surf);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink2);font-weight:600">
+        <span>지급 합계 (자동)</span>
+        <span id="pay-edit-total" style="font-size:16px;font-weight:800;color:var(--teal)">0원</span>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button id="pay-edit-cancel-btn" type="button" style="padding:8px 14px;border:1px solid var(--bd);background:var(--card);color:var(--ink);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">취소</button>
+        <button id="pay-edit-save-btn" type="button" style="padding:8px 14px;border:0;background:var(--teal);color:#fff;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">💾 저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 근무형태 등록/수정 모달 -->
 <div id="shift-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;align-items:center;justify-content:center;">
   <div style="background:var(--card);border-radius:12px;width:480px;max-height:85vh;overflow-y:auto;border:1px solid var(--bd);">
@@ -2349,7 +2375,7 @@ noprohr.netlify.app/tbm_sign.html
 </div>
 
 </div></div></div>
-<script src="/js/app.js?v=2026-05-20-07"></script>
+<script src="/js/app.js?v=2026-05-20-08"></script>
 <!-- 인라인 핸들러용 unsafe-inline은 추후 단계적 제거 예정 -->
 <script>
 // placeholder - app.js에서 모든 로직 처리

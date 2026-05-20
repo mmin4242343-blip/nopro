@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-20-07';
+const CLIENT_BUILD = '2026-05-20-08';
 
 // 🇰🇷 한국어 IME 글로벌 가드 (2026-05-19)
 // 증상: 한글 조합 중(예: "도급" 타이핑 중) Tab/Enter/다른 칸 클릭으로 blur 발생 시
@@ -47,7 +47,7 @@ const REMAINDER_KEYS = Object.freeze([
   'safety', 'safety_records', 'safety_config',
   'folders', 'custom_docs', 'saved_forms',
   'pol_snapshots', 'pay_snapshots', 'bk_snapshots',
-  'emp_change_history'
+  'emp_change_history', 'pay_change_history'
 ]);
 // 2차 로드 완료 여부 — 화면별 가드(Day 3) + 로딩 스피너(Day 4)에서 참조
 let _remainderLoaded = false;
@@ -538,7 +538,7 @@ function calcAnnualLeave(emp, forYear){
 // ══════════════════════════════════════
 // LocalStorage
 // ══════════════════════════════════════
-const LS={E:'npm5_emps',R:'npm5_rec',P:'npm5_pol',B:'npm5_bk',T:'npm5_tbk',BN:'npm5_bonus',AL:'npm5_allow',TX:'npm5_tax',CL:'npm5_changelog'};
+const LS={E:'npm5_emps',R:'npm5_rec',P:'npm5_pol',B:'npm5_bk',T:'npm5_tbk',BN:'npm5_bonus',AL:'npm5_allow',TX:'npm5_tax',CL:'npm5_changelog',PCL:'npm5_pay_changelog'};
 function load(k,def){try{const v=localStorage.getItem(k);return v?JSON.parse(v):def;}catch{return def;}}
 let TAX_REC = JSON.parse(localStorage.getItem('npm5_tax')||'{}');
 // 특정 날짜에 유효한 값 반환 (from 이하 최신)
@@ -1246,6 +1246,221 @@ function getEmpChangeHistory(empId, category) {
   if (category && category !== 'all') return list.filter(h => h.category === category);
   return list;
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// 급여 변경 이력 (2026-05-20 2차 작업, 도입) — 확정된 PAY_SNAPSHOTS의 셀 직접 보정
+// 구조: [{ empId, y, m, field, fieldLabel, before, after, changedAt, changedBy, type:'pay_update' }]
+// PROTECTED_KEYS 포함 — 빈 배열 자동 차단
+let PAY_CHANGE_HISTORY = load(LS.PCL, null) || [];
+
+// monthSummary 결과의 수정 가능 필드 (B안: 모든 항목 수정 + 합계 자동 재계산)
+// 'total'은 자동 재계산이라 감시 대상 X
+const PAY_FIELD_META = {
+  tBase:          { label:'기본급' },
+  tNightPay:      { label:'야간수당' },
+  tOtDayPay:      { label:'주간연장수당' },
+  tOtNightPay:    { label:'야간연장수당' },
+  tHolDayPay:     { label:'휴일주간수당' },
+  tHolNightPay:   { label:'휴일야간수당' },
+  tHolDayOtPay:   { label:'휴일주간연장수당' },
+  tHolNightOtPay: { label:'휴일야간연장수당' },
+  annualPay:      { label:'연차수당' },
+  wkly:           { label:'주휴수당' },
+  bonus:          { label:'상여금' },
+  totalAllowance: { label:'수당' },
+  deduction:      { label:'공제' }
+};
+const PAY_PLUS_FIELDS  = ['tBase','tNightPay','tOtDayPay','tOtNightPay','tHolDayPay','tHolNightPay','tHolDayOtPay','tHolNightOtPay','annualPay','wkly','bonus','totalAllowance'];
+const PAY_MINUS_FIELDS = ['deduction'];
+
+// 합계 자동 재계산 — summary 객체 받아서 total 필드 갱신해서 반환
+function recalcPayTotal(summary){
+  if(!summary || typeof summary!=='object') return summary;
+  let sum = 0;
+  for(const f of PAY_PLUS_FIELDS)  sum += Number(summary[f] || 0);
+  for(const f of PAY_MINUS_FIELDS) sum -= Number(summary[f] || 0);
+  summary.total = sum;
+  return summary;
+}
+
+// 급여 변경 이력 1건 추가 — append-only
+function addPayChangeHistory(entry){
+  if(!entry || !entry.empId || !entry.changedBy) return;
+  PAY_CHANGE_HISTORY.unshift({
+    empId: String(entry.empId),
+    y: Number(entry.y),
+    m: Number(entry.m),
+    field: entry.field || '',
+    fieldLabel: entry.fieldLabel || entry.field || '',
+    before: entry.before == null ? '-' : String(entry.before),
+    after: entry.after == null ? '-' : String(entry.after),
+    changedAt: new Date().toISOString(),
+    changedBy: String(entry.changedBy),
+    type: entry.type || 'pay_update'
+  });
+  try { localStorage.setItem(LS.PCL, JSON.stringify(PAY_CHANGE_HISTORY)); } catch(_){}
+  if(typeof saveLS === 'function') saveLS();
+}
+
+// 직원·월 단위 급여 이력 조회
+function getPayChangeHistory(empId, y, m){
+  let list = PAY_CHANGE_HISTORY.filter(h => String(h.empId)===String(empId));
+  if(y) list = list.filter(h => Number(h.y)===Number(y));
+  if(m) list = list.filter(h => Number(h.m)===Number(m));
+  return list;
+}
+
+// ─── 급여 수정 잠금 모드 (확정된 PAY_SNAPSHOTS 한 직원 한 달 편집) ─────────
+// 키 형식: `${empId}_${y}_${m}` — 같은 직원도 월별로 독립적으로 편집
+let _editingPayKey = null;       // 현재 편집 중인 key
+let _editingPaySnapshot = null;  // 편집 시작 시점 summary 깊은 복사 — 취소 시 복원용
+
+async function startEditPay(empId, y, m){
+  const key = `${empId}_${y}_${m}`;
+  if(_editingPayKey === key) return;
+  if(_editingPayKey){
+    if(!confirm('다른 직원/월 급여를 수정 중입니다.\n현재 수정사항을 취소하고 이동하시겠습니까?')) return;
+    _cancelPayEditInternal();
+    closePayEditModal();
+  }
+  const snap = PAY_SNAPSHOTS[_polKey(y, m)];
+  if(!snap || !snap.confirmed){
+    alert('확정된 달만 보정할 수 있습니다.\n먼저 [💾 이 달 급여 확정]을 눌러주세요.');
+    return;
+  }
+  const summary = snap.summaries && snap.summaries[empId];
+  if(!summary) return;
+  const author = await promptChangeAuthor('급여 보정');
+  if(!author) return;
+  _editingPayKey = key;
+  _editingPaySnapshot = JSON.parse(JSON.stringify(summary));
+  openPayEditModal(empId, y, m);
+}
+
+function savePayEdit(empId, y, m){
+  const key = `${empId}_${y}_${m}`;
+  if(_editingPayKey !== key) return;
+  const snap = PAY_SNAPSHOTS[_polKey(y, m)];
+  if(!snap || !_editingPaySnapshot){ _cancelPayEditInternal(); closePayEditModal(); return; }
+  const summary = snap.summaries && snap.summaries[empId];
+  if(!summary){ _cancelPayEditInternal(); closePayEditModal(); return; }
+  const author = _lastChangedBy;
+  if(!author){
+    alert('변경자 이름이 없어 저장할 수 없습니다. 모달을 닫고 다시 열어주세요.');
+    return;
+  }
+  // 모달 input들 → summary 반영 + 변경 이력 push
+  let changeCount = 0;
+  Object.keys(PAY_FIELD_META).forEach(field => {
+    const inp = document.querySelector(`[data-pay-key="${key}"][data-pay-field="${field}"]`);
+    if(!inp) return;
+    const newVal = Math.round(+String(inp.value).replace(/[^\d.\-]/g,'') || 0);
+    const oldVal = Math.round(Number(_editingPaySnapshot[field] || 0));
+    if(oldVal === newVal) return;
+    summary[field] = newVal;
+    addPayChangeHistory({
+      empId, y, m,
+      field,
+      fieldLabel: PAY_FIELD_META[field].label,
+      before: oldVal.toLocaleString()+'원',
+      after: newVal.toLocaleString()+'원',
+      changedBy: author,
+      type: 'pay_update'
+    });
+    changeCount++;
+  });
+  if(changeCount > 0){
+    recalcPayTotal(summary);
+    try { localStorage.setItem('npm5_pay_snapshots', JSON.stringify(PAY_SNAPSHOTS)); } catch(_){}
+    saveLS();
+  }
+  _editingPayKey = null;
+  _editingPaySnapshot = null;
+  closePayEditModal();
+  if(typeof renderPayroll === 'function') renderPayroll();
+  if(typeof showSyncToast === 'function'){
+    if(changeCount > 0) showSyncToast(`✅ 급여 ${changeCount}개 항목 보정 저장`, 'ok', 2500);
+    else showSyncToast('변경사항이 없습니다', 'info', 1800);
+  }
+}
+
+function _cancelPayEditInternal(){
+  _editingPayKey = null;
+  _editingPaySnapshot = null;
+}
+
+function cancelPayEdit(empId, y, m){
+  const key = `${empId}_${y}_${m}`;
+  if(_editingPayKey !== key) return;
+  _cancelPayEditInternal();
+  closePayEditModal();
+  if(typeof showSyncToast === 'function') showSyncToast('급여 수정 취소', 'info', 1500);
+}
+
+// 급여 보정 모달 — 한 직원 한 달 모든 항목 + 합계 자동 재계산
+function openPayEditModal(empId, y, m){
+  const modal = document.getElementById('pay-edit-modal');
+  if(!modal) return;
+  const snap = PAY_SNAPSHOTS[_polKey(y, m)];
+  if(!snap) return;
+  const summary = snap.summaries && snap.summaries[empId];
+  if(!summary) return;
+  const emp = EMPS.find(e => e.id===empId);
+  const key = `${empId}_${y}_${m}`;
+
+  document.getElementById('pay-edit-title').textContent = `${(emp && emp.name) || ''} 급여 보정`;
+  document.getElementById('pay-edit-sub').textContent = `${y}년 ${m}월 · 확정값 직접 수정 (합계 자동 재계산)`;
+
+  const fields = Object.keys(PAY_FIELD_META).map(f => {
+    const meta = PAY_FIELD_META[f];
+    const v = Math.round(Number(summary[f] || 0));
+    const isMinus = PAY_MINUS_FIELDS.indexOf(f) >= 0;
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px dashed var(--bd);gap:10px">
+        <span style="font-size:12.5px;color:${isMinus?'var(--rose)':'var(--ink2)'};font-weight:${isMinus?'700':'500'}">${isMinus?'🔴 ':''}${meta.label}</span>
+        <div style="display:flex;align-items:center;gap:5px">
+          <input type="text" inputmode="numeric"
+            data-pay-key="${key}" data-pay-field="${f}"
+            value="${v.toLocaleString()}"
+            style="width:130px;padding:7px 10px;border:1px solid var(--bd);background:var(--card);color:${isMinus?'var(--rose)':'var(--ink)'};border-radius:7px;font-size:13px;font-weight:600;text-align:right;font-family:inherit;outline:none"
+            oninput="formatNumInput(this);_recalcPayEditTotal('${key}')">
+          <span style="font-size:11px;color:var(--muted)">원</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  document.getElementById('pay-edit-body').innerHTML = fields;
+  _recalcPayEditTotal(key);
+
+  document.getElementById('pay-edit-save-btn').onclick = () => savePayEdit(empId, y, m);
+  document.getElementById('pay-edit-cancel-btn').onclick = () => cancelPayEdit(empId, y, m);
+
+  modal.style.display = 'flex';
+}
+
+function closePayEditModal(){
+  const m = document.getElementById('pay-edit-modal');
+  if(m) m.style.display = 'none';
+  // X 버튼·외부 닫기 — 편집 상태도 정리 (savePayEdit/cancelPayEdit 거치지 않은 경우)
+  if(_editingPayKey){ _cancelPayEditInternal(); }
+}
+
+// 합계 자동 재계산 — 모달 input 변경 시마다 하단 표시 갱신
+function _recalcPayEditTotal(key){
+  let sum = 0;
+  for(const f of PAY_PLUS_FIELDS){
+    const inp = document.querySelector(`[data-pay-key="${key}"][data-pay-field="${f}"]`);
+    if(inp) sum += +String(inp.value).replace(/[^\d.\-]/g, '') || 0;
+  }
+  for(const f of PAY_MINUS_FIELDS){
+    const inp = document.querySelector(`[data-pay-key="${key}"][data-pay-field="${f}"]`);
+    if(inp) sum -= +String(inp.value).replace(/[^\d.\-]/g, '') || 0;
+  }
+  const totalEl = document.getElementById('pay-edit-total');
+  if(totalEl) totalEl.textContent = Math.round(sum).toLocaleString() + '원';
+}
+// ───────────────────────────────────────────────────────────────────────────
 
 // 가장 오래된 입사일 — 변경 이력의 'join' before 값들 + 현재 emp.join 중 제일 이른 날짜
 // 입사일이 늦게 변경되어도 과거 REC가 화면에 그대로 표시되도록 (2026-05-20-07)
@@ -4066,6 +4281,9 @@ function renderPayroll(){
         ${s.deduction>0?`<div class="pr"><span class="prl">${getEmpPayMode(emp)==='monthly'?'결근 일할공제':'결근 공제'}</span><span class="prv" style="color:var(--rose)">-${fmt$(s.deduction)}원</span></div>`:''}
         ${(()=>{const d=getMonthAllowance(emp.id,pY,pM,'deduct');return d!==0?`<div class="pr"><span class="prl">기타공제(가불)</span><span class="prv" style="color:var(--rose)">${fmt$(d)}원</span></div>`:'';})()}
         <div class="pr"><span class="prl">지급 합계</span><span class="prv" style="color:var(--teal);font-size:14px">${fmt$(s.total)}원</span></div>
+        ${_monthLocked?`<div style="display:flex;justify-content:flex-end;margin-top:6px;padding-top:6px;border-top:1px dashed var(--bd2)">
+          <button class="btn btn-xs" onclick="startEditPay(${emp.id},${pY},${pM})" style="background:var(--card);color:var(--navy2);border:1px solid var(--bd2);font-size:11px;font-weight:600">✏️ 급여 보정</button>
+        </div>`:''}
       </div>
     </div>`;
   }).join('');
@@ -16632,6 +16850,7 @@ async function sbSaveAll(companyId) {
     {key:'folders', value:FOLDERS.map(f=>({...f,files:(f.files||[]).map(({dataUrl,...r})=>r)}))},
     {key:'safety', value:(()=>{const s={};Object.entries(SAFETY_REC).forEach(([k,v])=>{s[k]=Array.isArray(v)?v.map(({data,...r})=>r):v;});return s;})()},
     {key:'emp_change_history', value: (typeof EMP_CHANGE_HISTORY!=='undefined' && Array.isArray(EMP_CHANGE_HISTORY)) ? EMP_CHANGE_HISTORY : []},
+    {key:'pay_change_history', value: (typeof PAY_CHANGE_HISTORY!=='undefined' && Array.isArray(PAY_CHANGE_HISTORY)) ? PAY_CHANGE_HISTORY : []},
   ];
 
   // 🛡️ 빈 데이터 덮어쓰기 방어: 어떤 경로로도 빈값으로 보호 키를 덮어쓰지 못함.
@@ -17349,6 +17568,11 @@ async function sbLoadRemainder(companyId) {
     if('emp_change_history' in map){
       EMP_CHANGE_HISTORY = Array.isArray(map.emp_change_history) ? map.emp_change_history : [];
       try { localStorage.setItem(LS.CL, JSON.stringify(EMP_CHANGE_HISTORY)); } catch(_){}
+    }
+    // 급여 보정 이력 (2026-05-20 2차 작업 도입)
+    if('pay_change_history' in map){
+      PAY_CHANGE_HISTORY = Array.isArray(map.pay_change_history) ? map.pay_change_history : [];
+      try { localStorage.setItem(LS.PCL, JSON.stringify(PAY_CHANGE_HISTORY)); } catch(_){}
     }
 
     // 최초 1회: POL_SNAPSHOTS가 비어있고 REC 데이터가 있으면 현재 POL을 과거 달에 복사해 시작점 확보
