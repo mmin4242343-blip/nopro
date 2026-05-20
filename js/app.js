@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-20-09';
+const CLIENT_BUILD = '2026-05-20-10';
 
 // 🇰🇷 한국어 IME 글로벌 가드 (2026-05-19)
 // 증상: 한글 조합 중(예: "도급" 타이핑 중) Tab/Enter/다른 칸 클릭으로 blur 발생 시
@@ -2451,9 +2451,10 @@ function setPohalAtt(eid, type){
   const k=rk(eid,cY,cM,cD);
   if(!REC[k])REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[]};
   // annual/halfAnnual/absent 셋 다 함께 정리 — halfAnnual만 잔존하는 모순 방지
+  // 2026-05-20-10: 결근·연차 체크 시 start/end 자동 클리어 (반차는 4h 출근 의미라 유지)
   if(type==='work'){REC[k].absent=false;REC[k].annual=false;REC[k].halfAnnual=false;}
-  else if(type==='annual'){REC[k].annual=!REC[k].annual;if(REC[k].annual){REC[k].absent=false;REC[k].halfAnnual=false;}}
-  else if(type==='absent'){REC[k].absent=!REC[k].absent;if(REC[k].absent){REC[k].annual=false;REC[k].halfAnnual=false;}}
+  else if(type==='annual'){REC[k].annual=!REC[k].annual;if(REC[k].annual){REC[k].absent=false;REC[k].halfAnnual=false;REC[k].start='';REC[k].end='';}}
+  else if(type==='absent'){REC[k].absent=!REC[k].absent;if(REC[k].absent){REC[k].annual=false;REC[k].halfAnnual=false;REC[k].start='';REC[k].end='';}}
   saveLS();renderTable();
   // 연차/결근 변경 시 연차관리·근태현황·급여 탭 갱신
   const lvPage=document.getElementById('pg-leave');
@@ -2577,9 +2578,10 @@ function setR(eid,f,v){
   const k=rk(eid,cY,cM,cD);
   if(!REC[k])REC[k]={empId:eid,start:'',end:'',absent:false,annual:false,halfAnnual:false,note:'',outTimes:[]};
   // 상호 배타
-  if(f==='annual'&&v){REC[k].absent=false;REC[k].halfAnnual=false;}
+  // 2026-05-20-10: 결근·연차 체크 시 start/end 자동 클리어 (반차는 4h 출근 의미라 유지)
+  if(f==='annual'&&v){REC[k].absent=false;REC[k].halfAnnual=false;REC[k].start='';REC[k].end='';}
   if(f==='halfAnnual'&&v){REC[k].absent=false;REC[k].annual=false;}
-  if(f==='absent'&&v){REC[k].annual=false;REC[k].halfAnnual=false;}
+  if(f==='absent'&&v){REC[k].annual=false;REC[k].halfAnnual=false;REC[k].start='';REC[k].end='';}
   // 대체근무 ↔ 대체공휴일 상호 배타 (한 날에 둘 다 켜는 건 의미 모순)
   if(f==='subWork'&&v) REC[k].subHol=false;
   if(f==='subHol'&&v) REC[k].subWork=false;
