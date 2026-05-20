@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-20-05';
+const CLIENT_BUILD = '2026-05-20-06';
 
 // 🇰🇷 한국어 IME 글로벌 가드 (2026-05-19)
 // 증상: 한글 조합 중(예: "도급" 타이핑 중) Tab/Enter/다른 칸 클릭으로 blur 발생 시
@@ -1647,7 +1647,12 @@ function monthSummary(eid,y,m){
   const emp=EMPS.find(e=>e.id===eid);
   if(!emp)return{wdays:0,adays:0,aldays:0,twkH:0,tNightH:0,tOtDayH:0,tOtNightH:0,tHolDayH:0,tHolNightH:0,tHolDayOtH:0,tHolNightOtH:0,tBase:0,tNightPay:0,tOtDayPay:0,tOtNightPay:0,tHolDayPay:0,tHolNightPay:0,tHolDayOtPay:0,tHolNightOtPay:0,annualPay:0,wkly:0,bonus:0,allowances:{},totalAllowance:0,deduction:0,total:0};
   // 입사일 이전 월이면 빈 결과
-  if(emp.join){const jd=parseEmpDate(emp.join);if(jd>new Date(y,m,0))return{wdays:0,adays:0,aldays:0,twkH:0,tNightH:0,tOtDayH:0,tOtNightH:0,tHolDayH:0,tHolNightH:0,tHolDayOtH:0,tHolNightOtH:0,tBase:0,tNightPay:0,tOtDayPay:0,tOtNightPay:0,tHolDayPay:0,tHolNightPay:0,tHolDayOtPay:0,tHolNightOtPay:0,annualPay:0,wkly:0,bonus:0,allowances:{},totalAllowance:0,deduction:0,total:0};}
+  if(emp.join){const jd=parseEmpDate(emp.join);if(jd>new Date(y,m,0)){
+    // A안 (2026-05-20-06): REC가 그 월에 하나라도 있으면 계산 진행 — 입사일 변경 전 기록 보존
+    const _ymPre=`${eid}_${y}-${String(m).padStart(2,'0')}-`;
+    const _hasRec=REC && Object.keys(REC).some(k=>k.startsWith(_ymPre));
+    if(!_hasRec) return{wdays:0,adays:0,aldays:0,twkH:0,tNightH:0,tOtDayH:0,tOtNightH:0,tHolDayH:0,tHolNightH:0,tHolDayOtH:0,tHolNightOtH:0,tBase:0,tNightPay:0,tOtDayPay:0,tOtNightPay:0,tHolDayPay:0,tHolNightPay:0,tHolDayOtPay:0,tHolNightOtPay:0,annualPay:0,wkly:0,bonus:0,allowances:{},totalAllowance:0,deduction:0,total:0};
+  }}
   // 퇴사일 이후 월이면 빈 결과
   if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<new Date(y,m-1,1))return{wdays:0,adays:0,aldays:0,twkH:0,tNightH:0,tOtDayH:0,tOtNightH:0,tHolDayH:0,tHolNightH:0,tHolDayOtH:0,tHolNightOtH:0,tBase:0,tNightPay:0,tOtDayPay:0,tOtNightPay:0,tHolDayPay:0,tHolNightPay:0,tHolDayOtPay:0,tHolNightOtPay:0,annualPay:0,wkly:0,bonus:0,allowances:{},totalAllowance:0,deduction:0,total:0};}
   const days=dim(y,m);
@@ -2614,7 +2619,8 @@ function renderTable(){
   renderFilterBar('daily-filter-bar','daily');
   const dayDate=new Date(cY,cM-1,cD);
   const activeDayEmps = applyCommonFilter(EMPS.filter(emp=>{
-    if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate)return false;}
+    // A안 (2026-05-20-06): 입사일 이전이라도 그 날 REC 있으면 표시
+    if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate){if(!REC||!REC[rk(emp.id,cY,cM,cD)])return false;}}
     if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<dayDate)return false;}
     return true;
   }), 'daily', dayDate);
@@ -3258,7 +3264,8 @@ function activeDayEmpsForCopy(){
   const search=(document.getElementById('sb-search-inp')?.value||'').trim();
   // 1) renderTable과 동일하게: 입퇴사 + 페이지 상단 필터바
   const baseFiltered = applyCommonFilter(EMPS.filter(emp=>{
-    if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate) return false;}
+    // A안 (2026-05-20-06): 입사일 이전이라도 그 날 REC 있으면 표시
+    if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate){if(!REC||!REC[rk(emp.id,cY,cM,cD)])return false;}}
     if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<dayDate) return false;}
     return true;
   }), 'daily', dayDate);
@@ -3952,7 +3959,8 @@ function renderPayroll(){
   const payMonthEnd=new Date(pY,pM,0);
   const payMonthStart=new Date(pY,pM-1,1);
   const activePayEmps = applyCommonFilter(EMPS.filter(emp=>{
-    if(emp.join){const jd=parseEmpDate(emp.join);if(jd>payMonthEnd)return false;}
+    // A안 (2026-05-20-06): 입사 전 월이라도 그 월 REC 있으면 표시
+    if(emp.join){const jd=parseEmpDate(emp.join);if(jd>payMonthEnd){const _pre=`${emp.id}_${pY}-${pad(pM)}-`;if(!REC||!Object.keys(REC).some(k=>k.startsWith(_pre)))return false;}}
     if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<payMonthStart)return false;}
     return true;
   }), 'payroll', payMonthStart);
@@ -4068,7 +4076,8 @@ function renderXlPreview(){
   const isMonthlyView = false;
 
   const payEmps = applyCommonFilter(EMPS.filter(emp=>{
-    if(emp.join){const jd=parseEmpDate(emp.join);if(jd>new Date(pY,pM,0))return false;}
+    // A안 (2026-05-20-06): 입사 전 월이라도 그 월 REC 있으면 표시
+    if(emp.join){const jd=parseEmpDate(emp.join);if(jd>new Date(pY,pM,0)){const _pre=`${emp.id}_${pY}-${pad(pM)}-`;if(!REC||!Object.keys(REC).some(k=>k.startsWith(_pre)))return false;}}
     if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<new Date(pY,pM-1,1))return false;}
     return true;
   }), 'payroll', new Date(pY,pM-1,1));
@@ -9584,7 +9593,8 @@ function exportDailyExcel(){
   // 직원 필터링 (renderTable과 동일, 퇴사일 당일은 포함)
   const dayDate2=new Date(cY,cM-1,cD);
   const activeDayEmps = applyCommonFilter(EMPS.filter(emp=>{
-    if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate2)return false;}
+    // A안 (2026-05-20-06): 입사일 이전이라도 그 날 REC 있으면 표시 (엑셀 일관성)
+    if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate2){if(!REC||!REC[rk(emp.id,cY,cM,cD)])return false;}}
     if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<dayDate2)return false;}
     return true;
   }), 'daily', dayDate2);
@@ -9732,7 +9742,8 @@ function _buildRangeExcel(sd, ed, skipEmpty){
     const dow=dowNames[cur.getDay()];
     const dayDate=new Date(y,m-1,d);
     const activeEmps=applyCommonFilter(EMPS.filter(emp=>{
-      if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate)return false;}
+      // A안 (2026-05-20-06): 입사일 이전이라도 그 날 REC 있으면 표시
+      if(emp.join){const jd=parseEmpDate(emp.join);if(jd>dayDate){if(!REC||!REC[rk(emp.id,y,m,d)])return false;}}
       if(emp.leave){const ld=parseEmpDate(emp.leave);if(ld<dayDate)return false;}
       return true;
     }), 'daily', dayDate);
