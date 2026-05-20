@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-20-04';
+const CLIENT_BUILD = '2026-05-20-05';
 
 // 🇰🇷 한국어 IME 글로벌 가드 (2026-05-19)
 // 증상: 한글 조합 중(예: "도급" 타이핑 중) Tab/Enter/다른 칸 클릭으로 blur 발생 시
@@ -46,7 +46,8 @@ const REMAINDER_KEYS = Object.freeze([
   'rec', 'tbk', 'bonus', 'allow', 'tax',
   'safety', 'safety_records', 'safety_config',
   'folders', 'custom_docs', 'saved_forms',
-  'pol_snapshots', 'pay_snapshots', 'bk_snapshots'
+  'pol_snapshots', 'pay_snapshots', 'bk_snapshots',
+  'emp_change_history'
 ]);
 // 2차 로드 완료 여부 — 화면별 가드(Day 3) + 로딩 스피너(Day 4)에서 참조
 let _remainderLoaded = false;
@@ -1144,6 +1145,109 @@ const DEF_POL={
 };
 
 let EMPS=load(LS.E,null)||[];
+
+// ───────────────────────────────────────────────────────────────────────────
+// 직원 변경 이력 (2026-05-20 도입) — 시안 v3 변경이력 기능
+// 구조: [{ empId, field, fieldLabel, category, before, after, changedAt, changedBy, type }]
+//   type: 'create' | 'update' | 'delete' | 'retire' | 'unretire'
+//   category: 'personal' | 'role' | 'salary' | 'shift'
+// PROTECTED_KEYS 포함 — 빈 배열은 S-2 가드로 자동 차단 (첫 이력부터 서버 저장)
+// USE_EMP_HISTORY 시계열과 별개. emp 현재값만 신뢰 원칙 유지.
+let EMP_CHANGE_HISTORY = load(LS.CL, null) || [];
+
+// 변경자 입력 세션 변수 (페이지 새로고침 시 잊음, localStorage 영구저장 X)
+let _lastChangedBy = '';
+
+// 수정 잠금 모드 상태 — 시안 v3 패턴 (행 단위 편집 잠금)
+// _editingEmpId: 현재 편집 중인 직원 id (null = 편집 모드 아님)
+// _editingEmpSnapshot: 편집 시작 시점 emp 깊은 복사 — 취소 시 복원용
+let _editingEmpId = null;
+let _editingEmpSnapshot = null;
+
+// nopro emp 필드명 기준 — 시안 12종 + nopro 추가 필드 감시 대상
+const EMP_FIELD_META = {
+  name:     { label:'이름',         category:'personal' },
+  role:     { label:'직종',         category:'role' },
+  dept:     { label:'소속',         category:'role' },
+  deptCat:  { label:'부서',         category:'role' },
+  empNo:    { label:'사원번호',     category:'role' },
+  rrnFront: { label:'주민번호',     category:'personal' },
+  rate:     { label:'시급',         category:'salary' },
+  monthly:  { label:'월급',         category:'salary' },
+  payMode:  { label:'급여방식',     category:'salary' },
+  sot:      { label:'소정근로시간', category:'salary' },
+  join:     { label:'입사일',       category:'personal' },
+  leave:    { label:'퇴사일',       category:'personal' },
+  phone:    { label:'핸드폰',       category:'personal' },
+  gender:   { label:'성별',         category:'personal' },
+  nation:   { label:'내외국인',     category:'personal' },
+  shift:    { label:'주/야간',      category:'shift' }
+};
+
+// 변경자 입력 모달 — Promise 반환. resolve(이름) / resolve(null)=취소
+// 모달 HTML은 index.html의 #change-author-modal에 정의
+function promptChangeAuthor(actionLabel) {
+  return new Promise((resolve) => {
+    const m = document.getElementById('change-author-modal');
+    if (!m) { console.warn('[promptChangeAuthor] modal not in DOM'); resolve(null); return; }
+    const input = document.getElementById('change-author-input');
+    const label = document.getElementById('change-author-label');
+    const action = document.getElementById('change-author-action');
+    if (action) action.textContent = actionLabel || '직원 정보 변경';
+    if (label) label.textContent = '변경자 이름을 입력해주세요';
+    input.value = _lastChangedBy || '';
+    m.style.display = 'flex';
+    setTimeout(()=>{ try{input.focus(); input.select();}catch(_){} }, 50);
+
+    const ok = document.getElementById('change-author-ok');
+    const cancel = document.getElementById('change-author-cancel');
+    const cleanup = () => { m.style.display = 'none'; ok.onclick = null; cancel.onclick = null; input.onkeydown = null; };
+    ok.onclick = () => {
+      const name = (input.value || '').trim();
+      if (!name) {
+        input.style.borderColor = '#dc2626';
+        input.focus();
+        setTimeout(()=>{ try{input.style.borderColor='';}catch(_){} }, 1200);
+        return;
+      }
+      _lastChangedBy = name;
+      cleanup();
+      resolve(name);
+    };
+    cancel.onclick = () => { cleanup(); resolve(null); };
+    input.onkeydown = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); ok.click(); }
+      else if (e.key === 'Escape') { e.preventDefault(); cancel.click(); }
+    };
+  });
+}
+
+// 변경 이력 1건 추가 — append-only, 자동 저장
+function addEmpChangeHistory(entry) {
+  if (!entry || !entry.empId || !entry.changedBy) return;
+  EMP_CHANGE_HISTORY.unshift({
+    empId: String(entry.empId),
+    field: entry.field || '',
+    fieldLabel: entry.fieldLabel || entry.field || '',
+    category: entry.category || 'personal',
+    before: entry.before == null ? '-' : String(entry.before),
+    after: entry.after == null ? '-' : String(entry.after),
+    changedAt: new Date().toISOString(),
+    changedBy: String(entry.changedBy),
+    type: entry.type || 'update'
+  });
+  try { localStorage.setItem(LS.CL, JSON.stringify(EMP_CHANGE_HISTORY)); } catch(_){}
+  if (typeof saveLS === 'function') saveLS();
+}
+
+// 직원 한 명의 이력 조회 (최신순 — unshift로 추가했으므로 그대로)
+function getEmpChangeHistory(empId, category) {
+  const list = EMP_CHANGE_HISTORY.filter(h => String(h.empId) === String(empId));
+  if (category && category !== 'all') return list.filter(h => h.category === category);
+  return list;
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 let POL=Object.assign({...DEF_POL},load(LS.P,{}));
 // 💡 localStorage 초기 로드 직후 payMode 정규화 — sbLoadAll 호출 전에도 일관성 보장
 // _normEmpPayModes는 line 1128에 정의 (function declaration 호이스팅으로 여기서 호출 가능)
@@ -4527,6 +4631,266 @@ function xlEdit(empId, field, rawText) {
 // 직원 관리
 // ══════════════════════════════════════
 
+// ───────────────────────────────────────────────────────────────────────────
+// 수정 잠금 모드 핸들러 (2026-05-20 도입)
+// renderEmps 안에서 _editingEmpId !== e.id인 행은 input readonly + button disabled
+// ───────────────────────────────────────────────────────────────────────────
+async function startEditEmp(empId){
+  if(_editingEmpId === empId) return;
+  if(_editingEmpId){
+    if(!confirm('다른 직원을 수정 중입니다.\n현재 수정사항을 취소하고 이동하시겠습니까?')) return;
+    cancelEditEmp(_editingEmpId);
+  }
+  const e = EMPS.find(x=>x.id===empId);
+  if(!e) return;
+  const author = await promptChangeAuthor('직원 정보 수정');
+  if(!author) return;  // 변경자 미입력 → 편집 모드 진입 안 함
+  _editingEmpId = empId;
+  _editingEmpSnapshot = JSON.parse(JSON.stringify(e));
+  if(typeof renderEmps==='function') renderEmps();
+  // 첫 input에 포커스
+  setTimeout(()=>{
+    const row = document.querySelector(`#emp-tbody tr[data-eid="${empId}"]`);
+    if(row){
+      try { row.scrollIntoView({behavior:'smooth',block:'center'}); } catch(_){}
+      const inp = row.querySelector('input:not([readonly]):not([disabled])');
+      if(inp){ try{ inp.focus(); inp.select(); } catch(_){} }
+    }
+  }, 100);
+}
+
+function saveEditEmp(empId){
+  if(_editingEmpId !== empId) return;
+  const e = EMPS.find(x=>x.id===empId);
+  if(!e || !_editingEmpSnapshot) return;
+  const author = _lastChangedBy;
+  if(!author){
+    alert('변경자 이름이 없어 저장할 수 없습니다. 수정 버튼을 다시 눌러 입력해주세요.');
+    return;
+  }
+  // 변경 필드 감지 + 이력 push (EMP_FIELD_META에 정의된 필드만)
+  let changeCount = 0;
+  const _norm = v => (v==null || v==='') ? '' : String(v);
+  Object.keys(EMP_FIELD_META).forEach(key=>{
+    const meta = EMP_FIELD_META[key];
+    const beforeRaw = _editingEmpSnapshot[key];
+    const afterRaw = e[key];
+    if(_norm(beforeRaw) === _norm(afterRaw)) return;
+    addEmpChangeHistory({
+      empId: e.id,
+      field: key,
+      fieldLabel: meta.label,
+      category: meta.category,
+      before: _norm(beforeRaw) || '-',
+      after: _norm(afterRaw) || '-',
+      changedBy: author,
+      type: 'update'
+    });
+    changeCount++;
+  });
+  _editingEmpId = null;
+  _editingEmpSnapshot = null;
+  saveLS();
+  if(typeof renderEmps==='function') renderEmps();
+  if(typeof showSyncToast==='function'){
+    if(changeCount > 0) showSyncToast(`✅ ${changeCount}개 항목 저장됨 (${e.name||'무명'})`,'ok',2500);
+    else showSyncToast('변경사항이 없습니다','info',1800);
+  }
+}
+
+function cancelEditEmp(empId){
+  if(_editingEmpId !== empId) return;
+  const idx = EMPS.findIndex(x=>x.id===empId);
+  if(idx>=0 && _editingEmpSnapshot){
+    EMPS[idx] = _editingEmpSnapshot;
+    saveLS();
+  }
+  _editingEmpId = null;
+  _editingEmpSnapshot = null;
+  if(typeof renderEmps==='function') renderEmps();
+  if(typeof showSyncToast==='function') showSyncToast('수정이 취소되었습니다','info',1500);
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// 상세보기 모달 — 기본 정보 + 변경 이력 (2026-05-20 도입)
+// ───────────────────────────────────────────────────────────────────────────
+let _detailEmpId = null;
+let _detailHistoryFilter = 'all';
+
+function openEmpDetail(empId, initialTab){
+  const m = document.getElementById('emp-detail-modal');
+  if(!m) return;
+  const e = EMPS.find(x=>x.id===empId);
+  if(!e) return;
+  _detailEmpId = empId;
+  _detailHistoryFilter = 'all';
+  document.getElementById('emp-detail-title').textContent = e.name || '(이름 없음)';
+  document.getElementById('emp-detail-sub').textContent = [
+    e.empNo || '',
+    e.role || '',
+    e.dept || '',
+    e.shift==='night' ? '야간' : '주간',
+    e.leave ? `퇴사 ${e.leave}` : '재직 중'
+  ].filter(Boolean).join(' · ');
+
+  renderEmpDetailInfo(e);
+  renderEmpDetailHistory();
+  switchEmpDetailTab(initialTab || 'info');
+  // 필터 chip 초기화 — 전체로
+  filterEmpDetailHistory('all');
+  m.style.display = 'flex';
+}
+
+function closeEmpDetail(){
+  const m = document.getElementById('emp-detail-modal');
+  if(m) m.style.display = 'none';
+  _detailEmpId = null;
+}
+
+function enterEditFromEmpDetail(){
+  if(!_detailEmpId) return;
+  const id = _detailEmpId;
+  closeEmpDetail();
+  if(typeof startEditEmp==='function') startEditEmp(id);
+}
+
+function switchEmpDetailTab(tab){
+  document.querySelectorAll('.emp-detail-tab').forEach(el=>{
+    const isActive = el.dataset.tab === tab;
+    el.style.color = isActive ? 'var(--ink)' : 'var(--muted)';
+    el.style.fontWeight = isActive ? '700' : '500';
+    el.style.borderBottomColor = isActive ? 'var(--ink)' : 'transparent';
+  });
+  const i = document.getElementById('emp-detail-tab-info');
+  const h = document.getElementById('emp-detail-tab-history');
+  if(i) i.style.display = tab==='info' ? 'block' : 'none';
+  if(h) h.style.display = tab==='history' ? 'block' : 'none';
+}
+
+function filterEmpDetailHistory(cat){
+  _detailHistoryFilter = cat;
+  document.querySelectorAll('.emp-detail-history-chip').forEach(el=>{
+    const isActive = el.dataset.cat === cat;
+    el.style.background = isActive ? 'var(--ink)' : 'var(--card)';
+    el.style.color = isActive ? 'var(--card)' : 'var(--ink)';
+    el.style.borderColor = isActive ? 'var(--ink)' : 'var(--bd)';
+    el.style.fontWeight = isActive ? '600' : '500';
+  });
+  renderEmpDetailHistory();
+}
+
+function _empDetailPayModeLabel(m){
+  const v = m || 'fixed';
+  if(v==='hourly') return '시급제';
+  if(v==='monthly'||v==='pohal') return '포괄임금제';
+  return '통상임금제';
+}
+
+function renderEmpDetailInfo(e){
+  let leaveText = '-';
+  try { const al=calcAnnualLeave(e); leaveText = `${al.remain}개 / ${al.total}개`; } catch(_){}
+  const rows = [
+    ['사원번호', e.empNo || '-'],
+    ['이름', e.name || '-'],
+    ['직종', e.role || '-'],
+    ['부서', e.deptCat || '-'],
+    ['직급', e.grade || '-'],
+    ['소속', e.dept || '-'],
+    ['주민번호 앞자리', e.rrnFront || '-'],
+    ['나이', e.age ? `${e.age}세` : '-'],
+    ['성별', e.gender==='female' ? '여' : '남'],
+    ['내외국인', e.nation==='foreign' ? '외국인' : '내국인'],
+    ['핸드폰', e.phone || '-'],
+    ['급여방식', _empDetailPayModeLabel(e.payMode)],
+    ['시급', e.rate!=null && e.rate!=='' ? Number(e.rate).toLocaleString()+'원' : '-'],
+    ['월급', e.monthly!=null && e.monthly!=='' ? Number(e.monthly).toLocaleString()+'원' : '-'],
+    ['소정근로시간', e.sot ? `${e.sot}시간` : '-'],
+    ['주/야간', e.shift==='night' ? '야간' : '주간'],
+    ['입사일', e.join || '-'],
+    ['퇴사일', e.leave || '재직 중'],
+    ['연차 잔여', leaveText]
+  ];
+  document.getElementById('emp-detail-info-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 22px">
+      ${rows.map(([label,value])=>`
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 0;border-bottom:1px dashed var(--bd)">
+          <span style="font-size:11px;color:var(--muted);font-weight:500;flex-shrink:0">${esc(label)}</span>
+          <span style="font-size:13px;color:var(--ink);font-weight:600;text-align:right">${esc(String(value))}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderEmpDetailHistory(){
+  if(!_detailEmpId) return;
+  const filtered = getEmpChangeHistory(_detailEmpId, _detailHistoryFilter);
+  const all = getEmpChangeHistory(_detailEmpId);
+  const cntEl = document.getElementById('emp-detail-history-count');
+  if(cntEl) cntEl.textContent = all.length;
+
+  const body = document.getElementById('emp-detail-history-body');
+  if(!body) return;
+  if(filtered.length === 0){
+    body.innerHTML = `
+      <div style="padding:48px 20px;text-align:center;color:var(--muted);font-size:13px">
+        <div style="font-size:32px;opacity:.3;margin-bottom:10px">📭</div>
+        해당하는 변경 이력이 없습니다
+      </div>
+    `;
+    return;
+  }
+  body.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${filtered.map(h=>{
+        const typeText = h.type==='create' ? '등록'
+          : h.type==='delete' ? '삭제'
+          : h.type==='retire' ? '퇴사'
+          : h.type==='unretire' ? '퇴사취소'
+          : '변경';
+        const typeColor = (h.type==='create' || h.type==='unretire') ? '#16A34A'
+          : (h.type==='delete' || h.type==='retire') ? '#DC2626'
+          : '#1B64DA';
+        return `
+          <div style="border:1px solid var(--bd);border-radius:10px;padding:11px 14px;background:var(--card)">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="font-size:13px;font-weight:700;color:var(--ink)">${esc(h.fieldLabel || h.field || '')}</span>
+                <span style="font-size:10px;padding:2px 7px;border-radius:5px;font-weight:700;background:${typeColor}22;color:${typeColor}">${typeText}</span>
+              </div>
+              <span style="font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap">${_formatChangeDateTime(h.changedAt)}</span>
+            </div>
+            ${(h.type==='create' || h.type==='delete')
+              ? `<div style="font-size:12px;color:var(--ink2)">${esc(h.after || h.before || '-')}</div>`
+              : `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px">
+                  <span style="padding:3px 8px;background:#FEE2E2;color:#991B1B;border-radius:6px;text-decoration:line-through;text-decoration-color:rgba(153,27,27,.4)">${esc(h.before)}</span>
+                  <span style="color:var(--ink3);font-weight:700">→</span>
+                  <span style="padding:3px 8px;background:#DCFCE7;color:#166534;border-radius:6px;font-weight:600">${esc(h.after)}</span>
+                </div>`
+            }
+            <div style="margin-top:8px;font-size:11px;color:var(--muted)">
+              👤 ${esc(h.changedBy)}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function _formatChangeDateTime(iso){
+  try {
+    const d = new Date(iso);
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    const hh = String(d.getHours()).padStart(2,'0');
+    const mm = String(d.getMinutes()).padStart(2,'0');
+    return `${y}.${m}.${day} ${hh}:${mm}`;
+  } catch(_) { return iso || '-'; }
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 function renderEmps(){
   // 옛 dept-cat-options datalist DOM이 남아있으면 정리 (캐시된 페이지 잔재 청소)
   const _oldDl = document.getElementById('dept-cat-options');
@@ -4553,30 +4917,38 @@ function renderEmps(){
       else if(_curGroup==='leave') _groupHdr=`<tr><td colspan="19" style="padding:5px 14px;background:linear-gradient(90deg,#FEE2E2,#FFF1F2);font-size:10px;font-weight:800;color:#E11D48;letter-spacing:.5px;border-bottom:1px solid #FECDD3">🚪 퇴사자</td></tr>`;
     }
     _prevGroup = _curGroup;
-    return _groupHdr+`<tr draggable="true" data-eid="${e.id}"
-      ondragstart="empDragIdx=${i};this.style.opacity='.4';this.style.background='var(--nbg)';this.style.transform='scale(.98)'"
+    // 🔒 수정 잠금 모드 — _editingEmpId === e.id 행만 input 활성
+    const isThisEdit = _editingEmpId === e.id;
+    const isOtherEdit = _editingEmpId && _editingEmpId !== e.id;
+    const ro = isThisEdit ? '' : 'readonly';
+    const dis = isThisEdit ? '' : 'disabled';
+    const rowBg = isThisEdit
+      ? 'background:#F0F7FF;box-shadow:inset 3px 0 0 #3182F6;'
+      : (e.leave?'opacity:.5;background:var(--rose-dim);':(isOtherEdit?'opacity:.5;':''));
+    return _groupHdr+`<tr draggable="${isThisEdit?'false':'true'}" data-eid="${e.id}"
+      ondragstart="${isThisEdit?'event.preventDefault()':`empDragIdx=${i};this.style.opacity='.4';this.style.background='var(--nbg)';this.style.transform='scale(.98)'`}"
       ondragend="this.style.opacity='';this.style.background='';this.style.transform=''"
       ondragover="event.preventDefault();this.style.borderTop='2px solid var(--navy2)'"
       ondragleave="this.style.borderTop=''"
       ondrop="empDrop(event,${i});document.querySelectorAll('#emp-tbody tr').forEach(r=>r.style.borderTop='')"
-      style="transition:all .15s;${e.leave?'opacity:.5;background:var(--rose-dim);':''}cursor:pointer;">
-      <td><span style="cursor:grab;color:var(--ink3);font-size:14px;padding:0 4px;">⠿</span></td>
+      style="transition:all .15s;${rowBg}cursor:${isThisEdit?'default':'pointer'};">
+      <td><span style="cursor:${isThisEdit?'default':'grab'};color:var(--ink3);font-size:14px;padding:0 4px;">⠿</span></td>
       <td style="text-align:center;font-size:11px;font-weight:700;color:#94A3B8;padding:0 4px">${rowNum}</td>
       <td><div style="display:flex;gap:2px;align-items:center">
-        <input class="ei2" value="${esc(e.empNo||'')}" oninput="updE(${e.id},'empNo',this.value)" style="text-align:center;font-size:10px;flex:1" placeholder="사번" autocomplete="off">
-        ${!e.empNo&&POL.empNoEnabled?`<button onclick="showGenEmpNo(${e.id})" style="padding:2px 4px;font-size:8px;border:1px solid var(--navy2);border-radius:4px;background:var(--nbg);color:var(--navy2);cursor:pointer;white-space:nowrap;font-weight:700" title="사번 자동 생성 (사이트코드 미설정 시 안내 표시)">생성</button>`:''}
+        <input class="ei2" ${ro} value="${esc(e.empNo||'')}" oninput="updE(${e.id},'empNo',this.value)" style="text-align:center;font-size:10px;flex:1" placeholder="사번" autocomplete="off">
+        ${!e.empNo&&POL.empNoEnabled&&isThisEdit?`<button onclick="showGenEmpNo(${e.id})" style="padding:2px 4px;font-size:8px;border:1px solid var(--navy2);border-radius:4px;background:var(--nbg);color:var(--navy2);cursor:pointer;white-space:nowrap;font-weight:700" title="사번 자동 생성 (사이트코드 미설정 시 안내 표시)">생성</button>`:''}
       </div></td>
-      <td><input class="ei2" value="${esc(e.name)}" oninput="updE(${e.id},'name',this.value)" placeholder="이름" autocomplete="off"></td>
-      <td><input class="ei2" value="${esc(e.role)}" oninput="updE(${e.id},'role',this.value)" autocomplete="off"></td>
-      <td><input class="ei2" value="${esc(e.deptCat||'')}" placeholder="사무" oninput="updE(${e.id},'deptCat',this.value.trim())" style="text-align:center;background:${e.deptCat?'#ECFDF5':'transparent'};color:${e.deptCat?'#047857':'var(--ink2)'};font-weight:${e.deptCat?'700':'500'};font-size:10px" title="부서 분류 (입력 즉시 저장 + 필터에 자동 분류)" autocomplete="off" /></td>
-      <td><input class="ei2" value="${esc(e.grade||'')}" oninput="updE(${e.id},'grade',this.value)" placeholder="직급" autocomplete="off"></td>
-      <td><input class="ei2" value="${esc(e.dept||'')}" oninput="updE(${e.id},'dept',this.value)" placeholder="인천본점" autocomplete="off"></td>
+      <td><input class="ei2" ${ro} value="${esc(e.name)}" oninput="updE(${e.id},'name',this.value)" placeholder="이름" autocomplete="off"></td>
+      <td><input class="ei2" ${ro} value="${esc(e.role)}" oninput="updE(${e.id},'role',this.value)" autocomplete="off"></td>
+      <td><input class="ei2" ${ro} value="${esc(e.deptCat||'')}" placeholder="사무" oninput="updE(${e.id},'deptCat',this.value.trim())" style="text-align:center;background:${e.deptCat?'#ECFDF5':'transparent'};color:${e.deptCat?'#047857':'var(--ink2)'};font-weight:${e.deptCat?'700':'500'};font-size:10px" title="부서 분류 (입력 즉시 저장 + 필터에 자동 분류)" autocomplete="off" /></td>
+      <td><input class="ei2" ${ro} value="${esc(e.grade||'')}" oninput="updE(${e.id},'grade',this.value)" placeholder="직급" autocomplete="off"></td>
+      <td><input class="ei2" ${ro} value="${esc(e.dept||'')}" oninput="updE(${e.id},'dept',this.value)" placeholder="인천본점" autocomplete="off"></td>
       <td>
         <div style="display:flex;gap:3px;align-items:center">
-          <input class="ei2" value="${esc(e.rrnFront||'')}" maxlength="6" placeholder="앞6자리"
+          <input class="ei2" ${ro} value="${esc(e.rrnFront||'')}" maxlength="6" placeholder="앞6자리"
             oninput="updRrn(${e.id},'rrnFront',this.value)" id="rrn-front-${e.id}" style="text-align:center;letter-spacing:1px" autocomplete="off">
           <span style="color:var(--ink3);font-size:12px">-</span>
-          <input class="ei2" type="password" value="${esc(e.rrnBack||'')}" maxlength="7" placeholder="뒷7자리"
+          <input class="ei2" ${ro} type="password" value="${esc(e.rrnBack||'')}" maxlength="7" placeholder="뒷7자리"
             oninput="updRrn(${e.id},'rrnBack',this.value)" id="rrn-back-${e.id}" style="text-align:center;letter-spacing:2px" autocomplete="off">
           <button type="button" onclick="toggleRrnVis(${e.id})" id="rrn-eye-${e.id}"
             title="주민번호 뒷자리 보기/숨기기"
@@ -4585,51 +4957,55 @@ function renderEmps(){
       </td>
       <td>
         ${(()=>{const _m=(e.payMode||POL.basePayMode); return (_m==='monthly'||_m==='pohal')
-          ?`<div style="display:flex;align-items:center;gap:2px"><input class="ei2" type="text" inputmode="numeric" value="${e.monthly!==null&&e.monthly!==undefined?Number(e.monthly).toLocaleString():''}" oninput="formatNumInput(this)" onchange="updE(${e.id},'monthly',+this.value.replace(/,/g,'')||0)" style="text-align:right" placeholder="${Number(POL.baseMonthly||0).toLocaleString()}" autocomplete="off"><span style="font-size:9px;color:var(--ink3)">원/월</span></div>`
-          :`<div style="display:flex;align-items:center;gap:2px"><input class="ei2" type="text" inputmode="numeric" value="${e.rate!==null&&e.rate!==undefined?Number(e.rate).toLocaleString():''}" oninput="formatNumInput(this)" onchange="updE(${e.id},'rate',+this.value.replace(/,/g,'')||0)" style="text-align:right" placeholder="${Number(POL.baseRate||0).toLocaleString()}" autocomplete="off"><span style="font-size:9px;color:var(--ink3)">원/h</span></div>`
+          ?`<div style="display:flex;align-items:center;gap:2px"><input class="ei2" ${ro} type="text" inputmode="numeric" value="${e.monthly!==null&&e.monthly!==undefined?Number(e.monthly).toLocaleString():''}" oninput="formatNumInput(this)" onchange="updE(${e.id},'monthly',+this.value.replace(/,/g,'')||0)" style="text-align:right" placeholder="${Number(POL.baseMonthly||0).toLocaleString()}" autocomplete="off"><span style="font-size:9px;color:var(--ink3)">원/월</span></div>`
+          :`<div style="display:flex;align-items:center;gap:2px"><input class="ei2" ${ro} type="text" inputmode="numeric" value="${e.rate!==null&&e.rate!==undefined?Number(e.rate).toLocaleString():''}" oninput="formatNumInput(this)" onchange="updE(${e.id},'rate',+this.value.replace(/,/g,'')||0)" style="text-align:right" placeholder="${Number(POL.baseRate||0).toLocaleString()}" autocomplete="off"><span style="font-size:9px;color:var(--ink3)">원/h</span></div>`
         ;})()}
       </td>
-      <td><input class="ei2" type="date" value="${esc(e.join||'')}" onchange="updE(${e.id},'join',this.value)"></td>
+      <td><input class="ei2" ${ro} type="date" value="${esc(e.join||'')}" onchange="updE(${e.id},'join',this.value)"></td>
       <td>
         <div style="display:flex;gap:3px">
-          <button class="gender-btn male ${(e.gender||'male')==='male'?'on':''}" onclick="updE(${e.id},'gender','male');renderEmps()">남</button>
-          <button class="gender-btn female ${e.gender==='female'?'on':''}" onclick="updE(${e.id},'gender','female');renderEmps()">여</button>
+          <button class="gender-btn male ${(e.gender||'male')==='male'?'on':''}" ${dis} onclick="${isThisEdit?`updE(${e.id},'gender','male');renderEmps()`:''}">남</button>
+          <button class="gender-btn female ${e.gender==='female'?'on':''}" ${dis} onclick="${isThisEdit?`updE(${e.id},'gender','female');renderEmps()`:''}">여</button>
         </div>
       </td>
       <td>
         <div style="display:flex;gap:3px">
-          <button class="nation-btn local ${(e.nation||'local')==='local'?'on':''}" onclick="updE(${e.id},'nation','local');renderEmps()">내국인</button>
-          <button class="nation-btn foreign ${e.nation==='foreign'?'on':''}" onclick="updE(${e.id},'nation','foreign');renderEmps()">외국인</button>
+          <button class="nation-btn local ${(e.nation||'local')==='local'?'on':''}" ${dis} onclick="${isThisEdit?`updE(${e.id},'nation','local');renderEmps()`:''}">내국인</button>
+          <button class="nation-btn foreign ${e.nation==='foreign'?'on':''}" ${dis} onclick="${isThisEdit?`updE(${e.id},'nation','foreign');renderEmps()`:''}">외국인</button>
         </div>
       </td>
-      <td><input class="ei2" type="number" value="${e.age||''}" onchange="updE(${e.id},'age',+this.value)" style="text-align:center" placeholder="자동" id="age-${e.id}"></td>
-      <td><input class="ei2" value="${esc(e.phone||'')}" oninput="this.value=formatPhone(this.value);updE(${e.id},'phone',this.value)" placeholder="010-0000-0000" maxlength="13"></td>
+      <td><input class="ei2" ${ro} type="number" value="${e.age||''}" onchange="updE(${e.id},'age',+this.value)" style="text-align:center" placeholder="자동" id="age-${e.id}"></td>
+      <td><input class="ei2" ${ro} value="${esc(e.phone||'')}" oninput="this.value=formatPhone(this.value);updE(${e.id},'phone',this.value)" placeholder="010-0000-0000" maxlength="13"></td>
       <td>
         <div class="rb-g" style="justify-content:center">
-          <div class="rb ${!e.payMode||e.payMode==='fixed'?'on':''}" onclick="updE(${e.id},'payMode','fixed');renderEmps()" style="font-size:9px;padding:3px 6px">통상임금제</div>
-          <div class="rb ${e.payMode==='hourly'?'on':''}" onclick="updE(${e.id},'payMode','hourly');renderEmps()" style="font-size:9px;padding:3px 6px">시급제</div>
-          <div class="rb ${e.payMode==='monthly'||e.payMode==='pohal'?'on':''}" onclick="updE(${e.id},'payMode','pohal');renderEmps()" style="font-size:9px;padding:3px 6px">포괄임금제</div>
+          <div class="rb ${!e.payMode||e.payMode==='fixed'?'on':''}" onclick="${isThisEdit?`updE(${e.id},'payMode','fixed');renderEmps()`:''}" style="font-size:9px;padding:3px 6px${isThisEdit?'':';pointer-events:none;opacity:.6'}">통상임금제</div>
+          <div class="rb ${e.payMode==='hourly'?'on':''}" onclick="${isThisEdit?`updE(${e.id},'payMode','hourly');renderEmps()`:''}" style="font-size:9px;padding:3px 6px${isThisEdit?'':';pointer-events:none;opacity:.6'}">시급제</div>
+          <div class="rb ${e.payMode==='monthly'||e.payMode==='pohal'?'on':''}" onclick="${isThisEdit?`updE(${e.id},'payMode','pohal');renderEmps()`:''}" style="font-size:9px;padding:3px 6px${isThisEdit?'':';pointer-events:none;opacity:.6'}">포괄임금제</div>
         </div>
       </td>
       <td>
         <div style="display:flex;gap:4px;justify-content:center">
-          <button class="shift-btn day ${(e.shift||'day')==='day'?'on':''}" onclick="updE(${e.id},'shift','day');renderEmps()">주간</button>
-          <button class="shift-btn night ${e.shift==='night'?'on':''}" onclick="updE(${e.id},'shift','night');renderEmps()">야간</button>
+          <button class="shift-btn day ${(e.shift||'day')==='day'?'on':''}" ${dis} onclick="${isThisEdit?`updE(${e.id},'shift','day');renderEmps()`:''}">주간</button>
+          <button class="shift-btn night ${e.shift==='night'?'on':''}" ${dis} onclick="${isThisEdit?`updE(${e.id},'shift','night');renderEmps()`:''}">야간</button>
         </div>
       </td>
       <td style="text-align:center"><span style="font-size:11px;font-weight:700;color:var(--green)">${al.remain}개</span><br><span style="font-size:9px;color:var(--ink3)">(총${al.total})</span></td>
       <td>
-        <div style="display:flex;gap:3px;flex-direction:column;align-items:flex-start">
-          ${e.leave
-            ?`<div style="display:flex;align-items:center;gap:4px;background:#FEE2E2;border:1px solid #FECACA;border-radius:7px;padding:3px 7px">
-                <span style="font-size:9px;color:var(--rose);font-weight:700">퇴사</span>
-                <span style="font-size:10px;color:#991B1B;font-weight:600">${esc(e.leave)}</span>
-              </div>
-              <button class="btn btn-xs" onclick="cancelLeave(${e.id})" style="font-size:9px;color:var(--ink3);margin-top:2px">퇴사취소</button>`
-            :`<button class="btn btn-xs" onclick="setLeave(${e.id})" style="color:var(--rose);border-color:#FECACA">퇴사처리</button>`
-          }
-          <button class="btn btn-xs" onclick="rmE(${e.id})" style="color:var(--ink3);font-size:9px;margin-top:2px">삭제</button>
-        </div>
+        ${isThisEdit
+          ?`<div style="display:flex;gap:3px;flex-direction:column;align-items:stretch">
+              <button class="btn btn-xs" onclick="saveEditEmp(${e.id})" style="background:#22C55E;color:#fff;border:0;font-weight:700">💾 저장</button>
+              <button class="btn btn-xs" onclick="cancelEditEmp(${e.id})" style="color:var(--rose);border-color:#FECACA">취소</button>
+            </div>`
+          :`<div style="display:flex;gap:3px;flex-direction:column;align-items:stretch">
+              <button class="btn btn-xs" ${isOtherEdit?'disabled':''} onclick="openEmpDetail(${e.id})" style="color:#1B64DA;border-color:#C8DEFF">상세</button>
+              <button class="btn btn-xs" ${isOtherEdit?'disabled':''} onclick="startEditEmp(${e.id})" style="color:#16A34A;border-color:#BBF7D0">수정</button>
+              <button class="btn btn-xs" ${isOtherEdit?'disabled':''} onclick="rmE(${e.id})" style="color:var(--ink3);font-size:9px">삭제</button>
+              ${e.leave
+                ?`<button class="btn btn-xs" ${isOtherEdit?'disabled':''} onclick="cancelLeave(${e.id})" style="font-size:9px;color:var(--ink3);margin-top:2px">퇴사취소</button>`
+                :`<button class="btn btn-xs" ${isOtherEdit?'disabled':''} onclick="setLeave(${e.id})" style="color:var(--rose);border-color:#FECACA;font-size:9px;margin-top:2px">퇴사처리</button>`
+              }
+            </div>`
+        }
       </td>
     </tr>`;
   }).join('');
@@ -6214,26 +6590,92 @@ function confirmLeave(id){
   const inp=document.getElementById('leave-date-inp');
   if(!inp||!inp.value)return;
   const e=EMPS.find(x=>x.id===id);if(!e)return;
-  e.leave=inp.value;
-  document.getElementById('leave-modal').remove();
-  saveLS();renderEmps();renderSb();
+  const leaveDate = inp.value;
+  // 날짜 모달 먼저 닫고 변경자 모달 띄움
+  const modal = document.getElementById('leave-modal');
+  if(modal) modal.remove();
+  promptChangeAuthor('퇴사 처리').then(author => {
+    if(!author) return;  // 변경자 미입력 → 처리 안 함
+    e.leave = leaveDate;
+    if(typeof addEmpChangeHistory === 'function'){
+      addEmpChangeHistory({
+        empId: e.id,
+        field: 'leave',
+        fieldLabel: '퇴사일',
+        category: 'personal',
+        before: '재직',
+        after: leaveDate,
+        changedBy: author,
+        type: 'retire'
+      });
+    }
+    saveLS();
+    if(typeof renderEmps==='function') renderEmps();
+    if(typeof renderSb==='function') renderSb();
+    if(typeof showSyncToast==='function') showSyncToast(`🚪 ${e.name||''} 퇴사 처리됨`,'warn',2500);
+  });
 }
 function cancelLeave(id){
   const e=EMPS.find(x=>x.id===id);if(!e)return;
-  e.leave='';
-  saveLS();renderEmps();renderSb();
+  if(_editingEmpId){
+    alert('다른 직원을 수정 중입니다. 먼저 저장 또는 취소해주세요.');
+    return;
+  }
+  const oldLeave = e.leave;
+  promptChangeAuthor('퇴사 취소').then(author => {
+    if(!author) return;
+    e.leave = '';
+    if(typeof addEmpChangeHistory === 'function'){
+      addEmpChangeHistory({
+        empId: e.id,
+        field: 'leave',
+        fieldLabel: '퇴사일',
+        category: 'personal',
+        before: oldLeave || '-',
+        after: '재직',
+        changedBy: author,
+        type: 'unretire'
+      });
+    }
+    saveLS();
+    if(typeof renderEmps==='function') renderEmps();
+    if(typeof renderSb==='function') renderSb();
+    if(typeof showSyncToast==='function') showSyncToast(`✅ ${e.name||''} 퇴사 취소됨`,'ok',2500);
+  });
 }
 function rmE(id){
   const emp=EMPS.find(e=>e.id===id);
   if(!emp)return;
+  if(_editingEmpId){
+    alert('다른 직원을 수정 중입니다. 먼저 저장 또는 취소해주세요.');
+    return;
+  }
   const nm = emp.name || '이름없음';
   if(!confirm(`"${nm}" 직원을 삭제하시겠습니까?\n\n이 직원의 출퇴근·급여·연차·수당 이력이 화면에서 사라집니다.\n\n※ 복구가 필요하면 관리자에게 문의 (감사 로그에 기록은 남습니다)`))return;
   if(!confirm(`⚠️ 최종 확인\n\n"${nm}" 을(를) 정말 삭제할까요?`))return;
-  EMPS=EMPS.filter(e=>e.id!==id);
-  saveLS();
-  // 다른 기기에 30초 폴링을 기다리지 않고 즉시 반영
-  if(typeof flushPendingSave==='function') flushPendingSave();
-  renderEmps();renderSb();renderTable();
+  promptChangeAuthor('직원 삭제').then(author => {
+    if(!author) return;
+    // 삭제 전 이력 push
+    if(typeof addEmpChangeHistory === 'function'){
+      addEmpChangeHistory({
+        empId: emp.id,
+        field: 'delete',
+        fieldLabel: '직원 삭제',
+        category: 'personal',
+        before: nm,
+        after: '-',
+        changedBy: author,
+        type: 'delete'
+      });
+    }
+    EMPS=EMPS.filter(e=>e.id!==id);
+    saveLS();
+    // 다른 기기에 30초 폴링을 기다리지 않고 즉시 반영
+    if(typeof flushPendingSave==='function') flushPendingSave();
+    if(typeof renderEmps==='function') renderEmps();
+    if(typeof renderSb==='function') renderSb();
+    if(typeof renderTable==='function') renderTable();
+  });
 }
 function rmAllEmps(){
   // 🛡️ 2026-04-23 사고 이후 "전직원 일괄 삭제" 비활성화.
@@ -16156,6 +16598,7 @@ async function sbSaveAll(companyId) {
     {key:'tbk', value:TBK},
     {key:'folders', value:FOLDERS.map(f=>({...f,files:(f.files||[]).map(({dataUrl,...r})=>r)}))},
     {key:'safety', value:(()=>{const s={};Object.entries(SAFETY_REC).forEach(([k,v])=>{s[k]=Array.isArray(v)?v.map(({data,...r})=>r):v;});return s;})()},
+    {key:'emp_change_history', value: (typeof EMP_CHANGE_HISTORY!=='undefined' && Array.isArray(EMP_CHANGE_HISTORY)) ? EMP_CHANGE_HISTORY : []},
   ];
 
   // 🛡️ 빈 데이터 덮어쓰기 방어: 어떤 경로로도 빈값으로 보호 키를 덮어쓰지 못함.
@@ -16869,6 +17312,11 @@ async function sbLoadRemainder(companyId) {
     if('bk_snapshots' in map)    { BK_SNAPSHOTS = map.bk_snapshots || {}; localStorage.setItem('npm5_bk_snapshots', JSON.stringify(BK_SNAPSHOTS)); }
     if('custom_docs' in map)     { CUSTOM_DOCS = map.custom_docs || []; localStorage.setItem('npm5_custom_docs', JSON.stringify(CUSTOM_DOCS)); }
     if('saved_forms' in map)     { SAVED_FORMS = map.saved_forms || []; localStorage.setItem('npm5_saved_forms', JSON.stringify(SAVED_FORMS)); }
+    // 직원 변경 이력 (2026-05-20 도입) — C-1 가드 패턴 (if 'key' in map)
+    if('emp_change_history' in map){
+      EMP_CHANGE_HISTORY = Array.isArray(map.emp_change_history) ? map.emp_change_history : [];
+      try { localStorage.setItem(LS.CL, JSON.stringify(EMP_CHANGE_HISTORY)); } catch(_){}
+    }
 
     // 최초 1회: POL_SNAPSHOTS가 비어있고 REC 데이터가 있으면 현재 POL을 과거 달에 복사해 시작점 확보
     try {

@@ -34,12 +34,14 @@ export const ALLOWED_KEYS = Object.freeze([
   'company_info',
   'custom_docs',
   'saved_forms',
+  'emp_change_history',
 ]);
 
 // 빈값 저장 가드·낙관적 잠금·사이즈 급감 차단의 보호 대상 키.
 // 사고 시 복구가 어렵거나 사용자 입력값이 즉시 사라지는 키만 포함.
+// emp_change_history: 변경 이력 append-only — 빈 배열은 S-2 가드로 자동 스킵 (첫 이력 1건부터 저장됨)
 export const PROTECTED_KEYS = Object.freeze(
-  new Set(['emps', 'rec', 'bonus', 'allow', 'tax', 'tbk', 'safety', 'bk'])
+  new Set(['emps', 'rec', 'bonus', 'allow', 'tax', 'tbk', 'safety', 'bk', 'emp_change_history'])
 );
 
 // 헬퍼 — Set이 아닌 배열로 받고 싶을 때

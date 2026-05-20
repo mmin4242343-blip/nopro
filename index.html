@@ -1554,6 +1554,56 @@
   <div id="shift-list"></div>
 </div>
 
+<!-- 변경자 입력 모달 — 직원 정보 수정/삭제/퇴사 시 (2026-05-20 도입) -->
+<div id="change-author-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:var(--card);border-radius:12px;width:100%;max-width:380px;padding:20px;border:1px solid var(--bd);box-shadow:0 8px 32px rgba(0,0,0,.15);">
+    <div id="change-author-action" style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">직원 정보 변경</div>
+    <div id="change-author-label" style="font-size:15px;font-weight:700;color:var(--ink);margin-bottom:6px;">변경자 이름을 입력해주세요</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5;">변경 이력에 기록될 작업자 이름입니다. 이름을 적지 않으면 변경이 진행되지 않습니다.</div>
+    <input id="change-author-input" type="text" placeholder="예: 홍길동" style="width:100%;padding:10px 12px;border:1px solid var(--bd);background:var(--card);color:var(--ink);border-radius:8px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;transition:border-color .15s;">
+    <div style="display:flex;gap:6px;margin-top:14px;justify-content:flex-end;">
+      <button id="change-author-cancel" type="button" style="padding:8px 14px;border:1px solid var(--bd);background:var(--card);color:var(--ink);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
+      <button id="change-author-ok" type="button" style="padding:8px 14px;border:none;background:var(--ink);color:var(--card);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">확인</button>
+    </div>
+  </div>
+</div>
+
+<!-- 직원 상세보기 모달 — 기본정보 + 변경이력 탭 (2026-05-20 도입) -->
+<div id="emp-detail-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:var(--card);border-radius:14px;width:100%;max-width:680px;max-height:90vh;border:1px solid var(--bd);display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.18);">
+    <div style="padding:18px 22px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:flex-start;justify-content:space-between;gap:16px;">
+      <div style="flex:1;min-width:0">
+        <div id="emp-detail-title" style="font-size:18px;font-weight:800;color:var(--ink);letter-spacing:-.3px">-</div>
+        <div id="emp-detail-sub" style="font-size:12px;color:var(--muted);margin-top:4px">-</div>
+      </div>
+      <button onclick="closeEmpDetail()" style="background:var(--nbg);border:0;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;color:var(--muted);flex-shrink:0;font-family:inherit">×</button>
+    </div>
+    <div style="display:flex;gap:2px;padding:0 22px;border-bottom:1px solid var(--bd);">
+      <div class="emp-detail-tab" data-tab="info" onclick="switchEmpDetailTab('info')" style="padding:12px 16px;font-size:13px;color:var(--ink);font-weight:700;border-bottom:2px solid var(--ink);margin-bottom:-1px;cursor:pointer">기본 정보</div>
+      <div class="emp-detail-tab" data-tab="history" onclick="switchEmpDetailTab('history')" style="padding:12px 16px;font-size:13px;color:var(--muted);font-weight:500;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer">변경 이력 <span id="emp-detail-history-count" style="background:var(--nbg);color:var(--muted);padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;margin-left:4px">0</span></div>
+    </div>
+    <div style="padding:18px 22px;overflow-y:auto;flex:1">
+      <div id="emp-detail-tab-info" style="display:block">
+        <div id="emp-detail-info-body"></div>
+      </div>
+      <div id="emp-detail-tab-history" style="display:none">
+        <div style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap" id="emp-detail-history-filters">
+          <button class="emp-detail-history-chip" data-cat="all" onclick="filterEmpDetailHistory('all')" style="padding:5px 11px;border:1px solid var(--ink);background:var(--ink);color:var(--card);border-radius:14px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">전체</button>
+          <button class="emp-detail-history-chip" data-cat="role" onclick="filterEmpDetailHistory('role')" style="padding:5px 11px;border:1px solid var(--bd);background:var(--card);color:var(--ink);border-radius:14px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit">직무·소속</button>
+          <button class="emp-detail-history-chip" data-cat="salary" onclick="filterEmpDetailHistory('salary')" style="padding:5px 11px;border:1px solid var(--bd);background:var(--card);color:var(--ink);border-radius:14px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit">급여</button>
+          <button class="emp-detail-history-chip" data-cat="shift" onclick="filterEmpDetailHistory('shift')" style="padding:5px 11px;border:1px solid var(--bd);background:var(--card);color:var(--ink);border-radius:14px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit">근무형태</button>
+          <button class="emp-detail-history-chip" data-cat="personal" onclick="filterEmpDetailHistory('personal')" style="padding:5px 11px;border:1px solid var(--bd);background:var(--card);color:var(--ink);border-radius:14px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit">개인정보</button>
+        </div>
+        <div id="emp-detail-history-body"></div>
+      </div>
+    </div>
+    <div style="padding:12px 22px;border-top:1px solid var(--bd);display:flex;gap:6px;justify-content:flex-end">
+      <button onclick="closeEmpDetail()" style="padding:8px 14px;border:1px solid var(--bd);background:var(--card);color:var(--ink);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">닫기</button>
+      <button onclick="enterEditFromEmpDetail()" style="padding:8px 14px;border:0;background:var(--ink);color:var(--card);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">이 직원 수정</button>
+    </div>
+  </div>
+</div>
+
 <!-- 근무형태 등록/수정 모달 -->
 <div id="shift-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;align-items:center;justify-content:center;">
   <div style="background:var(--card);border-radius:12px;width:480px;max-height:85vh;overflow-y:auto;border:1px solid var(--bd);">
@@ -2299,7 +2349,7 @@ noprohr.netlify.app/tbm_sign.html
 </div>
 
 </div></div></div>
-<script src="/js/app.js?v=2026-05-20-04"></script>
+<script src="/js/app.js?v=2026-05-20-05"></script>
 <!-- 인라인 핸들러용 unsafe-inline은 추후 단계적 제거 예정 -->
 <script>
 // placeholder - app.js에서 모든 로직 처리
