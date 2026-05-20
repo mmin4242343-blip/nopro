@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-20-01';
+const CLIENT_BUILD = '2026-05-20-02';
 
 // 🇰🇷 한국어 IME 글로벌 가드 (2026-05-19)
 // 증상: 한글 조합 중(예: "도급" 타이핑 중) Tab/Enter/다른 칸 클릭으로 blur 발생 시
@@ -4972,7 +4972,7 @@ function openBulkAdd(){
         <div>
           <div style="font-size:16px;font-weight:700;color:var(--ink)">📋 직원 등록</div>
           <div style="font-size:10.5px;color:var(--ink3);margin-top:2px">
-            Tab/→: 이동 · Enter: 아래 · Shift+클릭/드래그: 범위선택 · Ctrl+C: 복사 · Ctrl+V: 붙여넣기(엑셀 복붙 가능!) · Delete: 지우기
+            Tab/→: 이동 · Enter: 아래 · Shift+클릭/드래그: 범위선택 · Ctrl+C: 복사 · Ctrl+V: 붙여넣기(엑셀 복붙) · Delete: 셀 비우기 · 🗑 선택행 삭제: 행 통째로 제거
           </div>
           <div style="font-size:10.5px;color:var(--navy2);margin-top:3px;font-weight:600">
             💡 사번은 공란으로 두시면 직원 정보(직종·소속) 기반으로 자동 생성할 수 있습니다.
@@ -4980,7 +4980,9 @@ function openBulkAdd(){
         </div>
         <div style="display:flex;gap:8px;align-items:center">
           <span id="bulk-count" style="font-size:11px;color:var(--ink3);background:#F1F5F9;padding:4px 10px;border-radius:6px">0명 입력됨</span>
+          <button onclick="bulkAddRows(1)" class="btn btn-xs" style="color:var(--navy2);border-color:var(--navy2)">+ 1행</button>
           <button onclick="bulkAddRows(10)" class="btn btn-xs" style="color:var(--navy2);border-color:var(--navy2)">+ 10행</button>
+          <button onclick="bulkDeleteSelectedRows()" class="btn btn-xs" style="color:var(--rose);border-color:#FECACA" title="선택된 행(들) 삭제 — Shift+클릭이나 Shift+↑↓으로 범위 선택">🗑 선택행 삭제</button>
           <button onclick="closeBulkAdd()" class="btn btn-xs">✕</button>
           <button onclick="confirmBulkAdd()" class="btn btn-n btn-sm">✅ 추가하기</button>
         </div>
@@ -5139,21 +5141,25 @@ function bulkUpdateHighlight(){
   });
 }
 
+// onfocus 콜백 — 상태 추적만 담당. focus()/select() 직접 호출 안 함
+// (input의 onfocus에서 호출되므로 이미 focus 상태. select() 호출하면 클릭 시 기존 텍스트가 전부 선택돼
+//  사용자가 한 글자만 타이핑해도 통째로 지워지는 "값 사라짐" 버그 발생함)
 function bulkFocusCell(ri, ci, e){
   if(_bulkDragging) return;
   bulkSel = {r:ri, c:ci};
   if(!e?.shiftKey) bulkSelRange = null;
   bulkUpdateHighlight();
+}
+
+// 키보드 네비게이션 전용 — focus + 전체 선택 (Enter/Tab 직후 즉시 덮어쓰기 가능)
+function bulkKeyNav(ri, ci){
+  bulkSel = {r:ri, c:ci};
+  bulkSelRange = null;
+  bulkUpdateHighlight();
   const cell = document.getElementById(`bulk-cell-${ri}-${ci}`);
   if(!cell) return;
   const inp = cell.querySelector('input,button');
   if(!inp) return;
-  // 이미 같은 input에서 호출된 경우(onfocus 콜백)는 select만 호출 — focus() 재호출은 무한 루프 방지
-  if(document.activeElement === inp){
-    if(inp.tagName==='INPUT' && typeof inp.select==='function') inp.select();
-    return;
-  }
-  // 다른 셀로 이동 — focus + 전체 텍스트 선택 (Enter 직후 바로 덮어쓰기 가능)
   inp.focus();
   if(inp.tagName==='INPUT' && typeof inp.select==='function'){
     try { inp.select(); } catch(_){}
@@ -5291,32 +5297,32 @@ function bulkKeyDown(e){
   if(e.key==='Tab'){
     e.preventDefault();
     bulkSelRange = null;
-    if(e.shiftKey){ if(c>0) bulkFocusCell(r,c-1); else if(r>0) bulkFocusCell(r-1,cols-1); }
-    else { if(c<cols-1) bulkFocusCell(r,c+1); else if(r<rows-1) bulkFocusCell(r+1,0); }
+    if(e.shiftKey){ if(c>0) bulkKeyNav(r,c-1); else if(r>0) bulkKeyNav(r-1,cols-1); }
+    else { if(c<cols-1) bulkKeyNav(r,c+1); else if(r<rows-1) bulkKeyNav(r+1,0); }
     return;
   }
-  if(e.key==='Enter'){ e.preventDefault(); bulkSelRange=null; if(r<rows-1) bulkFocusCell(r+1,c); return; }
+  if(e.key==='Enter'){ e.preventDefault(); bulkSelRange=null; if(r<rows-1) bulkKeyNav(r+1,c); return; }
   if(e.key==='ArrowDown' && !e.shiftKey){
     // select 요소 열려있지 않을 때만 이동
     if(document.activeElement.tagName==='SELECT') return;
-    e.preventDefault(); if(r<rows-1) bulkFocusCell(r+1,c); return;
+    e.preventDefault(); if(r<rows-1) bulkKeyNav(r+1,c); return;
   }
   if(e.key==='ArrowUp' && !e.shiftKey){
     if(document.activeElement.tagName==='SELECT') return;
-    e.preventDefault(); if(r>0) bulkFocusCell(r-1,c); return;
+    e.preventDefault(); if(r>0) bulkKeyNav(r-1,c); return;
   }
   if(e.key==='ArrowRight' && !e.shiftKey){
     // input에서 커서가 끝에 있을 때만 이동
     const ae=document.activeElement;
     if(ae.tagName==='SELECT') return;
     if(ae.tagName==='INPUT' && ae.selectionStart!==ae.value.length) return;
-    e.preventDefault(); if(c<cols-1) bulkFocusCell(r,c+1); return;
+    e.preventDefault(); if(c<cols-1) bulkKeyNav(r,c+1); return;
   }
   if(e.key==='ArrowLeft' && !e.shiftKey){
     const ae=document.activeElement;
     if(ae.tagName==='SELECT') return;
     if(ae.tagName==='INPUT' && ae.selectionStart!==0) return;
-    e.preventDefault(); if(c>0) bulkFocusCell(r,c-1); return;
+    e.preventDefault(); if(c>0) bulkKeyNav(r,c-1); return;
   }
   // Shift+방향키: 범위 확장
   if(e.key==='ArrowDown' && e.shiftKey){
@@ -5424,6 +5430,31 @@ function bulkClearRange(){
 
 function bulkAddRows(n){
   for(let i=0;i<n;i++) bulkData.push({});
+  renderBulkTable();
+}
+
+// 선택된 행(들) 삭제 — 범위 선택(Shift+드래그/Shift+↑↓) 시 그 범위, 단일 셀 선택 시 그 행 1줄
+function bulkDeleteSelectedRows(){
+  let r1, r2;
+  if(bulkSelRange){
+    r1 = Math.min(bulkSelRange.r1, bulkSelRange.r2);
+    r2 = Math.max(bulkSelRange.r1, bulkSelRange.r2);
+  } else if(bulkSel.r >= 0){
+    r1 = r2 = bulkSel.r;
+  } else {
+    alert('삭제할 행을 먼저 선택하세요\n\n(셀을 클릭하거나 Shift+↑↓·Shift+클릭으로 범위 선택)');
+    return;
+  }
+  const count = r2 - r1 + 1;
+  // 입력된 행이 포함돼 있으면 확인 — 빈 행만이면 바로 삭제
+  const hasData = bulkData.slice(r1, r2+1).some(r =>
+    Object.values(r||{}).some(v=>v!==undefined&&v!==null&&String(v).trim()!=='')
+  );
+  if(hasData && !confirm(`선택된 ${count}개 행을 삭제하시겠습니까?\n(입력된 데이터도 함께 사라집니다)`)) return;
+  bulkData.splice(r1, count);
+  if(bulkData.length === 0) bulkData.push({}); // 최소 1행 유지
+  bulkSelRange = null;
+  bulkSel = {r: -1, c: -1};
   renderBulkTable();
 }
 
