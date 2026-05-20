@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-20-08';
+const CLIENT_BUILD = '2026-05-20-09';
 
 // 🇰🇷 한국어 IME 글로벌 가드 (2026-05-19)
 // 증상: 한글 조합 중(예: "도급" 타이핑 중) Tab/Enter/다른 칸 클릭으로 blur 발생 시
@@ -14823,6 +14823,11 @@ function exportMonthlyExcel(){
           [2,3,4,5,6,7,8,9].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty(rowBg)));
           xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),'연차',S.accent(C.green,C.green3,true));
           xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
+        } else if(rec.absent){
+          // 결근일: 시간 컬럼 모두 비우고 '결근' 표시만 (2026-05-20-09 fix — 이전엔 calcSession 결과·공제시간이 들어가 화면과 불일치)
+          [2,3,4,5,6,7,8,9].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty(rowBg)));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),'결근',S.accent(C.rose,C.rose3,true));
+          xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
         } else {
           const bks=getActiveBk(vY,vM,d,emp);
           const activeBks = rec.customBk ? (rec.customBkList||[]) : bks;
@@ -14980,6 +14985,11 @@ function exportMonthlyExcelOne(empId){
       if(rec.annual){
         [2,3,4,5,6,7,8,9].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty(rowBg)));
         xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),'연차',S.accent(C.green,C.green3,true));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
+      } else if(rec.absent){
+        // 결근일: 시간 컬럼 모두 비우고 '결근' 표시만 (2026-05-20-09 fix)
+        [2,3,4,5,6,7,8,9].forEach(ci=>xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:ci}),'',S.empty(rowBg)));
+        xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:10}),'결근',S.accent(C.rose,C.rose3,true));
         xlsWrite(ws,XLSX.utils.encode_cell({r:R,c:11}),rec.note||'',S.cell(C.gray,rowBg,false,'left'));
       } else {
         const bks=getActiveBk(vY,vM,d,emp);
