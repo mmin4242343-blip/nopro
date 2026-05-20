@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-20-02';
+const CLIENT_BUILD = '2026-05-20-03';
 
 // 🇰🇷 한국어 IME 글로벌 가드 (2026-05-19)
 // 증상: 한글 조합 중(예: "도급" 타이핑 중) Tab/Enter/다른 칸 클릭으로 blur 발생 시
@@ -2345,7 +2345,8 @@ function applyCommonFilter(emps, tab, refDate){
     if(f.dept && f.dept!=='all' && (emp.dept||'').trim()!==(f.dept||'').trim()) return false;
     if(f.deptCat && f.deptCat!=='all'){
       const ec=(emp.deptCat||'').trim();
-      if(f.deptCat==='none'){ if(ec) return false; }
+      // '사무 (none)' 버튼: 빈값 + 글자로 '사무'를 입력한 직원도 모두 포함 (필터 일관성)
+      if(f.deptCat==='none'){ if(ec && ec!=='사무') return false; }
       else if(ec!==f.deptCat) return false;
     }
     if(f.search && !(emp.name||'').toLowerCase().includes(f.search)) return false;
@@ -3402,7 +3403,7 @@ function renderMonthly(){
     if(MF.nation==='korean' && isFor) return false;
     if(MF.nation==='foreign' && !isFor) return false;
     if(MF.dept!=='all' && (e.dept||'').trim()!==MF.dept) return false;
-    if(MF.deptCat!=='all'){const ec=(e.deptCat||'').trim();if(MF.deptCat==='none'){if(ec)return false;}else if(ec!==MF.deptCat)return false;}
+    if(MF.deptCat!=='all'){const ec=(e.deptCat||'').trim();if(MF.deptCat==='none'){if(ec && ec!=='사무')return false;}else if(ec!==MF.deptCat)return false;}
     return true;
   });
   // 현재 선택 직원이 필터에 없으면 첫 번째로 리셋
@@ -3542,7 +3543,7 @@ function renderOv(){
     if(MF.nation==='korean' && isFor) return false;
     if(MF.nation==='foreign' && !isFor) return false;
     if(MF.dept!=='all' && (e.dept||'').trim()!==MF.dept) return false;
-    if(MF.deptCat!=='all'){const ec=(e.deptCat||'').trim();if(MF.deptCat==='none'){if(ec)return false;}else if(ec!==MF.deptCat)return false;}
+    if(MF.deptCat!=='all'){const ec=(e.deptCat||'').trim();if(MF.deptCat==='none'){if(ec && ec!=='사무')return false;}else if(ec!==MF.deptCat)return false;}
     return true;
   });
   const rows=mvEmps.map(emp=>{
@@ -4877,11 +4878,10 @@ function updE(id,f,v){
   if(f==='rate' || f==='monthly'){
     const n = +v;
     e[f] = isNaN(n) ? 0 : Math.max(0, n);
-  } else if(f==='deptCat'){
-    // '사무'는 미지정(none) 필터와 중복되므로 빈 값으로 정규화
-    const t = (v||'').trim();
-    e[f] = (t==='사무') ? '' : t;
   } else {
+    // 주의: deptCat '사무' 정규화는 oninput에서 하지 않음.
+    // 사용자가 '사' → '사무' 타이핑 중 자동 클리어돼 값 사라지는 현상 차단.
+    // 화면 노출은 makeFilterBar의 customCats 제외 + 필터 매칭에서 처리.
     e[f] = v;
   }
   // 입사일/퇴사일 미래 날짜는 실수일 가능성 → 저장하되 경고
@@ -5190,13 +5190,13 @@ function bulkCycleSelect(ri, ci, e){
 function bulkSetVal(ri, ci, val){
   if(!bulkData[ri]) bulkData[ri] = {};
   const key = BULK_COLS[ci].key;
-  // 주민번호 / deptCat 입력값 정규화
+  // 주민번호는 숫자만 허용 (즉시 정규화 OK — 사용자가 보고 있는 input value도 같은 결과)
   if(key==='rrnFront' || key==='rrnBack'){
     val = String(val||'').replace(/[^0-9]/g,'');
-  } else if(key==='deptCat'){
-    const t = String(val||'').trim();
-    val = (t==='사무') ? '' : t;
   }
+  // 주의: deptCat '사무' 정규화는 oninput에서 하지 않음.
+  // 사용자가 '사' → '사무'까지 타이핑하는 도중에 '사무' 매칭돼서 값이 사라지는 UX 버그 발생.
+  // confirmBulkAdd 저장 시점에 한 번만 정규화.
   bulkData[ri][key] = val;
   updateBulkCount();
   // 이름 셀이면 배경색만 업데이트
@@ -5275,16 +5275,35 @@ function bulkKeyDown(e){
   const cols = BULK_COLS.length;
 
   // Ctrl+C: 복사
-  if(e.ctrlKey && e.key==='c'){
-    bulkCopy(); return;
-  }
-  // Ctrl+V: 붙여넣기 (클립보드 API - 엑셀에서 복사한 텍스트도 처리)
-  if(e.ctrlKey && e.key==='v'){
+  // input 안에서 일부 텍스트를 직접 선택한 경우는 브라우저 기본 동작에 양보(부분 복사 지원).
+  // 그 외엔 셀(또는 범위) 단위로 bulkCopy 실행.
+  if(e.ctrlKey && (e.key==='c' || e.key==='C')){
+    const ae = document.activeElement;
+    const hasInputSel = ae && ae.tagName==='INPUT'
+      && typeof ae.selectionStart==='number'
+      && ae.selectionStart !== ae.selectionEnd;
+    if(hasInputSel) return; // 부분 텍스트 선택 → 브라우저 기본 복사 사용
     e.preventDefault();
-    navigator.clipboard.readText().then(text=>{
-      if(text) bulkPasteText(text);
-      else bulkPaste();
-    }).catch(()=>bulkPaste());
+    bulkCopy();
+    return;
+  }
+  // Ctrl+V: 붙여넣기
+  // 내부 클립보드(bulkClipboard)가 있으면 그것 우선 — 시스템 클립보드의 무관한 텍스트를
+  // 가져와 셀이 잘못 덮이는 사고 차단. 내부 없을 때만 시스템 클립보드(엑셀 복붙) 시도.
+  if(e.ctrlKey && (e.key==='v' || e.key==='V')){
+    const ae = document.activeElement;
+    const hasInputSel = ae && ae.tagName==='INPUT'
+      && typeof ae.selectionStart==='number'
+      && ae.selectionStart !== ae.selectionEnd;
+    if(hasInputSel) return; // 부분 텍스트 교체는 브라우저 기본에 양보
+    e.preventDefault();
+    if(bulkClipboard && bulkClipboard.length){
+      bulkPaste();
+    } else {
+      navigator.clipboard.readText().then(text=>{
+        if(text) bulkPasteText(text);
+      }).catch(()=>{});
+    }
     return;
   }
   // Delete/Backspace: 선택 범위 지우기
@@ -5345,16 +5364,30 @@ function bulkCopy(){
   const r1=Math.min(range.r1,range.r2), r2=Math.max(range.r1,range.r2);
   const c1=Math.min(range.c1,range.c2), c2=Math.max(range.c1,range.c2);
   bulkClipboard = [];
+  const textRows = [];
   for(let r=r1;r<=r2;r++){
     const row=[];
+    const textRow=[];
     for(let c=c1;c<=c2;c++){
-      row.push(bulkData[r]?.[BULK_COLS[c].key]||'');
+      const v = bulkData[r]?.[BULK_COLS[c].key];
+      const vv = (v===undefined||v===null) ? '' : v;
+      row.push(vv);
+      textRow.push(String(vv));
     }
     bulkClipboard.push(row);
+    textRows.push(textRow.join('\t'));
   }
+  // 시스템 클립보드에도 동일 내용 복사 (엑셀·외부로 붙여넣기 가능)
+  // 실패해도 내부 bulkClipboard로 폴백되므로 무시
+  try { navigator.clipboard.writeText(textRows.join('\n')).catch(()=>{}); } catch(_){}
   // 상태 표시
   const el=document.getElementById('bulk-count');
-  if(el){ const orig=el.textContent; el.textContent=`📋 ${(r2-r1+1)}행 복사됨`; setTimeout(()=>updateBulkCount(),1200); }
+  if(el){
+    const cnt=(r2-r1+1)*(c2-c1+1);
+    el.textContent=`📋 ${(r2-r1+1)}행 × ${(c2-c1+1)}열 (${cnt}셀) 복사됨`;
+    el.style.background='#DBEAFE'; el.style.color='#1E3A5F';
+    setTimeout(()=>updateBulkCount(),1500);
+  }
 }
 
 function bulkPaste(){
@@ -5520,9 +5553,11 @@ function confirmBulkAdd(){
     const pm=row.payMode||null;
     // 💡 monthly·pohal 둘 다 포괄임금제 — 둘 중 어느 라벨이든 월급 필드(monthly)에 저장
     const isMonthly=pm==='monthly' || pm==='pohal';
+    // deptCat '사무'는 미지정(none) 필터와 동치이므로 빈값으로 정규화 (저장 시점에만 1회)
+    const _deptCat = ((row.deptCat||'').trim()==='사무') ? '' : (row.deptCat||'').trim();
     EMPS.push({
       id:maxId, name:row.name.trim(),
-      role:row.role||'', grade:row.grade||'', dept:row.dept||'', deptCat:row.deptCat||'',
+      role:row.role||'', grade:row.grade||'', dept:row.dept||'', deptCat:_deptCat,
       empNo:row.empNo||'',
       rate:(!isMonthly&&row.rate)?+row.rate:null,
       monthly:(isMonthly&&row.rate)?+row.rate:null,
@@ -13807,7 +13842,7 @@ function exportMonthlyExcel(){
     const colCount = days+6;
 
     // 타이틀 블록
-    R = xlsTitleBlock(ws, `📊 ${monthStr} 근태 전체 현황`, `출력일: ${new Date().toLocaleDateString('ko-KR')} · 총 ${(()=>{return EMPS.filter(e=>{if(mvFilter!=='all'&&(e.payMode||'fixed')!==mvFilter)return false;if(MF.shift!=='all'&&(e.shift||'day')!==MF.shift)return false;const isFor=e.nation==='foreign'||e.foreigner===true;if(MF.nation==='korean'&&isFor)return false;if(MF.nation==='foreign'&&!isFor)return false;if(MF.dept!=='all'&&(e.dept||'').trim()!==MF.dept)return false;if(MF.deptCat!=='all'){const ec=(e.deptCat||'').trim();if(MF.deptCat==='none'){if(ec)return false;}else if(ec!==MF.deptCat)return false;}return !e.leave;}).length})()}명`, colCount, R);
+    R = xlsTitleBlock(ws, `📊 ${monthStr} 근태 전체 현황`, `출력일: ${new Date().toLocaleDateString('ko-KR')} · 총 ${(()=>{return EMPS.filter(e=>{if(mvFilter!=='all'&&(e.payMode||'fixed')!==mvFilter)return false;if(MF.shift!=='all'&&(e.shift||'day')!==MF.shift)return false;const isFor=e.nation==='foreign'||e.foreigner===true;if(MF.nation==='korean'&&isFor)return false;if(MF.nation==='foreign'&&!isFor)return false;if(MF.dept!=='all'&&(e.dept||'').trim()!==MF.dept)return false;if(MF.deptCat!=='all'){const ec=(e.deptCat||'').trim();if(MF.deptCat==='none'){if(ec && ec!=='사무')return false;}else if(ec!==MF.deptCat)return false;}return !e.leave;}).length})()}명`, colCount, R);
     ws['!rows'] = [{hpt:28},{hpt:16}];
 
     // 헤더행 (사용자 요청: 근무일/연차/실근무/월급여 컬럼 제외)
@@ -13845,7 +13880,7 @@ function exportMonthlyExcel(){
       if(MF.nation==='korean'&&isFor) return false;
       if(MF.nation==='foreign'&&!isFor) return false;
       if(MF.dept!=='all'&&(e.dept||'').trim()!==MF.dept) return false;
-      if(MF.deptCat!=='all'){const ec=(e.deptCat||'').trim();if(MF.deptCat==='none'){if(ec)return false;}else if(ec!==MF.deptCat)return false;}
+      if(MF.deptCat!=='all'){const ec=(e.deptCat||'').trim();if(MF.deptCat==='none'){if(ec && ec!=='사무')return false;}else if(ec!==MF.deptCat)return false;}
       return true;
     });
 
@@ -13910,7 +13945,7 @@ function exportMonthlyExcel(){
     if(MF.nation==='korean'&&isFor) return false;
     if(MF.nation==='foreign'&&!isFor) return false;
     if(MF.dept!=='all'&&(e.dept||'').trim()!==MF.dept) return false;
-    if(MF.deptCat!=='all'){const ec=(e.deptCat||'').trim();if(MF.deptCat==='none'){if(ec)return false;}else if(ec!==MF.deptCat)return false;}
+    if(MF.deptCat!=='all'){const ec=(e.deptCat||'').trim();if(MF.deptCat==='none'){if(ec && ec!=='사무')return false;}else if(ec!==MF.deptCat)return false;}
     return true;
   });
 
