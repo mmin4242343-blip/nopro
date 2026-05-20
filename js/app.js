@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-20-03';
+const CLIENT_BUILD = '2026-05-20-04';
 
 // 🇰🇷 한국어 IME 글로벌 가드 (2026-05-19)
 // 증상: 한글 조합 중(예: "도급" 타이핑 중) Tab/Enter/다른 칸 클릭으로 blur 발생 시
@@ -5618,24 +5618,32 @@ function importEmpsExcel(input){
     // 헤더(1행) 기반 열 인덱스 자동 감지
     const hdr=rows[0].map(h=>String(h||'').trim());
     const colMap={};
+    // ⚠️ 키워드 순서가 중요 — 더 구체적인 표현을 앞에 배치 (예: '주민번호 뒷자리' 먼저 매칭)
     const colNames={
       empNo:['사원코드','사원번호','사번'],
       name:['사원명','이름','성명'],
-      nation:['내외국인구분','내외국인','국적구분'],
+      nation:['내외국인구분','내외국인','국적구분','국적'],
+      rrnBack:['주민번호 뒷자리','주민 뒷자리','주민뒷자리','뒷자리'],
+      rrnFront:['주민번호 앞자리','주민 앞자리','주민앞자리','앞자리'],
       rrn:['주민(외국인)등록번호','주민등록번호','주민번호','등록번호'],
       age:['나이','연령'],
       gender:['성별'],
-      join:['입사일자','입사일','입사날짜'],
-      grade:['직급'],
+      join:['입사일자','입사일','입사날짜','입사'],
+      grade:['직급','등급'],
       role:['직종','직무'],
-      phone:['휴대폰번호','핸드폰','휴대폰','연락처','전화번호']
+      deptCat:['부서분류','부서구분','부서'],     // 'deptCat'은 '부서'를 포함하므로 '소속'보다 먼저 매칭돼야 함
+      dept:['소속','사업장','지점','본점','지사'],
+      shift:['주야간','주·야간','근무형태','근무 형태','시프트','주/야간','교대'],
+      payMode:['급여방식','급여 방식','임금형태','임금 형태','급여형태','급여 형태','임금방식'],
+      rate:['시급/월급','시급','월급','임금','급여','단가'],
+      phone:['휴대폰번호','핸드폰','휴대폰','연락처','전화번호','휴대전화']
     };
+    // 한 열이 둘 이상의 키에 매칭되지 않도록 이미 사용된 인덱스는 건너뜀
+    const usedIdx = new Set();
     for(const[key,names]of Object.entries(colNames)){
-      const idx=hdr.findIndex(h=>names.some(n=>h.includes(n)));
-      if(idx>=0)colMap[key]=idx;
+      const idx=hdr.findIndex((h,i)=>!usedIdx.has(i) && names.some(n=>h.includes(n)));
+      if(idx>=0){ colMap[key]=idx; usedIdx.add(idx); }
     }
-    // 직급/직종 구분: 직급이 직종보다 앞에 있으면 순서대로 매핑
-    // 별도 처리 불필요 - 헤더명으로 정확히 매칭됨
 
     if(colMap.name===undefined){excelToast('사원명 열을 찾을 수 없습니다');return;}
 
@@ -5656,19 +5664,45 @@ function importEmpsExcel(input){
       const nid=EMPS.length>0?Math.max(...EMPS.map(x=>x.id))+1:1;
       const ci=EMPS.length%colors.length;
 
-      // 주민번호 파싱 (XXXXXX-XXXXXXX 또는 13자리 숫자)
+      // 주민번호 파싱
+      // 케이스: 'XXXXXX-XXXXXXX' / 13자리 숫자 / 앞·뒤 별도 열 / Excel 숫자 저장으로 leading 0 손실
       let rrnFront='',rrnBack='';
-      if(colMap.rrn!==undefined){
-        const raw=String(r[colMap.rrn]||'').replace(/\s/g,'');
+      if(colMap.rrnFront!==undefined || colMap.rrnBack!==undefined){
+        // 앞·뒤 별도 열
+        const onlyDigits = s => String(s||'').replace(/\D/g,'');
+        if(colMap.rrnFront!==undefined) rrnFront = onlyDigits(r[colMap.rrnFront]);
+        if(colMap.rrnBack!==undefined)  rrnBack  = onlyDigits(r[colMap.rrnBack]);
+        // Excel 숫자 저장으로 leading 0이 빠진 케이스: 앞자리 5자리 → 0 패딩, 뒷자리 6자리 → 0 패딩
+        if(rrnFront.length===5) rrnFront = '0'+rrnFront;
+        if(rrnBack.length===6)  rrnBack  = '0'+rrnBack;
+      } else if(colMap.rrn!==undefined){
+        // 통합 열 (대시 포함 or 13자리 숫자)
+        const cell = r[colMap.rrn];
+        // 숫자형으로 저장된 경우(과학표기 포함) 일반 십진수 문자열로 변환
+        let raw;
+        if(typeof cell==='number'){
+          raw = cell.toLocaleString('fullwide',{useGrouping:false});
+        } else {
+          raw = String(cell||'').trim();
+        }
+        raw = raw.replace(/\s/g,'');
         if(raw.includes('-')){
           const parts=raw.split('-');
-          rrnFront=parts[0]||'';
-          rrnBack=parts[1]||'';
-        }else if(raw.length>=13){
-          rrnFront=raw.slice(0,6);
-          rrnBack=raw.slice(6,13);
-        }else if(raw.length>=6){
-          rrnFront=raw.slice(0,6);
+          rrnFront=String(parts[0]||'').replace(/\D/g,'');
+          rrnBack =String(parts[1]||'').replace(/\D/g,'');
+          // leading 0 보정
+          if(rrnFront.length===5) rrnFront='0'+rrnFront;
+          if(rrnBack.length===6)  rrnBack ='0'+rrnBack;
+        } else {
+          const digits = raw.replace(/\D/g,'');
+          // Excel 숫자 저장으로 12자리만 남은 경우 → 앞에 0 패딩하여 13자리로 복원
+          const padded = digits.length===12 ? '0'+digits : digits;
+          if(padded.length>=13){
+            rrnFront=padded.slice(0,6);
+            rrnBack =padded.slice(6,13);
+          } else if(padded.length>=6){
+            rrnFront=padded.slice(0,6);
+          }
         }
       }
 
@@ -5715,15 +5749,60 @@ function importEmpsExcel(input){
         phone=String(r[colMap.phone]||'').trim();
       }
 
+      // 소속
+      const dept = colMap.dept!==undefined ? String(r[colMap.dept]||'').trim() : '';
+      // 부서 분류 ('사무'는 미지정과 동치이므로 빈값으로 정규화)
+      let deptCat = colMap.deptCat!==undefined ? String(r[colMap.deptCat]||'').trim() : '';
+      if(deptCat==='사무') deptCat='';
+      // 주야간 — 한글·영문 모두 인식
+      let shift = 'day';
+      if(colMap.shift!==undefined){
+        const sv = String(r[colMap.shift]||'').trim().toLowerCase();
+        if(sv==='야간' || sv==='야' || sv==='night' || sv==='n' || sv.includes('야')) shift='night';
+        else if(sv) shift='day';
+      }
+      // 급여방식 — 통상임금제(fixed) / 시급제(hourly) / 포괄임금제(pohal). 그 외 라벨은 fixed로 폴백
+      let payMode = null;
+      if(colMap.payMode!==undefined){
+        const pv = String(r[colMap.payMode]||'').trim();
+        if(pv==='시급제'||pv==='시급'||pv==='hourly') payMode='hourly';
+        else if(pv==='포괄임금제'||pv==='포괄임금'||pv==='월급제'||pv==='monthly'||pv==='pohal') payMode='pohal';
+        else if(pv==='통상임금제'||pv==='통상'||pv==='fixed') payMode='fixed';
+        else if(pv) payMode='fixed';
+      }
+      // 시급/월급 — 콤마·통화기호·"원"·"/h" 등 제거 후 숫자 추출
+      let rate=null, monthly=null;
+      if(colMap.rate!==undefined){
+        const rv = r[colMap.rate];
+        let num;
+        if(typeof rv==='number'){
+          num = rv;
+        } else {
+          const s = String(rv||'').replace(/[^\d.-]/g,''); // 숫자·점·마이너스만 남김
+          num = s ? parseFloat(s) : NaN;
+        }
+        if(!isNaN(num) && num>0){
+          // 100,000 이상이면 월급으로 자동 추정 (payMode가 hourly가 아닐 때)
+          if(payMode==='pohal' || (payMode!=='hourly' && num>=100000)){
+            monthly = num;
+            if(!payMode) payMode='pohal';
+          } else {
+            rate = num;
+            if(!payMode) payMode='hourly';
+          }
+        }
+      }
+
       const emp={
         id:nid,
         name:nm,
         empNo:colMap.empNo!==undefined?String(r[colMap.empNo]||'').trim():'',
         role:colMap.role!==undefined?String(r[colMap.role]||'').trim():'',
         grade:colMap.grade!==undefined?String(r[colMap.grade]||'').trim():'',
-        dept:'',
-        rate:null,
-        monthly:null,
+        dept:dept,
+        deptCat:deptCat,
+        rate:rate,
+        monthly:monthly,
         join:joinDate,
         leave:'',
         age:age,
@@ -5731,8 +5810,8 @@ function importEmpsExcel(input){
         rrnFront:rrnFront,
         rrnBack:rrnBack,
         sot:209,
-        payMode:null,
-        shift:'day',
+        payMode:payMode,
+        shift:shift,
         gender:gender,
         nation:nation,
         color:colors[ci],
@@ -5742,7 +5821,17 @@ function importEmpsExcel(input){
       added++;
     }
 
+    // 새로 추가된 직원이 기존 주간/야간 그룹에 합쳐지도록 정렬 (배열 끝에 push되면 별도 '주간' 헤더가 또 생김)
+    sortEMPS();
     saveLS();renderEmps();renderSb();renderTable();
+    // Supabase 즉시 저장
+    try{
+      const _sess=JSON.parse(localStorage.getItem('nopro_session')||'null');
+      if(_sess && _sess.companyId){
+        if(saveLS._timer) clearTimeout(saveLS._timer);
+        sbSaveAll(_sess.companyId).catch(e=>console.warn(e));
+      }
+    }catch(_){}
     const msg=added+'명 등록'+(skipped>0?' / '+skipped+'명 중복 스킵':'');
     excelToast(msg);
   };
