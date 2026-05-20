@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-19-15';
+const CLIENT_BUILD = '2026-05-20-01';
 
 // 🇰🇷 한국어 IME 글로벌 가드 (2026-05-19)
 // 증상: 한글 조합 중(예: "도급" 타이핑 중) Tab/Enter/다른 칸 클릭으로 blur 발생 시
@@ -2375,7 +2375,8 @@ function makeFilterBar(tab){
     </div>
     ${(()=>{
       // 부서 분류: 전체 / 사무(none) / 기본 3개(선별/시설/운반) / EMPS에 입력된 커스텀 부서 자동 추가
-      const customCats = [...new Set(EMPS.map(e=>(e.deptCat||'').trim()).filter(d=>d && !DEPT_CATS.includes(d)))].sort();
+      // '사무' 텍스트가 deptCat에 직접 입력된 경우는 none과 중복되므로 제외
+      const customCats = [...new Set(EMPS.map(e=>(e.deptCat||'').trim()).filter(d=>d && d!=='사무' && !DEPT_CATS.includes(d)))].sort();
       const all = [['all','전체'],['none','사무'],...DEPT_CATS.map(c=>[c,c]),...customCats.map(c=>[c,c])];
       return `<div class="filter-group" data-fg="deptCat" title="부서 분류">`+
         all.map(([v,l])=>`<button class="fb${(f.deptCat||'all')===v?' on':''}" onclick="setFilter('${tab}','deptCat','${v}',this)"${v==='none'?' title="부서 미지정"':''}>${esc(l)}</button>`).join('')+
@@ -2418,7 +2419,8 @@ function renderFilterBar(containerId, tab){
     // 검색 input에 포커스 중이면 버튼 상태만 업데이트하고 input은 보존
     const f = F[tab];
     // 부서 분류 그룹은 EMPS의 커스텀 값 포함이라 동적 — 매 호출마다 재계산
-    const _customCats = [...new Set(EMPS.map(e=>(e.deptCat||'').trim()).filter(d=>d && !DEPT_CATS.includes(d)))].sort();
+    // '사무' 텍스트가 deptCat에 직접 입력된 경우는 none과 중복되므로 제외
+    const _customCats = [...new Set(EMPS.map(e=>(e.deptCat||'').trim()).filter(d=>d && d!=='사무' && !DEPT_CATS.includes(d)))].sort();
     el.querySelectorAll('.filter-group').forEach((grp, gi)=>{
       const key = ['shift','nation','pay','deptCat'][gi];
       if(!key) return;
@@ -3375,9 +3377,10 @@ function renderMonthly(){
     } else { mvDeptDiv.style.display='none'; }
   }
   // 부서 분류(deptCat) 필터 동적 생성 — 기본 4개 + EMPS에 입력된 커스텀 부서 자동 포함
+  // '사무' 텍스트가 deptCat에 직접 입력된 경우는 none과 중복되므로 제외
   const mvDeptCatDiv = document.getElementById('mv-deptcat-filter');
   if(mvDeptCatDiv){
-    const customCats = [...new Set(EMPS.map(e=>(e.deptCat||'').trim()).filter(d=>d && !DEPT_CATS.includes(d)))].sort();
+    const customCats = [...new Set(EMPS.map(e=>(e.deptCat||'').trim()).filter(d=>d && d!=='사무' && !DEPT_CATS.includes(d)))].sort();
     const all = [['all','전체'],['none','사무'],...DEPT_CATS.map(c=>[c,c]),...customCats.map(c=>[c,c])];
     mvDeptCatDiv.innerHTML = all.map(([v,l])=>`
       <button class="mvf-sub btn btn-xs${MF.deptCat===v?' on':''}"
@@ -4874,6 +4877,10 @@ function updE(id,f,v){
   if(f==='rate' || f==='monthly'){
     const n = +v;
     e[f] = isNaN(n) ? 0 : Math.max(0, n);
+  } else if(f==='deptCat'){
+    // '사무'는 미지정(none) 필터와 중복되므로 빈 값으로 정규화
+    const t = (v||'').trim();
+    e[f] = (t==='사무') ? '' : t;
   } else {
     e[f] = v;
   }
@@ -4902,28 +4909,31 @@ function updE(id,f,v){
 // 📋 직원 등록
 // ══════════════════════════════════════
 
+// 컬럼 순서·구성을 직원관리 메인 테이블과 동일하게 맞춤
+// (연차잔여·삭제는 등록 시 불필요하므로 제외)
 const BULK_COLS = [
-  { key:'empNo',   label:'사번',     type:'text',   w:64  },
-  { key:'name',    label:'이름 *',   type:'text',   w:88  },
-  { key:'role',    label:'직종 *',   type:'text',   w:80  },
-  { key:'grade',   label:'직급 *',   type:'text',   w:72  },
-  { key:'dept',    label:'소속 *',   type:'text',   w:80  },
-  { key:'rrnFront',label:'주민번호(앞)',type:'text', w:80  },
-  { key:'rrnBack', label:'주민번호(뒤)',type:'text', w:80  },
-  { key:'payMode', label:'급여방식', type:'select', w:96,
+  { key:'empNo',   label:'사번',         type:'text',   w:64  },
+  { key:'name',    label:'이름 *',       type:'text',   w:88  },
+  { key:'role',    label:'직종 *',       type:'text',   w:80  },
+  { key:'deptCat', label:'부서 *',       type:'text',   w:72  },
+  { key:'grade',   label:'직급 *',       type:'text',   w:72  },
+  { key:'dept',    label:'소속 *',       type:'text',   w:80  },
+  { key:'rrnFront',label:'주민번호(앞) *',type:'text',  w:88  },
+  { key:'rrnBack', label:'주민번호(뒤) *',type:'text',  w:88  },
+  { key:'rate',    label:'시급/월급 *',  type:'number', w:96  },
+  { key:'join',    label:'입사일 *',     type:'date',   w:116 },
+  { key:'gender',  label:'성별 *',       type:'select', w:72,
+    opts:[{v:'male',l:'남'},{v:'female',l:'여'}] },
+  { key:'nation',  label:'내외국인 *',   type:'select', w:82,
+    opts:[{v:'local',l:'내국인'},{v:'foreign',l:'외국인'}] },
+  { key:'age',     label:'나이',         type:'number', w:56  },
+  { key:'phone',   label:'핸드폰 *',     type:'text',   w:112 },
+  { key:'payMode', label:'급여방식 *',   type:'select', w:104,
     // 인라인 UI(통상임금제/시급제/포괄임금제)와 통일. 월급제·포괄임금 라벨 제거.
     // 기존 monthly/pohal 직원 데이터는 그대로 유지됨 (calcSession이 두 분기 모두 처리).
     opts:[{v:'fixed',l:'통상임금제'},{v:'hourly',l:'시급제'},{v:'pohal',l:'포괄임금제'}] },
-  { key:'rate',    label:'시급/월급',type:'number', w:96  },
-  { key:'join',    label:'입사일',   type:'date',   w:116 },
-  { key:'gender',  label:'성별',     type:'select', w:72,
-    opts:[{v:'male',l:'남'},{v:'female',l:'여'}] },
-  { key:'nation',  label:'내외국인', type:'select', w:82,
-    opts:[{v:'local',l:'내국인'},{v:'foreign',l:'외국인'}] },
-  { key:'shift',   label:'주야간',   type:'select', w:72,
+  { key:'shift',   label:'주야간 *',     type:'select', w:76,
     opts:[{v:'day',l:'주간'},{v:'night',l:'야간'}] },
-  { key:'phone',   label:'연락처',   type:'text',   w:112 },
-  { key:'age',     label:'나이',     type:'number', w:56  },
 ];
 
 const BULK_ROWS = 20;
@@ -4957,7 +4967,7 @@ function openBulkAdd(){
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px 12px;overflow:hidden';
 
   modal.innerHTML = `
-    <div style="background:#fff;border-radius:16px;width:100%;max-width:1260px;box-shadow:0 24px 80px rgba(0,0,0,.3);display:flex;flex-direction:column;height:100%;max-height:calc(100vh - 40px)">
+    <div style="background:#fff;border-radius:16px;width:100%;max-width:1480px;box-shadow:0 24px 80px rgba(0,0,0,.3);display:flex;flex-direction:column;height:100%;max-height:calc(100vh - 40px)">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:2px solid var(--bd2);flex-shrink:0;background:#F8FAFC;border-radius:16px 16px 0 0">
         <div>
           <div style="font-size:16px;font-weight:700;color:var(--ink)">📋 직원 등록</div>
@@ -5051,7 +5061,7 @@ function renderBulkTable(){
         } else if(col.type==='date'){
           inp = `<input type="text" value="${val}" placeholder="YYYYMMDD"
             onchange="bulkSetDate(${ri},${ci},this.value)"
-            onblur="bulkSetDate(${ri},${ci},this.value);renderBulkTable()"
+            onblur="bulkSetDate(${ri},${ci},this.value)"
             onfocus="bulkFocusCell(${ri},${ci},event)"
             style="width:100%;border:none;background:transparent;font-size:12px;color:var(--ink);padding:2px;outline:none;font-family:inherit">`;
         } else {
@@ -5135,7 +5145,19 @@ function bulkFocusCell(ri, ci, e){
   if(!e?.shiftKey) bulkSelRange = null;
   bulkUpdateHighlight();
   const cell = document.getElementById(`bulk-cell-${ri}-${ci}`);
-  if(cell){ const inp = cell.querySelector('input,button'); if(inp) inp.focus(); }
+  if(!cell) return;
+  const inp = cell.querySelector('input,button');
+  if(!inp) return;
+  // 이미 같은 input에서 호출된 경우(onfocus 콜백)는 select만 호출 — focus() 재호출은 무한 루프 방지
+  if(document.activeElement === inp){
+    if(inp.tagName==='INPUT' && typeof inp.select==='function') inp.select();
+    return;
+  }
+  // 다른 셀로 이동 — focus + 전체 텍스트 선택 (Enter 직후 바로 덮어쓰기 가능)
+  inp.focus();
+  if(inp.tagName==='INPUT' && typeof inp.select==='function'){
+    try { inp.select(); } catch(_){}
+  }
 }
 
 
@@ -5161,12 +5183,56 @@ function bulkCycleSelect(ri, ci, e){
 }
 function bulkSetVal(ri, ci, val){
   if(!bulkData[ri]) bulkData[ri] = {};
-  bulkData[ri][BULK_COLS[ci].key] = val;
+  const key = BULK_COLS[ci].key;
+  // 주민번호 / deptCat 입력값 정규화
+  if(key==='rrnFront' || key==='rrnBack'){
+    val = String(val||'').replace(/[^0-9]/g,'');
+  } else if(key==='deptCat'){
+    const t = String(val||'').trim();
+    val = (t==='사무') ? '' : t;
+  }
+  bulkData[ri][key] = val;
   updateBulkCount();
   // 이름 셀이면 배경색만 업데이트
-  if(BULK_COLS[ci].key==='name'){
+  if(key==='name'){
     const cell = document.getElementById(`bulk-cell-${ri}-${ci}`);
     if(cell) cell.style.background = val ? '#F0FFF4' : '#fff';
+  }
+  // 주민번호 입력 시 나이 자동 계산 (직원관리 메인 탭과 동일 로직)
+  if(key==='rrnFront' || key==='rrnBack'){
+    const row = bulkData[ri];
+    const age = rrn2age(row.rrnFront||'', row.rrnBack||'');
+    if(age!==''){
+      row.age = age;
+      // age 컬럼의 input value를 직접 갱신 (재렌더 없이)
+      const ageCi = BULK_COLS.findIndex(c=>c.key==='age');
+      if(ageCi>=0){
+        const ageCell = document.getElementById(`bulk-cell-${ri}-${ageCi}`);
+        if(ageCell){ const ageInp = ageCell.querySelector('input'); if(ageInp) ageInp.value = age; }
+      }
+    }
+    // 주민번호 뒷자리 첫 글자로 성별·내외국인 자동 분류 (덮어쓰기 X — 비어있을 때만)
+    if(key==='rrnBack' && val){
+      const g = rrn2gender(val[0]);
+      const n = rrn2nation(val[0]);
+      if(g && !row.gender) row.gender = g;
+      if(n && !row.nation) row.nation = n;
+      // 해당 select 버튼 라벨 업데이트
+      const refreshSelect = (k, v)=>{
+        const ci2 = BULK_COLS.findIndex(c=>c.key===k);
+        if(ci2<0) return;
+        const cell = document.getElementById(`bulk-cell-${ri}-${ci2}`);
+        if(!cell) return;
+        const btn = cell.querySelector('button'); if(!btn) return;
+        const opt = BULK_COLS[ci2].opts.find(o=>o.v===v); if(!opt) return;
+        btn.textContent = opt.l + ' ▾';
+        btn.style.background = 'var(--nbg)';
+        btn.style.color = 'var(--navy2)';
+        btn.style.fontWeight = '700';
+      };
+      if(g) refreshSelect('gender', row.gender);
+      if(n) refreshSelect('nation', row.nation);
+    }
   }
 }
 
@@ -5175,6 +5241,9 @@ function bulkSetDate(ri, ci, val){
   if(!bulkData[ri]) bulkData[ri] = {};
   bulkData[ri][BULK_COLS[ci].key] = parsed;
   updateBulkCount();
+  // 재렌더 없이 input value만 갱신 — Enter 직후 다음 셀로 이동한 포커스가 깨지지 않도록
+  const cell = document.getElementById(`bulk-cell-${ri}-${ci}`);
+  if(cell){ const inp = cell.querySelector('input'); if(inp) inp.value = parsed; }
 }
 
 function updateBulkCount(){
@@ -5371,23 +5440,40 @@ function confirmBulkAdd(){
     .filter(({r})=>Object.values(r||{}).some(v=>v!==undefined&&v!==null&&String(v).trim()!==''));
   if(filledRows.length===0){ alert('이름을 최소 1명 이상 입력하세요'); return; }
 
-  // 필수 필드 검증: 이름·직종·직급·소속
+  // 필수 필드 검증 — 사번(자동 생성)·나이(주민번호로 자동 계산) 외 모든 컬럼 필수
+  // 직원관리 메인 테이블에서 입력받는 항목과 동일하게 맞춤
   const REQUIRED = [
-    {key:'name',  label:'이름'},
-    {key:'role',  label:'직종'},
-    {key:'grade', label:'직급'},
-    {key:'dept',  label:'소속'},
+    {key:'name',     label:'이름'},
+    {key:'role',     label:'직종'},
+    {key:'deptCat',  label:'부서'},
+    {key:'grade',    label:'직급'},
+    {key:'dept',     label:'소속'},
+    {key:'rrnFront', label:'주민번호(앞)'},
+    {key:'rrnBack',  label:'주민번호(뒤)'},
+    {key:'rate',     label:'시급/월급'},
+    {key:'join',     label:'입사일'},
+    {key:'gender',   label:'성별'},
+    {key:'nation',   label:'내외국인'},
+    {key:'phone',    label:'핸드폰'},
+    {key:'payMode',  label:'급여방식'},
+    {key:'shift',    label:'주야간'},
   ];
   const incomplete = [];
   filledRows.forEach(({r,idx})=>{
-    const missing = REQUIRED.filter(f=>!r[f.key]||!String(r[f.key]).trim()).map(f=>f.label);
+    const missing = REQUIRED.filter(f=>{
+      const v = r[f.key];
+      if(v===undefined || v===null) return true;
+      if(typeof v==='string' && !v.trim()) return true;
+      return false;
+    }).map(f=>f.label);
     if(missing.length>0){
       const rowName = r.name && r.name.trim() ? r.name.trim() : '(이름 없음)';
       incomplete.push(`${idx+1}행 [${rowName}]: ${missing.join(' · ')} 누락`);
     }
   });
   if(incomplete.length>0){
-    alert(`아래 항목을 모두 입력한 뒤 저장하세요.\n\n[필수 항목] 이름 · 직종 · 직급 · 소속\n\n${incomplete.join('\n')}`);
+    const reqLabels = REQUIRED.map(f=>f.label).join(' · ');
+    alert(`아래 항목을 모두 입력한 뒤 저장하세요.\n\n[필수 항목] ${reqLabels}\n\n${incomplete.join('\n')}`);
     return;
   }
 
