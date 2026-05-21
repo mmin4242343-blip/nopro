@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-21-1';
+const CLIENT_BUILD = '2026-05-21-3';
 
 // 🇰🇷 한국어 IME 글로벌 가드 (2026-05-19)
 // 증상: 한글 조합 중(예: "도급" 타이핑 중) Tab/Enter/다른 칸 클릭으로 blur 발생 시
@@ -811,6 +811,21 @@ async function safeItemSave(key, value){
       try { reportError({ level: 'guard', source: 'safeItemSave', message: '빈값 덮어쓰기 차단', meta: { key, reason: 'snap_has_data' } }); } catch {}
       return {blocked:true};
     }
+  }
+  // 🛡️ C-15: allow 키 직원 수 급감 차단 (2026-05-21 도입)
+  // 5/18 사고: 콘솔/외부 도구로 ALLOWANCE_REC을 통째 갈아엎는 시도를 서버 도달 전 차단
+  if(key === 'allow' && snap && snap[key]){
+    try {
+      const oldObj = typeof snap[key]==='string' ? JSON.parse(snap[key]) : snap[key];
+      const oldCount = Object.keys(oldObj || {}).length;
+      const newCount = Object.keys(value || {}).length;
+      const lost = oldCount - newCount;
+      if(oldCount > 0 && lost >= 5 && lost / oldCount > 0.30){
+        console.error('🛡️ safeItemSave: allow 직원 수 급감 차단', oldCount, '→', newCount);
+        try { reportError({ level:'guard', source:'safeItemSave', message:'allow 직원 수 급감 차단', meta:{ key, oldCount, newCount, lost } }); } catch{}
+        return {blocked:true};
+      }
+    } catch(_){}
   }
   // 🛡️ 낙관적 잠금: 마지막으로 본 서버 버전을 함께 보냄
   const expectedUpdatedAt = (typeof _serverVersions!=='undefined' && _serverVersions) ? (_serverVersions[key]||null) : null;
@@ -2763,7 +2778,7 @@ function makeFilterBar(tab){
     ${(()=>{
       // 부서 분류: 전체 / 사무(none) / 기본 3개(선별/시설/운반) / EMPS에 입력된 커스텀 부서 자동 추가
       // '사무' 텍스트가 deptCat에 직접 입력된 경우는 none과 중복되므로 제외
-      const customCats = [...new Set(EMPS.map(e=>(e.deptCat||'').trim()).filter(d=>d && d!=='사무' && !DEPT_CATS.includes(d)))].sort();
+      const customCats = [...new Set(EMPS.filter(e=>!e.deletedAt).map(e=>(e.deptCat||'').trim()).filter(d=>d && d!=='사무' && !DEPT_CATS.includes(d)))].sort();
       const all = [['all','전체'],['none','사무'],...DEPT_CATS.map(c=>[c,c]),...customCats.map(c=>[c,c])];
       return `<div class="filter-group" data-fg="deptCat" title="부서 분류">`+
         all.map(([v,l])=>`<button class="fb${(f.deptCat||'all')===v?' on':''}" onclick="setFilter('${tab}','deptCat','${v}',this)"${v==='none'?' title="부서 미지정"':''}>${esc(l)}</button>`).join('')+
@@ -2772,7 +2787,7 @@ function makeFilterBar(tab){
     ${(()=>{
       // 인천본점 항상 맨 앞 → 아웃소싱 → 그 외 가나다순 (본점 우선 정렬)
       const _deptRank = s => s==='인천본점' ? 0 : (s==='아웃소싱' ? 1 : 2);
-      const depts=[...new Set(EMPS.map(e=>(e.dept||'').trim()).filter(d=>d))].sort((a,b)=>{
+      const depts=[...new Set(EMPS.filter(e=>!e.deletedAt).map(e=>(e.dept||'').trim()).filter(d=>d))].sort((a,b)=>{
         const ra=_deptRank(a), rb=_deptRank(b);
         if(ra!==rb) return ra-rb;
         return a.localeCompare(b);
@@ -2807,7 +2822,7 @@ function renderFilterBar(containerId, tab){
     const f = F[tab];
     // 부서 분류 그룹은 EMPS의 커스텀 값 포함이라 동적 — 매 호출마다 재계산
     // '사무' 텍스트가 deptCat에 직접 입력된 경우는 none과 중복되므로 제외
-    const _customCats = [...new Set(EMPS.map(e=>(e.deptCat||'').trim()).filter(d=>d && d!=='사무' && !DEPT_CATS.includes(d)))].sort();
+    const _customCats = [...new Set(EMPS.filter(e=>!e.deletedAt).map(e=>(e.deptCat||'').trim()).filter(d=>d && d!=='사무' && !DEPT_CATS.includes(d)))].sort();
     el.querySelectorAll('.filter-group').forEach((grp, gi)=>{
       const key = ['shift','nation','pay','deptCat'][gi];
       if(!key) return;
@@ -3756,7 +3771,7 @@ function renderMonthly(){
   // 소속 필터 동적 생성
   const mvDeptDiv = document.getElementById('mv-dept-filter');
   if(mvDeptDiv){
-    const depts=[...new Set(EMPS.map(e=>(e.dept||'').trim()).filter(d=>d))].sort();
+    const depts=[...new Set(EMPS.filter(e=>!e.deletedAt).map(e=>(e.dept||'').trim()).filter(d=>d))].sort();
     if(depts.length){
       mvDeptDiv.style.display='flex';
       mvDeptDiv.innerHTML=['all',...depts].map(v=>`
@@ -3771,7 +3786,7 @@ function renderMonthly(){
   // '사무' 텍스트가 deptCat에 직접 입력된 경우는 none과 중복되므로 제외
   const mvDeptCatDiv = document.getElementById('mv-deptcat-filter');
   if(mvDeptCatDiv){
-    const customCats = [...new Set(EMPS.map(e=>(e.deptCat||'').trim()).filter(d=>d && d!=='사무' && !DEPT_CATS.includes(d)))].sort();
+    const customCats = [...new Set(EMPS.filter(e=>!e.deletedAt).map(e=>(e.deptCat||'').trim()).filter(d=>d && d!=='사무' && !DEPT_CATS.includes(d)))].sort();
     const all = [['all','전체'],['none','사무'],...DEPT_CATS.map(c=>[c,c]),...customCats.map(c=>[c,c])];
     mvDeptCatDiv.innerHTML = all.map(([v,l])=>`
       <button class="mvf-sub btn btn-xs${MF.deptCat===v?' on':''}"

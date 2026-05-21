@@ -122,6 +122,31 @@ export const handler = async (event) => {
         }
       }
 
+      // 🛡️ S-8: allow 키 직원 수 급감 차단 (2026-05-21 도입)
+      // 5/18 사고: 누군가 콘솔/외부 도구로 ALLOWANCE_REC을 통째 갈아엎고 저장 → 직원 50명 사라짐.
+      // 일반 사용(셀 단위 입력)은 절대 안 걸림. 일괄 변경만 차단.
+      if (item.key === 'allow' && oldValue) {
+        try {
+          const oldObj = JSON.parse(oldValue);
+          const oldCount = Object.keys(oldObj || {}).length;
+          const newCount = Object.keys(value || {}).length;
+          const EMP_SHRINK_THRESHOLD = 0.30;
+          const MIN_EMP_LOSS = 5;
+          const lostEmps = oldCount - newCount;
+          if (oldCount > 0 && lostEmps >= MIN_EMP_LOSS && lostEmps / oldCount > EMP_SHRINK_THRESHOLD) {
+            conflicts.push({
+              key: item.key,
+              reason: 'allow-emp-count-dropped',
+              oldCount,
+              newCount,
+              lostEmps,
+            });
+            console.error(`🚨 allow 직원 수 급감 차단! (company=${companyId}, by=${changedBy}, ${oldCount}명 → ${newCount}명, -${lostEmps}명). 콘솔/외부 도구 의심.`);
+            continue;
+          }
+        } catch(_){}
+      }
+
       // atomic upsert (레이스 컨디션 방지)
       const newUpdatedAt = new Date().toISOString();
       const { error: upsertErr } = await supabase
