@@ -3,7 +3,7 @@ const API_BASE = '/api';
 // 🏷️ 클라이언트 빌드 식별자 — 배포 때마다 갱신.
 // 서버 응답의 _serverBuild와 비교해서 다르면 사용자에게 새로고침 권유 토스트 표시.
 // 캐시된 옛 클라이언트 코드가 새 가드를 우회하는 경로 차단.
-const CLIENT_BUILD = '2026-05-20-10';
+const CLIENT_BUILD = '2026-05-21-1';
 
 // 🇰🇷 한국어 IME 글로벌 가드 (2026-05-19)
 // 증상: 한글 조합 중(예: "도급" 타이핑 중) Tab/Enter/다른 칸 클릭으로 blur 발생 시
@@ -1669,6 +1669,44 @@ function calcBkDeduct(sMin,eMin,bks){
   });
   return t;
 }
+// 기본 휴게 ∪ 외출 합집합 분 — 겹치는 구간 이중 차감 방지
+// 1분 단위 OR 마스크 (calcNightMins와 동일 패턴)
+function calcBkOutUnion(sMin,eMin,bks,outTimes){
+  let n=0;
+  for(let t=sMin;t<eMin;t++){
+    let hit=false;
+    if(bks){
+      for(let i=0;i<bks.length;i++){
+        let bs=pT(bks[i].start!==undefined?bks[i].start:bks[i].s);
+        let be=pT(bks[i].end!==undefined?bks[i].end:bks[i].e);
+        if(bs===null||be===null)continue;
+        if(eMin>1440){
+          if(bs<sMin) bs+=1440;
+          if(be<=bs&&be<sMin) be+=1440;
+          else if(be<bs) be+=1440;
+        }
+        if(be<bs) be+=1440;
+        if(t>=bs&&t<be){hit=true;break;}
+      }
+    }
+    if(!hit && outTimes && outTimes.length){
+      for(let i=0;i<outTimes.length;i++){
+        let os=pT(outTimes[i].s),oe=pT(outTimes[i].e);
+        if(os===null||oe===null)continue;
+        // 자정 월담 근무 시 외출도 휴게와 동일 패턴으로 보정
+        if(eMin>1440){
+          if(os<sMin) os+=1440;
+          if(oe<=os&&oe<sMin) oe+=1440;
+          else if(oe<os) oe+=1440;
+        }
+        if(oe<os) oe+=1440;
+        if(t>=os&&t<oe){hit=true;break;}
+      }
+    }
+    if(hit)n++;
+  }
+  return n;
+}
 function calcNightMins(sMin,eMin,bks,outTimes){
   const ns=POL.nightStart*60;
   let n=0;
@@ -1692,14 +1730,19 @@ function calcNightMins(sMin,eMin,bks,outTimes){
       }
       if(inBk)continue;
     }
-    // 외출시간 제외
+    // 외출시간 제외 — 자정 월담 보정 포함 (calcBkOutUnion과 동일 패턴)
     if(outTimes&&outTimes.length){
       let inOut=false;
       for(let i=0;i<outTimes.length;i++){
-        const os=pT(outTimes[i].s),oe=pT(outTimes[i].e);
+        let os=pT(outTimes[i].s),oe=pT(outTimes[i].e);
         if(os===null||oe===null)continue;
-        let oeAdj=oe<os?oe+1440:oe;
-        if(t>=os&&t<oeAdj){inOut=true;break;}
+        if(eMin>1440){
+          if(os<sMin) os+=1440;
+          if(oe<=os&&oe<sMin) oe+=1440;
+          else if(oe<os) oe+=1440;
+        }
+        if(oe<os) oe+=1440;
+        if(t>=os&&t<oe){inOut=true;break;}
       }
       if(inOut)continue;
     }
@@ -1739,7 +1782,8 @@ function calcSession(start,end,rate,isHol,bks,outTimes,empMode,premiumRate,halfD
   const gross=e-s;
   const bkMins=calcBkDeduct(s,e,bks);
   const nightBkMins=calcNightBkMins(s,e,bks);
-  const deduct=bkMins+(calcOutMins(outTimes)||0);
+  // 기본 휴게 ∪ 외출 합집합 — 겹치면 한 번만 차감 (이중 차감 방지)
+  const deduct=calcBkOutUnion(s,e,bks,outTimes);
   const work=Math.max(0,gross-deduct);
   const nightM=calcNightMins(s,e,bks,outTimes); // 22~06 야간 분
   const dayM=Math.max(0,work-nightM);
